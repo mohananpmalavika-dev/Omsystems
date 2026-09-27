@@ -72,6 +72,10 @@ export class NotificationWorker {
       const provider = this.providers.get(job.channel);
       const result = await provider.send(job);
 
+      if (!result.accepted || result.state === "FAILED") {
+        throw new Error(result.error || "notification_provider_rejected");
+      }
+
       await this.outbox.markSent(job.id, result);
       return true;
     } catch (err: unknown) {

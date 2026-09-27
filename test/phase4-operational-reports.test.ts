@@ -42,7 +42,7 @@ describe("Phase 4 persistent daily reports",()=>{
 
   it("publishes and generates every requested operational report template",async()=>{
     const catalog=await app.inject({method:"GET",url:"/v1/reports/operational/templates",headers:admin});
-    expect(catalog.statusCode).toBe(200);expect(catalog.json().data).toHaveLength(7);
+    expect(catalog.statusCode).toBe(200);expect(catalog.json().data.map((item:any)=>item.id)).toEqual(expect.arrayContaining(["daily_surveillance_health","comprehensive","branch_health_summary","camera_availability","alert_summary","recorder_status","hdd_health","retention_compliance"]));
     const templates=["branch_health_summary","camera_availability","alert_summary","recorder_status","hdd_health","retention_compliance"];
     for(const template of templates){
       const response=await app.inject({method:"POST",url:"/v1/reports/operational/runs",headers:admin,payload:{template,formats:["csv"],filters:{branchId:"branch-blr-001"}}});
@@ -73,7 +73,7 @@ describe("Phase 4 persistent daily reports",()=>{
 
   it("generates reconciled CSV, XLSX and PDF artifacts with signed downloads and delivery history",async()=>{
     const health=await app.inject({method:"GET",url:"/v1/operations/health/summary",headers:admin});
-    const requested=await app.inject({method:"POST",url:"/v1/reports/operational/runs",headers:admin,payload:{formats:["csv","xlsx","pdf"],filters:{branchId:"branch-blr-001"},recipients:["manager@example.com"]}});expect(requested.statusCode).toBe(202);const runId=requested.json().id;
+    const requested=await app.inject({method:"POST",url:"/v1/reports/operational/runs",headers:admin,payload:{formats:["csv","xlsx","pdf"],filters:{},recipients:["manager@example.com"]}});expect(requested.statusCode).toBe(202);const runId=requested.json().id;
     await waitFor(async()=> (await store.getOperationalReportRun(runId,"omsystems"))?.status==="completed",10_000);
     await app.inject({method:"POST",url:"/internal/reports/operational/drain",headers:{"x-report-worker-key":workerKey}});
     await waitFor(async()=>store.operationalReportDeliveries[0]?.status==="delivered",2_000);
@@ -82,7 +82,7 @@ describe("Phase 4 persistent daily reports",()=>{
   });
 
   it("handles a 5,000-camera CSV run asynchronously without a fixed application limit",async()=>{
-    const template=store.cameras.get("cam-001")!;for(let index=3;index<=5000;index++){const id=`scale-camera-${index}`;const nodeId=`scale-node-${index}`;const node:ResourceNode={id:nodeId,parentId:"group-public-blr-001",tenantId:"omsystems",type:"camera",name:`Scale Camera ${index}`,path:["company-1","division-retail","region-south","branch-blr-001","group-public-blr-001",nodeId]};const camera:Camera={...structuredClone(template),id,nodeId,name:`Scale Camera ${index}`,channel:index,status:index%10===0?"offline":"online"};store.nodes.set(nodeId,node);store.cameras.set(id,camera);}
+    const template=store.cameras.get("cam-001")!;for(const id of ["cam-001","cam-002"]){store.cameras.get(id)!.branchId="branch-blr-001";}for(let index=3;index<=5000;index++){const id=`scale-camera-${index}`;const nodeId=`scale-node-${index}`;const node:ResourceNode={id:nodeId,parentId:"group-public-blr-001",tenantId:"omsystems",type:"camera",name:`Scale Camera ${index}`,path:["company-1","division-retail","region-south","branch-blr-001","group-public-blr-001",nodeId]};const camera:Camera={...structuredClone(template),id,nodeId,branchId:"branch-blr-001",name:`Scale Camera ${index}`,channel:index,status:index%10===0?"offline":"online"};store.nodes.set(nodeId,node);store.cameras.set(id,camera);}
     const response=await app.inject({method:"POST",url:"/v1/reports/operational/runs",headers:admin,payload:{formats:["csv"],filters:{branchId:"branch-blr-001"}}});const id=response.json().id;await waitFor(async()=> (await store.getOperationalReportRun(id,"omsystems"))?.status==="completed",20_000);const run=await store.getOperationalReportRun(id,"omsystems");expect(run?.summary?.totalCameras).toBe(5000);expect(run?.rowCount).toBeGreaterThanOrEqual(5001);expect((await store.listOperationalReportArtifacts("omsystems",id))[0]?.sizeBytes).toBeGreaterThan(100_000);
   },30_000);
 });

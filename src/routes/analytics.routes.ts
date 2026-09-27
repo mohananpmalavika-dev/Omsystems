@@ -142,8 +142,8 @@ const alertListQuery = z.object({
 });
 const liveWallQuery = z.object({
   cameraIds: z.string().trim().min(1).max(20_000).transform((value) =>
-    [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))].slice(0, 144)
-  ),
+    [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))]
+  ).refine(ids => ids.length <= 144, "Request at most 144 cameras per batch"),
   limit: z.coerce.number().int().min(1).max(500).default(200),
 });
 
@@ -394,9 +394,9 @@ export async function registerAnalyticsRoutes(
       authorizedCameraIds.length > 0
         ? store.listAnalyticsRulesByCameraIds(authorizedCameraIds)
         : Promise.resolve([]),
-      store.listAnalyticsAlerts(request.currentUser.tenantId, {
-        limit: Math.min(1_000, query.limit * 5),
-      }),
+      authorizedCameraIds.length > 0 ? store.listAnalyticsAlerts(request.currentUser.tenantId, {
+        cameraIds: authorizedCameraIds, priorityFirst: true, limit: query.limit,
+      }) : Promise.resolve([]),
     ]);
     const alerts = candidateAlerts
       .filter((alert) => authorizedSet.has(alert.cameraId))

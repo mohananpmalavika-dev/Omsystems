@@ -3709,13 +3709,15 @@ export class MemoryStore {
     const raw = this.analyticsAlerts
       .filter((alert) => alert.tenantId === inputTenantId)
       .filter((alert) => !filters.cameraId || alert.cameraId === filters.cameraId)
+      .filter((alert) => !filters.cameraIds || filters.cameraIds.includes(alert.cameraId))
+      .filter((alert) => !filters.branchIds || filters.branchIds.includes(this.cameras.get(alert.cameraId)?.branchId ?? ""))
       .filter((alert) => !filters.branchId ||
         this.cameras.get(alert.cameraId)?.branchId === filters.branchId)
       .filter((alert) => !filters.status || alert.status === filters.status)
       .filter((alert) => !filters.severity || alert.severity === filters.severity)
       .filter((alert) => !filters.from || alert.lastDetectedAt >= filters.from)
       .filter((alert) => !filters.to || alert.firstDetectedAt <= filters.to)
-      .sort((left, right) => right.lastDetectedAt.localeCompare(left.lastDetectedAt))
+      .sort((left, right) => (filters.priorityFirst ? Number(["resolved", "false_alarm", "suppressed"].includes(left.status)) - Number(["resolved", "false_alarm", "suppressed"].includes(right.status)) || left.severity.localeCompare(right.severity) : 0) || right.lastDetectedAt.localeCompare(left.lastDetectedAt))
       .slice(0, filters.limit);
 
     return raw.map((alert) => {

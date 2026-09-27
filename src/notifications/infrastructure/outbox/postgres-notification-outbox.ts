@@ -168,6 +168,9 @@ export class PostgresNotificationOutbox {
   }
 
   async markSent(jobId: string, result: ProviderSendResult, now = new Date()): Promise<NotificationJob | undefined> {
+    if (!result.accepted || result.state === "FAILED") {
+      throw new Error(result.error || "notification_provider_rejected");
+    }
     const status: NotificationStatus = result.state === "DELIVERED" ? "DELIVERED" : "SENT";
 
     if (this.pool) {

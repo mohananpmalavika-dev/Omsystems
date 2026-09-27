@@ -3,15 +3,16 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, ArrowUpRight, Building2, Camera as CameraIcon, Check, ChevronRight, Compass, Crosshair, Eye, Film, LayoutDashboard, Lock, Pin, PinOff, RefreshCw, Search, ShieldAlert, X } from "lucide-react";
-import { EnhancedCameraGrid, type GridLayout } from "./enhanced-camera-grid";
+import { fleetCameraPage, operationalStageAlerts } from "./live-stage-model";
+import { EnhancedCameraGrid, type GridLayout, type GridSize } from "./enhanced-camera-grid";
 import { PlaybackController } from "./playback-controller";
 import { CameraInterventionModal } from "./camera-intervention-modal";
 import { analyticsApi } from "@/lib/api-client";
 import type { AnalyticsAlert, AnalyticsRule, Camera } from "@/lib/types";
 
-type Mode = "watch" | "investigate" | "respond" | "overview";
+type Mode = "watch" | "investigate" | "respond" | "overview" | "fleet";
 type ReplaySegment = { id: string; startTime: string; endTime: string };
-const MODES = [{ id: "watch", label: "Watch", icon: Eye }, { id: "investigate", label: "Investigate", icon: Film }, { id: "respond", label: "Respond", icon: ShieldAlert }, { id: "overview", label: "Overview", icon: LayoutDashboard }] as const;
+const MODES = [{ id: "watch", label: "Watch", icon: Eye }, { id: "investigate", label: "Investigate", icon: Film }, { id: "respond", label: "Respond", icon: ShieldAlert }, { id: "overview", label: "Overview", icon: LayoutDashboard }, { id: "fleet", label: "Fleet wall", icon: CameraIcon }] as const;
 const SCENES = [
   { id: "all", label: "Whole scene", keywords: [] },
   { id: "entrance", label: "Entrance", keywords: ["entrance", "entry", "ingress", "door", "lobby", "gate"] },
@@ -34,6 +35,10 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
   onRefresh: () => Promise<void>; onActiveStreamsChange: (count: number) => void; onMonitoredCamerasChange: (ids: string[]) => void; onOpenCameraAi: (id: string) => void;
 }) {
   const [mode, setMode] = useState<Mode>("watch");
+  const [fleetColumns, setFleetColumns] = useState(4);
+  const [fleetPage, setFleetPage] = useState(0);
+  const [fleetBranch, setFleetBranch] = useState("all");
+  const [fleetRotating, setFleetRotating] = useState(false);
   const [sceneId, setSceneId] = useState("all");
   const [cameraId, setCameraId] = useState<string>();
   const [pinned, setPinned] = useState(false);
@@ -58,7 +63,7 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
   const scoped = useMemo(() => cameras.filter(camera => matchesScene(camera, scene.keywords)), [cameras, scene]);
   const active = scoped.find(camera => camera.id === cameraId) ?? scoped[0];
   const scopedIds = useMemo(() => new Set(scoped.map(camera => camera.id)), [scoped]);
-  const scopedEvents = useMemo(() => alerts.filter(alert => scopedIds.has(alert.cameraId)).sort((a, b) => (Date.parse(eventTime(b)) || 0) - (Date.parse(eventTime(a)) || 0)), [alerts, scopedIds]);
+  const scopedEvents = useMemo(() => operationalStageAlerts(alerts, scopedIds).sort((a, b) => (Date.parse(eventTime(b)) || 0) - (Date.parse(eventTime(a)) || 0)), [alerts, scopedIds]);
   const attention = [...scopedEvents].filter(alert => !terminal.has(alert.status)).sort((a, b) => a.severity.localeCompare(b.severity));
   const selectedEvent = scopedEvents.find(alert => alert.id === selectedEventId && alert.cameraId === active?.id);
   const draftKey = selectedEvent?.id ?? active?.id ?? "";
@@ -67,8 +72,15 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
     scoped.forEach(camera => { const key = camera.branchId || "unassigned"; groups.set(key, [...(groups.get(key) ?? []), camera]); });
     return Array.from(groups.entries()).map(([id, members]) => ({ id, members, name: members[0].branchName || "Unassigned branch" }));
   }, [scoped]);
-  const stageCameras = useMemo(() => mode === "overview" ? branches.slice(0, 4).map(branch => branch.members[0]) : active ? [active] : [], [mode, active, branches]);
-  const layout = useMemo<GridLayout>(() => ({ name: "Operations stage", gridSize: mode === "overview" && stageCameras.length > 1 ? "2x2" : "1x1", positions: stageCameras.map((camera, position) => ({ cameraId: camera.id, position, stream: mode === "overview" ? "sub" : "main" })) }), [mode, stageCameras]);
+  const fleet = useMemo(() => fleetCameraPage(scoped, fleetBranch, fleetColumns ** 2, fleetPage), [scoped, fleetBranch, fleetColumns, fleetPage]);
+  useEffect(() => {
+    if (mode !== "fleet" || !fleetRotating || fleet.pageCount < 2) return;
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") setFleetPage(page => (page + 1) % fleet.pageCount); }, 15_000);
+    return () => window.clearInterval(timer);
+  }, [mode, fleetRotating, fleet.pageCount]);
+  useEffect(() => { if (fleetBranch !== "all" && !branches.some(branch => branch.id === fleetBranch)) { setFleetBranch("all"); setFleetPage(0); } }, [branches, fleetBranch]);
+  const stageCameras = useMemo(() => mode === "fleet" ? fleet.cameras : mode === "overview" ? branches.slice(0, 4).map(branch => branch.members[0]) : active ? [active] : [], [mode, active, branches, fleet]);
+  const layout = useMemo<GridLayout>(() => ({ name: "Operations stage", gridSize: mode === "fleet" ? `${fleetColumns}x${fleetColumns}` as GridSize : mode === "overview" && stageCameras.length > 1 ? "2x2" : "1x1", positions: stageCameras.map((camera, position) => ({ cameraId: camera.id, position, stream: mode === "overview" || mode === "fleet" ? "sub" : "main" })) }), [mode, stageCameras, fleetColumns]);
   const scopeSignature = scoped.map(camera => camera.id).join("|");
   useEffect(() => {
     if (previousScope.current !== scopeSignature && cameraId && !scopedIds.has(cameraId)) {
@@ -103,7 +115,7 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
   }, [mode, active?.id, replayWindow, replayNonce]);
   const selectedSegment = segments.find(segment => segment.id === selectedSegmentId);
 
-  function selectCamera(id: string) { if (busy) return; setCameraId(id); setPinned(false); setInterventionsOpen(false); setSelectedEventId(undefined); setFeedback(undefined); setReplayAnchor(undefined); }
+  function selectCamera(id: string) { if (busy) return; if (mode === "fleet") setMode("watch"); setCameraId(id); setPinned(false); setInterventionsOpen(false); setSelectedEventId(undefined); setFeedback(undefined); setReplayAnchor(undefined); }
   function selectEvent(alert: AnalyticsAlert) {
     if (busy) return;
     setCameraId(alert.cameraId); setPinned(false); setInterventionsOpen(false); setSelectedEventId(alert.id); setMode("investigate"); setContextOpen(true); setFeedback(undefined);
@@ -130,9 +142,18 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
         return <button key={item.id} type="button" disabled={busy || count === 0} aria-pressed={sceneId === item.id} onClick={() => { setSceneId(item.id); setSelectedEventId(undefined); setPinned(false); }}><span className="los-scene-node"><Crosshair size={17} /></span><strong>{item.label}</strong><small>{count}</small></button>;
       })}<div className="los-scene-note"><Compass size={22} /><span>{scoped.length} cameras<br />{branches.length} branches</span></div></nav>
       <div className="los-main">
-        <div className="los-stage-heading"><div><span className="los-eyebrow">{mode === "overview" ? "BRANCH SCENES / UP TO 4 LIVE FEEDS" : pinned ? "PINNED FOCUS / OPERATOR CONTROL" : "FOCUS / LIVE VIEW"}</span><h3>{mode === "overview" ? "Across your scope" : active?.name ?? "No camera in this scene"}</h3><p>{mode === "overview" ? "Expand a branch scene to take focus." : active?.branchName || "Branch not recorded"}</p></div><div>{active && mode !== "overview" && <button type="button" aria-pressed={pinned} aria-label={pinned ? "Unpin focus camera" : "Pin focus camera"} onClick={() => { if (active) setCameraId(active.id); setPinned(!pinned); }}>{pinned ? <PinOff size={16} /> : <Pin size={16} />}{pinned ? "Pinned" : "Pin"}</button>}<button type="button" aria-pressed={controlsOpen} onClick={() => setControlsOpen(!controlsOpen)}>Feed controls</button></div></div>
+        <div className="los-stage-heading"><div><span className="los-eyebrow">{mode === "fleet" ? "FLEET / MULTI-CAMERA VIEW" : mode === "overview" ? "BRANCH SCENES / UP TO 4 LIVE FEEDS" : pinned ? "PINNED FOCUS / OPERATOR CONTROL" : "FOCUS / LIVE VIEW"}</span><h3>{mode === "fleet" ? "Your fleet, in view." : mode === "overview" ? "Across your scope" : active?.name ?? "No camera in this scene"}</h3><p>{mode === "fleet" ? `${fleet.total} cameras in scope · ${stageCameras.length} tiles on this page · up to ${Math.min(maxConcurrentStreams, stageCameras.length)} simultaneous streams` : mode === "overview" ? "Expand a branch scene to take focus." : active?.branchName || "Branch not recorded"}</p></div><div>{active && mode !== "overview" && mode !== "fleet" && <button type="button" aria-pressed={pinned} aria-label={pinned ? "Unpin focus camera" : "Pin focus camera"} onClick={() => { if (active) setCameraId(active.id); setPinned(!pinned); }}>{pinned ? <PinOff size={16} /> : <Pin size={16} />}{pinned ? "Pinned" : "Pin"}</button>}<button type="button" aria-pressed={controlsOpen} onClick={() => setControlsOpen(!controlsOpen)}>Feed controls</button></div></div>
+        {mode === "fleet" && <div className="los-fleet-toolbar">
+          <label>Branch<select aria-label="Fleet branch" value={fleetBranch} onChange={event => { setFleetBranch(event.target.value); setFleetPage(0); }}>{[{ id: "all", name: "All branches" }, ...branches].map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>
+          <label>Tiles<select aria-label="Fleet tile layout" value={fleetColumns} onChange={event => { setFleetColumns(Number(event.target.value)); setFleetPage(0); }}>{[4,6,8,12].map(columns => <option key={columns} value={columns}>{columns} × {columns} ({columns ** 2} tiles)</option>)}</select></label>
+          <button type="button" disabled={busy || fleet.currentPage === 0} onClick={() => setFleetPage(fleet.currentPage - 1)}>Previous feeds</button>
+          <span role="status">Page {fleet.currentPage + 1} / {fleet.pageCount}</span>
+          <button type="button" disabled={busy || fleet.currentPage + 1 === fleet.pageCount} onClick={() => setFleetPage(fleet.currentPage + 1)}>Next feeds</button>
+          <button type="button" aria-pressed={fleetRotating} onClick={() => setFleetRotating(!fleetRotating)}>{fleetRotating ? "Pause rotation" : "Rotate every 15s"}</button>
+          <small>Substreams use the configured viewer capacity. Select a camera in the dock to investigate it.</small>
+        </div>}
         <div className={`los-video-stage ${controlsOpen ? "controls-visible" : ""}`} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); const id = event.dataTransfer.getData("text/plain"); if (scopedIds.has(id)) { selectCamera(id); setMode("watch"); } }}>
-          {stageCameras.length ? <EnhancedCameraGrid key={mode === "overview" ? "overview" : active?.id} cameras={stageCameras} initialLayout={layout} compactStage maxConcurrentStreams={mode === "overview" ? Math.min(4, maxConcurrentStreams) : 1} enableVirtualScrolling={false} aiByCamera={aiByCamera} showAiOverlay={showAiOverlay} onOpenCameraAi={onOpenCameraAi} onActiveStreamsChange={onActiveStreamsChange} onMonitoredCamerasChange={onMonitoredCamerasChange} /> : <div className="los-empty"><CameraIcon size={36} /><strong>No cameras in this scene.</strong><p>Choose another area or adjust the wall scope.</p></div>}
+          {stageCameras.length ? <EnhancedCameraGrid key={mode === "fleet" ? `fleet:${fleetBranch}:${fleetColumns}:${fleet.currentPage}` : mode === "overview" ? "overview" : active?.id} cameras={stageCameras} initialLayout={layout} compactStage maxConcurrentStreams={mode === "fleet" ? maxConcurrentStreams : mode === "overview" ? Math.min(4, maxConcurrentStreams) : 1} enableVirtualScrolling={false} aiByCamera={aiByCamera} showAiOverlay={showAiOverlay} onOpenCameraAi={onOpenCameraAi} onActiveStreamsChange={onActiveStreamsChange} onMonitoredCamerasChange={onMonitoredCamerasChange} /> : <div className="los-empty"><CameraIcon size={36} /><strong>No cameras in this scene.</strong><p>Choose another area or adjust the wall scope.</p></div>}
         </div>
         {mode === "investigate" && <section className="los-replay" aria-label="Recorded replay"><header><div><span className="los-eyebrow">RECORDED / {selectedEvent ? "EVENT WINDOW" : "RECENT WINDOW"}</span><h3>Review what led here.</h3><p>{replayWindow ? `${timeLabel(replayWindow.from)} → ${timeLabel(replayWindow.to)}` : "Select an event to set the replay window."}</p></div><button type="button" onClick={() => { if (!selectedEvent) setReplayAnchor(new Date().toISOString()); setReplayNonce(value => value + 1); }} disabled={replayLoading}><RefreshCw size={15} />Refresh replay</button></header>{replayLoading ? <div className="los-empty">Looking for recorded coverage…</div> : replayError ? <p role="alert">{replayError}</p> : selectedSegment && active ? <><PlaybackController key={`${active.id}:${selectedSegment.id}:${anchor}`} segmentId={selectedSegment.id} cameraId={active.id} cameraName={active.name} startTime={selectedSegment.startTime} endTime={selectedSegment.endTime} initialOffsetSeconds={Math.max(0, ((replayWindow?.timestamp ?? Date.parse(selectedSegment.startTime)) - Date.parse(selectedSegment.startTime)) / 1000)} /><label>Recorded segment<select value={selectedSegment.id} onChange={event => setSelectedSegmentId(event.target.value)}>{segments.map(segment => <option key={segment.id} value={segment.id}>{timeLabel(segment.startTime)} → {timeLabel(segment.endTime)}</option>)}</select></label></> : <div className="los-empty"><Film size={26} /><strong>No playable recording in this window.</strong><p>Live video remains available above. Recorder archives can be reviewed in the recording workspace.</p></div>}{active && <Link href={`/recordings?cameraId=${encodeURIComponent(active.id)}`}>Open recording workspace <ArrowUpRight size={14} /></Link>}</section>}
         {mode === "overview" ? <div className="los-branch-scenes">{branches.map(branch => <button key={branch.id} type="button" onClick={() => { selectCamera(branch.members[0].id); setMode("watch"); }}><Building2 size={22} /><div><strong>{branch.name}</strong><small>{branch.members.length} cameras in scope · {attention.filter(alert => branch.members.some(camera => camera.id === alert.cameraId)).length} open events</small></div><ArrowUpRight size={18} /></button>)}</div> : <section className="los-feed-dock" aria-label="Related camera dock"><header><div><span className="los-eyebrow">RELATED FEEDS / SELECT OR DRAG TO FOCUS</span><h3>Keep the context close.</h3></div><label><Search size={14} /><input aria-label="Search related cameras" placeholder="Find another feed" value={query} onChange={event => setQuery(event.target.value)} /></label></header><div className="los-dock-items">{related.map(camera => <button key={camera.id} type="button" disabled={busy} draggable onDragStart={event => event.dataTransfer.setData("text/plain", camera.id)} onClick={() => selectCamera(camera.id)}><span className="los-feed-symbol"><CameraIcon size={23} /><i data-status={camera.status} /></span><strong>{camera.name}</strong><small>{camera.branchName || "Unassigned branch"} · {camera.status}</small><span>{camera.branchId === active?.branchId ? "Same branch" : "Across scope"}<ChevronRight size={12} /></span></button>)}{!related.length && <p className="los-empty">No other cameras match this scope or search.</p>}</div></section>}

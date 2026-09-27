@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { loadCameraBatches } from "@/lib/fleet-loading";
 import { analyticsApi } from "@/lib/api-client";
 import type {
   AnalyticsAlert,
@@ -44,7 +45,7 @@ export function useLiveAiWall(cameras: Camera[], enabled = true) {
   const requestSequenceRef = useRef(0);
 
   const cameraIds = useMemo(
-    () => cameras.slice(0, 144).map((camera) => camera.id),
+    () => cameras.map((camera) => camera.id),
     [cameras],
   );
   const cameraSignature = cameraIds.join("|");
@@ -63,13 +64,16 @@ export function useLiveAiWall(cameras: Camera[], enabled = true) {
     const requestSequence = ++requestSequenceRef.current;
     setLoading(true);
     try {
-      const response = await analyticsApi.liveWall(cameraIds, 500);
+      const responses = await loadCameraBatches(cameraIds, ids => analyticsApi.liveWall(ids, 500));
       if (requestSequence !== requestSequenceRef.current) return;
-      setRules(response.data.rules);
-      setAlerts(response.data.alerts);
-      setCorrelations(response.data.correlations ?? []);
-      setSummary(response.data.summary);
-      setLastUpdatedAt(response.data.sampledAt);
+      const rules = [...new Map(responses.flatMap(response => response.data.rules).map(rule => [rule.id, rule])).values()];
+      const alerts = [...new Map(responses.flatMap(response => response.data.alerts).map(alert => [alert.id, alert])).values()];
+      const open = alerts.filter(alert => !TERMINAL_ALERT_STATUSES.has(alert.status) && !["P4", "P5"].includes(alert.severity));
+      setRules(rules);
+      setAlerts(alerts);
+      setCorrelations(responses.flatMap(response => response.data.correlations ?? []));
+      setSummary({ total: alerts.length, open: open.length, new: open.filter(alert => alert.status === "new").length, critical: open.filter(alert => alert.severity === "P1").length, highPriority: open.filter(alert => ["P1", "P2"].includes(alert.severity)).length });
+      setLastUpdatedAt(responses.map(response => response.data.sampledAt).sort()[0]);
       setError(undefined);
     } catch (reason) {
       if (requestSequence !== requestSequenceRef.current) return;

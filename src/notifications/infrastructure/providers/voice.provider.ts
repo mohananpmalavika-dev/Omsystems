@@ -12,6 +12,7 @@ import type {
 } from "../../domain/notification.types.js";
 import type { NotificationProvider } from "./notification-provider.interface.js";
 import { VoiceCallbackTokens } from "../../../alerts/voice-call.js";
+import { randomBytes } from "node:crypto";
 
 export interface VoiceTransport {
   name: "asterisk" | "twilio" | "exotel" | "webhook" | "test";
@@ -22,6 +23,7 @@ export interface VoiceTransport {
     statusUrl: string;
     recordingUrl: string;
   }): Promise<{ id: string }>;
+  healthCheck?(): Promise<ProviderHealth>;
 }
 
 export class VoiceNotificationProvider implements NotificationProvider {
@@ -29,16 +31,15 @@ export class VoiceNotificationProvider implements NotificationProvider {
   private readonly tokens: VoiceCallbackTokens;
 
   constructor(
-    private readonly transport: VoiceTransport = {
-      name: "asterisk",
-      async placeCall(input) {
-        return { id: `call-${Date.now()}-${Math.random().toString(36).substring(2, 6)}` };
-      },
-    },
-    private readonly publicBaseUrl = process.env.PUBLIC_BASE_URL || "https://sentinel.bank-corp.internal",
-    tokenSecret = process.env.VOICE_TOKEN_SECRET || "sentinel-voice-secret-key-2026"
+    private readonly transport?: VoiceTransport,
+    private readonly publicBaseUrl = process.env.PUBLIC_BASE_URL || "",
+    tokenSecret = process.env.VOICE_TOKEN_SECRET
   ) {
-    this.tokens = new VoiceCallbackTokens(tokenSecret);
+    if (transport && process.env.NODE_ENV === "production") {
+      if (transport.name === "test") throw new Error("production_test_voice_transport_forbidden");
+      if (!tokenSecret || !/^https:\/\//i.test(publicBaseUrl)) throw new Error("voice_callback_configuration_required");
+    }
+    this.tokens = new VoiceCallbackTokens(tokenSecret || randomBytes(32).toString("hex"));
   }
 
   getTokens(): VoiceCallbackTokens {
@@ -46,6 +47,9 @@ export class VoiceNotificationProvider implements NotificationProvider {
   }
 
   async send(job: NotificationJob): Promise<ProviderSendResult> {
+    if (!this.transport || !this.publicBaseUrl) {
+      return { accepted: false, state: "FAILED", provider: "voice", error: "PROVIDER_NOT_CONFIGURED" };
+    }
     const token = this.tokens.sign({
       notificationId: job.id,
       alertId: job.alertId,
@@ -66,6 +70,7 @@ export class VoiceNotificationProvider implements NotificationProvider {
       statusUrl,
       recordingUrl,
     });
+    if (!callResult.id) throw new Error("voice_provider_receipt_missing");
 
     return {
       accepted: true,
@@ -83,12 +88,12 @@ export class VoiceNotificationProvider implements NotificationProvider {
   }
 
   async healthCheck(): Promise<ProviderHealth> {
+    if (this.transport?.healthCheck && this.publicBaseUrl) return this.transport.healthCheck();
     return {
-      provider: `voice-${this.transport.name}`,
+      provider: this.transport ? `voice-${this.transport.name}` : "voice",
       channel: this.channel,
-      status: "HEALTHY",
-      latencyMs: 25.4,
-      consecutiveFailures: 0,
+      status: this.transport && this.publicBaseUrl ? "DEGRADED" : "UNAVAILABLE",
+      error: this.transport && this.publicBaseUrl ? "PROVIDER_HEALTH_UNVERIFIED" : "PROVIDER_NOT_CONFIGURED",
       observedAt: new Date(),
     };
   }

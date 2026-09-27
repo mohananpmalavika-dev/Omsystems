@@ -518,9 +518,10 @@ export class AnalyticsRepository {
          AND ($5::text IS NULL OR alert.severity=$5)
          AND ($6::timestamptz IS NULL OR alert.last_detected_at >= $6)
          AND ($7::timestamptz IS NULL OR alert.first_detected_at <= $7)
-       ORDER BY alert.last_detected_at DESC LIMIT $8`,
+       AND ($9::uuid[] IS NULL OR alert.camera_id = ANY($9::uuid[]))
+       ORDER BY ${filters.priorityFirst ? "CASE WHEN alert.status IN ('resolved','false_alarm','suppressed') THEN 1 ELSE 0 END, alert.severity ASC," : ""} alert.last_detected_at DESC LIMIT $8`,
       [...params, filters.status ?? null, filters.severity ?? null, filters.from ?? null,
-        filters.to ?? null, filters.limit],
+        filters.to ?? null, filters.limit, filters.cameraIds ?? null],
     );
     return result.rows.map(mapAlert);
   }

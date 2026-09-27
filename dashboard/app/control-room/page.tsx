@@ -1,5 +1,6 @@
 "use client";
 
+import { loadCameraInventory } from "@/lib/fleet-loading";
 import { LiveOperationsStage } from "@/components/live-operations-stage";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -392,7 +393,11 @@ function ControlRoomContent() {
 
     try {
       const [cameraResult, statsResult, priorityResult] = await Promise.allSettled([
-        requestJson("/api/control/v1/cameras?limit=500&action=live%3Aview", controller.signal),
+        loadCameraInventory(async (offset, limit) => {
+          const body = await requestJson(`/api/control/v1/cameras?limit=${limit}&offset=${offset}&action=live%3Aview`, controller.signal);
+          const total = body && typeof body === "object" ? (body as { total?: number }).total : undefined;
+          return { cameras: parseCameras(body), total: typeof total === "number" ? total : undefined };
+        }),
         requestJson("/api/control/v1/operations/health/summary", controller.signal),
         requestJson("/api/control/v1/alerts/alert-center?limit=200", controller.signal),
       ]);
