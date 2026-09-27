@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import Link from "next/link";
 import { 
   RefreshCw, 
@@ -141,7 +142,7 @@ export function ComponentDetailPage({ title, component }: { title: string; compo
             Refresh
           </button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* Telemetry Hub Navigation Tabs */}
       <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-800 pb-1 scrollbar-none">

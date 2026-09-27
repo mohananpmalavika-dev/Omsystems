@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -66,7 +67,7 @@ export default function CameraPurposeAssignmentPage() {
           <p style={{ color: "#555" }}>
             Map a lawful CCTV purpose to a specific camera and track assignment details.
           </p>
-        </div>
+        <FieldVisual /></div>
         <Link href="/maintenance/privacy" style={{ color: "#2563eb" }}>
           Back to privacy
         </Link>

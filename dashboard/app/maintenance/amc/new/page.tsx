@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -66,7 +67,7 @@ export default function NewAmcContractPage() {
           <p>Capture contract dates, vendor coverage, service levels, and renewal value.</p>
         </div>
         <Link href="/maintenance/amc">Back to AMC contracts</Link>
-      </header>
+      <FieldVisual /></header>
 
       <form className="work-order-form" onSubmit={handleSubmit}>
         <div className="work-order-form-grid">

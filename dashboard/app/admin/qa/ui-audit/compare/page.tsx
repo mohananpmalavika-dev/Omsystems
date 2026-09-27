@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -135,7 +136,7 @@ function QAComparisonContent() {
                 </div>
               </div>
             </div>
-          </div>
+          <FieldVisual /></div>
         </div>
 
         {/* Diff KPI Cards */}

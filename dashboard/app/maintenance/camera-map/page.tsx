@@ -1,5 +1,6 @@
 'use client';
 
+import { FieldVisual } from "@/components/field-visual";
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 
@@ -234,7 +235,7 @@ export default function CameraMapPage() {
               🔄 Refresh
             </button>
           </div>
-        </div>
+        <FieldVisual /></div>
 
         {/* Statistics */}
         <div className="grid grid-cols-4 gap-4 mt-6">

@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import {
@@ -1479,7 +1480,7 @@ export default function OrganizationHierarchyPage() {
               <ScanFace size={15} /> Enroll Employee with Photo
             </button>
           </div>
-        </div>
+        <FieldVisual /></div>
 
         {/* Notices */}
         {notice && (

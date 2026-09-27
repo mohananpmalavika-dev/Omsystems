@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect } from "react";
 import { AppLayout } from "@/components/app-layout";
 import { CameraImportExportModal } from "@/components/camera-import-export-modal";
@@ -123,7 +124,7 @@ export default function CameraImportExportPage() {
               Import / Export Cameras
             </button>
           </div>
-        </div>
+        <FieldVisual /></div>
 
         {/* Quick Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

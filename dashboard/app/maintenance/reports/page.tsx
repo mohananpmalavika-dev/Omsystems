@@ -1,5 +1,6 @@
 'use client';
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect } from 'react';
 import { ReportGenerationForm, ReportList, ScheduledReportsList } from '@/components/maintenance/report-components';
 
@@ -173,7 +174,7 @@ export default function MaintenanceReportsPage() {
         <p className="mt-2 text-gray-600">
           Generate, schedule, and manage maintenance reports
         </p>
-      </div>
+      <FieldVisual /></div>
 
       {/* Tabs */}
       <div className="border-b border-gray-200 mb-6">

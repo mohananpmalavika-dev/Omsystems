@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect, useCallback } from "react";
 import {
   Users,
@@ -220,7 +221,7 @@ export function PersonReIdWorkspace({
             Refresh
           </button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {error && (
         <div

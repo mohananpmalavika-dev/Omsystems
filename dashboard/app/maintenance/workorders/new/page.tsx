@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { maintenanceApi, cameraInventoryApi } from "@/lib/api-client";
@@ -103,7 +104,7 @@ export default function NewWorkOrderPage() {
           <h1>Create work order</h1>
           <p>Define the problem, severity, affected asset, SLA due date, and expected service schedule.</p>
         </div>
-      </header>
+      <FieldVisual /></header>
 
       <form className="work-order-form" onSubmit={handleSubmit}>
         <div className="work-order-form-grid">

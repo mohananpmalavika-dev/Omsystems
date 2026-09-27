@@ -6,6 +6,7 @@
 
 'use client';
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect } from 'react';
 import { 
   Shield, 
@@ -310,7 +311,7 @@ export default function DeviceDetailPage() {
             <RefreshCw className="w-4 h-4" />
             Refresh
           </button>
-        </div>
+        <FieldVisual /></div>
       </div>
 
       {/* Device Info Cards */}

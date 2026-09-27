@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useEffect, useState, useCallback } from "react";
 import { AppLayout } from "@/components/app-layout";
 import {
@@ -302,7 +303,7 @@ export default function SignedConfigurationConsolePage() {
               Sign Bundle
             </button>
           </div>
-        </div>
+        <FieldVisual /></div>
 
         {/* Alerts */}
         {error && (

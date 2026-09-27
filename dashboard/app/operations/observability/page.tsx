@@ -1,3 +1,4 @@
+import { FieldVisual } from "@/components/field-visual";
 import React from "react";
 import { VmsObservabilityView } from "@/components/vms-observability-view";
 
@@ -17,7 +18,7 @@ export default function ObservabilityPage() {
           <p className="text-sm text-slate-400 mt-1">
             Authoritative Core Metrics: vms_camera_online, vms_camera_stream_fps, vms_camera_bitrate, vms_recording_segments, vms_recording_gaps, and Storage Latency Histograms
           </p>
-        </div>
+        <FieldVisual /></div>
         <VmsObservabilityView />
       </div>
     </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -215,7 +216,7 @@ export default function HealthMonitoringPage() {
               <button type="button" onClick={() => void load()} disabled={refreshing || loading} className="inline-flex items-center gap-2 rounded-lg border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-semibold transition hover:bg-white/15 disabled:opacity-50"><RefreshCw size={15} className={refreshing || loading ? "animate-spin" : ""} />Refresh snapshot</button>
               <button type="button" onClick={() => void runHealthCheck()} disabled={checkRunning} className="inline-flex items-center gap-2 rounded-lg bg-teal-400 px-4 py-2.5 text-sm font-semibold text-slate-950 transition hover:bg-teal-300 disabled:opacity-50"><ClipboardCheck size={16} />{checkRunning ? "Starting check..." : "Run health check"}</button>
             </div>
-          </div>
+          <FieldVisual /></div>
         </div>
       </section>
 

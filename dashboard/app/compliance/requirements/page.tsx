@@ -1,5 +1,6 @@
 'use client';
 
+import { FieldVisual } from "@/components/field-visual";
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Shield, Plus, Search, Filter, CheckCircle, XCircle, Clock } from 'lucide-react';
@@ -94,7 +95,7 @@ export default function RequirementsPage() {
             <Plus className="h-5 w-5" />
             <span>Add Requirement</span>
           </Link>
-        </div>
+        <FieldVisual /></div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">

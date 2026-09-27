@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect, useCallback, useId } from "react";
 import {
   ShieldAlert,
@@ -347,7 +348,7 @@ export function CameraTamperWorkspace({ cameraId }: { cameraId?: string }) {
             Tune Thresholds
           </button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* Active Alerts Banner if tamper detected */}
       {activeAlertsCount > 0 && (

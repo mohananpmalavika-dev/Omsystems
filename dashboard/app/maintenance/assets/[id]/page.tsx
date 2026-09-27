@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { maintenanceApi, organizationApi } from "@/lib/api-client";
@@ -101,7 +102,7 @@ export default function AssetDetailPage() {
           <h1>Asset details</h1>
           <p>Maintain field identity, ownership, placement, firmware, warranty, and lifecycle status.</p>
         </div>
-      </header>
+      <FieldVisual /></header>
 
       <form className="work-order-form" onSubmit={handleSave}>
         <div className="work-order-form-grid">

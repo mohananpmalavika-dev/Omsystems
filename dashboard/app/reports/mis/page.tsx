@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { AppLayout } from "@/components/app-layout";
@@ -253,7 +254,7 @@ export default function MisReportsPage() {
               <Printer size={14} /> Print / Save PDF
             </button>
           </div>
-        </div>
+        <FieldVisual /></div>
 
         {/* DAILY 08:00 PM AUTO-DISPATCH EXECUTIVE SCORECARD BANNER */}
         <div className="relative overflow-hidden rounded-2xl border border-sky-500/30 bg-gradient-to-r from-slate-950 via-slate-900 to-sky-950/40 p-5 shadow-xl print:hidden">

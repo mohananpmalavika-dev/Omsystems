@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import Link from "next/link";
 import {
   Activity,
@@ -202,7 +203,7 @@ export function AnalyticsDomainWorkspace({ domainId }: { domainId: DomainId }) {
             AI engine {engineState}
           </div>
         </div>
-      </header>
+      <FieldVisual /></header>
 
       {message && <div className={`mb-4 flex items-center gap-2 rounded-xl border p-3 text-sm ${message.kind === "error" ? "border-red-500/30 bg-red-500/10 text-red-200" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"}`}>
         {message.kind === "error" ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}{message.text}

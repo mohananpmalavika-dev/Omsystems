@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Phone, PhoneOff, Mic, MicOff, Volume2, Search, 
@@ -499,7 +500,7 @@ export default function CommunicationsCallsPage() {
             Refresh
           </button>
         </div>
-      </header>
+      <FieldVisual /></header>
       
       {/* View Mode Tabs */}
       <div className="view-tabs">

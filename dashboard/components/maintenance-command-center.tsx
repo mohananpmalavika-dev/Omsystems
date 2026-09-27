@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect } from "react";
 import {
   Wrench,
@@ -188,7 +189,7 @@ export function MaintenanceCommandCenter() {
               First-Time Fix: {metrics?.firstTimeFixRatePct || 94.2}%
             </span>
           </div>
-        </div>
+        <FieldVisual /></div>
       </div>
 
       {toastMsg && (

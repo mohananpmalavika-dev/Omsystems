@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useEffect, useState, useCallback } from "react";
 import {
   TrendingUp,
@@ -166,7 +167,7 @@ export default function BranchComparisonPage() {
             <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
           </button>
         </div>
-      </header>
+      <FieldVisual /></header>
 
       {message && (
         <div

@@ -7,6 +7,7 @@
 
 'use client';
 
+import { FieldVisual } from "@/components/field-visual";
 import React from 'react';
 import { BranchOperationalHealth, HealthState } from '../../../types/operational-health.types';
 import { BranchCameraWall } from './branch-camera-wall';
@@ -87,7 +88,7 @@ export function BranchDetailView({ health, onClose, onRefresh }: BranchDetailVie
                 Refresh
               </button>
             </div>
-          </div>
+          <FieldVisual /></div>
         </div>
       </div>
 

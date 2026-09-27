@@ -7,6 +7,7 @@
 
 'use client';
 
+import { FieldVisual } from "@/components/field-visual";
 import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { 
@@ -153,7 +154,7 @@ function SecurityDeviceHubContent() {
               Settings
             </Link>
           </div>
-        </div>
+        <FieldVisual /></div>
       </div>
 
       {error && <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</div>}

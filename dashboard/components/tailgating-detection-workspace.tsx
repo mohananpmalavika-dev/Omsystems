@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   ShieldAlert,
@@ -354,7 +355,7 @@ export function TailgatingDetectionWorkspace({ portalId }: { portalId?: string }
             <RefreshCw size={14} className={loading ? "animate-spin text-cyan-400" : ""} />
           </button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* Sub-module Navigation Tabs */}
       <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">

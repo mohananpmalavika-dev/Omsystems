@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect, useRef } from "react";
 import {
   Building2,
@@ -248,7 +249,7 @@ export function DeviceConfigurationCenter() {
               <RefreshCw className={`w-4 h-4 ${loadingDevices ? "animate-spin" : ""}`} />
             </button>
           </div>
-        </div>
+        <FieldVisual /></div>
       </div>
 
       {error && <div role="alert" className="rounded-xl border border-rose-500/40 bg-rose-950/40 px-4 py-3 text-sm text-rose-200">{error}</div>}

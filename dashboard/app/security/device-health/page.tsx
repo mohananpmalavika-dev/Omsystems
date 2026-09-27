@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import {
@@ -209,7 +210,7 @@ export default function SecurityDeviceHealthPage() {
             </button>
           </div>
         </div>
-      </header>
+      <FieldVisual /></header>
 
       {message && (
         <div

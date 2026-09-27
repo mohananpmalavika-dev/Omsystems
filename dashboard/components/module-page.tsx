@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { AlertTriangle, ArrowRight, LoaderCircle, Plus, RefreshCw } from "lucide-react";
+import { FieldVisual } from "@/components/field-visual";
 
 type ModulePageProps = {
   eyebrow: string;
@@ -40,7 +41,7 @@ export function ModulePage({
 }: ModulePageProps) {
   return (
     <div className="module-page">
-      <header className="module-hero">
+      <header className="module-hero field-hero">
         <div className="module-hero-copy">
           <div className="module-icon"><Icon size={21} /></div>
           <div>
@@ -49,6 +50,7 @@ export function ModulePage({
             <p className="module-description">{description}</p>
           </div>
         </div>
+        <FieldVisual />
         <div className="module-hero-actions">
           {typeof count === "number" && (
             <div className="module-count">

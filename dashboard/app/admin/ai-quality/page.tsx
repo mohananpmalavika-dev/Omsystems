@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { AppLayout } from "@/components/app-layout";
 import { AIQualityRegistry } from "@/components/ai-quality-registry";
 
@@ -12,7 +13,7 @@ export default function AIQualityPage() {
           <p className="text-sm text-slate-400 mt-1">
             Production-certified computer vision models, benchmark evaluation curves, hardware profiles, and real-time fleet drift monitor.
           </p>
-        </div>
+        <FieldVisual /></div>
 
         <AIQualityRegistry />
       </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useCallback, useEffect, useState } from "react";
 import { 
   Activity, 
@@ -154,7 +155,7 @@ export default function OperationalHealthDashboard() {
               <span>{realtime ? "Realtime stream connected" : autoRefresh ? "30-second polling active" : "Live refresh paused"}</span>
               <em>Updated {getTimeAgo(lastRefresh.toISOString())}</em>
             </div>
-          </div>
+          <FieldVisual /></div>
         </div>
         <div className="overview-actions">
           <label className="overview-toggle">

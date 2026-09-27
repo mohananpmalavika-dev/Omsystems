@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect } from "react";
 import { ArrowLeft, Server, Camera, Building2, RefreshCw, AlertTriangle } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
@@ -220,7 +221,7 @@ export default function SystemManagementPage() {
               </div>
             </div>
           </div>
-        </header>
+        <FieldVisual /></header>
 
         {stats && (
           <div style={{

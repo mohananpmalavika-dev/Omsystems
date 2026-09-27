@@ -15,6 +15,7 @@
  * - Search and filter features
  */
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect, useCallback } from "react";
 import {
   Settings,
@@ -431,7 +432,7 @@ export function FeatureManagementDashboard() {
                 </button>
               </div>
             )}
-          </div>
+          <FieldVisual /></div>
 
           {/* Alert / Notification Banner */}
           {actionMessage && (

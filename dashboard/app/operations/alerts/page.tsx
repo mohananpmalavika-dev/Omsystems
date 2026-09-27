@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useEffect, useState } from "react";
 import { 
   AlertTriangle, 
@@ -196,7 +197,7 @@ export default function OperationalAlertsPage() {
             Refresh
           </button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* Filters */}
       {showFilters && (

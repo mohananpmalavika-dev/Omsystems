@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -46,7 +47,7 @@ export default function PrivacyPurposeNewPage() {
           <p style={{ color: "#555" }}>
             Capture lawful basis and risk level for CCTV processing purposes.
           </p>
-        </div>
+        <FieldVisual /></div>
         <Link href="/maintenance/privacy/purposes" style={{ color: "#2563eb" }}>
           Back to purposes
         </Link>

@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect } from "react";
 import {
   Server,
@@ -144,7 +145,7 @@ export function AssetReplacementManager() {
               100% Channel Mappings Preserved
             </span>
           </div>
-        </div>
+        <FieldVisual /></div>
       </div>
 
       {toastMsg && (

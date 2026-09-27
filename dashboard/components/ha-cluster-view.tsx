@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useCallback, useEffect, useState } from "react";
 import { Activity, AlertTriangle, Network, Radio, RefreshCw, Server, ShieldCheck } from "lucide-react";
 
@@ -147,7 +148,7 @@ export function HAClusterView() {
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
             Refresh
           </button>
-        </div>
+        <FieldVisual /></div>
         {error && <p className="mt-3 text-xs text-amber-300">Latest refresh failed: {error}</p>}
       </div>
 

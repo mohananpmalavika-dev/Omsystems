@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect, useCallback } from "react";
 import {
   AlertTriangle,
@@ -220,7 +221,7 @@ export function FallDetectionWorkspace({
             Refresh
           </button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* Statistics Strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">

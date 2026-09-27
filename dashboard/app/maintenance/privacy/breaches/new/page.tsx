@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -49,7 +50,7 @@ export default function PrivacyBreachNewPage() {
           <p style={{ color: "#555" }}>
             Log a new privacy breach so it can be triaged and tracked by the CCTV privacy team.
           </p>
-        </div>
+        <FieldVisual /></div>
         <Link href="/maintenance/privacy/breaches" style={{ color: "#2563eb" }}>
           Back to breaches
         </Link>

@@ -1,3 +1,4 @@
+import { FieldVisual } from "@/components/field-visual";
 import { Metadata } from 'next';
 import { PerformanceObservabilityDashboard } from '@/components/performance-observability-dashboard';
 import { AppLayout } from '@/components/app-layout';
@@ -17,7 +18,7 @@ export default function PerformancePage() {
             <p className="mt-2 text-sm text-slate-400">
               Real-time performance metrics, API latency percentiles, database query analysis, and system health
             </p>
-          </div>
+          <FieldVisual /></div>
 
           <PerformanceObservabilityDashboard />
         </div>

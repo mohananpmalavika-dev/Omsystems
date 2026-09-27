@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Volume2,
@@ -409,7 +410,7 @@ export function AudioStreamMonitoringWorkspace() {
             </span>
           </div>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* Fleet KPI Metric Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">

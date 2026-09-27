@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -165,7 +166,7 @@ export default function AuthorizedPersonsPage() {
             <RefreshCw size={16} className={busy ? "animate-spin" : ""} />
           </button>
         </div>
-      </header>
+      <FieldVisual /></header>
 
       {/* Tab Navigation */}
       <div className="mb-6 flex flex-wrap items-center gap-2 border-b border-slate-800 pb-3">

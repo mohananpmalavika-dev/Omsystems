@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React from "react";
 import {
   Activity,
@@ -81,7 +82,7 @@ export function BranchHealthHeader({ state, onRefresh }: BranchHealthHeaderProps
         <div className="flex items-center gap-3">
           {getStatusBadge(state.overallStatus)}
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* Grid of Telemetry Indicators */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 pt-2 border-t border-slate-800/80">

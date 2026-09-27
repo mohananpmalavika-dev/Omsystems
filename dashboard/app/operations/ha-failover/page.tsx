@@ -1,3 +1,4 @@
+import { FieldVisual } from "@/components/field-visual";
 import React from "react";
 import { HaFailoverView } from "@/components/ha-failover-view";
 
@@ -17,7 +18,7 @@ export default function HaFailoverPage() {
           <p className="text-sm text-slate-400 mt-1">
             Zero-SPOF Distributed Architecture: Redis HA Leases with Monotonic Fencing Epochs, Split-Brain Protection, and Capacity Scheduling
           </p>
-        </div>
+        <FieldVisual /></div>
         <HaFailoverView />
       </div>
     </div>

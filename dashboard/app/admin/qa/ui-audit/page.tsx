@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -291,7 +292,7 @@ export default function AutomatedUiAuditPage() {
               Run History ({runs.length})
             </button>
           </div>
-        </div>
+        <FieldVisual /></div>
 
         {/* TAB 1: NEW AUDIT FORM */}
         {activeTab === "new" && (

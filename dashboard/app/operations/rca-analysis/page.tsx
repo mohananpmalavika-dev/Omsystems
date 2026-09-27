@@ -7,6 +7,7 @@
 
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect } from "react";
 import { Activity, AlertCircle, Loader2, RefreshCw, Search, Sparkles } from "lucide-react";
 import { RCADiagnosisPanel } from "@/components/rca-diagnosis-panel";
@@ -95,7 +96,7 @@ export default function RCAAnalysisPage() {
         <p className="mt-2 text-sm text-slate-400">
           Multi-branch correlation, topology reasoning, temporal analysis, and explainable confidence scoring
         </p>
-      </header>
+      <FieldVisual /></header>
 
       {/* Control Panel */}
       <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/80 p-5">

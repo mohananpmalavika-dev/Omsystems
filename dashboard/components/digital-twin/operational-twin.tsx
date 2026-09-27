@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
@@ -72,7 +73,7 @@ export default function OperationalTwin({ branchId, editor = false }: { branchId
   const startLive=async(object:TwinObject)=>{if(object.binding?.deviceType!=="camera")return;setBusy(true);try{setLiveSession(await startLiveFromBrowser(object.binding.deviceId,"sub"));}catch(reason){setError(message(reason));}finally{setBusy(false);}};
 
   if(loading)return <div className="grid min-h-[70vh] place-items-center"><Loader2 className="animate-spin text-cyan-500" size={40}/></div>;
-  if(!live?.configured)return <div className="grid min-h-[70vh] place-items-center p-6"><div className="max-w-xl rounded-2xl border bg-white p-10 text-center shadow-sm workspace-heading"><Layers3 className="mx-auto text-cyan-600" size={54}/><h1 className="mt-4 text-2xl font-bold">Create branch Digital Twin</h1><p className="mt-2 text-sm text-gray-500">Initialize the branch, its building and Ground Floor. Device positions remain editable as floor-plan versions change.</p><button disabled={busy} onClick={bootstrap} className="btn-primary mt-6">{busy?"Creating…":"Initialize Digital Twin"}</button></div></div>;
+  if(!live?.configured)return <div className="grid min-h-[70vh] place-items-center p-6"><div className="max-w-xl rounded-2xl border bg-white p-10 text-center shadow-sm workspace-heading"><Layers3 className="mx-auto text-cyan-600" size={54}/><h1 className="mt-4 text-2xl font-bold">Create branch Digital Twin</h1><p className="mt-2 text-sm text-gray-500">Initialize the branch, its building and Ground Floor. Device positions remain editable as floor-plan versions change.</p><button disabled={busy} onClick={bootstrap} className="btn-primary mt-6">{busy?"Creating…":"Initialize Digital Twin"}</button><FieldVisual /></div></div>;
   if(!state)return <div className="p-10 text-center text-gray-500">No floors configured.</div>;
   const planUrl=state.floorPlan?assetUrl(state.floorPlan.contentUrl):undefined;
   const sceneClass=viewMode==="2d"?"":viewMode==="2.5d"?"[transform:perspective(1100px)_rotateX(42deg)_rotateZ(-2deg)_scale(.9)] shadow-2xl":"[transform:perspective(900px)_rotateX(58deg)_rotateZ(-8deg)_scale(.82)] shadow-2xl";

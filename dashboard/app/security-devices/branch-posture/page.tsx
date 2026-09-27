@@ -6,6 +6,7 @@
 
 'use client';
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect } from 'react';
 import { 
   Shield, 
@@ -273,7 +274,7 @@ export default function BranchSecurityPosturePage() {
               Back to Overview
             </Link>
           </div>
-        </div>
+        <FieldVisual /></div>
       </div>
 
       {/* Summary Cards */}

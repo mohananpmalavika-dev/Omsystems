@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Activity,
@@ -260,7 +261,7 @@ export function RecordingRecoveryWorkspace() {
             Launch Backfill
           </button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* Notifications */}
       {actionError && (

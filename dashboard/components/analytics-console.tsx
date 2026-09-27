@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import {
   Activity, AlertTriangle, ArrowLeft, BellRing, BrainCircuit, Camera, Box,
   Check, ChevronRight, CircleDot, Clock3, ExternalLink, Plus, RefreshCw,
@@ -284,7 +285,7 @@ export function AnalyticsConsole() {
           <i /> AI engine {engineState}
           <small>{engineState === "online" ? "Real-time edge & cloud ingestion active" : "Independent from live view and recording"}</small>
         </div>
-      </header>
+      <FieldVisual /></header>
 
       {message && (
         <div className={`analytics-message ${message.kind}`}>

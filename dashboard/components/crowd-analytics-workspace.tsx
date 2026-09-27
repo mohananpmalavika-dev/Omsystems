@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect, useCallback } from "react";
 import {
   Users,
@@ -284,7 +285,7 @@ export function CrowdAnalyticsWorkspace({ branchId }: { branchId?: string }) {
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* KPI Cards Ribbon */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">

@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { AlertTriangle, ArrowLeft, Building2, Camera, Shield, ShieldCheck, Users, Server } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/app-layout";
@@ -107,7 +108,7 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>
-          </header>
+          <FieldVisual /></header>
           <div style={{ padding: "2rem", textAlign: "center" }}>
             <p>Loading organization...</p>
           </div>

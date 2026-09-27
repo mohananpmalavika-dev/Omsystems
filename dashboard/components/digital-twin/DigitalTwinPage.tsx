@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState } from "react";
 import { AlertTriangle, Info, Network, RefreshCw } from "lucide-react";
 import { TopologyVisualization } from "./TopologyVisualization";
@@ -22,7 +23,7 @@ export function DigitalTwinPage() {
             <RefreshCw className="h-4 w-4" aria-hidden="true" />Refresh data
           </button>
         </div>
-      </header>
+      <FieldVisual /></header>
 
       <div className="mx-auto max-w-7xl space-y-4 px-4 py-8 sm:px-6 lg:px-8">
         <section className="rounded-lg border border-gray-200 bg-white p-4 sm:p-6" aria-labelledby="topology-heading">

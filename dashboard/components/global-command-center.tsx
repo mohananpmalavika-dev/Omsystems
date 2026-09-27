@@ -5,6 +5,7 @@
  * Top-level federation monitoring dashboard showing all regions
  */
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -180,7 +181,7 @@ export function GlobalCommandCenter() {
             Refresh
           </Button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* Summary Cards */}
       {error && (

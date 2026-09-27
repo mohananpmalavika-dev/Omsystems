@@ -5,6 +5,7 @@
  * Displays metrics, trends, heat maps, and operational intelligence
  */
 
+import { FieldVisual } from "@/components/field-visual";
 import {
   Activity, BarChart3, Clock, Eye, Footprints, Users, Download, RefreshCw,
   AlertTriangle,
@@ -194,7 +195,7 @@ export function AnalyticsDashboard() {
             </div>
           )}
         </div>
-      </header>
+      <FieldVisual /></header>
 
       {error && (
         <div className="dashboard-error">

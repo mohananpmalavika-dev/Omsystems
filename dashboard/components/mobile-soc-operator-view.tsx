@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect } from "react";
 import {
   ShieldAlert,
@@ -196,7 +197,7 @@ export function MobileSocOperatorView() {
               <span className="text-slate-400">{selectedIncident.branch.code}</span>
             </div>
           </div>
-        </div>
+        <FieldVisual /></div>
 
         {/* Media Viewport (Snapshot vs 45-Sec Clip vs WebRTC Live) */}
         <div className="p-4 space-y-4 flex-1">

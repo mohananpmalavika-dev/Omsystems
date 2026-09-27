@@ -3,6 +3,7 @@
  * UI for managing notification recipient groups and members
  */
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect } from 'react';
 import { Users, Mail, Phone, Plus, Trash2, Edit2, Save, X, CheckCircle } from 'lucide-react';
 
@@ -156,7 +157,7 @@ export function RecipientGroupManager() {
           <Plus className="w-4 h-4" />
           New Group
         </button>
-      </div>
+      <FieldVisual /></div>
 
       {/* Groups List */}
       {!showCreateForm && (

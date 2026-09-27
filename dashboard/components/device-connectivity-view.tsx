@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect, useMemo } from "react";
 import {
   ShieldCheck,
@@ -264,7 +265,7 @@ export function DeviceConnectivityView() {
               Score: 98/100 (Grade A)
             </span>
           </div>
-        </div>
+        <FieldVisual /></div>
       </div>
 
       {toastMsg && (

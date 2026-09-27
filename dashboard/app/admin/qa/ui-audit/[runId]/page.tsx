@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { AppLayout } from "@/components/app-layout";
@@ -161,7 +162,7 @@ export default function QARunReportPage(props: { params: Promise<{ runId: string
                 <div className="text-[11px] text-slate-500 mt-0.5">8 Weighted Operational Pillars</div>
               </div>
             </div>
-          </div>
+          <FieldVisual /></div>
 
           {/* Score Pillar Bars */}
           <div className="mt-6 pt-5 border-t border-slate-800/80 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8 text-center text-xs">

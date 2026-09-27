@@ -6,6 +6,7 @@
 
 'use client';
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect } from 'react';
 import { 
   Search, 
@@ -265,7 +266,7 @@ export default function DeviceDiscoveryPage() {
               New Discovery Job
             </button>
           </div>
-        </div>
+        <FieldVisual /></div>
       </div>
 
       {error && (

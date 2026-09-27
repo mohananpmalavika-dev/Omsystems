@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
@@ -355,7 +356,7 @@ export default function FleetBranchesPage() {
             <span>Refresh</span>
           </button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       <section className="command-center-focus" aria-labelledby="branch-triage-title">
         <div className="command-center-focus-heading">

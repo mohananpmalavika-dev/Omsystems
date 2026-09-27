@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import {
   AlertTriangle,
   Calendar,
@@ -202,7 +203,7 @@ export function VideoSearchInterface() {
             Search recordings by date, camera, events, motion, and detected
             objects
           </p>
-        </div>
+        <FieldVisual /></div>
       </div>
 
       {/* Search Filters */}

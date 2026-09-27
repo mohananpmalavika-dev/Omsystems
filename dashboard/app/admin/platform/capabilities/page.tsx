@@ -1,5 +1,6 @@
 'use client';
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useMemo } from 'react';
 import {
   ShieldCheck,
@@ -120,7 +121,7 @@ export default function PlatformCapabilitiesPage() {
             Refresh Truth
           </button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* Error Alert */}
       {error && (

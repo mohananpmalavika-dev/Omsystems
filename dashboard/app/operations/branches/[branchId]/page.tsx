@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -128,7 +129,7 @@ export default function BranchWorkspacePage() {
               <span>Live Wall</span>
             </Link>
           </div>
-        </div>
+        <FieldVisual /></div>
 
         {/* Tab Navigation */}
         <div className="flex items-center gap-1 border-b border-slate-800 overflow-x-auto pb-px">

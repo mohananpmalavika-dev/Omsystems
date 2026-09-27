@@ -5,6 +5,7 @@
  * Production-ready mobile operations interface
  */
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   ShieldAlert,
@@ -409,7 +410,7 @@ export function MobileCommandCenter() {
               </span>
             </div>
           </div>
-        </div>
+        <FieldVisual /></div>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-20">

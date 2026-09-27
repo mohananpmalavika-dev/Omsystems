@@ -13,6 +13,7 @@
  * - Export comparison report
  */
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -326,7 +327,7 @@ export default function AiComparisonPage() {
             Export Report
           </Button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* Capability Selection */}
       <Card>

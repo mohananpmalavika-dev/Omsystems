@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { maintenanceApi } from "@/lib/api-client";
@@ -36,7 +37,7 @@ export default function NewVendorPage() {
     <div className="record-form-page" style={{ padding: 16 }}>
       <header className="record-form-hero workspace-heading">
         <div><span>Service network</span><h1>Add vendor</h1><p>Onboard a maintenance partner and record the primary escalation contact.</p></div>
-      </header>
+      <FieldVisual /></header>
       <form onSubmit={handleSubmit} style={{ maxWidth: 640 }}>
         <div style={{ marginBottom: 8 }}>
           <label>Name<br />

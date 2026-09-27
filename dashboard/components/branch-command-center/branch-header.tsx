@@ -6,6 +6,7 @@
 
 'use client';
 
+import { FieldVisual } from "@/components/field-visual";
 import React from 'react';
 import Link from 'next/link';
 import { BranchOperationalSnapshot } from '@/types/branch-operational-snapshot';
@@ -156,7 +157,7 @@ export function BranchHeader({ snapshot, onRefresh }: BranchHeaderProps) {
               Refresh
             </button>
           </div>
-        </div>
+        <FieldVisual /></div>
       </div>
     </div>
   );

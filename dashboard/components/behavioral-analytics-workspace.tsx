@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect, useCallback } from "react";
 import {
   Brain,
@@ -331,7 +332,7 @@ export function BehavioralAnalyticsWorkspace({ branchId }: { branchId?: string }
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* System Health Status */}
       {health && (

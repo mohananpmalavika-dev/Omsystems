@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AlertCircle, CheckCircle2, Clock } from "lucide-react";
@@ -181,7 +182,7 @@ export default function WorkOrderDetailPage() {
           <h1>Work order details</h1>
           <p>Update assignment, execution evidence, resolution, and SLA lifecycle status.</p>
         </div>
-      </header>
+      <FieldVisual /></header>
 
       {slaBanner}
 

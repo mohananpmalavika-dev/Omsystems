@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useEffect, useState } from "react";
 import {
   Activity,
@@ -186,7 +187,7 @@ export function DVRNVRMonitorDashboard() {
         <div className="workspace-heading">
           <h1>DVR/NVR Monitoring</h1>
           <p>Real-time device health and status monitoring</p>
-        </div>
+        <FieldVisual /></div>
         <div className="header-actions">
           <label className="auto-refresh-toggle">
             <input

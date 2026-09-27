@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -303,7 +304,7 @@ export function AISOPWorkflowInterface({ executionId }: { executionId?: string }
             </Badge>
           )}
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* Progress Overview */}
       <Card>

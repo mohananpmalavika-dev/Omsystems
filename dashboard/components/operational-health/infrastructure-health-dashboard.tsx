@@ -12,6 +12,7 @@
  * 5. Infrastructure Path Visualization - Camera dependencies
  */
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect } from "react";
 import { Server, RefreshCw } from "lucide-react";
 import { fetchBranchesHealth } from "@/lib/api/operational-health";
@@ -123,7 +124,7 @@ export function InfrastructureHealthDashboard() {
             Refresh
           </button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* Top Row: Health Score + Active Incidents */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

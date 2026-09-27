@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect, useCallback, useId } from "react";
 import {
   ShieldAlert,
@@ -338,7 +339,7 @@ export function CameraObstructionWorkspace({ cameraId }: { cameraId?: string }) 
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin text-zinc-200" : ""}`} />
           </button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* Fleet KPI Metric Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">

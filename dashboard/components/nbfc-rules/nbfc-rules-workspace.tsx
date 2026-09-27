@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Activity,
@@ -1218,7 +1219,7 @@ export function NbfcRulesWorkspace() {
             Create AI Rule
           </button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {loadError && (
         <div role="alert" className="flex items-center justify-between gap-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">

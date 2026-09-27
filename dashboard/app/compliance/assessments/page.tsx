@@ -1,5 +1,6 @@
 'use client';
 
+import { FieldVisual } from "@/components/field-visual";
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { complianceApi } from '@/lib/api-client';
@@ -130,7 +131,7 @@ export default function AssessmentsPage() {
           >
             + New Assessment
           </button>
-        </div>
+        <FieldVisual /></div>
       </div>
 
       {error && <div className="mb-6 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">{error}</div>}

@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { SyncedPlaybackView } from "@/components/synced-playback-view";
 import { NotificationsProvider } from "@/components/notifications/NotificationsProvider";
@@ -252,7 +253,7 @@ export default function SyncedPlaybackPage() {
                 <span>{isPlaybackActive ? "Reload Synced Stream" : "Launch Synced Playback"}</span>
               </button>
             </div>
-          </div>
+          <FieldVisual /></div>
         </div>
 
         {/* Control Bar: Branch Selection & Time Range */}

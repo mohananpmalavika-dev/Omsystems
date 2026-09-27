@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AppLayout } from "@/components/app-layout";
@@ -705,7 +706,7 @@ export default function IncidentDetailPage() {
               <p style={{ fontSize: "18px", color: "#4b5563", margin: 0 }}>
                 {incident.title}
               </p>
-            </div>
+            <FieldVisual /></div>
           </div>
         </div>
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect } from "react";
 import {
   ShieldCheck,
@@ -119,7 +120,7 @@ export function RetentionComplianceDashboard() {
             <span>Refresh Fleet</span>
           </button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* KPI Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

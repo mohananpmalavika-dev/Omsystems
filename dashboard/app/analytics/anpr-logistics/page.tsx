@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import {
@@ -189,7 +190,7 @@ export default function AnprLogisticsPage() {
             </button>
           </div>
         </div>
-      </header>
+      <FieldVisual /></header>
 
       {message && (
         <div

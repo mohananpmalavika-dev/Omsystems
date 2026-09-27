@@ -3,6 +3,7 @@
  * Production-ready UI for configuring notification policies
  */
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect } from 'react';
 import { 
   AlertCircle, 
@@ -357,7 +358,7 @@ export function NotificationPolicyEditor() {
               </span>
             )}
           </div>
-        </div>
+        <FieldVisual /></div>
 
         <div className="space-y-4">
           <div>

@@ -1,5 +1,6 @@
 'use client';
 
+import { FieldVisual } from "@/components/field-visual";
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, Search, Filter, TrendingUp, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
@@ -104,7 +105,7 @@ export default function FindingsPage() {
               <p className="text-gray-600 mt-1">Track and manage compliance issues</p>
             </div>
           </div>
-        </div>
+        <FieldVisual /></div>
 
         {error && <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">{error} <button type="button" className="font-semibold underline" onClick={() => void fetchFindings()}>Try again</button></div>}
 

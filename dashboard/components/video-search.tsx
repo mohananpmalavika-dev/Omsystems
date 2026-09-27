@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import {
   AlertTriangle,
   Calendar,
@@ -180,7 +181,7 @@ export function VideoSearch() {
         <div className="search-header workspace-heading">
           <h1>Video search & retrieval</h1>
           <p>Find recordings by date, time, camera, and event type</p>
-        </div>
+        <FieldVisual /></div>
 
         {error && (
           <div className="error-banner">

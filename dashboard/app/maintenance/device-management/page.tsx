@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
@@ -156,7 +157,7 @@ export default function DeviceManagementPage() {
               Back
             </Link>
           </div>
-        </div>
+        <FieldVisual /></div>
 
         {/* Device Configuration Center Banner */}
         <div className="bg-gradient-to-r from-indigo-950/60 via-slate-900/60 to-slate-900/60 border border-indigo-500/30 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">

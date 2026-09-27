@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Database,
@@ -348,7 +349,7 @@ export default function DatabaseManagerPage() {
               <span>+ Add Record</span>
             </button>
           </div>
-        </div>
+        <FieldVisual /></div>
 
         {/* Main Grid: Table Switcher Sidebar + Table Data Workspace */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

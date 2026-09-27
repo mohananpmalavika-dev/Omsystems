@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import Link from "next/link";
 import {
   Activity,
@@ -110,7 +111,7 @@ export function BranchGatewayFleet() {
             <span className="inline-flex items-center gap-1.5"><Cpu size={14} className="text-blue-300"/> Automatic restart after power loss</span>
             <span className="inline-flex items-center gap-1.5"><Camera size={14} className="text-blue-300"/> ONVIF and DVR discovery</span>
           </div>
-        </div>
+        <FieldVisual /></div>
         <div className="flex items-start gap-3 lg:flex-col lg:items-end">
           <span className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold ${realtime ? "bg-emerald-400/15 text-emerald-200" : "bg-amber-400/15 text-amber-100"}`}>
             <i className={`h-2 w-2 rounded-full ${realtime ? "bg-emerald-400" : "bg-amber-400"}`}/>

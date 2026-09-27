@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useSearchParams } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import {
@@ -98,7 +99,7 @@ export default function AiCommandCenterPage() {
         {branchId && <p className="mt-2 text-xs text-cyan-300">Scoped to branch {branchId}</p>}
       </div>
       <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300"><ShieldCheck size={15}/> No unsupported claims</div>
-    </header>
+    <FieldVisual /></header>
 
     {error && <div className="mb-4 flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200"><AlertTriangle size={16}/>{error}</div>}
 

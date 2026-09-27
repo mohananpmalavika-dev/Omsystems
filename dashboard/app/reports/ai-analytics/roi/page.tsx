@@ -13,6 +13,7 @@
  * - NPV and IRR visualization
  */
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -257,7 +258,7 @@ export default function AiRoiCalculatorPage() {
             Export Excel
           </Button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* Date Range Selector */}
       <Card>

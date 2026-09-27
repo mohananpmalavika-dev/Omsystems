@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect, useCallback, useId } from "react";
 import {
   Package,
@@ -310,7 +311,7 @@ export function AbandonedObjectWorkspace({ cameraId }: { cameraId?: string }) {
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* 2. Operational KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">

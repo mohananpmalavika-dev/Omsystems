@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { 
@@ -80,7 +81,7 @@ export default function CompliancePage() {
             New Framework
           </button>
         </div>
-      </header>
+      <FieldVisual /></header>
 
       <div className="page-content">
         <ComplianceHubNav />

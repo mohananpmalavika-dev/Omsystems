@@ -1,5 +1,6 @@
 'use client';
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ComplianceHubNav } from '@/components/compliance/compliance-hub-nav';
@@ -121,7 +122,7 @@ export default function BranchCompliancePage() {
           <Award size={16} />
           Export Official RBI Certificate
         </button>
-      </div>
+      <FieldVisual /></div>
 
       {error && (
         <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800" role="alert">

@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle, Info, RefreshCw, XCircle } from "lucide-react";
 
@@ -154,7 +155,7 @@ export default function DiagnosticsPage() {
           <p className="text-sm text-gray-600">
             Checking live video wall configuration and connectivity
           </p>
-        </div>
+        <FieldVisual /></div>
 
         <div className="mb-4 flex justify-end">
           <button

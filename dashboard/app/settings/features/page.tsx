@@ -1,3 +1,4 @@
+import { FieldVisual } from "@/components/field-visual";
 import { FeatureList } from "@/components/feature-status-badge";
 
 export const metadata = {
@@ -16,7 +17,7 @@ export default function MyFeaturesPage() {
           <p className="text-slate-400">
             View all features enabled for your account. Contact support to enable additional features.
           </p>
-        </div>
+        <FieldVisual /></div>
 
         <FeatureList />
       </div>

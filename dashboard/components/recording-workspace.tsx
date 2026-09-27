@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import Hls from "hls.js";
 import { AlertTriangle, CalendarClock, CheckCircle2, Clapperboard, LoaderCircle, Play, RefreshCw, Video } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -187,7 +188,7 @@ export function RecordingWorkspace() {
       <header className="recording-header workspace-heading">
         <div><span className="eyebrow">RECORDING OPERATIONS</span><h1>Recording playback</h1><p>Search footage on camera SD cards and recorder hard disks, or review indexed recordings.</p></div>
         <a href="/" className="secondary-button"><Video size={15} />Live wall</a>
-      </header>
+      <FieldVisual /></header>
 
       <section className="recording-filters" aria-label="Recording playback filters">
         <label>Branch<select value={branchId} onChange={(event) => setBranchId(event.target.value)}>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>

@@ -1,3 +1,4 @@
+import { FieldVisual } from "@/components/field-visual";
 import { BranchEdgeProductView } from "@/components/branch-edge-product-view";
 
 export const metadata = {
@@ -16,7 +17,7 @@ export default function Page() {
           <p className="text-sm text-slate-400 mt-1">
             Zero-Outage Branch Architecture: Multi-Protocol Discovery (ONVIF/Dahua/Hik/CP PLUS), Store-and-Forward Buffering, Broadband & LTE Failover, and Local Credential Rotation
           </p>
-        </div>
+        <FieldVisual /></div>
         <BranchEdgeProductView />
       </div>
     </div>

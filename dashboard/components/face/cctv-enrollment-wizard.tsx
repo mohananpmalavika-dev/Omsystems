@@ -12,6 +12,7 @@
  * 4. Enroll ചെയ്യുക
  */
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState } from "react";
 import {
   Camera,
@@ -159,7 +160,7 @@ export function CCTVEnrollmentWizard({
           <p className="text-slate-400">
             {cameraName} → {watchlistName}
           </p>
-        </div>
+        <FieldVisual /></div>
 
         {/* Steps */}
         <div className="flex items-center justify-center mb-8 gap-4">

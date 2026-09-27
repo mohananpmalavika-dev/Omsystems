@@ -7,6 +7,7 @@
 
 'use client';
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState } from 'react';
 import { OperationalSummaryKPIs } from './summary/operational-summary-kpis';
 import { BranchHealthMosaic } from './mosaic/branch-health-mosaic';
@@ -81,7 +82,7 @@ export function OperationalDashboard() {
                 {summaryLoading || branchesLoading ? 'Refreshing...' : 'Refresh Now'}
               </button>
             </div>
-          </div>
+          <FieldVisual /></div>
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { FieldVisual } from "@/components/field-visual";
 import Link from 'next/link';
 import { FormEvent, useState } from 'react';
 
@@ -69,7 +70,7 @@ export default function AxProSetupPage() {
   return (
     <main className="min-h-screen bg-slate-950 p-6 text-slate-100">
       <div className="mx-auto max-w-3xl">
-        <div className="mb-8 flex items-start justify-between gap-4 workspace-heading"><div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-400">Integration setup</p><h1 className="text-3xl font-semibold">Hikvision AX PRO</h1><p className="mt-2 text-sm text-slate-400">Credentials are referenced from the secret vault. This setup does not accept or persist a password.</p></div><Link href="/security-devices/integrations" className="rounded-lg border border-slate-700 px-4 py-2 text-sm hover:bg-slate-900">Back</Link></div>
+        <div className="mb-8 flex items-start justify-between gap-4 workspace-heading"><div><p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-400">Integration setup</p><h1 className="text-3xl font-semibold">Hikvision AX PRO</h1><p className="mt-2 text-sm text-slate-400">Credentials are referenced from the secret vault. This setup does not accept or persist a password.</p></div><Link href="/security-devices/integrations" className="rounded-lg border border-slate-700 px-4 py-2 text-sm hover:bg-slate-900">Back</Link><FieldVisual /></div>
         {message && <div className="mb-5 rounded-lg border border-amber-700/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{message}</div>}
         <form onSubmit={create} className="space-y-6 rounded-xl border border-slate-800 bg-slate-900/70 p-6">
           <Field label="Integration name" value={form.name} onChange={(v) => update('name', v)} required placeholder="Branch AX PRO" />

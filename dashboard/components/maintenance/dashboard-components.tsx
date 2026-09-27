@@ -5,6 +5,7 @@
 
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect } from "react";
 
 // ============================================================================
@@ -458,7 +459,7 @@ export const MaintenanceDashboard: React.FC<{
           <p className="text-gray-600 mt-2">
             Real-time asset health, work orders, and SLA monitoring
           </p>
-        </div>
+        <FieldVisual /></div>
 
         {/* Metrics Summary */}
         <DashboardMetricsSummary {...data.summary} />

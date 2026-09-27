@@ -1,5 +1,6 @@
 'use client';
 
+import { FieldVisual } from "@/components/field-visual";
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { AlertCircle, CheckCircle, RefreshCw, Shield, WifiOff } from 'lucide-react';
@@ -74,7 +75,7 @@ export default function IntegrationsPage() {
             <Link href="/security-devices" className="rounded-lg border border-slate-700 px-4 py-2 text-sm hover:bg-slate-900">Device hub</Link>
             <Link href="/settings/integrations/hikvision/ax-pro" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold hover:bg-blue-500">Add AX PRO</Link>
           </div>
-        </div>
+        <FieldVisual /></div>
 
         {message && <div className="mb-6 rounded-lg border border-amber-700/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">{message}</div>}
 

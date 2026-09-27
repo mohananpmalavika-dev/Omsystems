@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Bookmark,
@@ -548,7 +549,7 @@ export function VideoBookmarksWorkspace() {
             Tag Bookmark
           </button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* Error Alert */}
       {error && (

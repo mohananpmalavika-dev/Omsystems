@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { FieldVisual } from "@/components/field-visual";
 
 type PageHeroProps = {
   eyebrow?: string;
@@ -25,7 +26,7 @@ export function PageHero({
   tone = "navy",
 }: PageHeroProps) {
   return (
-    <header className={`page-hero page-hero-${tone}`}>
+    <header className={`page-hero field-hero page-hero-${tone}`}>
       <div className="page-hero-copy">
         <span className="page-hero-icon"><Icon size={23} /></span>
         <div>
@@ -34,6 +35,7 @@ export function PageHero({
           <p className="page-hero-description">{description}</p>
         </div>
       </div>
+      <FieldVisual />
       <div className="page-hero-actions">
         <Link href={backHref} className="page-hero-back">
           <ArrowLeft size={16} />

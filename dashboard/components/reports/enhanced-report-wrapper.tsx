@@ -11,6 +11,7 @@
 
 'use client';
 
+import { FieldVisual } from "@/components/field-visual";
 import { useRef, useEffect, useState } from 'react';
 import { useAutoRefresh } from '@/hooks/use-auto-refresh';
 import { usePerformanceMonitor } from '@/hooks/use-performance-monitor';
@@ -125,7 +126,7 @@ export function EnhancedReportWrapper({
             </span>
           </div>
         )}
-      </div>
+      <FieldVisual /></div>
       
       {/* Content */}
       <div ref={contentRef} className="printable-content">

@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect, useCallback } from "react";
 import {
   CarFront,
@@ -302,7 +303,7 @@ export function AnprWorkspace() {
             OCR Test Sandbox
           </button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* KPI Ribbon */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">

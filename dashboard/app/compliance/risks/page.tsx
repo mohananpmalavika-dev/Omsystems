@@ -1,5 +1,6 @@
 'use client';
 
+import { FieldVisual } from "@/components/field-visual";
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, Plus, Search, TrendingUp, Activity } from 'lucide-react';
@@ -122,7 +123,7 @@ export default function RisksPage() {
             <Plus className="h-5 w-5" />
             <span>Add Risk</span>
           </Link>
-        </div>
+        <FieldVisual /></div>
 
         {error && <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">{error} <button type="button" className="font-semibold underline" onClick={() => void fetchRisks()}>Try again</button></div>}
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Activity,
@@ -305,7 +306,7 @@ export function ColdCloudArchiveWorkspace() {
               <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
             </button>
           </div>
-        </div>
+        <FieldVisual /></div>
       </div>
 
       {/* Alerts */}

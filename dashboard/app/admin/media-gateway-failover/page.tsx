@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useEffect, useState, useCallback } from "react";
 import { AppLayout } from "@/components/app-layout";
 import {
@@ -313,7 +314,7 @@ export default function MediaGatewayFailoverConsolePage() {
               Register Gateway
             </button>
           </div>
-        </div>
+        <FieldVisual /></div>
 
         {/* Feedback Messages */}
         {error && (

@@ -6,6 +6,7 @@
  * Admin interface for managing branch devices and enrollment codes
  */
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect } from 'react';
 import { 
   Smartphone, 
@@ -195,7 +196,7 @@ export default function DeviceManagementPage() {
             >
               <RefreshCw className="w-5 h-5 text-gray-600" />
             </button>
-          </div>
+          <FieldVisual /></div>
 
           {/* Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">

@@ -1,3 +1,4 @@
+import { FieldVisual } from "@/components/field-visual";
 import React from "react";
 import { ZeroTouchOnboardingView } from "@/components/zero-touch-onboarding-view";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -19,7 +20,7 @@ export default function ZeroTouchPage() {
             <p className="text-sm text-slate-400 mt-1">
               Discover and provision branch devices through authenticated edge agents, with live validation and operator review.
             </p>
-          </div>
+          <FieldVisual /></div>
           <ZeroTouchOnboardingView />
         </div>
       </div>

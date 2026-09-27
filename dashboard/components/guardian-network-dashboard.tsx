@@ -11,6 +11,7 @@
  * - Intelligence updates
  */
 
+import { FieldVisual } from "@/components/field-visual";
 import { useEffect, useState, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -223,7 +224,7 @@ export function GuardianNetworkDashboard() {
             Last sync: {new Date(stats.sync.lastSyncAt).toLocaleTimeString()}
           </span>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* Critical Alerts Banner */}
       {alerts.filter(a => a.alertLevel === 'critical' && !a.acknowledged).length > 0 && (

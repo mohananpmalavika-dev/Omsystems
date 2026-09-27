@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -345,7 +346,7 @@ export function IdentityWatchlistWorkspace({ initialMode }: { initialMode: Works
             <Plus size={15} /> New watchlist
           </button>
         </div>
-      </header>
+      <FieldVisual /></header>
 
       <nav className="mb-5 flex w-fit gap-1 rounded-xl border border-slate-800 bg-slate-900 p-1" aria-label="Identity intelligence workspaces">
         <Link href="/analytics/face-recognition" className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold ${mode === "face" ? "bg-cyan-600 text-white" : "text-slate-400 hover:bg-slate-800"}`}><ScanFace size={14} />Face watchlists</Link>

@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -344,7 +345,7 @@ export function UnifiedIncidentWorkflow({ incidentId }: { incidentId: string }) 
             )}
           </Button>
         </div>
-      </div>
+      <FieldVisual /></div>
 
       {/* Error Alert Box */}
       {errorMessage && (

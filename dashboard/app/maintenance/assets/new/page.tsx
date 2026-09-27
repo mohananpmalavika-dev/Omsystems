@@ -1,5 +1,6 @@
 "use client";
 
+import { FieldVisual } from "@/components/field-visual";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { maintenanceApi, organizationApi } from "@/lib/api-client";
@@ -89,7 +90,7 @@ export default function NewAssetPage() {
           <h1>Register asset</h1>
           <p>Add a real field asset with its identity, ownership, location, and lifecycle status.</p>
         </div>
-      </header>
+      <FieldVisual /></header>
 
       <form className="work-order-form" onSubmit={handleSubmit}>
         <div className="work-order-form-grid">
