@@ -1,0 +1,48 @@
+{
+  "passed": true,
+  "views": [
+    "watch",
+    "investigate",
+    "respond",
+    "overview",
+    "missing-recording",
+    "analytics-unavailable"
+  ],
+  "submissions": [
+    {
+      "path": "/api/control/v1/analytics/alerts/evt-entry/acknowledge",
+      "method": "POST",
+      "body": {
+        "notes": "Verified entry with branch manager."
+      }
+    },
+    {
+      "path": "/api/control/v1/analytics/alerts/evt-entry/incidents",
+      "method": "POST",
+      "body": {
+        "notes": "Verified entry with branch manager."
+      }
+    },
+    {
+      "path": "/api/control/v1/analytics/alerts/evt-entry",
+      "method": "PATCH",
+      "body": {
+        "status": "resolved"
+      }
+    }
+  ],
+  "playbackRequests": [
+    {
+      "path": "/api/control/v1/cameras/cam-entry/playback",
+      "from": "2026-09-27T15:59:30.000Z",
+      "to": "2026-09-27T16:01:00.000Z"
+    },
+    {
+      "path": "/api/control/v1/cameras/cam-cash/playback",
+      "from": "2026-09-27T16:00:30.000Z",
+      "to": "2026-09-27T16:02:00.000Z"
+    }
+  ],
+  "liveRequestCount": 299,
+  "errors": []
+}

@@ -73,6 +73,7 @@ export interface EnhancedCameraGridProps {
   showAiOverlay?: boolean;
   onOpenCameraAi?: (cameraId: string) => void;
   focusCameraId?: string;
+  compactStage?: boolean;
 }
 
 interface VisibleRange {
@@ -191,6 +192,7 @@ export function EnhancedCameraGrid({
   showAiOverlay = true,
   onOpenCameraAi,
   focusCameraId,
+  compactStage = false,
 }: EnhancedCameraGridProps) {
   const [gridSize, setGridSize] = useState<GridSize>(
     initialLayout?.gridSize || "2x2"
@@ -1557,7 +1559,7 @@ export function EnhancedCameraGrid({
   return (
     <div ref={wallRef} className={`camera-grid-container ${isFullscreen ? "camera-grid-fullscreen" : ""}`}>
       {/* ── GUARDIAN AI COPILOT CONTROL BAR ── */}
-      <div className="guardian-copilot-bar" role="search" aria-label="Guardian AI Live Wall Copilot">
+      {!compactStage && <div className="guardian-copilot-bar" role="search" aria-label="Guardian AI Live Wall Copilot">
         <div className="copilot-brand">
           <Bot size={18} className="copilot-icon text-sky-400" />
           <span className="copilot-title">GUARDIAN AI COPILOT</span>
@@ -1673,9 +1675,9 @@ export function EnhancedCameraGrid({
             📐 1+5 Hero Grid
           </button>
         </div>
-      </div>
+      </div>}
 
-      <div className="grid-toolbar">
+      {!compactStage && <div className="grid-toolbar">
         <div className="grid-actions">
           <label className="toolbar-control">
             Grid
@@ -1870,9 +1872,9 @@ export function EnhancedCameraGrid({
             {isFullscreen ? "Exit fullscreen" : "Fullscreen"}
           </button>
         </div>
-      </div>
+      </div>}
 
-      {showLayoutMenu && (
+      {showLayoutMenu && !compactStage && (
         <div className="layout-save-panel">
           <label htmlFor="layout-name">Layout name</label>
           <input

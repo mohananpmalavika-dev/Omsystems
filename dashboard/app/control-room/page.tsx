@@ -1,9 +1,11 @@
 "use client";
 
+import { LiveOperationsStage } from "@/components/live-operations-stage";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowUpRight,
   Activity,
   AlertTriangle,
   Bell,
@@ -813,82 +815,12 @@ function ControlRoomContent() {
   }
 
   return (
-    <div className="control-room">
+    <div className="control-room operations-stage-room">
       <EmergencyAlarmPopup />
-      <header className="control-room-nav-hub">
-        <div className="wall-heading">
-          <span className="brand-pill"><Video size={22} aria-hidden="true" /></span>
-          <div>
-            <h1>Live video wall</h1>
-            <p>Monitor cameras and detections across your branches.</p>
-          </div>
-        </div>
-        <nav className="nav-hub-left" aria-label="Quick operations navigation">
-          <a href="/" className="nav-link" title="Open Overview Dashboard">
-            <LayoutDashboard size={14} />
-            <span>Overview</span>
-          </a>
-          <a href="/operations/branches" className="nav-link" title="Manage Branches">
-            <Building2 size={14} />
-            <span>Branches</span>
-          </a>
-          <a href="/operations/alerts" className="nav-link" title="View Alert Center">
-            <Bell size={14} />
-            <span>Alerts</span>
-          </a>
-          <a href="/analytics" className="nav-link" title="View AI Analytics">
-            <Activity size={14} />
-            <span>Analytics</span>
-          </a>
-          <a href="/maintenance/health" className="nav-link" title="System Health">
-            <HardDrive size={14} />
-            <span>Maintenance</span>
-          </a>
-          <a href="/admin/organization" className="nav-link" title="Organization Structure">
-            <Layers size={14} />
-            <span>Organization</span>
-          </a>
-        </nav>
-        <div className="nav-hub-right">
-          <span className={`data-status ${dataMode}`}>
-            <i />
-            {dataMode === "live" ? "System Live" : dataMode === "partial" ? "Partial Sync" : "Offline Mode"}
-          </span>
-          <span className="wall-clock"><HeaderClock /></span>
-          <button
-            type="button"
-            className="lockdown-btn"
-            onClick={() => setEmergencyLockdownOpen(true)}
-            title="Emergency Panic & Branch Lockdown Cockpit"
-          >
-            <Siren size={14} className={lockdownState === "triggered" ? "pulse-siren" : ""} />
-            <span>{lockdownState === "triggered" ? "LOCKDOWN ACTIVE" : "Panic / Lockdown"}</span>
-          </button>
-          <button
-            type="button"
-            className="lockdown-btn"
-            style={{ borderColor: "rgba(14, 165, 233, 0.4)", color: "#38bdf8", background: voiceStrobePlaying || pttActive ? "rgba(14, 165, 233, 0.25)" : "rgba(14, 165, 233, 0.1)" }}
-            onClick={() => setAudioDeterrenceOpen(true)}
-            title="Two-Way Audio Deterrence & Auto-Voice Prompts"
-          >
-            <Megaphone size={14} className={voiceStrobePlaying || pttActive ? "pulse-siren" : ""} />
-            <span>{voiceStrobePlaying ? "BROADCASTING" : pttActive ? "MIC LIVE" : "2-Way Audio"}</span>
-          </button>
-          <button
-            type="button"
-            className="refresh-btn"
-            onClick={() => void loadData()}
-            disabled={refreshing}
-            title="Refresh Camera Feeds"
-          >
-            <RefreshCw size={14} className={refreshing ? "spin" : ""} />
-            <span>{refreshing ? "Refreshing" : "Refresh"}</span>
-          </button>
-        </div>
-      </header>
+      <header className="los-page-heading"><div><span className="los-eyebrow">KRYPTONVISION / LIVE OPERATIONS</span><h1>Live Operations Stage</h1><p>A situation-first workspace. Choose a scene, follow an event, coordinate the response.</p></div><div className="los-page-actions"><span className={"los-data-state " + dataMode}><i />{dataMode === "live" ? "Inventory connected" : dataMode === "partial" ? "Partial service availability" : "Services unavailable"}</span><Link href="/operations/alerts">Alert centre <ArrowUpRight size={15} /></Link><button type="button" onClick={() => void loadData()} disabled={refreshing}><RefreshCw size={15} />{refreshing ? "Refreshing…" : "Refresh scope"}</button></div></header>
 
       {/* 2. Interactive Zone / Region / Area / Branch Scope Filter Toolbar */}
-      <section className="hierarchy-filter-bar" aria-label="Live Wall Scope Selection">
+      <details className="los-scope-sheet"><summary><span><Globe2 size={17} />Wall scope & filters</span><strong>{activeSingleBranch?.branchName ?? "Across branches"} · {filteredCameras.length} cameras</strong><ChevronRight size={16} /></summary><section className="hierarchy-filter-bar" aria-label="Live Wall Scope Selection">
         <div className="filter-controls-row">
           {/* Zone Selector */}
           <div className="filter-select-group">
@@ -1106,10 +1038,10 @@ function ControlRoomContent() {
             </button>
           </div>
         </div>
-      </section>
+      </section></details>
 
       {/* 2.5 Virtual Guard Patrol Tour Bar */}
-      <section className="patrol-tour-bar" aria-label="Virtual Guard Patrol Tour Mode">
+      <details className="los-patrol-sheet"><summary><span><Compass size={16} />Patrol & advanced operations</span><small>{isPatrolActive ? PATROL_STAGES[patrolStageIndex].name : "Manual operator focus"}</small><ChevronRight size={16} /></summary><section className="patrol-tour-bar" aria-label="Virtual Guard Patrol Tour Mode">
         <div className="patrol-meta">
           <div className="patrol-brand">
             <Compass size={16} className={isPatrolActive ? "spin-slow text-indigo-400" : "text-slate-400"} />
@@ -1158,7 +1090,7 @@ function ControlRoomContent() {
             )}
           </button>
         </div>
-      </section>
+      </section><div className="los-advanced-actions"><button type="button" onClick={() => setEmergencyLockdownOpen(true)}><Siren size={14} />Panic / lockdown cockpit</button><button type="button" onClick={() => setAudioDeterrenceOpen(true)}><Megaphone size={14} />Audio broadcast console</button></div></details>
 
       {/* 3. Single Branch Hero Banner (if a single branch is selected) */}
       {activeSingleBranch && (
@@ -1267,28 +1199,7 @@ function ControlRoomContent() {
 
       {/* 5. Main Camera Video Wall Grid */}
       <section className="control-room-content" aria-label="Camera wall">
-        {filteredCameras.length > 0 ? (
-          <EnhancedCameraGrid
-            key={`grid-${filteredCameras.map((camera) => camera.id).join("|")}`}
-            cameras={filteredCameras}
-            initialLayout={initialLayout}
-            maxConcurrentStreams={CONTROL_ROOM_MAX_CONCURRENT_STREAMS}
-            priorityCameraIds={prioritizeAiAlerts ? combinedPriorityCameraIds : priorityCameraIds}
-            adaptiveLayout={prioritizeAiAlerts}
-            enableVirtualScrolling={false}
-            enableGPUAcceleration
-            aiByCamera={aiByCamera}
-            showAiOverlay={showAiOverlays}
-            focusCameraId={focusCameraId}
-            onOpenCameraAi={(cameraId) => {
-              setSelectedAiCameraId(cameraId);
-              setFocusCameraId(cameraId);
-              setAiPanelOpen(true);
-            }}
-            onActiveStreamsChange={setActiveStreams}
-            onMonitoredCamerasChange={handleMonitoredCamerasChange}
-          />
-        ) : cameras.length > 0 ? (
+        {filteredCameras.length > 0 ? <LiveOperationsStage cameras={filteredCameras} alerts={liveAi.alerts} aiByCamera={aiByCamera} showAiOverlay={showAiOverlays} focusCameraId={focusCameraId} maxConcurrentStreams={CONTROL_ROOM_MAX_CONCURRENT_STREAMS} analyticsError={liveAi.error} analyticsLoading={liveAi.loading} onRefresh={liveAi.refresh} onActiveStreamsChange={setActiveStreams} onMonitoredCamerasChange={handleMonitoredCamerasChange} onOpenCameraAi={cameraId => { setSelectedAiCameraId(cameraId); setFocusCameraId(cameraId); setAiPanelOpen(true); }} /> : cameras.length > 0 ? (
           <div className="empty-control-room-card">
             <div className="empty-icon-wrap">
               <Filter size={36} />

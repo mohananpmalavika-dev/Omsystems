@@ -6,7 +6,8 @@ import {
   Phone, PhoneOff, Mic, MicOff, Volume2, Search, 
   Building2, User, Clock, CheckCircle2, XCircle, 
   PhoneMissed, AlertCircle, MessageSquare, RefreshCw,
-  Radio, ChevronRight, Filter, Video, VideoOff, ScreenShare
+  Radio, ChevronRight, Filter, Video, VideoOff, ScreenShare,
+  Shield, Users, Monitor
 } from 'lucide-react';
 import { communicationAPI } from '@/services/communication-api';
 import { useCommunicationSignaling } from '@/hooks/use-communication-signaling';
@@ -14,6 +15,7 @@ import { useWebRTCCall, type CallModality } from '@/hooks/use-webrtc-call';
 import type { 
   BranchContact, 
   EmployeeContact, 
+  CommunicationEmployee,
   CallSession,
   CommunicationPresence,
   CommunicationCallStatus 
@@ -25,7 +27,12 @@ import type { CallInviteEvent, CallStatusEvent } from '@/hooks/use-communication
 // ============================================================================
 
 type ViewMode = 'directory' | 'history';
-type SelectedContact = { type: 'BRANCH'; branch: BranchContact } | { type: 'EMPLOYEE'; employee: EmployeeContact } | null;
+type DirectoryScope = 'all' | 'internal' | 'branches';
+type SelectedContact = 
+  | { type: 'BRANCH'; branch: BranchContact } 
+  | { type: 'EMPLOYEE'; employee: EmployeeContact } 
+  | { type: 'INTERNAL_USER'; user: CommunicationEmployee } 
+  | null;
 
 interface ActiveCall {
   session: CallSession;
@@ -120,7 +127,10 @@ function getQualityColor(quality?: 'GOOD' | 'DEGRADED' | 'POOR'): string {
 export default function CommunicationsCallsPage() {
   // State
   const [viewMode, setViewMode] = useState<ViewMode>('directory');
+  const [directoryScope, setDirectoryScope] = useState<DirectoryScope>('all');
   const [branches, setBranches] = useState<BranchContact[]>([]);
+  const [internalUsers, setInternalUsers] = useState<CommunicationEmployee[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedContact, setSelectedContact] = useState<SelectedContact>(null);
   const [loading, setLoading] = useState(true);
@@ -142,6 +152,19 @@ export default function CommunicationsCallsPage() {
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const durationIntervalRef = useRef<number | null>(null);
+
+  // Detect logged-in user to identify own station
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('user') || sessionStorage.getItem('user');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed?.id) setCurrentUserId(parsed.id);
+        }
+      } catch {}
+    }
+  }, []);
 
   useEffect(() => {
     if (remoteVideoRef.current && webrtc.remoteStream) {
@@ -165,11 +188,21 @@ export default function CommunicationsCallsPage() {
     try {
       setLoading(true);
       setError(null);
-      const data = await communicationAPI.getBranchDirectory();
-      setBranches(data);
+      const [branchData, empRes] = await Promise.all([
+        communicationAPI.getBranchDirectory().catch(err => {
+          console.error('[Communications] Failed to load branch directory:', err);
+          return [] as BranchContact[];
+        }),
+        communicationAPI.getEmployeeDirectory().catch(err => {
+          console.error('[Communications] Failed to load internal users:', err);
+          return { data: [] as CommunicationEmployee[] };
+        }),
+      ]);
+      setBranches(branchData);
+      setInternalUsers(empRes.data || []);
     } catch (err: any) {
       console.error('[Communications] Failed to load directory:', err);
-      setError(err.message || 'Failed to load branch directory');
+      setError(err.message || 'Failed to load directory');
     } finally {
       setLoading(false);
     }
@@ -299,6 +332,12 @@ export default function CommunicationsCallsPage() {
           })
         };
       }));
+      setInternalUsers(prev => prev.map(user => {
+        if (user.employeeId === event.entityId) {
+          return { ...user, presence: event.presence };
+        }
+        return user;
+      }));
     });
     
     return () => {
@@ -365,7 +404,10 @@ export default function CommunicationsCallsPage() {
     }
   }, [webrtc]);
   
-  const handleCallEmployee = useCallback(async (employee: EmployeeContact, modality: CallModality = 'audio') => {
+  const handleCallEmployee = useCallback(async (
+    target: { employeeId: string; employeeName?: string; branchName?: string; role?: string; employeeRole?: string }, 
+    modality: CallModality = 'audio'
+  ) => {
     try {
       setError(null);
       const stream = await webrtc.initializeMedia({
@@ -374,8 +416,14 @@ export default function CommunicationsCallsPage() {
       });
       if (!stream) return;
       
-      const session = await communicationAPI.callEmployee(employee.employeeId, 'VMS operator calling');
-      setActiveCall({ session, startTime: new Date(), modality });
+      const session = await communicationAPI.callEmployee(target.employeeId, 'VMS operator calling');
+      const enhancedSession: CallSession = {
+        ...session,
+        targetEmployeeId: target.employeeId,
+        targetEmployeeName: target.employeeName || session.targetEmployeeName || 'Internal VMS Operator',
+        targetBranchName: target.branchName || session.targetBranchName || (target.role || target.employeeRole ? `SOC (${target.role || target.employeeRole})` : 'Central SOC'),
+      };
+      setActiveCall({ session: enhancedSession, startTime: new Date(), modality });
 
       if (modality === 'screenshare') {
         setTimeout(async () => {
@@ -383,7 +431,7 @@ export default function CommunicationsCallsPage() {
         }, 500);
       }
     } catch (err: any) {
-      console.error('[Communications] Failed to call employee:', err);
+      console.error('[Communications] Failed to call operator/employee:', err);
       setError(err.message || 'Failed to initiate call');
     }
   }, [webrtc]);
@@ -471,9 +519,19 @@ export default function CommunicationsCallsPage() {
   // FILTERED CONTACTS
   // ============================================================================
   
+  const query = searchQuery.trim().toLowerCase();
+
+  const filteredInternalUsers = internalUsers.filter(user => {
+    if (!query) return true;
+    return (
+      user.employeeName.toLowerCase().includes(query) ||
+      (user.employeeRole && user.employeeRole.toLowerCase().includes(query)) ||
+      (user.branchName && user.branchName.toLowerCase().includes(query))
+    );
+  });
+
   const filteredBranches = branches.filter(branch => {
-    if (!searchQuery.trim()) return true;
-    const query = searchQuery.toLowerCase();
+    if (!query) return true;
     return (
       branch.branchName.toLowerCase().includes(query) ||
       branch.branchCode?.toLowerCase().includes(query) ||
@@ -561,10 +619,36 @@ export default function CommunicationsCallsPage() {
                 <Search size={16} />
                 <input
                   type="text"
-                  placeholder="Search branch, employee, code..."
+                  placeholder="Search operator, branch, role..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
+              </div>
+
+              <div className="directory-scope-tabs">
+                <button
+                  type="button"
+                  className={`scope-pill ${directoryScope === 'all' ? 'active' : ''}`}
+                  onClick={() => setDirectoryScope('all')}
+                >
+                  All ({filteredInternalUsers.length + filteredBranches.length})
+                </button>
+                <button
+                  type="button"
+                  className={`scope-pill ${directoryScope === 'internal' ? 'active' : ''}`}
+                  onClick={() => setDirectoryScope('internal')}
+                >
+                  <Shield size={12} />
+                  VMS Operators ({filteredInternalUsers.length})
+                </button>
+                <button
+                  type="button"
+                  className={`scope-pill ${directoryScope === 'branches' ? 'active' : ''}`}
+                  onClick={() => setDirectoryScope('branches')}
+                >
+                  <Building2 size={12} />
+                  Branches ({filteredBranches.length})
+                </button>
               </div>
               
               <div className="directory-list">
@@ -573,63 +657,136 @@ export default function CommunicationsCallsPage() {
                     <RefreshCw size={24} className="spin" />
                     <p>Loading directory...</p>
                   </div>
-                ) : filteredBranches.length === 0 ? (
+                ) : filteredBranches.length === 0 && filteredInternalUsers.length === 0 ? (
                   <div className="empty-state">
                     <Building2 size={32} />
-                    <p>No branches found</p>
+                    <p>No contacts found</p>
                   </div>
                 ) : (
-                  filteredBranches.map(branch => (
-                    <div key={branch.branchId} className="directory-group">
-                      <button
-                        type="button"
-                        className={`branch-item ${selectedContact?.type === 'BRANCH' && selectedContact.branch.branchId === branch.branchId ? 'selected' : ''}`}
-                        onClick={() => setSelectedContact({ type: 'BRANCH', branch })}
-                      >
-                        <div className="branch-info">
-                          <div className="branch-header">
-                            <Building2 size={16} />
-                            <span className="branch-name">{branch.branchName}</span>
-                          </div>
-                          {branch.branchCode && (
-                            <span className="branch-code">{branch.branchCode}</span>
-                          )}
+                  <>
+                    {/* Internal VMS Operators Section */}
+                    {(directoryScope === 'all' || directoryScope === 'internal') && filteredInternalUsers.length > 0 && (
+                      <div className="directory-section">
+                        <div className="directory-section-header">
+                          <Shield size={13} style={{ color: '#38bdf8' }} />
+                          <span>Internal VMS Operators / SOC Team</span>
+                          <span className="count-badge">{filteredInternalUsers.length}</span>
                         </div>
-                        
-                        <div className="presence-indicator">
-                          <span className={`presence-dot ${getPresenceColor(branch.presence)}`} />
-                          <span className="device-count">
-                            {branch.onlineDeviceCount}/{branch.totalDeviceCount}
-                          </span>
-                        </div>
-                      </button>
-                      
-                      {branch.employees.length > 0 && (
-                        <div className="employee-list">
-                          {branch.employees.map(employee => (
+
+                        {filteredInternalUsers.map(user => {
+                          const isSelf = currentUserId && user.employeeId === currentUserId;
+                          const isSelected = selectedContact?.type === 'INTERNAL_USER' && selectedContact.user.employeeId === user.employeeId;
+                          return (
                             <button
-                              key={employee.employeeId}
+                              key={`vms-user-${user.employeeId}`}
                               type="button"
-                              className={`employee-item ${selectedContact?.type === 'EMPLOYEE' && selectedContact.employee.employeeId === employee.employeeId ? 'selected' : ''}`}
-                              onClick={() => setSelectedContact({ type: 'EMPLOYEE', employee })}
+                              className={`internal-user-item ${isSelected ? 'selected' : ''}`}
+                              onClick={() => setSelectedContact({ type: 'INTERNAL_USER', user })}
                             >
-                              <div className="employee-info">
-                                <User size={14} />
-                                <div>
-                                  <span className="employee-name">{employee.employeeName}</span>
-                                  {employee.role && (
-                                    <span className="employee-role">{employee.role}</span>
-                                  )}
+                              <div className="user-item-main">
+                                <div className="user-avatar-wrap">
+                                  <Shield size={15} />
+                                  <span className={`presence-dot ${getPresenceColor(user.presence)}`} />
+                                </div>
+                                <div className="user-details">
+                                  <div className="user-name-row">
+                                    <span className="user-name">{user.employeeName}</span>
+                                    {isSelf && <span className="self-tag">You</span>}
+                                  </div>
+                                  <span className="user-role">{user.employeeRole || 'VMS Operator'}</span>
                                 </div>
                               </div>
-                              
-                              <span className={`presence-dot ${getPresenceColor(employee.presence)}`} />
+
+                              <div className="quick-actions" onClick={e => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  className="quick-icon-btn"
+                                  title="Video Call"
+                                  onClick={() => handleCallEmployee(user, 'video')}
+                                  disabled={Boolean(isSelf) || user.presence === 'OFFLINE' || !!activeCall}
+                                >
+                                  <Video size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="quick-icon-btn"
+                                  title="Voice Call"
+                                  onClick={() => handleCallEmployee(user, 'audio')}
+                                  disabled={Boolean(isSelf) || user.presence === 'OFFLINE' || !!activeCall}
+                                >
+                                  <Phone size={13} />
+                                </button>
+                              </div>
                             </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Branches Section */}
+                    {(directoryScope === 'all' || directoryScope === 'branches') && (
+                      <div className="directory-section">
+                        {directoryScope === 'all' && (
+                          <div className="directory-section-header" style={{ marginTop: '12px' }}>
+                            <Building2 size={13} style={{ color: '#94a3b8' }} />
+                            <span>Branches & Site Kiosks</span>
+                            <span className="count-badge">{filteredBranches.length}</span>
+                          </div>
+                        )}
+                        {filteredBranches.map(branch => (
+                          <div key={branch.branchId} className="directory-group">
+                            <button
+                              type="button"
+                              className={`branch-item ${selectedContact?.type === 'BRANCH' && selectedContact.branch.branchId === branch.branchId ? 'selected' : ''}`}
+                              onClick={() => setSelectedContact({ type: 'BRANCH', branch })}
+                            >
+                              <div className="branch-info">
+                                <div className="branch-header">
+                                  <Building2 size={16} />
+                                  <span className="branch-name">{branch.branchName}</span>
+                                </div>
+                                {branch.branchCode && (
+                                  <span className="branch-code">{branch.branchCode}</span>
+                                )}
+                              </div>
+                              
+                              <div className="presence-indicator">
+                                <span className={`presence-dot ${getPresenceColor(branch.presence)}`} />
+                                <span className="device-count">
+                                  {branch.onlineDeviceCount}/{branch.totalDeviceCount}
+                                </span>
+                              </div>
+                            </button>
+                            
+                            {branch.employees.length > 0 && (
+                              <div className="employee-list">
+                                {branch.employees.map(employee => (
+                                  <button
+                                    key={employee.employeeId}
+                                    type="button"
+                                    className={`employee-item ${selectedContact?.type === 'EMPLOYEE' && selectedContact.employee.employeeId === employee.employeeId ? 'selected' : ''}`}
+                                    onClick={() => setSelectedContact({ type: 'EMPLOYEE', employee })}
+                                  >
+                                    <div className="employee-info">
+                                      <User size={14} />
+                                      <div>
+                                        <span className="employee-name">{employee.employeeName}</span>
+                                        {employee.role && (
+                                          <span className="employee-role">{employee.role}</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    
+                                    <span className={`presence-dot ${getPresenceColor(employee.presence)}`} />
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </aside>
@@ -738,6 +895,87 @@ export default function CommunicationsCallsPage() {
                       </div>
                     )}
                   </div>
+                ) : selectedContact.type === 'INTERNAL_USER' ? (
+                  <div className="contact-details">
+                    <div className="contact-header">
+                      <div className="operator-icon-badge">
+                        <Shield size={32} />
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <h2>{selectedContact.user.employeeName}</h2>
+                          {currentUserId === selectedContact.user.employeeId && (
+                            <span className="self-tag-large">Your Station</span>
+                          )}
+                        </div>
+                        <p className="contact-subtitle">
+                          {selectedContact.user.employeeRole || 'Internal VMS Operator'} • Command Center SOC
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="presence-status">
+                      <span className={`presence-dot ${getPresenceColor(selectedContact.user.presence)}`} />
+                      <span>{getPresenceText(selectedContact.user.presence)}</span>
+                      <span className="device-info">Internal SOC Direct Extension</span>
+                    </div>
+
+                    <div className="contact-actions">
+                      <button
+                        type="button"
+                        className="call-btn primary"
+                        style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#fff' }}
+                        onClick={() => handleCallEmployee(selectedContact.user, 'video')}
+                        disabled={currentUserId === selectedContact.user.employeeId || selectedContact.user.presence === 'OFFLINE' || !!activeCall}
+                        title="Start HD Video Call"
+                      >
+                        <Video size={18} />
+                        Video Call
+                      </button>
+
+                      <button
+                        type="button"
+                        className="call-btn primary"
+                        onClick={() => handleCallEmployee(selectedContact.user, 'audio')}
+                        disabled={currentUserId === selectedContact.user.employeeId || selectedContact.user.presence === 'OFFLINE' || !!activeCall}
+                        title="Start Voice Call"
+                      >
+                        <Phone size={18} />
+                        Voice Call
+                      </button>
+
+                      <button
+                        type="button"
+                        className="call-btn primary"
+                        style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff' }}
+                        onClick={() => handleCallEmployee(selectedContact.user, 'screenshare')}
+                        disabled={currentUserId === selectedContact.user.employeeId || selectedContact.user.presence === 'OFFLINE' || !!activeCall}
+                        title="Start Call with Screen Sharing"
+                      >
+                        <ScreenShare size={18} />
+                        Share Screen
+                      </button>
+                    </div>
+
+                    <div className="operator-details-grid">
+                      <div className="info-box">
+                        <span className="label">Operator Role</span>
+                        <span className="value">{selectedContact.user.employeeRole || 'SOC Operator'}</span>
+                      </div>
+                      <div className="info-box">
+                        <span className="label">Location / Station</span>
+                        <span className="value">Central SOC / {selectedContact.user.branchName || 'Command Center'}</span>
+                      </div>
+                      <div className="info-box">
+                        <span className="label">Signaling Channel</span>
+                        <span className="value" style={{ color: '#22c55e' }}>Secure Direct WebRTC</span>
+                      </div>
+                      <div className="info-box">
+                        <span className="label">Call Capabilities</span>
+                        <span className="value">HD Video, Clear Voice, Screen Share</span>
+                      </div>
+                    </div>
+                  </div>
                 ) : (
                   <div className="contact-details">
                     <div className="contact-header">
@@ -797,8 +1035,8 @@ export default function CommunicationsCallsPage() {
               ) : (
                 <div className="empty-selection">
                   <Building2 size={48} />
-                  <h3>Select a branch or employee</h3>
-                  <p>Choose from the directory to view details and make calls</p>
+                  <h3>Select a contact or branch</h3>
+                  <p>Choose an internal VMS operator or branch to initiate calls</p>
                 </div>
               )}
             </main>
@@ -933,10 +1171,14 @@ export default function CommunicationsCallsPage() {
                 )}
                 {activeCall.session.targetEmployeeId && (
                   <>
-                    <User size={24} />
+                    {activeCall.session.targetBranchId ? (
+                      <User size={24} />
+                    ) : (
+                      <Shield size={24} style={{ color: '#38bdf8' }} />
+                    )}
                     <div>
-                      <h3>{activeCall.session.targetEmployeeName || 'Employee'}</h3>
-                      <p className="call-subtitle">{activeCall.session.targetBranchName}</p>
+                      <h3>{activeCall.session.targetEmployeeName || 'Operator'}</h3>
+                      <p className="call-subtitle">{activeCall.session.targetBranchName || 'Internal VMS Operator'}</p>
                     </div>
                   </>
                 )}
@@ -1058,13 +1300,19 @@ export default function CommunicationsCallsPage() {
             <h2>Incoming Call</h2>
             
             <div className="caller-info">
-              {incomingCall.sourceBranchId && (
+              {incomingCall.sourceBranchId ? (
                 <>
                   <Building2 size={48} />
-                  <h3>{incomingCall.sourceBranchName || 'Branch'}</h3>
+                  <h3>{incomingCall.sourceBranchName || 'Branch Intercom'}</h3>
                   {incomingCall.sourceEmployeeId && (
                     <p>{incomingCall.sourceEmployeeName}</p>
                   )}
+                </>
+              ) : (
+                <>
+                  <Shield size={48} style={{ color: '#38bdf8' }} />
+                  <h3>{incomingCall.sourceEmployeeName || 'Internal VMS Operator'}</h3>
+                  <p>Internal Command Center SOC Call</p>
                 </>
               )}
             </div>
@@ -1300,6 +1548,252 @@ export default function CommunicationsCallsPage() {
           background: var(--canvas);
           color: var(--ink);
           font-size: 13px;
+        }
+
+        .directory-scope-tabs {
+          display: flex;
+          gap: 6px;
+          padding: 8px 12px;
+          border-bottom: 1px solid var(--line);
+          background: rgba(255, 255, 255, 0.02);
+          overflow-x: auto;
+        }
+
+        .scope-pill {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          padding: 4px 10px;
+          font-size: 11px;
+          font-weight: 600;
+          border-radius: 20px;
+          border: 1px solid var(--line);
+          background: var(--surface);
+          color: var(--muted);
+          cursor: pointer;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+        }
+
+        .scope-pill:hover {
+          color: var(--ink);
+          border-color: rgba(59, 130, 246, 0.4);
+        }
+
+        .scope-pill.active {
+          background: rgba(37, 99, 235, 0.15);
+          color: #3b82f6;
+          border-color: rgba(37, 99, 235, 0.4);
+        }
+
+        .directory-section {
+          margin-bottom: 8px;
+        }
+
+        .directory-section-header {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 10px 4px;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: var(--muted);
+        }
+
+        .count-badge {
+          margin-left: auto;
+          font-size: 10px;
+          background: rgba(255, 255, 255, 0.08);
+          padding: 1px 6px;
+          border-radius: 10px;
+          color: var(--muted);
+        }
+
+        .internal-user-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          width: 100%;
+          padding: 9px 10px;
+          border: 1px solid var(--line);
+          border-radius: 8px;
+          background: var(--surface);
+          color: var(--ink);
+          cursor: pointer;
+          transition: all 0.15s ease;
+          margin-bottom: 5px;
+          text-align: left;
+        }
+
+        .internal-user-item:hover {
+          background: var(--surface-soft);
+          border-color: rgba(59, 130, 246, 0.4);
+        }
+
+        .internal-user-item.selected {
+          background: rgba(37, 99, 235, 0.12);
+          border-color: #2563eb;
+        }
+
+        .user-item-main {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          min-width: 0;
+          flex: 1;
+        }
+
+        .user-avatar-wrap {
+          position: relative;
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          background: rgba(37, 99, 235, 0.15);
+          color: #60a5fa;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .user-avatar-wrap .presence-dot {
+          position: absolute;
+          bottom: -2px;
+          right: -2px;
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          border: 2px solid var(--surface);
+        }
+
+        .user-details {
+          display: flex;
+          flex-direction: column;
+          min-width: 0;
+          flex: 1;
+        }
+
+        .user-name-row {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .user-name {
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--ink);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .self-tag {
+          font-size: 9px;
+          font-weight: 700;
+          padding: 1px 5px;
+          border-radius: 4px;
+          background: rgba(16, 185, 129, 0.15);
+          color: #10b981;
+        }
+
+        .self-tag-large {
+          font-size: 11px;
+          font-weight: 700;
+          padding: 2px 8px;
+          border-radius: 6px;
+          background: rgba(16, 185, 129, 0.15);
+          color: #10b981;
+          border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .user-role {
+          font-size: 11px;
+          color: var(--muted);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .quick-actions {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          flex-shrink: 0;
+          margin-left: 6px;
+        }
+
+        .quick-icon-btn {
+          width: 26px;
+          height: 26px;
+          border-radius: 6px;
+          border: 1px solid var(--line);
+          background: rgba(255, 255, 255, 0.05);
+          color: var(--muted);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+
+        .quick-icon-btn:hover:not(:disabled) {
+          background: #2563eb;
+          color: #fff;
+          border-color: #2563eb;
+        }
+
+        .quick-icon-btn:disabled {
+          opacity: 0.3;
+          cursor: not-allowed;
+        }
+
+        .operator-icon-badge {
+          width: 52px;
+          height: 52px;
+          border-radius: 12px;
+          background: linear-gradient(135deg, rgba(37, 99, 235, 0.2), rgba(124, 58, 237, 0.2));
+          border: 1px solid rgba(37, 99, 235, 0.4);
+          color: #60a5fa;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .operator-details-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+          gap: 12px;
+          margin-top: 24px;
+          padding-top: 20px;
+          border-top: 1px solid var(--line);
+        }
+
+        .operator-details-grid .info-box {
+          background: var(--surface);
+          border: 1px solid var(--line);
+          padding: 12px 14px;
+          border-radius: 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .operator-details-grid .info-box .label {
+          font-size: 10px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--muted);
+        }
+
+        .operator-details-grid .info-box .value {
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--ink);
         }
         
         .directory-list {

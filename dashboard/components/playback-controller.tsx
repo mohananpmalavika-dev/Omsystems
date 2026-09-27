@@ -30,6 +30,7 @@ interface PlaybackControllerProps {
   onBookmark?: () => void;
   onExport?: () => void;
   evidenceCaseId?: string;
+  initialOffsetSeconds?: number;
 }
 
 type PlaybackSpeed = 0.25 | 0.5 | 1 | 2 | 4 | 8 | 16;
@@ -44,6 +45,7 @@ export function PlaybackController({
   onBookmark,
   onExport,
   evidenceCaseId,
+  initialOffsetSeconds = 0,
 }: PlaybackControllerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -69,6 +71,9 @@ export function PlaybackController({
 
     const handleLoadedMetadata = () => {
       setDuration(video.duration);
+      if (initialOffsetSeconds > 0 && Number.isFinite(video.duration)) {
+        video.currentTime = Math.min(initialOffsetSeconds, Math.max(0, video.duration - 0.1));
+      }
     };
 
     const handleTimeUpdate = () => {
@@ -89,7 +94,7 @@ export function PlaybackController({
       video.removeEventListener("play", handlePlay);
       video.removeEventListener("pause", handlePause);
     };
-  }, []);
+  }, [initialOffsetSeconds]);
 
   // Handle fullscreen changes
   useEffect(() => {
@@ -444,6 +449,7 @@ export function PlaybackController({
             <div className="action-bar">
               <button
                 onClick={handleSnapshotClick}
+                disabled={!onSnapshot}
                 className="action-button"
                 title="Capture snapshot"
               >
@@ -453,6 +459,7 @@ export function PlaybackController({
 
               <button
                 onClick={handleBookmarkClick}
+                disabled={!onBookmark}
                 className="action-button"
                 title="Create bookmark"
               >
