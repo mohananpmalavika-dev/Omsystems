@@ -64,12 +64,12 @@ export class PPEDetector extends BaseDetector {
           list.push({ ...person, label: "no-safety-vest" });
           violations.set("no-safety-vest", list);
         }
-        // no-helmet alert disabled as requested (only alert when helmet is present/detected)
-        // if (analysis.missingHelmet) {
-        //   const list = violations.get("no-helmet") ?? [];
-        //   list.push({ ...person, label: "no-helmet" });
-        //   violations.set("no-helmet", list);
-        // }
+        // Maximum accuracy: only alert no-helmet if person detection confidence is high (>= 0.80)
+        if (analysis.missingHelmet && (person.confidence ?? 0) >= 0.80) {
+          const list = violations.get("no-helmet") ?? [];
+          list.push({ ...person, label: "no-helmet" });
+          violations.set("no-helmet", list);
+        }
       }
     }
 
