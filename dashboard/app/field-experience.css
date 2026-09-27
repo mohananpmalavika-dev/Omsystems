@@ -1,5 +1,9 @@
 /* Command Field language across fleet, intelligence, service and governance. */
 .experience-surface { --field-accent: #a9c7ff; --field-muted: #a3b7da; --field-line: #a3baff26; --field-bg: #0b152a; }
+.app-shell .sidebar { background: radial-gradient(450px 450px at -30% -10%, #28478355, transparent 75%), linear-gradient(170deg, #121d36, #0b1327 75%); }
+.app-shell .sidebar .brand-mark { background: linear-gradient(145deg, #719ae8, #315590); border-color: #a9c7ff66; box-shadow: 0 8px 26px #6197ff22, inset 0 1px #ffffff40; }
+.app-shell .sidebar .main-nav a.active { border-color: #91b7ff40; background: linear-gradient(110deg, #527dcc35, #28498020); box-shadow: inset 3px 0 #9fc1ff; }
+.app-shell .sidebar::before { background: linear-gradient(90deg, #9fc1ff, #689af0, transparent); }
 html[data-theme] .app-shell .experience-surface :is(.field-hero, .workspace-heading, .admin-header, .recording-header, .record-form-hero) {
   position: relative; isolation: isolate; overflow: hidden; min-height: 235px; padding: 56px 28px 27px; border: 1px solid #a3baff30 !important; border-radius: 26px !important;
   background: radial-gradient(ellipse at 78% 70%, #3562c22e, transparent 55%), radial-gradient(ellipse at 15% 130%, #466ad830, transparent 60%), #0b152a !important;
@@ -22,7 +26,7 @@ html[data-theme] .app-shell .experience-surface :is(.field-hero, .workspace-head
 .experience-surface:is([data-area="compliance"], [data-area="audit"], [data-area="evidence"], [data-area="account"], [data-area="incidents"]) .field-art-proof { display: block; }
 .experience-surface:is([data-area="maintenance"], [data-area="performance"], [data-area="security-devices"], [data-area="communications"]) .field-art-orbit { display: none; }
 .experience-surface:is([data-area="maintenance"], [data-area="performance"], [data-area="security-devices"], [data-area="communications"]) .field-art-pulse { display: block; }
-.field-hero { display: grid; grid-template-columns: minmax(0, 1fr) 265px; gap: 16px 26px; align-items: center; }
+html[data-theme] .app-shell .experience-surface .field-hero { display: grid !important; grid-template-columns: minmax(0, 1fr) 265px; gap: 16px 26px; align-items: center; }
 .field-hero :is(.page-hero-copy, .module-hero-copy) { display: block; min-width: 0; }
 .field-hero :is(.page-hero-icon, .module-icon) { float: left; width: 31px; height: 31px; margin: -5px 10px 0 0; padding: 7px; border-radius: 8px; color: #bbd2ff !important; background: #94b7ff18 !important; border: 1px solid #9dbbff2e; }
 .field-hero :is(.page-hero-icon, .module-icon) svg { width: 17px; height: 17px; }
@@ -49,7 +53,7 @@ html[data-theme] .app-shell .experience-surface :is(.workspace-heading, .field-h
 
 /* Connected metric strips replace separated dashboard boxes. */
 html[data-theme] .app-shell .experience-surface :is(.directory-summary, .recording-summary, .maintenance-summary-grid, .device-summary, .analytics-summary, .intelligence-summary, .stats-grid, .summary-grid) {
-  gap: 0 !important; overflow: hidden; border: 1px solid #a3baff26; border-radius: 18px; background: #101c34; box-shadow: 0 18px 40px -30px #17264e80;
+  gap: 0 !important; overflow: hidden; border: 1px solid #a3baff26 !important; border-radius: 18px; background: #101c34 !important; box-shadow: 0 18px 40px -30px #17264e80;
 }
 html[data-theme] .app-shell .experience-surface :is(.directory-summary, .recording-summary, .maintenance-summary-grid, .device-summary, .analytics-summary, .intelligence-summary, .stats-grid, .summary-grid) > :is(article, div, a) {
   background: transparent !important; color: #dce9ff !important; border: 0 !important; border-right: 1px solid #a3baff26 !important; border-radius: 0 !important; box-shadow: none !important; transform: none !important; padding: 22px;
@@ -57,6 +61,10 @@ html[data-theme] .app-shell .experience-surface :is(.directory-summary, .recordi
 html[data-theme] .app-shell .experience-surface :is(.directory-summary, .recording-summary, .maintenance-summary-grid, .device-summary, .analytics-summary, .intelligence-summary, .stats-grid, .summary-grid) :is(strong, .metric-value, .stat-value, p:nth-child(2)) { color: #e6efff !important; font-size: 32px; font-weight: 550; letter-spacing: -.04em; }
 html[data-theme] .app-shell .experience-surface :is(.directory-summary, .recording-summary, .maintenance-summary-grid, .device-summary, .analytics-summary, .intelligence-summary, .stats-grid, .summary-grid) :is(small, .metric-label, .stat-label, p:first-child, p:last-child) { color: #a3b7da !important; }
 html[data-theme] .app-shell .experience-surface :is(.directory-summary, .recording-summary, .maintenance-summary-grid, .device-summary) svg { color: #a9c7ff; }
+html[data-theme] .app-shell .experience-surface .maintenance-summary-card h2 { color: #a3b7da !important; }
+html[data-theme] .app-shell .experience-surface .maintenance-summary-card::after { display: none; }
+html[data-theme] .app-shell .experience-surface .maintenance-device-panel { padding: 25px; margin-bottom: 24px; border: 1px solid var(--line); border-radius: 22px; background: var(--surface); color: var(--ink); }
+.maintenance-device-panel h2 { font-size: 21px; letter-spacing: -.035em; }
 .experience-surface :is(.directory-summary article, .recording-summary article)::after { display: none; }
 
 /* Capability catalog, service panels and forms share a deliberate frame. */
@@ -85,11 +93,11 @@ html[data-theme] .app-shell .experience-surface .directory-quick-actions header 
 .public-experience:is([data-area="privacy"], [data-area="terms"]) h1 { padding-bottom: 22px; border-bottom: 1px solid var(--line); }
 .public-experience .login-container:not(.auth-entry) .login-card { border-top: 4px solid #91b7ff; border-radius: 24px; }
 
-@media (max-width: 1100px) { .field-hero { grid-template-columns: minmax(0, 1fr) 210px; } html[data-theme] .app-shell .experience-surface .workspace-heading { padding-right: 210px; } .workspace-heading > .field-visual { width: 165px; right: 20px; } }
+@media (max-width: 1100px) { html[data-theme] .app-shell .experience-surface .field-hero { grid-template-columns: minmax(0, 1fr) 210px; } html[data-theme] .app-shell .experience-surface .workspace-heading { padding-right: 210px; } .workspace-heading > .field-visual { width: 165px; right: 20px; } }
 @media (max-width: 760px) {
   html[data-theme] .app-shell .experience-surface :is(.field-hero, .workspace-heading, .admin-header, .recording-header, .record-form-hero) { padding: 53px 22px 22px; min-height: 0; border-radius: 22px !important; }
   html[data-theme] .app-shell .experience-surface :is(.field-hero, .workspace-heading, .admin-header, .recording-header, .record-form-hero) h1 { font-size: clamp(27px, 7vw, 39px) !important; }
-  .field-hero { grid-template-columns: minmax(0, 1fr); gap: 15px; }
+  html[data-theme] .app-shell .experience-surface .field-hero { grid-template-columns: minmax(0, 1fr); gap: 15px; }
   .field-hero > .field-visual { display: none; }
   .workspace-heading > .field-visual { display: none; }
   .field-hero :is(.page-hero-actions, .module-hero-actions) { grid-column: 1; }
@@ -98,5 +106,6 @@ html[data-theme] .app-shell .experience-surface .directory-quick-actions header 
   .experience-surface .directory-module-grid > a:nth-child(2n + 1) { border-right: 0; }
   html[data-theme] .app-shell .experience-surface :is(.directory-summary, .recording-summary, .maintenance-summary-grid, .device-summary, .analytics-summary, .intelligence-summary, .stats-grid, .summary-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
   html[data-theme] .app-shell .experience-surface :is(.directory-summary, .recording-summary, .maintenance-summary-grid, .device-summary, .analytics-summary, .intelligence-summary, .stats-grid, .summary-grid) > :is(article, div, a) { padding: 17px; border-bottom: 1px solid #a3baff26 !important; }
+  html[data-theme] .app-shell .experience-surface .maintenance-summary-card { grid-column: auto; }
 }
 @media print { html[data-theme] .app-shell .experience-surface :is(.field-hero, .workspace-heading, .admin-header, .recording-header, .record-form-hero) { padding: 20px; background: white !important; color: black !important; min-height: 0; } html[data-theme] .app-shell .experience-surface :is(.field-hero, .workspace-heading) :is(h1, p) { color: black !important; } .field-visual, .field-hero::before, .workspace-heading::before { display: none !important; } }

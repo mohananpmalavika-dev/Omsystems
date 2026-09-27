@@ -178,7 +178,8 @@ export default function MaintenancePage() {
           <p style={{ fontSize: 32, margin: 0 }}>{loading ? "…" : firmwareUpdates.length}</p>
           <p style={{ color: "#666" }}>Devices needing firmware action</p>
         </div>
-        <div className="maintenance-summary-card maintenance-device-summary" style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
+      </section>
+        <section className="maintenance-device-panel">
           <h2 style={{ marginBottom: 12 }}>Device management</h2>
           <p style={{ margin: 0, color: "#374151" }}>Secure rotation, templates, and IP assignments</p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginTop: 16 }}>
@@ -194,8 +195,7 @@ export default function MaintenancePage() {
           <Link href="/maintenance/device-management" style={{ display: "inline-block", marginTop: 16, color: "#2563eb" }}>
             Open device management
           </Link>
-        </div>
-      </section>
+        </section>
 
       <section style={{ display: "grid", gap: 16, marginBottom: 24 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>

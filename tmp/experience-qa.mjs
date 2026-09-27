@@ -30,7 +30,8 @@ async function worker() {
     pageErrors = [];
     try {
       const response = await page.goto(`http://127.0.0.1:3000${route}`, { waitUntil: 'domcontentloaded', timeout: 120000 });
-      await page.waitForTimeout(1000);
+      await page.locator('h1').first().waitFor({ timeout: 15000 }).catch(() => {});
+      await page.waitForTimeout(1200);
       const name = route.replaceAll('/', '-').replace(/^-/, '') || 'dashboard';
       await page.screenshot({ path: `tmp/experience-qa/${name}.png` });
       if (['/modules', '/maintenance', '/communications/calls', '/compliance/risks', '/admin/system'].includes(route)) {
