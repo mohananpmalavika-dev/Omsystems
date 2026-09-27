@@ -303,7 +303,7 @@ export async function registerAuthRoutes(
       if (!session?.id) throw new Error("session_creation_failed");
       const accessExpiresAt = session.accessExpiresAt
         ? new Date(session.accessExpiresAt).getTime()
-        : Date.now() + 3600_000;
+        : Date.now() + 30 * 24 * 60 * 60 * 1000;
       if (!Number.isFinite(accessExpiresAt) || accessExpiresAt <= Date.now()) {
         throw new Error("invalid_session_expiry");
       }
@@ -445,7 +445,7 @@ export async function registerAuthRoutes(
         if (!session?.id) throw new Error("session_creation_failed");
         const accessExpiresAt = session.accessExpiresAt
           ? new Date(session.accessExpiresAt).getTime()
-          : Date.now() + 3600_000;
+          : Date.now() + 30 * 24 * 60 * 60 * 1000;
         if (!Number.isFinite(accessExpiresAt) || accessExpiresAt <= Date.now()) {
           throw new Error("invalid_session_expiry");
         }
@@ -668,7 +668,7 @@ export async function registerAuthRoutes(
         return {
           accessToken: newAccessToken,
           ...(typeof store.rotateSessionTokens === "function" ? { refreshToken: newRefreshToken } : {}),
-          expiresIn: 3600,
+          expiresIn: 30 * 24 * 60 * 60, // 30 days in seconds
           tokenType: "Bearer",
         };
       } catch (error) {

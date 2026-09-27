@@ -103,6 +103,37 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
     headers.set("content-type", "application/json");
   }
 
+  // ─── Helper: attempt a silent token refresh using the HttpOnly refresh cookie ──
+  // ─── Helper: attempt a silent token refresh using the HttpOnly refresh cookie ──
+  async function attemptSilentRefresh(): Promise<{ accessToken: string; refreshToken?: string } | null> {
+    const refreshToken = request.cookies.get("sentinel_refresh")?.value;
+    if (!refreshToken) return null;
+    try {
+      let refreshRes = await fetch(new URL("/api/v1/auth/refresh", upstreamBase).toString(), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+        cache: "no-store",
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (refreshRes.status === 404) {
+        refreshRes = await fetch(new URL("/v1/auth/refresh", upstreamBase).toString(), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ refreshToken }),
+          cache: "no-store",
+          signal: AbortSignal.timeout(5_000),
+        });
+      }
+      if (!refreshRes.ok) return null;
+      const data = await refreshRes.json() as { accessToken?: string; refreshToken?: string };
+      if (!data?.accessToken) return null;
+      return { accessToken: data.accessToken, refreshToken: data.refreshToken };
+    } catch {
+      return null;
+    }
+  }
+
   try {
     let upstreamRes = await fetch(upstreamUrl.toString(), {
       method: request.method,
@@ -125,6 +156,61 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
         upstreamRes = secondTry;
       }
     }
+
+    // ─── Option 3: Auto-refresh & retry on 401 (expired/invalid access token) ───
+    // Silently refresh using the HttpOnly sentinel_refresh cookie and retry
+    // the original request – all within the same server-side round-trip so
+    // the browser never sees the 401.
+    const tokenErrorCodes = new Set([
+      "invalid_token", "token_expired", "unauthenticated",
+      "invalid_session", "session_expired", "INVALID_TOKEN",
+    ]);
+    if (
+      upstreamRes.status === 401 &&
+      !isPublicAuthPath &&
+      request.cookies.get("sentinel_refresh")?.value
+    ) {
+      let shouldRetry = false;
+      try {
+        const errBody = await upstreamRes.clone().json() as { error?: string };
+        shouldRetry = !errBody?.error || tokenErrorCodes.has(errBody.error);
+      } catch { shouldRetry = true; }
+
+      if (shouldRetry) {
+        const refreshed = await attemptSilentRefresh();
+        if (refreshed?.accessToken) {
+          const retryHeaders = new Headers(headers);
+          retryHeaders.set("authorization", `Bearer ${refreshed.accessToken}`);
+          let retryRes = await fetch(upstreamUrl.toString(), {
+            method: request.method,
+            headers: retryHeaders,
+            body: willSendBody ? requestBody : undefined,
+            cache: "no-store",
+          });
+          // Apply 404-fallback to the retry as well
+          if (retryRes.status === 404) {
+            const retryFallback = new URL(`/v1/${pathString}`, upstreamBase);
+            retryFallback.search = request.nextUrl.search;
+            const retrySecondTry = await fetch(retryFallback.toString(), {
+              method: request.method,
+              headers: retryHeaders,
+              body: willSendBody ? requestBody : undefined,
+              cache: "no-store",
+            });
+            if (retrySecondTry.ok || retrySecondTry.status !== 404) {
+              retryRes = retrySecondTry;
+            }
+          }
+          upstreamRes = retryRes;
+          // Mark so we can rotate the sentinel cookies below
+          (request as any).__refreshedAccessToken = refreshed.accessToken;
+          if (refreshed.refreshToken) {
+            (request as any).__refreshedRefreshToken = refreshed.refreshToken;
+          }
+        }
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     if (upstreamRes.status === 404 && pathString === "banking/sessions/summary") {
       const searchParams = request.nextUrl.searchParams;
@@ -222,7 +308,32 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
       outgoing.cookies.set("sentinel_refresh", "", { path: "/", maxAge: 0, sameSite: isHttps ? "none" : "lax", secure: isHttps, partitioned: isHttps } as any);
     }
 
+    // If a silent refresh was performed (Option 3), rotate the sentinel_access & sentinel_refresh cookies
+    // so the browser holds the new tokens for subsequent requests.
+    const silentlyRefreshedToken = (request as any).__refreshedAccessToken as string | undefined;
+    const silentlyRefreshedRefreshToken = (request as any).__refreshedRefreshToken as string | undefined;
+    if (silentlyRefreshedToken) {
+      const isHttps = requestIsHttps(request);
+      outgoing.cookies.set("sentinel_access", silentlyRefreshedToken, {
+        httpOnly: true,
+        sameSite: isHttps ? "none" : "lax",
+        secure: isHttps,
+        partitioned: isHttps,
+        path: "/",
+      } as any);
+      if (silentlyRefreshedRefreshToken) {
+        outgoing.cookies.set("sentinel_refresh", silentlyRefreshedRefreshToken, {
+          httpOnly: true,
+          sameSite: isHttps ? "none" : "lax",
+          secure: isHttps,
+          partitioned: isHttps,
+          path: "/",
+        } as any);
+      }
+    }
+
     return outgoing;
+
   } catch (error) {
     return NextResponse.json(
       {

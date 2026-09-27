@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { ModulePage } from "@/components/module-page";
 import { maintenanceApi, predictiveAnalyticsApi } from "@/lib/api-client";
+import { LiveStorageTelemetryWidget } from "@/components/operational-health/live-storage-telemetry-widget";
 
 interface SmartTelemetry {
   bay: string;
@@ -183,6 +184,9 @@ export default function MaintenancePredictivePage() {
 
         {activeTab === "smart" && (
           <div className="space-y-6">
+            {/* Live Storage Telemetry Widget - Shows MicroSD and HDD separately */}
+            <LiveStorageTelemetryWidget />
+
             {/* HERO CARD: 48-HOUR CRITICAL HDD SMART PREDICTION */}
             <div className="bg-gradient-to-br from-red-950/40 via-gray-900 to-black border-2 border-red-600/40 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
               <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 pb-6 border-b border-gray-800">

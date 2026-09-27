@@ -20,14 +20,14 @@
  */
 
 import type { Pool } from 'pg';
-import { randomBytes } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import type {
   CommunicationDevice,
   CommunicationDeviceType,
   CommunicationDeviceStatus,
   EnrollmentCode,
-  DeviceEnrollmentInput,
-  DevicePlatform,
+  EnrollDeviceInput,
+  CommunicationDevicePlatform,
 } from '../domain/types.js';
 import { ENROLLMENT_CODE_LENGTH } from '../domain/constants.js';
 
@@ -59,6 +59,9 @@ export interface GenerateEnrollmentCodeOptions {
    * Expiration duration in minutes (default: 30)
    */
   expiresInMinutes?: number;
+
+  /** Maximum enrollments; zero allows unlimited uses. */
+  maxUses?: number;
 
   /**
    * Whether code is single-use (default: true)
@@ -130,12 +133,13 @@ export class DeviceEnrollmentService {
       allowedDeviceType,
       employeeIds = [],
       expiresInMinutes = 30,
-      singleUse = true,
+      maxUses = 1,
       createdBy,
     } = options;
 
     // Generate cryptographically random code
     const code = this.generateRandomCode();
+    const codeHash = createHash('sha256').update(code.toLowerCase()).digest('hex');
 
     // Calculate expiry
     const expiresAt = new Date(Date.now() + expiresInMinutes * 60 * 1000);
@@ -143,27 +147,28 @@ export class DeviceEnrollmentService {
     // Create enrollment code record
     const result = await this.pool.query<EnrollmentCode>(
       `INSERT INTO communication_enrollment_codes (
-        id, tenant_id, branch_id, code,
-        allowed_device_type, required_employee_ids,
-        expires_at, single_use, created_by
+        id, tenant_id, branch_id, code, code_hash,
+        allowed_device_type, pre_assigned_employee_ids, max_uses,
+        expires_at, created_by
       ) VALUES (
-        gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8
+        gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9
       )
       RETURNING
         id, tenant_id as "tenantId", branch_id as "branchId",
         code, allowed_device_type as "allowedDeviceType",
-        required_employee_ids as "requiredEmployeeIds",
-        expires_at as "expiresAt", single_use as "singleUse",
-        used_at as "usedAt", created_by as "createdBy",
+        pre_assigned_employee_ids as "preAssignedEmployeeIds",
+        max_uses as "maxUses", uses_count as "usesCount",
+        expires_at as "expiresAt", consumed_at as "consumedAt", created_by as "createdBy",
         created_at as "createdAt"`,
       [
         tenantId,
         branchId,
         code,
+        codeHash,
         allowedDeviceType || null,
         employeeIds.length > 0 ? JSON.stringify(employeeIds) : null,
+        maxUses,
         expiresAt,
-        singleUse,
         createdBy,
       ]
     );
@@ -239,51 +244,57 @@ export class DeviceEnrollmentService {
    * @param input - Device enrollment input
    * @returns Enrolled device
    */
-  async enrollDevice(input: DeviceEnrollmentInput): Promise<CommunicationDevice> {
-    // Validate enrollment code
-    const validation = await this.validateEnrollmentCode(input.enrollmentCode);
-
-    if (!validation.valid) {
-      throw new Error(validation.reason || 'INVALID_ENROLLMENT_CODE');
-    }
-
-    // Validate device type if restricted
-    if (
-      validation.allowedDeviceType &&
-      input.deviceType !== validation.allowedDeviceType
-    ) {
-      throw new Error('ENROLLMENT_DEVICE_TYPE_MISMATCH');
-    }
-
-    // Validate employee IDs if required
-    if (validation.employeeIds && validation.employeeIds.length > 0) {
-      const missingEmployees = validation.employeeIds.filter(
-        (id) => !input.linkedEmployeeIds?.includes(id)
-      );
-
-      if (missingEmployees.length > 0) {
-        throw new Error('ENROLLMENT_MISSING_REQUIRED_EMPLOYEES');
-      }
-    }
-
-    // Begin transaction
+  async enrollDevice(input: EnrollDeviceInput): Promise<CommunicationDevice> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
 
+      // Lock and consume the enrollment code in this transaction. Concurrent
+      // requests cannot exceed max_uses, including single-use codes.
+      const codeHash = createHash('sha256').update(input.enrollmentCode.trim().toLowerCase()).digest('hex');
+      const codeResult = await client.query<any>(
+        `SELECT id, tenant_id as "tenantId", branch_id as "branchId",
+                allowed_device_type as "allowedDeviceType", max_uses as "maxUses",
+                uses_count as "usesCount", pre_assigned_employee_ids as "preAssignedEmployeeIds",
+                expires_at as "expiresAt", consumed_at as "consumedAt"
+         FROM communication_enrollment_codes
+         WHERE code_hash = $1 AND lower(code) = lower($2)
+         FOR UPDATE`,
+        [codeHash, input.enrollmentCode.trim()]
+      );
+      const enrollment = codeResult.rows[0];
+      if (!enrollment) throw new Error('ENROLLMENT_CODE_NOT_FOUND');
+      if (input.branchId && input.branchId !== enrollment.branchId) throw new Error('ENROLLMENT_BRANCH_MISMATCH');
+      if (new Date(enrollment.expiresAt).getTime() <= Date.now()) throw new Error('ENROLLMENT_CODE_EXPIRED');
+      if (enrollment.maxUses > 0 && enrollment.usesCount >= enrollment.maxUses) throw new Error('ENROLLMENT_CODE_ALREADY_USED');
+
+      const deviceType = enrollment.allowedDeviceType ?? (input.linkedEmployeeIds?.length ? 'EMPLOYEE_MOBILE' : 'BRANCH_SHARED');
+      const employeeIds = [...new Set([...(enrollment.preAssignedEmployeeIds ?? []), ...(input.linkedEmployeeIds ?? [])])];
+      if (enrollment.preAssignedEmployeeIds?.some((id: string) => !employeeIds.includes(id))) {
+        throw new Error('ENROLLMENT_MISSING_REQUIRED_EMPLOYEES');
+      }
+      if (employeeIds.length) {
+        const employees = await client.query(
+          `SELECT id FROM users WHERE id = ANY($1::uuid[]) AND tenant_id = $2 AND branch_id = $3 AND is_active = true`,
+          [employeeIds, enrollment.tenantId, enrollment.branchId]
+        );
+        if (employees.rowCount !== employeeIds.length) throw new Error('ENROLLMENT_INVALID_EMPLOYEE');
+      }
+
       // Create device record
       const deviceResult = await client.query<CommunicationDevice>(
         `INSERT INTO communication_devices (
-          id, tenant_id, branch_id,
+          id, tenant_id, branch_id, device_uuid, credential_hash,
           device_name, device_type, platform,
-          public_key, status,
+          public_key, device_capabilities, status,
           registered_at, created_at, updated_at
         ) VALUES (
-          gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7,
+          gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
           NOW(), NOW(), NOW()
         )
         RETURNING
           id, tenant_id as "tenantId", branch_id as "branchId",
+          device_uuid as "deviceUuid", credential_hash as "credentialHash",
           device_name as "deviceName", device_type as "deviceType",
           platform, public_key as "publicKey",
           certificate_id as "certificateId",
@@ -295,12 +306,15 @@ export class DeviceEnrollmentService {
           created_at as "createdAt",
           updated_at as "updatedAt"`,
         [
-          validation.tenantId!,
-          validation.branchId!,
+          enrollment.tenantId,
+          enrollment.branchId,
+          input.deviceUuid,
+          createHash('sha256').update(randomBytes(32)).digest('hex'),
           input.deviceName,
-          input.deviceType,
+          deviceType,
           input.platform,
-          input.devicePublicKey,
+          input.publicKey,
+          JSON.stringify(input.deviceCapabilities ?? {}),
           'PENDING', // Initial status
         ]
       );
@@ -308,30 +322,31 @@ export class DeviceEnrollmentService {
       const device = deviceResult.rows[0]!;
 
       // Link employees if specified
-      if (input.linkedEmployeeIds && input.linkedEmployeeIds.length > 0) {
-        for (const employeeId of input.linkedEmployeeIds) {
+      if (employeeIds.length > 0) {
+        for (const employeeId of employeeIds) {
           await client.query(
             `INSERT INTO communication_device_employees (
-              device_id, employee_id,
+              device_id, employee_id, tenant_id,
               is_primary, can_receive_calls, can_make_calls,
               can_receive_messages, can_send_messages,
               linked_at
-            ) VALUES ($1, $2, $3, true, true, true, true, NOW())`,
+            ) VALUES ($1, $2, $3, $4, true, true, true, true, NOW())`,
             [
               device.id,
               employeeId,
-              input.linkedEmployeeIds[0] === employeeId, // First is primary
+              enrollment.tenantId,
+              employeeIds[0] === employeeId, // First is primary
             ]
           );
         }
       }
 
-      // Mark enrollment code as used (if single-use)
       await client.query(
         `UPDATE communication_enrollment_codes
-        SET used_at = NOW()
-        WHERE code = $1 AND single_use = true`,
-        [input.enrollmentCode]
+         SET uses_count = uses_count + 1,
+             consumed_at = CASE WHEN max_uses > 0 AND uses_count + 1 >= max_uses THEN NOW() ELSE consumed_at END
+         WHERE id = $1`,
+        [enrollment.id]
       );
 
       await client.query('COMMIT');

@@ -4,6 +4,7 @@
  */
 
 import { Server as SocketIOServer } from 'socket.io';
+import { verify } from 'jsonwebtoken';
 import type { Server as HTTPServer } from 'http';
 import type { ControlPlaneStore } from '../control-plane-store.js';
 
@@ -89,6 +90,58 @@ export class WebSocketService {
       transports: ['websocket', 'polling'],
     });
 
+    this.io.use(async (socket, next) => {
+      const token = typeof socket.handshake.auth?.token === 'string' ? socket.handshake.auth.token : '';
+      try {
+        if (!token) return next(new Error('unauthorized'));
+        const secret = process.env.COMM_DEVICE_TOKEN_SECRET || process.env.JWT_SECRET;
+        if (!secret || secret.length < 32) return next(new Error('authentication_unavailable'));
+
+        const deviceClaims = verify(token, secret, {
+          algorithms: ['HS256'], issuer: 'sentinel-communications', audience: 'communication-device',
+        }) as { typ?: string; deviceId?: string; deviceUuid?: string };
+        if (deviceClaims.typ === 'device-access' && deviceClaims.deviceId) {
+          const pool = (this.store as any).db;
+          if (!pool?.query) return next(new Error('authentication_unavailable'));
+          const result = await pool.query(
+            `SELECT id, tenant_id, branch_id FROM communication_devices
+             WHERE id = $1 AND device_uuid = $2 AND status = 'ACTIVE' AND revoked_at IS NULL LIMIT 1`,
+            [deviceClaims.deviceId, deviceClaims.deviceUuid]
+          );
+          const device = result.rows[0];
+          if (!device) return next(new Error('unauthorized'));
+          socket.data.deviceId = device.id;
+          socket.data.tenantId = device.tenant_id;
+          socket.data.branchId = device.branch_id;
+          const employeeLinks = await pool.query(
+            `SELECT employee_id FROM communication_device_employees
+             WHERE device_id = $1 AND tenant_id = $2 AND unlinked_at IS NULL AND can_receive_calls = true`,
+            [device.id, device.tenant_id]
+          );
+          socket.data.employeeIds = employeeLinks.rows.map((row: { employee_id: string }) => row.employee_id);
+          socket.data.identityType = 'device';
+          return next();
+        }
+      } catch {
+        // Continue by validating a user session token below.
+      }
+
+      try {
+        const secret = process.env.JWT_SECRET;
+        if (!secret || secret.length < 32) return next(new Error('authentication_unavailable'));
+        const claims = verify(token, secret, { algorithms: ['HS256'] }) as { sub?: string; tid?: string };
+        if (!claims.sub || !claims.tid) return next(new Error('unauthorized'));
+        const user = await this.store.getUser(claims.sub);
+        if (!user || user.status !== 'active' || user.tenantId !== claims.tid) return next(new Error('unauthorized'));
+        socket.data.userId = user.id;
+        socket.data.tenantId = user.tenantId;
+        socket.data.identityType = 'operator';
+        return next();
+      } catch {
+        return next(new Error('unauthorized'));
+      }
+    });
+
     this.setupEventHandlers();
     this.logger.info('WebSocket service initialized');
   }
@@ -100,29 +153,15 @@ export class WebSocketService {
     this.io.on('connection', (socket) => {
       this.logger.info('Client connected:', socket.id);
 
-      // Authentication - client should send tenantId after connection
-      socket.on('authenticate', (data: { tenantId: string; userId: string }) => {
-        const { tenantId, userId } = data;
-
-        // Store connection mapping
-        if (!this.connectedClients.has(tenantId)) {
-          this.connectedClients.set(tenantId, new Set());
-        }
+      const tenantId = socket.data.tenantId as string | undefined;
+      if (tenantId) {
+        if (!this.connectedClients.has(tenantId)) this.connectedClients.set(tenantId, new Set());
         this.connectedClients.get(tenantId)!.add(socket.id);
-
-        // Join tenant-specific room
         socket.join(`tenant:${tenantId}`);
-        socket.data.tenantId = tenantId;
-        socket.data.userId = userId;
-
-        this.logger.info('Client authenticated:', {
-          socketId: socket.id,
-          tenantId,
-          userId,
-        });
-
-        socket.emit('authenticated', { success: true });
-      });
+      }
+      socket.on('authenticate', () => socket.emit('authenticated', {
+        success: Boolean(socket.data.tenantId), tenantId: socket.data.tenantId,
+      }));
 
       // Subscribe to specific channels
       socket.on('subscribe', (channel: string) => {

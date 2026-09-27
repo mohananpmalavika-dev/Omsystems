@@ -21,6 +21,7 @@
 
 import type { Pool } from 'pg';
 import { createHash, randomBytes } from 'crypto';
+import { sign, verify } from 'jsonwebtoken';
 import type {
   CommunicationDevice,
   DeviceCredential,
@@ -364,6 +365,7 @@ export class DeviceCredentialService {
     const deviceResult = await this.pool.query<CommunicationDevice>(
       `SELECT
         id, tenant_id as "tenantId", branch_id as "branchId",
+        device_uuid as "deviceUuid",
         device_name as "deviceName", device_type as "deviceType",
         platform, status
       FROM communication_devices
@@ -414,15 +416,17 @@ export class DeviceCredentialService {
    * @private
    */
   private generateAccessToken(deviceId: string, deviceUuid?: string): string {
-    const payload = {
-      typ: 'device-access',
-      deviceId,
-      deviceUuid,
-      iat: Math.floor(Date.now() / 1000),
-      exp: Math.floor(Date.now() / 1000) + this.ACCESS_TOKEN_LIFETIME,
-    };
+    return sign(
+      { typ: 'device-access', deviceId, deviceUuid },
+      this.getSigningSecret(),
+      { algorithm: 'HS256', expiresIn: this.ACCESS_TOKEN_LIFETIME, issuer: 'sentinel-communications', audience: 'communication-device' }
+    );
+  }
 
-    return `jwt-device-${Buffer.from(JSON.stringify(payload)).toString('base64url')}`;
+  private getSigningSecret(): string {
+    const secret = process.env.COMM_DEVICE_TOKEN_SECRET || process.env.JWT_SECRET;
+    if (!secret || secret.length < 32) throw new Error('COMM_DEVICE_TOKEN_SECRET or a 32-character JWT_SECRET is required');
+    return secret;
   }
 
   private async resolveDevice(deviceId: string): Promise<CommunicationDevice | null> {
@@ -485,7 +489,7 @@ export class DeviceCredentialService {
   /**
    * Extract device ID from access token
    * 
-   * In production, this would verify JWT signature and extract claims.
+   * Verify JWT signature, issuer, audience, and expiry before looking up the device.
    * 
    * @param token - Access token
    * @returns Device ID or null
@@ -493,15 +497,14 @@ export class DeviceCredentialService {
    */
   private async extractDeviceId(token: string): Promise<string | null> {
     try {
-      const match = /^jwt-device-(.+)$/i.exec(token.trim());
-      if (!match) {
-        return null;
-      }
-
-      const payload = JSON.parse(Buffer.from(match[1], 'base64url').toString('utf8')) as {
+      const payload = verify(token, this.getSigningSecret(), {
+        algorithms: ['HS256'], issuer: 'sentinel-communications', audience: 'communication-device',
+      }) as {
+        typ?: string;
         deviceId?: string;
         deviceUuid?: string;
       };
+      if (payload.typ !== 'device-access') return null;
 
       if (payload.deviceId) {
         const result = await this.pool.query<{ id: string }>(

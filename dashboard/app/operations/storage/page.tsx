@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { ComponentDetailPage } from "@/components/operational-health/component-detail-page";
 import { HddFleetWidget } from "@/components/operational-health/hdd-fleet-widget";
+import { LiveStorageTelemetryWidget } from "@/components/operational-health/live-storage-telemetry-widget";
 
 interface CameraStorageMapping {
   cameraId: string;
@@ -385,6 +386,9 @@ export default function StoragePage() {
           </div>
         </div>
       </section>
+
+      {/* Live Storage Telemetry - Memory Card and Hard Disk Separate Display */}
+      <LiveStorageTelemetryWidget />
 
       {/* Existing Operational HDD Fleet Health & Projections */}
       <HddFleetWidget detailed />

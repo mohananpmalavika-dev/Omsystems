@@ -404,9 +404,10 @@ export async function GET(request: NextRequest) {
     ? aggregateDisks(measuredSdCards, "Camera MicroSD Memory Pool")
     : { name: "Camera MicroSD Memory Pool", capacity_bytes: 128 * 1e9, used_bytes: 45 * 1e9, available_bytes: 83 * 1e9, status: "healthy" };
 
-  const tier1Count = cameras.length > 0 ? measuredSdCards.length : 0;
-  const tier2Count = cameras.length > 0 ? measuredRecorderDisks.length : 0;
+  const tier1Count = measuredSdCards.length;
+  const tier2Count = measuredRecorderDisks.length;
   const tier3Count = cameras.filter((c) => c.activeStorageTier === "online_cloud").length;
+  const hasDiscoveredStorage = measuredSdCards.length > 0 || measuredRecorderDisks.length > 0;
 
   // Active storage nodes for detail breakdown
   const activeStorageNodes = [
@@ -418,7 +419,7 @@ export async function GET(request: NextRequest) {
       capacity_bytes: sdCardNode.capacity_bytes,
       used_bytes: sdCardNode.used_bytes,
       available_bytes: sdCardNode.available_bytes,
-      status: cameras.length > 0 ? "healthy" : "not_present",
+      status: hasDiscoveredStorage ? "healthy" : "not_present",
       health_state: "HEALTHY",
       tier_primary: "hot",
     },
@@ -430,7 +431,7 @@ export async function GET(request: NextRequest) {
       capacity_bytes: dvrNode.capacity_bytes,
       used_bytes: dvrNode.used_bytes,
       available_bytes: dvrNode.available_bytes,
-      status: cameras.length > 0 ? "healthy" : "not_present",
+      status: hasDiscoveredStorage ? "healthy" : "not_present",
       health_state: "HEALTHY",
       tier_primary: "warm",
     },
@@ -460,13 +461,13 @@ export async function GET(request: NextRequest) {
         name: sdCardNode.name,
         capacity: formatBytes(sdCardNode.capacity_bytes),
         used: formatBytes(sdCardNode.used_bytes),
-        status: cameras.length > 0 ? "healthy" : "not_present",
+        status: hasDiscoveredStorage ? "healthy" : "not_present",
       },
       dvrHddNode: {
         name: dvrNode.name,
         capacity: formatBytes(dvrNode.capacity_bytes),
         used: formatBytes(dvrNode.used_bytes),
-        status: cameras.length > 0 ? "healthy" : "not_present",
+        status: hasDiscoveredStorage ? "healthy" : "not_present",
       },
       cloudNode: {
         name: cloudNode.name,

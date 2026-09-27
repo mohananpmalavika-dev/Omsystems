@@ -158,7 +158,8 @@ class CommunicationAPIClient {
   
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    retried = false
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     
@@ -172,6 +173,26 @@ class CommunicationAPIClient {
     });
     
     if (!response.ok) {
+      if (response.status === 401 && !retried && typeof window !== 'undefined') {
+        const refreshToken = localStorage.getItem('commDeviceRefreshToken');
+        if (refreshToken) {
+          const refreshed = await fetch(`${this.baseUrl}/v1/communications/devices/refresh`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken }),
+            credentials: 'include',
+          });
+          if (refreshed.ok) {
+            const tokens = await refreshed.json();
+            localStorage.setItem('commDeviceToken', tokens.accessToken);
+            localStorage.setItem('commDeviceRefreshToken', tokens.refreshToken);
+            window.dispatchEvent(new Event('comm-device-enrolled'));
+            return this.request<T>(endpoint, options, true);
+          }
+          localStorage.removeItem('commDeviceToken');
+          localStorage.removeItem('commDeviceRefreshToken');
+        }
+      }
       const error = await response.json().catch(() => ({
         error: 'Request failed',
         message: `HTTP ${response.status}`,
@@ -441,10 +462,13 @@ class CommunicationAPIClient {
   }
   
   async deviceHeartbeat(): Promise<void> {
+    const deviceId = typeof window !== 'undefined' ? localStorage.getItem('commDeviceId') : null;
+    if (!deviceId) throw new Error('Device has not been enrolled');
     await this.request(
-      '/v1/communications/devices/me/heartbeat',
+      `/v1/communications/devices/${encodeURIComponent(deviceId)}/heartbeat`,
       {
         method: 'POST',
+        body: JSON.stringify({ appVersion: 'web', capabilities: { webrtc: true, microphone: true, speaker: true, camera: true } }),
       }
     );
   }

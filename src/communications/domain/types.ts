@@ -469,6 +469,7 @@ export interface GenerateEnrollmentCodeInput {
 
 export interface EnrollDeviceInput {
   enrollmentCode: string;
+  branchId?: string;
   deviceName: string;
   platform: CommunicationDevicePlatform;
   publicKey: string;

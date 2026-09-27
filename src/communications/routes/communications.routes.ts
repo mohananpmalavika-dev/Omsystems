@@ -60,6 +60,7 @@ const enrollmentCodeSchema = z.object({
 
 const enrollDeviceSchema = z.object({
   enrollmentCode: z.string().min(1),
+  branchId: z.string().uuid().optional(),
   deviceName: z.string().trim().min(2).max(120),
   platform: z.enum(['WINDOWS', 'ANDROID', 'IOS', 'WEB']),
   publicKey: z.string().min(100),
@@ -93,6 +94,8 @@ const heartbeatSchema = z.object({
     webrtc: z.boolean().optional(),
   }).optional(),
 });
+
+const deviceRefreshSchema = z.object({ refreshToken: z.string().min(32) });
 
 const initiateCallSchema = z.object({
   targetType: z.enum(['BRANCH', 'EMPLOYEE', 'SOC_QUEUE']),
@@ -194,64 +197,106 @@ async function requirePermission(
   ctx: RouteContext,
   permission: string
 ): Promise<boolean> {
-  // TODO: Integrate with existing permission system
-  // For now, allow all authenticated users
-  return true;
+  const user = request.currentUser?.id ? await ctx.store.getUser(request.currentUser.id) : undefined;
+  if (!user || user.tenantId !== request.currentUser.tenantId) {
+    await reply.code(401).send({ error: 'unauthenticated' });
+    return false;
+  }
+
+  const action = permission.startsWith('communication.device.')
+    ? 'device:configure'
+    : permission.includes('view') || permission.includes('message')
+      ? 'incident:view'
+      : 'incident:create';
+  const body = (request.body && typeof request.body === 'object' ? request.body : {}) as Record<string, unknown>;
+  const params = request.params as Record<string, unknown>;
+  let branchId = (body.branchId || body.targetBranchId || params.branchId) as string | undefined;
+
+  if (!branchId && typeof body.targetId === 'string' && body.targetType === 'BRANCH') branchId = body.targetId;
+  if (!branchId && typeof body.targetId === 'string' && body.targetType === 'EMPLOYEE') {
+    const employee = await ctx.pool.query<{ branch_id: string }>(
+      'SELECT branch_id FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true LIMIT 1',
+      [body.targetId, user.tenantId]
+    );
+    branchId = employee.rows[0]?.branch_id;
+  }
+  const deviceId = typeof params.deviceId === 'string' ? params.deviceId : typeof params.id === 'string' ? params.id : undefined;
+  if (!branchId && deviceId) {
+    branchId = (await ctx.enrollmentService.getDevice(deviceId))?.branchId;
+  }
+
+  if (!branchId) {
+    await reply.code(403).send({ error: 'forbidden' });
+    return false;
+  }
+  const branch = await ctx.store.getNode(branchId);
+  if (!branch || branch.tenantId !== user.tenantId || branch.type !== 'branch') {
+    await reply.code(404).send({ error: 'branch_not_found' });
+    return false;
+  }
+  const decision = await ctx.store.checkAccess(user, action, branchId);
+  if (!decision?.allowed) await reply.code(403).send({ error: 'forbidden' });
+  return Boolean(decision?.allowed);
 }
 
 // ============================================================================
 // ROUTE REGISTRATION
 // ============================================================================
 
-function createFallbackRedis(): any {
-  const memory = new Map<string, string>();
-  return {
-    async get(key: string) { return memory.get(key) ?? null; },
-    async set(key: string, val: string) { memory.set(key, val); return 'OK'; },
-    async setEx(key: string, _ttl: number, val: string) { memory.set(key, val); return 'OK'; },
-    async del(key: string) { return memory.delete(key) ? 1 : 0; },
-    async keys(_pattern: string) { return Array.from(memory.keys()); },
-    async scan(_cursor: number, _options?: any) { return { cursor: 0, keys: Array.from(memory.keys()) }; },
-    async publish(_channel: string, _msg: string) { return 0; },
-    on() {},
-  };
-}
-
 class LazySignalingGateway {
-  constructor(private readonly getApp: () => FastifyInstance) {}
+  private gateway: CommunicationSignalingGateway | null = null;
+  constructor(private readonly getApp: () => FastifyInstance, private readonly pool: Pool) {}
 
   private getGateway(): CommunicationSignalingGateway | null {
+    if (this.gateway) return this.gateway;
     const io = (this.getApp() as any).io;
     if (!io) return null;
     try {
-      return new CommunicationSignalingGateway(io);
+      this.gateway = new CommunicationSignalingGateway(io);
+      return this.gateway;
     } catch {
       return null;
     }
   }
 
-  broadcastCallInvite(tenantId: string, targetDeviceIds: string[], targetOperatorIds: string[], call: any): void {
-    this.getGateway()?.broadcastCallInvite(tenantId, targetDeviceIds, targetOperatorIds, call);
+  private async ringingParticipants(callId: string): Promise<{ devices: string[]; operators: string[] }> {
+    const result = await this.pool.query(
+      `SELECT device_id::text, operator_id::text FROM communication_call_participants
+       WHERE call_id = $1 AND connection_status IN ('INVITED', 'RINGING')`,
+      [callId]
+    );
+    return {
+      devices: result.rows.map((row: any) => row.device_id).filter(Boolean),
+      operators: result.rows.map((row: any) => row.operator_id).filter(Boolean),
+    };
   }
 
-  broadcastCallAccept(tenantId: string, callId: string, data: any): void {
-    this.getGateway()?.broadcastCallAccept(tenantId, callId, data);
+  async broadcastCallInvite(tenantId: string, callId: string, data: any): Promise<void> {
+    const gateway = this.getGateway();
+    if (!gateway) throw new Error('Communication websocket is unavailable');
+    const { devices, operators } = await this.ringingParticipants(callId);
+    gateway.broadcastCallInvite(tenantId, devices, operators, { id: callId, ...data });
   }
 
-  broadcastCallAcceptedElsewhere(tenantId: string, callId: string, acceptorId: string): void {
-    this.getGateway()?.broadcastCallAcceptedElsewhere(tenantId, callId, acceptorId);
+  async broadcastCallAccept(tenantId: string, callId: string, data: any): Promise<void> {
+    this.getGateway()?.broadcastCallAccept(tenantId, { id: callId, ...data }, data.acceptedBy);
+  }
+
+  async broadcastCallAcceptedElsewhere(tenantId: string, callId: string, acceptorId: string): Promise<void> {
+    const { devices, operators } = await this.ringingParticipants(callId);
+    this.getGateway()?.broadcastCallAcceptedElsewhere(tenantId, callId, acceptorId, devices, operators);
   }
 
   broadcastCallReject(tenantId: string, callId: string, data: any): void {
-    this.getGateway()?.broadcastCallReject(tenantId, callId, data);
+    this.getGateway()?.broadcastCallReject(tenantId, callId, data.rejectedBy || data.actorId || 'unknown');
   }
 
   broadcastCallCancel(tenantId: string, callId: string, data: any): void {
-    this.getGateway()?.broadcastCallCancel(tenantId, callId, data);
+    this.getGateway()?.broadcastCallCancel(tenantId, callId, data.cancelledBy || data.actorId || 'unknown');
   }
 
   broadcastCallEnd(tenantId: string, callId: string, data: any): void {
-    this.getGateway()?.broadcastCallEnd(tenantId, callId, data);
+    this.getGateway()?.broadcastCallEnd(tenantId, callId, typeof data === 'string' ? data : data.endReason || 'NORMAL');
   }
 
   broadcastMessageCreated(tenantId: string, conversationId: string, message: any): void {
@@ -275,10 +320,14 @@ export async function registerCommunicationsRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore
 ): Promise<void> {
-  const pool: any = (store as any)?.pool || (store as any)?.db || (app as any).pg?.pool || {
-    query: async () => ({ rows: [] }),
-  };
-  const redis: any = (store as any)?.redis || (app as any).redis || redisModule?.getClient?.() || createFallbackRedis();
+  const pool: any = (store as any)?.pool || (store as any)?.db || (app as any).pg?.pool;
+  const redis: any = (store as any)?.redis || (app as any).redis || redisModule?.getClient?.();
+  if (!pool || typeof pool.query !== 'function' || typeof pool.connect !== 'function') {
+    throw new Error('Communications requires the configured PostgreSQL pool');
+  }
+  if (!redis || typeof redis.get !== 'function' || typeof redis.setEx !== 'function') {
+    throw new Error('Communications requires the configured Redis client');
+  }
   
   const logger = app.log?.child ? app.log.child({ module: 'communications' }) : console as any;
   
@@ -295,12 +344,10 @@ export async function registerCommunicationsRoutes(
   const messagingService = new CommunicationMessagingService(pool, redis);
   
   // Initialize WebSocket signaling gateway (lazy so it connects when Socket.IO attaches to app)
-  const signalingGateway = new LazySignalingGateway(() => app) as unknown as CommunicationSignalingGateway;
+  const signalingGateway = new LazySignalingGateway(() => app, pool) as unknown as CommunicationSignalingGateway;
   
   // Initialize WebRTC media provider
-  let mediaProvider: any;
-  try {
-    mediaProvider = createVoiceMediaProvider({
+  const mediaProvider = createVoiceMediaProvider({
       provider: (process.env.COMM_MEDIA_PROVIDER as any) ?? 'self-hosted',
       turnServerUrl: process.env.COMM_TURN_SERVER_URL || 'stun:stun.l.google.com:19302',
       turnUsername: process.env.COMM_TURN_USERNAME || '',
@@ -308,25 +355,6 @@ export async function registerCommunicationsRoutes(
       redis,
       logger,
     });
-  } catch {
-    mediaProvider = {
-      createSession: async (input: any) => ({
-        id: input?.callId || 'default-session',
-        provider: 'self-hosted',
-        createdAt: new Date().toISOString(),
-        status: 'active',
-      }),
-      createParticipantToken: async () => ({
-        participantToken: 'mock-token',
-        turnServers: [],
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
-      }),
-      disconnectParticipant: async () => {},
-      closeSession: async () => {},
-      getSessionMetrics: async () => null,
-      reportQualityMetrics: async () => {},
-    };
-  }
   
   const ctx: RouteContext = {
     pool,
@@ -360,8 +388,17 @@ export async function registerCommunicationsRoutes(
         return;
       }
       
-      const input: GenerateEnrollmentCodeInput = {
-        ...body,
+      const branch = await store.getNode(body.branchId);
+      if (!branch || branch.type !== 'branch' || branch.tenantId !== request.currentUser.tenantId) {
+        return reply.code(404).send({ error: 'branch_not_found' });
+      }
+      const input = {
+        branchId: body.branchId,
+        tenantId: branch.tenantId,
+        allowedDeviceType: body.allowedDeviceType,
+        expiresInMinutes: body.expiresInMinutes,
+        maxUses: body.maxUses,
+        employeeIds: body.preAssignedEmployeeIds,
         createdBy: request.currentUser.id,
       };
       
@@ -415,6 +452,7 @@ export async function registerCommunicationsRoutes(
           platform: result.device.platform,
         },
       });
+      const branch = await store.getNode(result.device.branchId);
       
       return reply.code(201).send({
         device: {
@@ -422,6 +460,8 @@ export async function registerCommunicationsRoutes(
           deviceUuid: result.device.deviceUuid,
           deviceName: result.device.deviceName,
           branchId: result.device.branchId,
+          branchName: branch?.name || '',
+          tenantId: result.device.tenantId,
           status: result.device.status,
         },
         accessToken: tokens.accessToken,
@@ -437,6 +477,19 @@ export async function registerCommunicationsRoutes(
         error: error.message || 'enrollment_failed',
         message: error.message,
       });
+    }
+  });
+
+  app.post('/v1/communications/devices/refresh', { config: { noAuth: true } }, async (request, reply) => {
+    try {
+      const { refreshToken } = deviceRefreshSchema.parse(request.body);
+      const tokens = await ctx.credentialService.refreshDeviceTokens(refreshToken);
+      if (!tokens) return reply.code(401).send({ error: 'invalid_device_refresh_token' });
+      return reply.send(tokens);
+    } catch (error) {
+      if (error instanceof z.ZodError) return reply.code(400).send({ error: 'invalid_request' });
+      ctx.logger.error({ error }, 'Failed to refresh device credentials');
+      return reply.code(500).send({ error: 'device_refresh_failed' });
     }
   });
   
@@ -759,83 +812,39 @@ export async function registerCommunicationsRoutes(
    */
   app.get('/v1/communications/directory/branches', async (request: AuthenticatedRequest, reply) => {
     try {
-      const tenantId = request.currentUser?.tenantId;
-
-      // Query branch resource nodes
-      let branchRows: any[] = [];
-      try {
-        const res = await ctx.pool.query(
-          "SELECT id::text, name, code, metadata FROM resource_nodes WHERE lower(node_type) = 'branch' ORDER BY name ASC"
-        );
-        branchRows = res.rows;
-      } catch (err) {
-        ctx.logger.warn({ err }, 'Failed to query branch resource_nodes');
-      }
-
-      // If no branch nodes found, get all non-camera nodes
-      if (branchRows.length === 0) {
-        try {
-          const fallback = await ctx.pool.query(
-            "SELECT id::text, name, code, metadata FROM resource_nodes WHERE lower(node_type) != 'camera' ORDER BY name ASC LIMIT 50"
-          );
-          branchRows = fallback.rows;
-        } catch {
-          // ignore
-        }
-      }
-
-      // Query active users
-      let userRows: any[] = [];
-      try {
-        const uRes = await ctx.pool.query(
-          "SELECT id::text, username, role FROM users ORDER BY username ASC"
-        );
-        userRows = uRes.rows;
-      } catch (err) {
-        ctx.logger.warn({ err }, 'Failed to query users');
-      }
-
-      // Query device count per branch
-      const deviceMap: Record<string, { total: number; online: number }> = {};
-      try {
-        const dRes = await ctx.pool.query(
-          "SELECT branch_id::text, status, count(*)::int as count FROM communication_devices GROUP BY branch_id, status"
-        );
-        for (const row of dRes.rows) {
-          if (!deviceMap[row.branch_id]) deviceMap[row.branch_id] = { total: 0, online: 0 };
-          deviceMap[row.branch_id].total += row.count;
-          if (row.status === 'ACTIVE' || row.status === 'ONLINE') {
-            deviceMap[row.branch_id].online += row.count;
-          }
-        }
-      } catch {
-        // ignore
-      }
-
-      const directory = branchRows.map((branch) => {
-        const devCount = deviceMap[branch.id] || { total: 0, online: 0 };
-
-        const employees = userRows.map((u) => ({
-          employeeId: u.id,
-          employeeName: u.username,
-          role: u.role || 'Operator',
-          branchId: branch.id,
-          branchName: branch.name,
-          presence: 'ONLINE' as const,
-          onlineDeviceCount: 1,
+      const user = request.currentUser?.id ? await store.getUser(request.currentUser.id) : undefined;
+      if (!user || user.tenantId !== request.currentUser.tenantId) return reply.code(401).send({ error: 'unauthenticated' });
+      const accessible = await store.listAccessibleNodes(user, 'incident:view', 'branch');
+      const branchIds = accessible.filter((node) => node.type === 'branch' && node.tenantId === user.tenantId).map((node) => node.id);
+      if (!branchIds.length) return { data: [] };
+      const [branchRes, userRes] = await Promise.all([
+        ctx.pool.query(`SELECT id::text, name, code FROM resource_nodes WHERE id = ANY($1::uuid[]) AND lower(node_type) = 'branch' ORDER BY name`, [branchIds]),
+        ctx.pool.query(`SELECT id::text, full_name AS name, username, role, branch_id::text FROM users WHERE tenant_id = $1 AND branch_id = ANY($2::uuid[]) AND is_active = true ORDER BY full_name`, [user.tenantId, branchIds]),
+      ]);
+      const directory = await Promise.all(branchRes.rows.map(async (branch: any) => {
+        const presence = await ctx.presenceService.getBranchPresence(user.tenantId, branch.id);
+        const employees = await Promise.all(userRes.rows.filter((employee: any) => employee.branch_id === branch.id).map(async (employee: any) => {
+          const employeePresence = await ctx.presenceService.getEmployeePresence(user.tenantId, employee.id);
+          return {
+            employeeId: employee.id,
+            employeeName: employee.name || employee.username,
+            role: employee.role || 'Staff',
+            branchId: branch.id,
+            branchName: branch.name,
+            presence: employeePresence.status,
+            onlineDeviceCount: employeePresence.onlineDeviceIds.length,
+          };
         }));
-
         return {
           branchId: branch.id,
           branchName: branch.name,
-          branchCode: branch.code || `BR-${branch.id.substring(0, 4).toUpperCase()}`,
-          presence: devCount.online > 0 ? ('ONLINE' as const) : ('ONLINE' as const),
-          onlineDeviceCount: Math.max(1, devCount.online),
-          totalDeviceCount: Math.max(1, devCount.total),
+          branchCode: branch.code,
+          presence: presence.status,
+          onlineDeviceCount: presence.onlineDeviceIds.length,
+          totalDeviceCount: presence.deviceCount,
           employees,
         };
-      });
-
+      }));
       return { data: directory };
     } catch (error) {
       ctx.logger.error({ error }, 'Failed to get branch directory');

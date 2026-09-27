@@ -148,8 +148,8 @@ export class CommunicationPresenceService {
     const devicesResult = await this.pool.query<{ deviceId: string }>(
       `SELECT device_id as "deviceId"
       FROM communication_device_employees
-      WHERE employee_id = $1 AND unlinked_at IS NULL`,
-      [employeeId]
+      WHERE employee_id = $1 AND tenant_id = $2 AND unlinked_at IS NULL`,
+      [employeeId, tenantId]
     );
 
     const deviceIds = devicesResult.rows.map(row => row.deviceId);

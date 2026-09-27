@@ -41,6 +41,7 @@ export default function KryptoVisionConnectPage() {
   const [deviceEnrolled, setDeviceEnrolled] = useState(false);
   const [deviceId, setDeviceId] = useState('');
   const [deviceName, setDeviceName] = useState('');
+  const [deviceStatus, setDeviceStatus] = useState('PENDING');
   const [branchId, setBranchId] = useState('');
   const [branchName, setBranchName] = useState('');
   const [deviceMode, setDeviceMode] = useState<'BRANCH_COMMON' | 'EMPLOYEE_SPECIFIC'>('BRANCH_COMMON');
@@ -53,7 +54,6 @@ export default function KryptoVisionConnectPage() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
   const [customDeviceName, setCustomDeviceName] = useState('');
   const [enrollmentCode, setEnrollmentCode] = useState('');
-  const [showCodeInput, setShowCodeInput] = useState(false);
   const [registering, setRegistering] = useState(false);
   const [loadingDirectory, setLoadingDirectory] = useState(false);
 
@@ -88,6 +88,7 @@ export default function KryptoVisionConnectPage() {
     const storedDeviceName = localStorage.getItem('commDeviceName');
     const storedBranchId = localStorage.getItem('commBranchId');
     const storedBranchName = localStorage.getItem('commBranchName');
+    const storedStatus = localStorage.getItem('commDeviceStatus');
     const storedMode = (localStorage.getItem('commDeviceMode') as any) || 'BRANCH_COMMON';
     const storedEmployee = localStorage.getItem('commLinkedEmployee');
 
@@ -97,6 +98,7 @@ export default function KryptoVisionConnectPage() {
       if (storedDeviceName) setDeviceName(storedDeviceName);
       if (storedBranchId) setBranchId(storedBranchId);
       if (storedBranchName) setBranchName(storedBranchName);
+      setDeviceStatus(storedStatus || 'PENDING');
       setDeviceMode(storedMode);
       if (storedEmployee) {
         try {
@@ -113,11 +115,34 @@ export default function KryptoVisionConnectPage() {
     checkEnrollment();
   }, [checkEnrollment]);
 
+  useEffect(() => {
+    const markReady = () => setDeviceStatus('ACTIVE');
+    window.addEventListener('comm-device-ready', markReady);
+    return () => window.removeEventListener('comm-device-ready', markReady);
+  }, []);
+
+  useEffect(() => {
+    if (!deviceEnrolled || deviceStatus !== 'ACTIVE') return;
+    const sendHeartbeat = () => {
+      if (document.visibilityState === 'visible') {
+        void communicationAPI.deviceHeartbeat().catch((heartbeatError) => {
+          console.warn('[Connect Device] Heartbeat failed:', heartbeatError);
+        });
+      }
+    };
+    sendHeartbeat();
+    const timer = window.setInterval(sendHeartbeat, 20_000);
+    return () => window.clearInterval(timer);
+  }, [deviceEnrolled, deviceStatus]);
+
   // 2. Load directory for enrollment screen if not enrolled
   useEffect(() => {
     if (!deviceEnrolled) {
       setLoadingDirectory(true);
-      fetch('/api/communications/devices/register')
+      const sessionToken = sessionStorage.getItem('activityAccessToken') || sessionStorage.getItem('accessToken') || localStorage.getItem('accessToken');
+      fetch('/api/communications/devices/register', {
+        headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
+      })
         .then((res) => res.json())
         .then((data) => {
           if (data.success && data.branches?.length > 0) {
@@ -187,6 +212,14 @@ export default function KryptoVisionConnectPage() {
         curEmployee = curBranch.employees.find((e) => e.id === selectedEmployeeId) || curBranch.employees[0];
       }
 
+      if (!enrollmentCode.trim()) throw new Error('Enter the enrollment code provided by your administrator');
+      if (!window.crypto?.subtle) throw new Error('This browser cannot securely enroll a device. Use HTTPS on a supported browser.');
+      const keyPair = await window.crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+      const publicKeyBytes = await window.crypto.subtle.exportKey('spki', keyPair.publicKey);
+      const publicKey = `-----BEGIN PUBLIC KEY-----\n${btoa(String.fromCharCode(...new Uint8Array(publicKeyBytes)))}\n-----END PUBLIC KEY-----`;
+      const deviceUuid = localStorage.getItem('commDeviceUuid') || window.crypto.randomUUID();
+      localStorage.setItem('commDeviceUuid', deviceUuid);
+
       const res = await fetch('/api/communications/devices/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -198,7 +231,9 @@ export default function KryptoVisionConnectPage() {
           employeeName: curEmployee?.name,
           deviceName: customDeviceName,
           platform: 'WEB',
-          enrollmentCode: showCodeInput ? enrollmentCode : undefined,
+          enrollmentCode,
+          publicKey,
+          deviceUuid,
         }),
       });
 
@@ -208,10 +243,14 @@ export default function KryptoVisionConnectPage() {
       }
 
       localStorage.setItem('commDeviceToken', data.accessToken);
+      localStorage.setItem('commDeviceRefreshToken', data.refreshToken);
+      window.dispatchEvent(new Event('comm-device-enrolled'));
       localStorage.setItem('commDeviceId', data.deviceId);
       localStorage.setItem('commDeviceName', data.deviceName);
       localStorage.setItem('commBranchId', data.branchId);
       localStorage.setItem('commBranchName', data.branchName);
+      if (data.tenantId) localStorage.setItem('commTenantId', data.tenantId);
+      localStorage.setItem('commDeviceStatus', data.status || 'PENDING');
       localStorage.setItem('commDeviceMode', data.mode);
       if (data.linkedEmployee) {
         localStorage.setItem('commLinkedEmployee', JSON.stringify(data.linkedEmployee));
@@ -229,10 +268,13 @@ export default function KryptoVisionConnectPage() {
   const handleResetDevice = () => {
     if (confirm('Are you sure you want to disconnect and switch this device?')) {
       localStorage.removeItem('commDeviceToken');
+      localStorage.removeItem('commDeviceRefreshToken');
       localStorage.removeItem('commDeviceId');
       localStorage.removeItem('commDeviceName');
       localStorage.removeItem('commBranchId');
       localStorage.removeItem('commBranchName');
+      localStorage.removeItem('commTenantId');
+      localStorage.removeItem('commDeviceStatus');
       localStorage.removeItem('commDeviceMode');
       localStorage.removeItem('commLinkedEmployee');
       setDeviceEnrolled(false);
@@ -601,30 +643,22 @@ export default function KryptoVisionConnectPage() {
 
             {/* Collapsible Admin Code */}
             <div className="pt-1">
-              <button
-                type="button"
-                onClick={() => setShowCodeInput(!showCodeInput)}
-                className="text-[11px] text-slate-400 hover:text-slate-300 underline"
-              >
-                {showCodeInput ? 'Hide enrollment code' : 'Have an admin enrollment code?'}
-              </button>
-              {showCodeInput && (
-                <div className="mt-2">
-                  <input
-                    type="text"
-                    value={enrollmentCode}
-                    onChange={(e) => setEnrollmentCode(e.target.value)}
-                    placeholder="Enter alphanumeric enrollment code"
-                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-xs font-mono text-white"
-                  />
-                </div>
-              )}
+              <label className="text-xs font-semibold text-slate-300">Admin enrollment code</label>
+              <input
+                type="text"
+                value={enrollmentCode}
+                onChange={(e) => setEnrollmentCode(e.target.value)}
+                placeholder="XXXX-XXXX-XXXX"
+                autoComplete="one-time-code"
+                required
+                className="mt-2 w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-xs font-mono text-white"
+              />
             </div>
 
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={registering}
+              disabled={registering || !enrollmentCode.trim()}
               className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-semibold text-sm shadow-lg shadow-blue-600/30 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {registering ? (
@@ -702,6 +736,12 @@ export default function KryptoVisionConnectPage() {
           </button>
         </div>
       </header>
+
+      {deviceStatus !== 'ACTIVE' && (
+        <div className="w-full max-w-5xl mx-auto mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          This device is registered and awaiting administrator approval. Calling becomes available after approval.
+        </div>
+      )}
 
       {/* Main Calling Stage */}
       <main className="w-full max-w-5xl mx-auto my-auto py-4">

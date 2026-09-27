@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { GET, POST } from "../app/api/control/[...path]/route";
-import { POST as POST_API_V1 } from "../app/api/v1/[...path]/route";
+import { GET as GET_API_V1, POST as POST_API_V1 } from "../app/api/v1/[...path]/route";
 
 const originalControlUrl = process.env.CONTROL_PLANE_INTERNAL_URL;
 const originalBridgeKey = process.env.EDGE_BRIDGE_SHARED_KEY;
@@ -503,6 +503,54 @@ describe("dashboard control-plane BFF", () => {
     const headers = new Headers(init?.headers);
     expect(headers.has("authorization")).toBe(false);
     expect(init?.body).toBe(JSON.stringify({ refreshToken: "compat-refresh-cookie" }));
+  });
+
+  it("Option 3: auto-refreshes expired access token on 401 and retries original request transparently", async () => {
+    let callCount = 0;
+    const upstream = vi.fn(async (
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      callCount++;
+      const url = String(input);
+      if (url.includes("/auth/refresh")) {
+        return Response.json({
+          accessToken: "new-silently-refreshed-token",
+          refreshToken: "new-silently-refreshed-refresh-token",
+          expiresIn: 30 * 24 * 60 * 60,
+        });
+      }
+      if (callCount === 1) {
+        return new Response(JSON.stringify({ error: "invalid_token", message: "Token expired" }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      const headers = new Headers(init?.headers);
+      if (headers.get("authorization") === "Bearer new-silently-refreshed-token") {
+        return Response.json({ success: true, data: "protected-data-recovered" });
+      }
+      return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 });
+    });
+    vi.stubGlobal("fetch", upstream);
+
+    const response = await GET_API_V1(
+      new NextRequest("https://sentinel.example/api/v1/protected/data", {
+        method: "GET",
+        headers: {
+          cookie: "sentinel_access=expired-token; sentinel_refresh=valid-refresh-token",
+        },
+      }),
+      { params: Promise.resolve({ path: ["protected", "data"] }) },
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.data).toBe("protected-data-recovered");
+
+    const cookies = response.headers.get("set-cookie") ?? "";
+    expect(cookies).toContain("sentinel_access=new-silently-refreshed-token");
+    expect(cookies).toContain("sentinel_refresh=new-silently-refreshed-refresh-token");
   });
 
   it("logs upstream fetch failures with route details and returns 502", async () => {

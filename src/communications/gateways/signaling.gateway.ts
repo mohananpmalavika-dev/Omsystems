@@ -55,20 +55,23 @@ export class CommunicationSignalingGateway {
       socket.on('comm:register-device', (data: { deviceId: string; tenantId: string }) => {
         const { deviceId, tenantId } = data;
 
-        if (!socket.data.tenantId) {
+        if (socket.data.identityType !== 'device' || !socket.data.deviceId || !socket.data.tenantId) {
           socket.emit('error', { message: 'Not authenticated' });
           return;
         }
 
-        // Verify tenant matches
-        if (socket.data.tenantId !== tenantId) {
+        // Only the device proven by the signed handshake token may join its room.
+        if (socket.data.tenantId !== tenantId || socket.data.deviceId !== deviceId) {
           socket.emit('error', { message: 'Tenant mismatch' });
           return;
         }
 
         // Join device room
         socket.join(WEBSOCKET_ROOMS.DEVICE(tenantId, deviceId));
-        socket.data.deviceId = deviceId;
+        socket.join(WEBSOCKET_ROOMS.BRANCH(tenantId, socket.data.branchId));
+        for (const employeeId of socket.data.employeeIds ?? []) {
+          socket.join(WEBSOCKET_ROOMS.EMPLOYEE(tenantId, employeeId));
+        }
 
         socket.emit('comm:device-registered', { deviceId });
       });
@@ -77,7 +80,7 @@ export class CommunicationSignalingGateway {
       socket.on('comm:register-operator', (data: { operatorId: string; tenantId: string }) => {
         const { operatorId, tenantId } = data;
 
-        if (!socket.data.tenantId || socket.data.tenantId !== tenantId) {
+        if (socket.data.identityType !== 'operator' || !socket.data.userId || socket.data.userId !== operatorId || socket.data.tenantId !== tenantId) {
           socket.emit('error', { message: 'Authentication failed' });
           return;
         }
@@ -98,6 +101,10 @@ export class CommunicationSignalingGateway {
           return;
         }
 
+        if (socket.data.identityType !== 'device' || socket.data.branchId !== branchId) {
+          socket.emit('error', { message: 'Branch access denied' });
+          return;
+        }
         socket.join(WEBSOCKET_ROOMS.BRANCH(socket.data.tenantId, branchId));
         socket.emit('comm:branch-subscribed', { branchId });
       });
@@ -111,6 +118,14 @@ export class CommunicationSignalingGateway {
           return;
         }
 
+        if (socket.data.identityType === 'device' && !(socket.data.employeeIds ?? []).includes(employeeId)) {
+          socket.emit('error', { message: 'Employee access denied' });
+          return;
+        }
+        if (socket.data.identityType === 'operator' && socket.data.userId !== employeeId) {
+          socket.emit('error', { message: 'Employee access denied' });
+          return;
+        }
         socket.join(WEBSOCKET_ROOMS.EMPLOYEE(socket.data.tenantId, employeeId));
         socket.emit('comm:employee-subscribed', { employeeId });
       });
@@ -156,16 +171,16 @@ export class CommunicationSignalingGateway {
     // Send to each target device
     for (const deviceId of targetDeviceIds) {
       this.io.to(WEBSOCKET_ROOMS.DEVICE(tenantId, deviceId)).emit(
-        WEBSOCKET_EVENTS.CALL_INVITE,
-        event
+        'comm:call:invite',
+        { ...event, direction: 'INBOUND' }
       );
     }
 
     // Send to each target operator
     for (const operatorId of targetOperatorIds) {
       this.io.to(WEBSOCKET_ROOMS.OPERATOR(tenantId, operatorId)).emit(
-        WEBSOCKET_EVENTS.CALL_INVITE,
-        event
+        'comm:call:invite',
+        { ...event, direction: 'INBOUND' }
       );
     }
   }

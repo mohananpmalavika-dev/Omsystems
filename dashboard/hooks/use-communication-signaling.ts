@@ -87,13 +87,21 @@ export interface CommunicationSignalingHook {
 
 export function useCommunicationSignaling(): CommunicationSignalingHook {
   const [connected, setConnected] = useState(false);
+  const [deviceToken, setDeviceToken] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const handlersRef = useRef<Map<string, Set<Function>>>(new Map());
   
   // Initialize Socket.IO connection
   useEffect(() => {
+    const refreshDeviceToken = () => setDeviceToken(localStorage.getItem('commDeviceToken'));
+    refreshDeviceToken();
+    window.addEventListener('comm-device-enrolled', refreshDeviceToken);
+    return () => window.removeEventListener('comm-device-enrolled', refreshDeviceToken);
+  }, []);
+
+  useEffect(() => {
     const token = typeof window !== 'undefined'
-      ? (sessionStorage.getItem('activityAccessToken') || sessionStorage.getItem('accessToken') || localStorage.getItem('accessToken'))
+      ? (deviceToken || sessionStorage.getItem('activityAccessToken') || sessionStorage.getItem('accessToken') || localStorage.getItem('accessToken'))
       : null;
     
     if (!token) {
@@ -121,8 +129,21 @@ export function useCommunicationSignaling(): CommunicationSignalingHook {
       console.log('[CommunicationSignaling] Connected to server');
       setConnected(true);
       
-      // Subscribe to communication events
-      socket.emit('comm:register-operator');
+      // Device identity comes from the server-signed enrollment token. User
+      // identity is supplied by the authenticated application session.
+      const deviceId = localStorage.getItem('commDeviceId');
+      const tenantId = localStorage.getItem('commTenantId');
+      if (deviceId && tenantId && localStorage.getItem('commDeviceToken')) {
+        socket.emit('comm:register-device', { deviceId, tenantId });
+      } else {
+        const operatorId = localStorage.getItem('userId') || sessionStorage.getItem('userId');
+        if (operatorId && tenantId) socket.emit('comm:register-operator', { operatorId, tenantId });
+      }
+    });
+
+    socket.on('comm:device-registered', () => {
+      localStorage.setItem('commDeviceStatus', 'ACTIVE');
+      window.dispatchEvent(new Event('comm-device-ready'));
     });
     
     socket.on('disconnect', (reason) => {
@@ -210,7 +231,7 @@ export function useCommunicationSignaling(): CommunicationSignalingHook {
       socketRef.current = null;
       handlersRef.current.clear();
     };
-  }, []);
+  }, [deviceToken]);
   
   // Event registration helper
   const registerHandler = useCallback((eventType: string, handler: Function) => {
