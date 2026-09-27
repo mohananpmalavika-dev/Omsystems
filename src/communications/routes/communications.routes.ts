@@ -252,7 +252,7 @@ class LazySignalingGateway {
     const io = (this.getApp() as any).io;
     if (!io) return null;
     try {
-      this.gateway = new CommunicationSignalingGateway(io, this.pool);
+      this.gateway = (io as any).communicationSignalingGateway || new CommunicationSignalingGateway(io, this.pool);
       return this.gateway;
     } catch {
       return null;

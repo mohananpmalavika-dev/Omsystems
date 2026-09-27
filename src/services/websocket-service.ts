@@ -7,6 +7,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { verify } from 'jsonwebtoken';
 import type { Server as HTTPServer } from 'http';
 import type { ControlPlaneStore } from '../control-plane-store.js';
+import { CommunicationSignalingGateway } from '../communications/gateways/signaling.gateway.js';
 
 export interface HealthUpdate {
   type: 'camera' | 'storage' | 'network' | 'ups';
@@ -141,6 +142,13 @@ export class WebSocketService {
         return next(new Error('unauthorized'));
       }
     });
+
+    const communicationsPool = (this.store as any).db;
+    if (communicationsPool?.query) {
+      (this.io as any).communicationSignalingGateway = new CommunicationSignalingGateway(this.io, communicationsPool);
+    } else {
+      this.logger.error('Communication signaling is unavailable: PostgreSQL pool missing');
+    }
 
     this.setupEventHandlers();
     this.logger.info('WebSocket service initialized');

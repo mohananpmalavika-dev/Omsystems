@@ -151,8 +151,14 @@ export function useCommunicationSignaling(): CommunicationSignalingHook {
       if (deviceId && tenantId && localStorage.getItem('commDeviceToken')) {
         socket.emit('comm:register-device', { deviceId, tenantId });
       } else {
-        const operatorId = localStorage.getItem('userId') || sessionStorage.getItem('userId');
-        if (operatorId && tenantId) socket.emit('comm:register-operator', { operatorId, tenantId });
+        let storedUser: { id?: string; tenantId?: string } | null = null;
+        try {
+          const raw = localStorage.getItem('user') || sessionStorage.getItem('user');
+          storedUser = raw ? JSON.parse(raw) : null;
+        } catch {}
+        const operatorId = localStorage.getItem('userId') || sessionStorage.getItem('userId') || storedUser?.id;
+        const operatorTenantId = tenantId || storedUser?.tenantId;
+        if (operatorId && operatorTenantId) socket.emit('comm:register-operator', { operatorId, tenantId: operatorTenantId });
       }
     });
 
