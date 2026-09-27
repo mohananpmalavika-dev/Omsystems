@@ -961,3 +961,11 @@ export class FaceAnalyticsDetector extends BaseDetector {
     };
   }
 }
+
+
+/**
+ * Factory function – creates a ready-to-use FaceAnalyticsDetector instance.
+ */
+export function createFaceAnalytics(): FaceAnalyticsDetector {
+  return new FaceAnalyticsDetector();
+}

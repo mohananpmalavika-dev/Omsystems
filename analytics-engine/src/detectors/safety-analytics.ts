@@ -1484,3 +1484,11 @@ export class SafetyAnalyticsDetector extends BaseDetector {
     };
   }
 }
+
+
+/**
+ * Factory function – creates a ready-to-use SafetyAnalyticsDetector instance.
+ */
+export function createSafetyAnalytics(): SafetyAnalyticsDetector {
+  return new SafetyAnalyticsDetector();
+}

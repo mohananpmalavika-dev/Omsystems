@@ -1231,3 +1231,11 @@ export class VehicleAnalyticsDetector extends BaseDetector {
     };
   }
 }
+
+
+/**
+ * Factory function – creates a ready-to-use VehicleAnalyticsDetector instance.
+ */
+export function createVehicleAnalytics(): VehicleAnalyticsDetector {
+  return new VehicleAnalyticsDetector();
+}

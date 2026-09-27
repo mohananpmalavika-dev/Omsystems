@@ -833,3 +833,11 @@ export class HumanAnalyticsDetector extends BaseDetector {
     };
   }
 }
+
+
+/**
+ * Factory function – creates a ready-to-use HumanAnalyticsDetector instance.
+ */
+export function createHumanAnalytics(): HumanAnalyticsDetector {
+  return new HumanAnalyticsDetector();
+}

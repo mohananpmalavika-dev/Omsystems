@@ -1130,3 +1130,11 @@ export class BankingAnalyticsDetector extends BaseDetector {
     };
   }
 }
+
+
+/**
+ * Factory function – creates a ready-to-use BankingAnalyticsDetector instance.
+ */
+export function createBankingAnalytics(): BankingAnalyticsDetector {
+  return new BankingAnalyticsDetector();
+}
