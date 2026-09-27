@@ -34,6 +34,9 @@ function formatCallDuration(seconds: number): string {
 }
 
 export default function KryptoVisionConnectPage() {
+  // Prevent hydration mismatch: this page reads localStorage before rendering
+  const [mounted, setMounted] = useState(false);
+
   // Device identity state
   const [deviceEnrolled, setDeviceEnrolled] = useState(false);
   const [deviceId, setDeviceId] = useState('');
@@ -106,6 +109,7 @@ export default function KryptoVisionConnectPage() {
   }, []);
 
   useEffect(() => {
+    setMounted(true);
     checkEnrollment();
   }, [checkEnrollment]);
 
@@ -459,6 +463,18 @@ export default function KryptoVisionConnectPage() {
       webrtc.sendChatFile(file, linkedEmployee?.name || deviceName);
     }
   };
+
+  // ============================================================================
+  // Hydration guard: render nothing on server; only render after client mount
+  // (this page depends on localStorage for device enrollment state)
+  // ============================================================================
+  if (!mounted) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   // ============================================================================
   // VIEW: NOT ENROLLED (Zero-Login Device Setup Kiosk)
