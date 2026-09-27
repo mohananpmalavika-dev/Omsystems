@@ -110,7 +110,6 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
   }
 
   // ─── Helper: attempt a silent token refresh using the HttpOnly refresh cookie ──
-  // ─── Helper: attempt a silent token refresh using the HttpOnly refresh cookie ──
   async function attemptSilentRefresh(): Promise<{ accessToken: string; refreshToken?: string } | null> {
     const refreshToken = request.cookies.get("sentinel_refresh")?.value;
     if (!refreshToken) return null;
