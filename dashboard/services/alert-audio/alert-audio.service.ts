@@ -28,9 +28,9 @@ const SPEECH_PREF_KEY = "sentinel-control-room-speech-alerts-enabled";
 export class AlertAudioService {
   private status: AlertAudioStatus = {
     state: "LOCKED",
-    enabled: true,
-    speechEnabled: true,
-    muted: false,
+    enabled: false,
+    speechEnabled: false,
+    muted: true,
     volume: 0.9,
     outputRouting: "SYSTEM_DEFAULT",
     activeP1Count: 0,
@@ -49,6 +49,7 @@ export class AlertAudioService {
 
   constructor() {
     if (typeof window !== "undefined") {
+      // Only enable audio if user has explicitly opted in via settings
       const localEnabled = window.localStorage.getItem(SOUND_PREF_KEY) === "true";
       const localSpeech = window.localStorage.getItem(SPEECH_PREF_KEY);
       const savedVolume = window.localStorage.getItem(VOLUME_PREF_KEY);
@@ -57,9 +58,10 @@ export class AlertAudioService {
       }
       if (localEnabled) {
         this.status.enabled = true;
+        this.status.muted = false;
         this.status.state = "READY";
       }
-      if (localSpeech !== null) this.status.speechEnabled = localSpeech === "true";
+      if (localSpeech === "true") this.status.speechEnabled = true;
     }
   }
 
