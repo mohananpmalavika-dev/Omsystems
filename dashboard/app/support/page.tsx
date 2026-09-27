@@ -1,5 +1,6 @@
 "use client";
 
+import { WorkflowNav } from "@/components/workflow-nav";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Activity, BookOpen, HelpCircle, LockKeyhole, Search, Server, ShieldCheck } from "lucide-react";
@@ -34,6 +35,7 @@ function guideFor(section: string, label: string) {
 }
 
 export default function SupportPage() {
+  const [supportTask, setSupportTask] = useState("diagnose");
   const [user, setUser] = useState<MenuAccessUser | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
   const [guideQuery, setGuideQuery] = useState("");
@@ -81,15 +83,16 @@ export default function SupportPage() {
         icon={HelpCircle}
         actions={<div className="page-hero-status"><ShieldCheck size={17} /><div><span>Recommended first step</span><strong>{user ? "Check platform health" : sessionChecked ? "Sign in to run diagnostics" : "Checking session…"}</strong></div></div>}
       />
-      <section className="support-panel">
+<WorkflowNav label="Support tasks" value={supportTask} onChange={setSupportTask} items={[{id:"diagnose",label:"Resolve an issue"},{id:"guide",label:"Find a page workflow"},{id:"escalate",label:"Prepare an escalation"}]} />
+      <div hidden={supportTask !== "diagnose"} className="personal-task-panel"><section className="support-panel">
         <header><span>Self-service</span><h2>Resolve or diagnose an issue</h2><p>These checks cover the most common camera, gateway, session, and navigation problems.</p></header>
         <div className="support-option-grid">
           {availableOptions.map(({ title, description, href, action, icon: Icon }) => (
             <Link href={actionHref(href)} key={href}><span><Icon size={20} /></span><div><strong>{title}</strong><p>{description}</p><em>{user ? action : "Sign in to continue"}</em></div></Link>
           ))}
         </div>
-      </section>
-      <section className="support-panel support-guide">
+      </section></div>
+      <div hidden={supportTask !== "guide"} className="personal-task-panel"><section className="support-panel support-guide">
         <header>
           <span>In-product user manual</span>
           <h2>What each page is for</h2>
@@ -113,13 +116,13 @@ export default function SupportPage() {
           })}
           {user && pageGuides.length === 0 && <p className="support-guide-empty">No assigned pages match that search. Try a broader term.</p>}
         </div>
-      </section>
-      <section className="support-escalation">
+      </section></div>
+      <div hidden={supportTask !== "escalate"} className="personal-task-panel"><section className="support-escalation">
         <div><span>Need administrator help?</span><h2>Include the page, time, and affected branch</h2><p>Share the exact workflow, the branch or device involved, the visible error message, and when the issue occurred. Never include passwords, camera credentials, or session tokens.</p></div>
         <Link href={actionHref(escalationTarget)} className="btn-secondary">
           {user ? activityAvailable ? "Review recent activity" : "Browse available modules" : "Sign in to review activity"}
         </Link>
-      </section>
+      </section></div>
     </main>
   );
 }

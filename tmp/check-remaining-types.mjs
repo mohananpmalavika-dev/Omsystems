@@ -1,0 +1,9 @@
+import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import ts from '../dashboard/node_modules/typescript/lib/typescript.js';
+const files=['components/record-composer.tsx','components/inspection-desk.tsx','components/analytics-domain-workspace.tsx','components/operational-health/component-detail-page.tsx','components/compliance/compliance-create-form.tsx','app/compliance/controls/page.tsx','app/compliance/requirements/page.tsx','app/compliance/assessments/page.tsx','app/incidents/create/page.tsx','app/account/security/page.tsx','app/support/page.tsx','app/maintenance/privacy/purposes/page.tsx',...['assets','amc','vendors','privacy/purposes','privacy/breaches'].map(route=>'app/maintenance/'+route+'/new/page.tsx')];
+const syntax=[];for(const file of files){const source=fs.readFileSync('dashboard/'+file,'utf8');const tree=ts.createSourceFile(file,source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);syntax.push(...tree.parseDiagnostics.map(d=>({file,message:ts.flattenDiagnosticMessageText(d.messageText,'\n')})));}
+const run=spawnSync(process.execPath,['dashboard/node_modules/typescript/bin/tsc','-p','dashboard/tsconfig.typecheck.json','--noEmit'],{encoding:'utf8',maxBuffer:4*1024*1024});
+const output=(run.stdout??'')+(run.stderr??'');fs.writeFileSync('tmp/experience-qa/remaining-typecheck.log',output);
+const errors=output.split('\n').filter(line=>line.includes('error TS')),changedErrors=errors.filter(line=>files.some(file=>line.includes(file)));
+const result={syntaxErrors:syntax,projectExitCode:run.status,totalTypeErrors:errors.length,errorsInChangedFiles:changedErrors};fs.writeFileSync('tmp/experience-qa/remaining-types.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));if(syntax.length||changedErrors.length||run.error)process.exitCode=1;

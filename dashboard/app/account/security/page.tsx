@@ -1,5 +1,6 @@
 "use client";
 
+import { WorkflowNav } from "@/components/workflow-nav";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
@@ -204,6 +205,7 @@ function evaluatePasswordStrength(password: string): {
 }
 
 export default function AccountSecurityPage() {
+  const [accountTask, setAccountTask] = useState("identity");
   const { alertPopupEnabled, alertToastEnabled, setAlertPopupEnabled, setAlertToastEnabled } = useUserAlertPreferences();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
@@ -476,9 +478,10 @@ export default function AccountSecurityPage() {
             </button>
           }
         />
+<WorkflowNav label="Account tasks" value={accountTask} onChange={setAccountTask} items={[{id:"identity",label:"Identity"},{id:"credentials",label:"Password & protection"},{id:"preferences",label:"Alert preferences"},{id:"sessions",label:"Devices & sessions"},{id:"voice",label:"Voice identity"}]} />
 
         {/* User Profile Information Card */}
-        <section
+        <div hidden={accountTask !== "identity"} className="personal-task-panel"><section
           className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden"
           aria-label="User profile information"
         >
@@ -560,7 +563,7 @@ export default function AccountSecurityPage() {
               </div>
             </div>
           </div>
-        </section>
+        </section></div>
 
         {/* Global Status Alerts */}
         {error && (
@@ -647,7 +650,7 @@ export default function AccountSecurityPage() {
         </div>
 
         {/* Change Password Card */}
-        <section
+        <div hidden={accountTask !== "credentials"} className="personal-task-panel"><section
           className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden"
           aria-label="Change account password"
         >
@@ -937,13 +940,13 @@ export default function AccountSecurityPage() {
               </div>
             </form>
           </div>
-        </section>
+        </section></div>
 
         {/* Voice ID Biometrics Enrollment Card */}
-        <VoiceEnrollmentCard />
+        <div hidden={accountTask !== "voice"} className="personal-task-panel"><VoiceEnrollmentCard /></div>
 
         {/* Alert & Notification Preferences Card */}
-        <section
+        <div hidden={accountTask !== "preferences"} className="personal-task-panel"><section
           className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden"
           aria-label="Alert and notification preferences"
         >
@@ -1023,10 +1026,10 @@ export default function AccountSecurityPage() {
               </button>
             </div>
           </div>
-        </section>
+        </section></div>
 
         {/* Active Sessions List Card */}
-        <section
+        <div hidden={accountTask !== "sessions"} className="personal-task-panel"><section
           className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden"
           aria-label="Active account sessions"
         >
@@ -1177,10 +1180,10 @@ export default function AccountSecurityPage() {
               })
             )}
           </div>
-        </section>
+        </section></div>
 
         {/* Sign Out Everywhere Section */}
-        <section
+        <div hidden={accountTask !== "sessions"} className="personal-task-panel"><section
           className="rounded-2xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/40 dark:bg-amber-950/20 p-5 sm:p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4"
           aria-label="Global session termination"
         >
@@ -1217,7 +1220,7 @@ export default function AccountSecurityPage() {
               </>
             )}
           </button>
-        </section>
+        </section></div>
 
         {/* Confirmation Modal */}
         {showSignoutModal && (

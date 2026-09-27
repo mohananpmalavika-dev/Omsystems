@@ -18,14 +18,18 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
     "auth/verify-otp",
     "auth/reset-password",
     "auth/reset-password-otp",
-  ]).has(pathString);
+    "communications/devices/enroll",
+    "communications/devices/quick-register",
+  ]).has(pathString) || pathString.startsWith("communications/devices/enroll");
 
-  // Routes that work with or without authentication (e.g. KryptonAI pre-login chat & suggestions)
+  // Routes that work with or without authentication (e.g. KryptonAI pre-login chat & suggestions, communications)
   const isOptionalAuthPath = new Set([
     "guardian/chat",
     "guardian/voice",
     "guardian/suggestions",
-  ]).has(pathString);
+    "communications/directory/branches",
+    "communications/directory/public",
+  ]).has(pathString) || pathString.startsWith("communications/");
 
   // 1. Direct handling for telemetry analytics ingestion
   if (pathString === "analytics") {

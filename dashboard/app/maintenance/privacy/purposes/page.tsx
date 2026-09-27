@@ -1,8 +1,9 @@
 "use client";
 
+import { InspectionDesk } from "@/components/inspection-desk";
 import React, { useEffect, useState } from "react";
 import { FileCheck2 } from "lucide-react";
-import { ModulePage, ModuleStatus } from "@/components/module-page";
+import { ModulePage } from "@/components/module-page";
 import { privacyApi } from "@/lib/api-client";
 
 export default function PrivacyPurposesPage() {
@@ -21,6 +22,7 @@ export default function PrivacyPurposesPage() {
 
   return (
     <ModulePage
+      presentation="registry"
       eyebrow="Privacy governance"
       title="Processing purposes"
       description="Define, review, and govern the lawful purposes that authorize CCTV processing across the estate."
@@ -35,20 +37,7 @@ export default function PrivacyPurposesPage() {
       emptyTitle="No processing purposes"
       emptyDescription="Add the first lawful purpose before assigning cameras to processing activities."
     >
-      <div className="module-table-wrap">
-        <table>
-          <thead><tr><th>Purpose</th><th>Lawful basis</th><th>Risk</th><th>Status</th><th>Description</th></tr></thead>
-          <tbody>{purposes.map((purpose) => (
-            <tr key={purpose.id}>
-              <td><strong className="module-row-title">{purpose.name}</strong></td>
-              <td><span className="module-category">{purpose.lawfulBasis}</span></td>
-              <td><span className={`module-priority ${(purpose.riskLevel || "").toLowerCase()}`}>{purpose.riskLevel || "Unrated"}</span></td>
-              <td><ModuleStatus value={purpose.active ? "Active" : "Inactive"} /></td>
-              <td>{purpose.description || "No description provided"}</td>
-            </tr>
-          ))}</tbody>
-        </table>
-      </div>
+      <InspectionDesk label="Processing purpose library" records={purposes.map(purpose => ({id:purpose.id,title:purpose.name,subtitle:purpose.lawfulBasis,status:purpose.active ? "active" : "inactive",description:purpose.description,fields:[{label:"Lawful basis",value:purpose.lawfulBasis || "Not recorded"},{label:"Risk level",value:purpose.riskLevel || "Unrated"},{label:"Data categories",value:Array.isArray(purpose.dataCategories) ? purpose.dataCategories.join(", ") || "Not recorded" : "Not recorded"},{label:"Available for use",value:purpose.active ? "Yes" : "No"}]}))} />
     </ModulePage>
   );
 }

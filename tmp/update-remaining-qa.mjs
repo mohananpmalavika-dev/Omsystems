@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+const path='tmp/remaining-workspaces-qa.mjs';let s=fs.readFileSync(path,'utf8');
+s=s.replace("assert.equal(submissions.at(-1).body.serialNumber,'SER-QA-001')","assert.equal(submissions.findLast(item=>item.path.endsWith('/maintenance/assets')).body.serialNumber,'SER-QA-001')");
+s=s.replace("assert.equal(submissions.at(-1).body.cost,0)","assert.equal(submissions.findLast(item=>item.path.endsWith('/maintenance/amc')).body.cost,0)");
+s=s.replace("['/compliance/risks/new','risk']","['/compliance/risks/new','risk'],['/incidents/create','incident-intake']");
+s=s.replace(" assert.deepEqual(errors,[]);",` await open('/support','.support-panel');await page.getByRole('button',{name:'Find a page workflow',exact:true}).click();await page.getByRole('heading',{name:'What each page is for'}).waitFor();await responsive('support-guide');await page.getByRole('button',{name:'Prepare an escalation',exact:true}).click();await page.getByRole('heading',{name:'Include the page, time, and affected branch'}).waitFor();
+ await open('/account/security','.account-security-page');await page.getByRole('button',{name:'Devices & sessions',exact:true}).click();await page.getByRole('heading',{name:'Active Devices & Sessions'}).waitFor();await responsive('account-sessions');await page.getByRole('button',{name:'Password & protection',exact:true}).click();await page.locator('.personal-task-panel:not([hidden]) input[type="password"]').first().waitFor();await responsive('account-protection');
+ assert.deepEqual(errors,[]);`);
+s=s.replace("console.log('Captured',p,body);",'');
+fs.writeFileSync(path,s);

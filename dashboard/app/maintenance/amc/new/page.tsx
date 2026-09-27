@@ -1,7 +1,6 @@
 "use client";
 
 import { RecordComposer } from "@/components/record-composer";
-import { FieldVisual } from "@/components/field-visual";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -61,14 +60,14 @@ export default function NewAmcContractPage() {
 
   return (
     <main className="record-form-page work-order-form-page">
-      <header className="record-form-hero workspace-heading">
+      <header className="workflow-heading composer-heading">
         <div>
           <span>Coverage & contracts</span>
           <h1>Create AMC contract</h1>
           <p>Capture contract dates, vendor coverage, service levels, and renewal value.</p>
         </div>
         <Link href="/maintenance/amc">Back to AMC contracts</Link>
-      <FieldVisual /></header>
+      </header>
 
       <RecordComposer onSubmit={handleSubmit} busy={loading} chapters={[{ title: "Agreement", description: "Set the partner, contract window and value.", content: <><label className="work-order-field">
             <span>Contract number <em>Required</em></span>

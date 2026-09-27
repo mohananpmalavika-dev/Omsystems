@@ -1,0 +1,2479 @@
+{
+  "passed": true,
+  "views": [
+    "asset-deployment",
+    "asset-review",
+    "amc-review",
+    "vendor",
+    "privacy-purpose",
+    "privacy-breach",
+    "requirement",
+    "risk",
+    "incident-intake",
+    "controls",
+    "requirements",
+    "assessments",
+    "purpose-library",
+    "telemetry-cameras",
+    "telemetry-recording",
+    "telemetry-storage",
+    "telemetry-network",
+    "telemetry-unavailable",
+    "analytics-policy",
+    "analytics-signals",
+    "support-guide",
+    "account-sessions",
+    "account-protection"
+  ],
+  "submissions": [
+    {
+      "path": "/api/control/v1/activity/sessions/start",
+      "body": {
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/control/v1/maintenance/assets",
+      "body": {
+        "category": "camera",
+        "assetType": "Dome camera",
+        "serialNumber": "SER-QA-001",
+        "location": "North entrance",
+        "status": "operational"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/page-visits",
+      "body": {
+        "sessionId": "undefined",
+        "pagePath": "/maintenance/assets",
+        "pageTitle": "",
+        "pageModule": "maintenance",
+        "pageCategory": "monitoring",
+        "referrerPath": null,
+        "queryParameters": {}
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/maintenance/assets/new",
+          "timestamp": "2026-09-27T18:12:27.884Z",
+          "metrics": {
+            "ttfb": 946.7000000029802,
+            "fcp": 1332,
+            "lcp": 1856,
+            "cls": 0.005239534143518519
+          },
+          "navigation": {
+            "dnsDuration": 2.7000000029802322,
+            "tcpDuration": 315.59999999403954,
+            "tlsDuration": 0,
+            "requestDuration": 620.0999999940395,
+            "responseDuration": 5,
+            "domInteractiveDuration": 368.90000000596046,
+            "domContentLoadedDuration": 0,
+            "loadDuration": 0.7999999970197678
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1856,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.005239534143518519,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:12:42.846Z"
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/maintenance/assets/new",
+          "timestamp": "2026-09-27T18:12:27.884Z",
+          "metrics": {
+            "ttfb": 946.7000000029802,
+            "fcp": 1332,
+            "lcp": 1856,
+            "cls": 0.005239534143518519
+          },
+          "navigation": {
+            "dnsDuration": 2.7000000029802322,
+            "tcpDuration": 315.59999999403954,
+            "tlsDuration": 0,
+            "requestDuration": 620.0999999940395,
+            "responseDuration": 5,
+            "domInteractiveDuration": 368.90000000596046,
+            "domContentLoadedDuration": 0,
+            "loadDuration": 0.7999999970197678
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1856,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.005239534143518519,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:12:42.848Z"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/undefined/end",
+      "body": {
+        "terminationReason": "browser_exit"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/start",
+      "body": {
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/control/v1/maintenance/amc",
+      "body": {
+        "contractNumber": "AMC-QA",
+        "vendorId": "vendor-1",
+        "startDate": "2026-09-01",
+        "endDate": "2027-09-01",
+        "coverage": "Fleet cameras and recorders",
+        "cost": 0,
+        "status": "pending"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/page-visits",
+      "body": {
+        "sessionId": "undefined",
+        "pagePath": "/maintenance/amc",
+        "pageTitle": "",
+        "pageModule": "maintenance",
+        "pageCategory": "monitoring",
+        "referrerPath": null,
+        "queryParameters": {}
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/maintenance/amc/new",
+          "timestamp": "2026-09-27T18:12:44.680Z",
+          "metrics": {
+            "ttfb": 1149.300000011921,
+            "fcp": 1556,
+            "lcp": 1556,
+            "cls": 0.0035866044560185187
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 1030.6000000089407,
+            "responseDuration": 5,
+            "domInteractiveDuration": 110.3999999910593,
+            "domContentLoadedDuration": 0.10000000894069672,
+            "loadDuration": 0.6000000089406967
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1556,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.0035866044560185187,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:12:53.618Z"
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/maintenance/amc/new",
+          "timestamp": "2026-09-27T18:12:44.680Z",
+          "metrics": {
+            "ttfb": 1149.300000011921,
+            "fcp": 1556,
+            "lcp": 1556,
+            "cls": 0.0035866044560185187
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 1030.6000000089407,
+            "responseDuration": 5,
+            "domInteractiveDuration": 110.3999999910593,
+            "domContentLoadedDuration": 0.10000000894069672,
+            "loadDuration": 0.6000000089406967
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1556,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.0035866044560185187,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:12:53.618Z"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/undefined/end",
+      "body": {
+        "terminationReason": "browser_exit"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/start",
+      "body": {
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/maintenance/vendors/new",
+          "timestamp": "2026-09-27T18:12:54.887Z",
+          "metrics": {
+            "ttfb": 484.6000000089407,
+            "fcp": 844,
+            "lcp": 844,
+            "cls": 0.0035866044560185187
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 473.30000001192093,
+            "responseDuration": 7.5999999940395355,
+            "domInteractiveDuration": 251.59999999403954,
+            "domContentLoadedDuration": 0,
+            "loadDuration": 0.699999988079071
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 844,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.0035866044560185187,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:13:00.866Z"
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/maintenance/vendors/new",
+          "timestamp": "2026-09-27T18:12:54.887Z",
+          "metrics": {
+            "ttfb": 484.6000000089407,
+            "fcp": 844,
+            "lcp": 844,
+            "cls": 0.0035866044560185187
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 473.30000001192093,
+            "responseDuration": 7.5999999940395355,
+            "domInteractiveDuration": 251.59999999403954,
+            "domContentLoadedDuration": 0,
+            "loadDuration": 0.699999988079071
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 844,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.0035866044560185187,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:13:00.866Z"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/undefined/end",
+      "body": {
+        "terminationReason": "component_unmount",
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/page-visits",
+      "body": {
+        "sessionId": "undefined",
+        "pagePath": "/maintenance/privacy/purposes/new",
+        "pageTitle": "KryptonVision | Security Operations",
+        "pageModule": "maintenance",
+        "pageCategory": "monitoring",
+        "referrerPath": null,
+        "queryParameters": {}
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/maintenance/privacy/purposes/new",
+          "timestamp": "2026-09-27T18:13:02.164Z",
+          "metrics": {
+            "ttfb": 536.6000000089407,
+            "fcp": 740,
+            "lcp": 1108,
+            "cls": 0.0035866044560185187
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 527.7000000029802,
+            "responseDuration": 4.5999999940395355,
+            "domInteractiveDuration": 132,
+            "domContentLoadedDuration": 0.09999999403953552,
+            "loadDuration": 0.9000000059604645
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1108,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.0035866044560185187,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:13:07.780Z"
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/maintenance/privacy/purposes/new",
+          "timestamp": "2026-09-27T18:13:02.164Z",
+          "metrics": {
+            "ttfb": 536.6000000089407,
+            "fcp": 740,
+            "lcp": 1108,
+            "cls": 0.0035866044560185187
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 527.7000000029802,
+            "responseDuration": 4.5999999940395355,
+            "domInteractiveDuration": 132,
+            "domContentLoadedDuration": 0.09999999403953552,
+            "loadDuration": 0.9000000059604645
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1108,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.0035866044560185187,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:13:07.781Z"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/start",
+      "body": {
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/maintenance/privacy/breaches/new",
+          "timestamp": "2026-09-27T18:13:09.122Z",
+          "metrics": {
+            "ttfb": 709.3999999910593,
+            "fcp": 1084,
+            "lcp": 1084,
+            "cls": 0.0035866044560185187
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 687.8999999910593,
+            "responseDuration": 6.200000002980232,
+            "domInteractiveDuration": 107,
+            "domContentLoadedDuration": 0.09999999403953552,
+            "loadDuration": 0.6000000089406967
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1084,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.0035866044560185187,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:13:14.749Z"
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/maintenance/privacy/breaches/new",
+          "timestamp": "2026-09-27T18:13:09.122Z",
+          "metrics": {
+            "ttfb": 709.3999999910593,
+            "fcp": 1084,
+            "lcp": 1084,
+            "cls": 0.0035866044560185187
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 687.8999999910593,
+            "responseDuration": 6.200000002980232,
+            "domInteractiveDuration": 107,
+            "domContentLoadedDuration": 0.09999999403953552,
+            "loadDuration": 0.6000000089406967
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1084,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.0035866044560185187,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:13:14.750Z"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/undefined/end",
+      "body": {
+        "terminationReason": "component_unmount",
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/page-visits",
+      "body": {
+        "sessionId": "undefined",
+        "pagePath": "/compliance/requirements/new",
+        "pageTitle": "KryptonVision | Security Operations",
+        "pageModule": "compliance",
+        "pageCategory": "general",
+        "referrerPath": null,
+        "queryParameters": {}
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/compliance/requirements/new",
+          "timestamp": "2026-09-27T18:13:16.226Z",
+          "metrics": {
+            "ttfb": 797.5,
+            "fcp": 960,
+            "lcp": 1376,
+            "cls": 0.0035866044560185187
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 768.2000000029802,
+            "responseDuration": 5.5999999940395355,
+            "domInteractiveDuration": 131,
+            "domContentLoadedDuration": 0.20000000298023224,
+            "loadDuration": 0.9000000059604645
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1376,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.0035866044560185187,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:13:22.492Z"
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/compliance/requirements/new",
+          "timestamp": "2026-09-27T18:13:16.226Z",
+          "metrics": {
+            "ttfb": 797.5,
+            "fcp": 960,
+            "lcp": 1376,
+            "cls": 0.0035866044560185187
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 768.2000000029802,
+            "responseDuration": 5.5999999940395355,
+            "domInteractiveDuration": 131,
+            "domContentLoadedDuration": 0.20000000298023224,
+            "loadDuration": 0.9000000059604645
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1376,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.0035866044560185187,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:13:22.492Z"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/start",
+      "body": {
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/compliance/risks/new",
+          "timestamp": "2026-09-27T18:13:23.946Z",
+          "metrics": {
+            "ttfb": 764.5,
+            "fcp": 1036,
+            "lcp": 1036,
+            "cls": 0.0035866044560185187
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 752.7000000029802,
+            "responseDuration": 15.5,
+            "domInteractiveDuration": 168.70000000298023,
+            "domContentLoadedDuration": 0.09999999403953552,
+            "loadDuration": 0.800000011920929
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1036,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.0035866044560185187,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:13:29.885Z"
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/compliance/risks/new",
+          "timestamp": "2026-09-27T18:13:23.946Z",
+          "metrics": {
+            "ttfb": 764.5,
+            "fcp": 1036,
+            "lcp": 1036,
+            "cls": 0.0035866044560185187
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 752.7000000029802,
+            "responseDuration": 15.5,
+            "domInteractiveDuration": 168.70000000298023,
+            "domContentLoadedDuration": 0.09999999403953552,
+            "loadDuration": 0.800000011920929
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1036,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.0035866044560185187,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:13:29.886Z"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/undefined/end",
+      "body": {
+        "terminationReason": "component_unmount",
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/page-visits",
+      "body": {
+        "sessionId": "undefined",
+        "pagePath": "/incidents/create",
+        "pageTitle": "KryptonVision | Security Operations",
+        "pageModule": "incidents",
+        "pageCategory": "operations",
+        "referrerPath": null,
+        "queryParameters": {}
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/incidents/create",
+          "timestamp": "2026-09-27T18:13:31.378Z",
+          "metrics": {
+            "ttfb": 725.7000000029802,
+            "fcp": 1000,
+            "lcp": 3872,
+            "cls": 0.023542383294753087
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 718.7000000029802,
+            "responseDuration": 5.799999997019768,
+            "domInteractiveDuration": 197.09999999403954,
+            "domContentLoadedDuration": 0.10000000894069672,
+            "loadDuration": 0.6000000089406967
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 3872,
+            "unit": "ms",
+            "rating": "needs-improvement"
+          },
+          {
+            "name": "CLS",
+            "value": 0.023542383294753087,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:13:36.945Z"
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/incidents/create",
+          "timestamp": "2026-09-27T18:13:31.378Z",
+          "metrics": {
+            "ttfb": 725.7000000029802,
+            "fcp": 1000,
+            "lcp": 3872,
+            "cls": 0.023542383294753087
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 718.7000000029802,
+            "responseDuration": 5.799999997019768,
+            "domInteractiveDuration": 197.09999999403954,
+            "domContentLoadedDuration": 0.10000000894069672,
+            "loadDuration": 0.6000000089406967
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 3872,
+            "unit": "ms",
+            "rating": "needs-improvement"
+          },
+          {
+            "name": "CLS",
+            "value": 0.023542383294753087,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:13:36.946Z"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/start",
+      "body": {
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/compliance/controls",
+          "timestamp": "2026-09-27T18:13:38.139Z",
+          "metrics": {
+            "ttfb": 541.7000000029802,
+            "fcp": 828,
+            "lcp": 1108,
+            "cls": 0.029458125964506175
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 536.2000000029802,
+            "responseDuration": 4.700000002980232,
+            "domInteractiveDuration": 139.70000000298023,
+            "domContentLoadedDuration": 0.29999999701976776,
+            "loadDuration": 0.5
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1108,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.029458125964506175,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:13:44.033Z"
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/compliance/controls",
+          "timestamp": "2026-09-27T18:13:38.139Z",
+          "metrics": {
+            "ttfb": 541.7000000029802,
+            "fcp": 828,
+            "lcp": 1108,
+            "cls": 0.029458125964506175
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 536.2000000029802,
+            "responseDuration": 4.700000002980232,
+            "domInteractiveDuration": 139.70000000298023,
+            "domContentLoadedDuration": 0.29999999701976776,
+            "loadDuration": 0.5
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1108,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.029458125964506175,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:13:44.034Z"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/undefined/end",
+      "body": {
+        "terminationReason": "component_unmount",
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/page-visits",
+      "body": {
+        "sessionId": "undefined",
+        "pagePath": "/compliance/requirements",
+        "pageTitle": "KryptonVision | Security Operations",
+        "pageModule": "compliance",
+        "pageCategory": "general",
+        "referrerPath": null,
+        "queryParameters": {}
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/compliance/requirements",
+          "timestamp": "2026-09-27T18:13:45.295Z",
+          "metrics": {
+            "ttfb": 487.09999999403954,
+            "fcp": 748,
+            "lcp": 748,
+            "cls": 0.025980078607253085
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 478.8999999910593,
+            "responseDuration": 4.4000000059604645,
+            "domInteractiveDuration": 183.3999999910593,
+            "domContentLoadedDuration": 0.09999999403953552,
+            "loadDuration": 0.800000011920929
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 748,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.025980078607253085,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:13:51.382Z"
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/compliance/requirements",
+          "timestamp": "2026-09-27T18:13:45.295Z",
+          "metrics": {
+            "ttfb": 487.09999999403954,
+            "fcp": 748,
+            "lcp": 748,
+            "cls": 0.025980078607253085
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 478.8999999910593,
+            "responseDuration": 4.4000000059604645,
+            "domInteractiveDuration": 183.3999999910593,
+            "domContentLoadedDuration": 0.09999999403953552,
+            "loadDuration": 0.800000011920929
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 748,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.025980078607253085,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:13:51.383Z"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/start",
+      "body": {
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/compliance/assessments",
+          "timestamp": "2026-09-27T18:13:52.806Z",
+          "metrics": {
+            "ttfb": 571.4000000059605,
+            "fcp": 1020,
+            "lcp": 1020,
+            "cls": 0.023542383294753087
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 560.6000000089407,
+            "responseDuration": 19.899999991059303,
+            "domInteractiveDuration": 254.80000001192093,
+            "domContentLoadedDuration": 0.09999999403953552,
+            "loadDuration": 0.699999988079071
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1020,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.023542383294753087,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:13:59.136Z"
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/compliance/assessments",
+          "timestamp": "2026-09-27T18:13:52.806Z",
+          "metrics": {
+            "ttfb": 571.4000000059605,
+            "fcp": 1020,
+            "lcp": 1020,
+            "cls": 0.023542383294753087
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 560.6000000089407,
+            "responseDuration": 19.899999991059303,
+            "domInteractiveDuration": 254.80000001192093,
+            "domContentLoadedDuration": 0.09999999403953552,
+            "loadDuration": 0.699999988079071
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1020,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.023542383294753087,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:13:59.136Z"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/undefined/end",
+      "body": {
+        "terminationReason": "component_unmount",
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/page-visits",
+      "body": {
+        "sessionId": "undefined",
+        "pagePath": "/maintenance/privacy/purposes",
+        "pageTitle": "KryptonVision | Security Operations",
+        "pageModule": "maintenance",
+        "pageCategory": "monitoring",
+        "referrerPath": null,
+        "queryParameters": {}
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/maintenance/privacy/purposes",
+          "timestamp": "2026-09-27T18:14:00.282Z",
+          "metrics": {
+            "ttfb": 483.8999999910593,
+            "fcp": 724,
+            "lcp": 900,
+            "cls": 0.023594383100344812
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 476.3999999910593,
+            "responseDuration": 4.200000002980232,
+            "domInteractiveDuration": 110.70000000298023,
+            "domContentLoadedDuration": 0.09999999403953552,
+            "loadDuration": 0.7999999970197678
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 900,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.023594383100344812,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:14:06.080Z"
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/maintenance/privacy/purposes",
+          "timestamp": "2026-09-27T18:14:00.282Z",
+          "metrics": {
+            "ttfb": 483.8999999910593,
+            "fcp": 724,
+            "lcp": 900,
+            "cls": 0.023594383100344812
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 476.3999999910593,
+            "responseDuration": 4.200000002980232,
+            "domInteractiveDuration": 110.70000000298023,
+            "domContentLoadedDuration": 0.09999999403953552,
+            "loadDuration": 0.7999999970197678
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 900,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.023594383100344812,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:14:06.081Z"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/start",
+      "body": {
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/operations/cameras",
+          "timestamp": "2026-09-27T18:14:07.660Z",
+          "metrics": {
+            "ttfb": 522.7999999970198,
+            "fcp": 764,
+            "lcp": 764,
+            "cls": 0.02706446084104938
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 514.7000000029802,
+            "responseDuration": 4.600000008940697,
+            "domInteractiveDuration": 179.69999998807907,
+            "domContentLoadedDuration": 0,
+            "loadDuration": 1.1000000089406967
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 764,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.02706446084104938,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:14:13.820Z"
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/operations/cameras",
+          "timestamp": "2026-09-27T18:14:07.660Z",
+          "metrics": {
+            "ttfb": 522.7999999970198,
+            "fcp": 764,
+            "lcp": 764,
+            "cls": 0.02706446084104938
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 514.7000000029802,
+            "responseDuration": 4.600000008940697,
+            "domInteractiveDuration": 179.69999998807907,
+            "domContentLoadedDuration": 0,
+            "loadDuration": 1.1000000089406967
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 764,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.02706446084104938,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:14:13.821Z"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/undefined/end",
+      "body": {
+        "terminationReason": "component_unmount",
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/page-visits",
+      "body": {
+        "sessionId": "undefined",
+        "pagePath": "/operations/recording",
+        "pageTitle": "KryptonVision | Security Operations",
+        "pageModule": "operations",
+        "pageCategory": "operations",
+        "referrerPath": null,
+        "queryParameters": {}
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/operations/recording",
+          "timestamp": "2026-09-27T18:14:15.310Z",
+          "metrics": {
+            "ttfb": 715.5,
+            "fcp": 960,
+            "lcp": 960,
+            "cls": 0.09637477527006175
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 704.7999999970198,
+            "responseDuration": 4.700000002980232,
+            "domInteractiveDuration": 173.29999999701977,
+            "domContentLoadedDuration": 0.20000000298023224,
+            "loadDuration": 0.5999999940395355
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 960,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.09637477527006175,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:14:21.038Z"
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/operations/recording",
+          "timestamp": "2026-09-27T18:14:15.310Z",
+          "metrics": {
+            "ttfb": 715.5,
+            "fcp": 960,
+            "lcp": 960,
+            "cls": 0.09637477527006175
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 704.7999999970198,
+            "responseDuration": 4.700000002980232,
+            "domInteractiveDuration": 173.29999999701977,
+            "domContentLoadedDuration": 0.20000000298023224,
+            "loadDuration": 0.5999999940395355
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 960,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.09637477527006175,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:14:21.039Z"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/start",
+      "body": {
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/operations/storage",
+          "timestamp": "2026-09-27T18:14:22.525Z",
+          "metrics": {
+            "ttfb": 518.0999999940395,
+            "fcp": 900,
+            "lcp": 900,
+            "cls": 0.03193062403549383
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 509,
+            "responseDuration": 8.400000005960464,
+            "domInteractiveDuration": 302.20000000298023,
+            "domContentLoadedDuration": 0.20000000298023224,
+            "loadDuration": 0.9000000059604645
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 900,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.03193062403549383,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:14:28.563Z"
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/operations/storage",
+          "timestamp": "2026-09-27T18:14:22.525Z",
+          "metrics": {
+            "ttfb": 518.0999999940395,
+            "fcp": 900,
+            "lcp": 900,
+            "cls": 0.03193062403549383
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 509,
+            "responseDuration": 8.400000005960464,
+            "domInteractiveDuration": 302.20000000298023,
+            "domContentLoadedDuration": 0.20000000298023224,
+            "loadDuration": 0.9000000059604645
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 900,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.03193062403549383,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:14:28.564Z"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/undefined/end",
+      "body": {
+        "terminationReason": "component_unmount",
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/page-visits",
+      "body": {
+        "sessionId": "undefined",
+        "pagePath": "/operations/network",
+        "pageTitle": "KryptonVision | Security Operations",
+        "pageModule": "operations",
+        "pageCategory": "operations",
+        "referrerPath": null,
+        "queryParameters": {}
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/operations/network",
+          "timestamp": "2026-09-27T18:14:30.248Z",
+          "metrics": {
+            "ttfb": 740.5,
+            "fcp": 1120,
+            "lcp": 1120,
+            "cls": 0.08313201292438271
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 728.5,
+            "responseDuration": 7.5999999940395355,
+            "domInteractiveDuration": 120.40000000596046,
+            "domContentLoadedDuration": 0.19999998807907104,
+            "loadDuration": 0.5999999940395355
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1120,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.08313201292438271,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:14:36.286Z"
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/operations/network",
+          "timestamp": "2026-09-27T18:14:30.248Z",
+          "metrics": {
+            "ttfb": 740.5,
+            "fcp": 1120,
+            "lcp": 1120,
+            "cls": 0.08313201292438271
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 728.5,
+            "responseDuration": 7.5999999940395355,
+            "domInteractiveDuration": 120.40000000596046,
+            "domContentLoadedDuration": 0.19999998807907104,
+            "loadDuration": 0.5999999940395355
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1120,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.08313201292438271,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:14:36.286Z"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/start",
+      "body": {
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/operations/cameras",
+          "timestamp": "2026-09-27T18:14:38.502Z",
+          "metrics": {
+            "ttfb": 1310.8999999910593,
+            "fcp": 1568,
+            "lcp": 1856,
+            "cls": 0.13342923128858025
+          },
+          "navigation": {
+            "dnsDuration": 0.7999999970197678,
+            "tcpDuration": 317.1000000089407,
+            "tlsDuration": 0,
+            "requestDuration": 983,
+            "responseDuration": 5.4000000059604645,
+            "domInteractiveDuration": 193.29999999701977,
+            "domContentLoadedDuration": 0,
+            "loadDuration": 0.5999999940395355
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1856,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.13342923128858025,
+            "unit": "",
+            "rating": "needs-improvement"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:14:43.714Z"
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/operations/cameras",
+          "timestamp": "2026-09-27T18:14:38.502Z",
+          "metrics": {
+            "ttfb": 1310.8999999910593,
+            "fcp": 1568,
+            "lcp": 1856,
+            "cls": 0.13342923128858025
+          },
+          "navigation": {
+            "dnsDuration": 0.7999999970197678,
+            "tcpDuration": 317.1000000089407,
+            "tlsDuration": 0,
+            "requestDuration": 983,
+            "responseDuration": 5.4000000059604645,
+            "domInteractiveDuration": 193.29999999701977,
+            "domContentLoadedDuration": 0,
+            "loadDuration": 0.5999999940395355
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1856,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.13342923128858025,
+            "unit": "",
+            "rating": "needs-improvement"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:14:43.714Z"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/undefined/end",
+      "body": {
+        "terminationReason": "component_unmount",
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/page-visits",
+      "body": {
+        "sessionId": "undefined",
+        "pagePath": "/analytics/people",
+        "pageTitle": "KryptonVision | Security Operations",
+        "pageModule": "analytics",
+        "pageCategory": "reports",
+        "referrerPath": null,
+        "queryParameters": {}
+      }
+    },
+    {
+      "path": "/api/control/v1/cameras/cam-1/analytics/rules",
+      "body": {
+        "name": "People counting · Entrance camera",
+        "detectionType": "counting",
+        "enabled": true,
+        "minConfidence": 0.7,
+        "cooldownSeconds": 60,
+        "recordingPolicy": "event-recording"
+      }
+    },
+    {
+      "path": "/api/control/v1/cameras/cam-1/analytics/rules/rule-1",
+      "body": {
+        "enabled": false
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/analytics/people",
+          "timestamp": "2026-09-27T18:14:45.325Z",
+          "metrics": {
+            "ttfb": 856.1000000089407,
+            "fcp": 1036,
+            "lcp": 1420,
+            "cls": 0.02965550666714892
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 845.6000000089407,
+            "responseDuration": 12.5,
+            "domInteractiveDuration": 124.29999999701977,
+            "domContentLoadedDuration": 0.09999999403953552,
+            "loadDuration": 0.7999999970197678
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1420,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.02965550666714892,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:14:58.083Z"
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/analytics/people",
+          "timestamp": "2026-09-27T18:14:45.325Z",
+          "metrics": {
+            "ttfb": 856.1000000089407,
+            "fcp": 1036,
+            "lcp": 1420,
+            "cls": 0.02965550666714892
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 845.6000000089407,
+            "responseDuration": 12.5,
+            "domInteractiveDuration": 124.29999999701977,
+            "domContentLoadedDuration": 0.09999999403953552,
+            "loadDuration": 0.7999999970197678
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1420,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.02965550666714892,
+            "unit": "",
+            "rating": "good"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:14:58.084Z"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/start",
+      "body": {
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/support",
+          "timestamp": "2026-09-27T18:14:59.625Z",
+          "metrics": {
+            "ttfb": 579.5999999940395,
+            "fcp": 940,
+            "lcp": 1272,
+            "cls": 0.12000209780092594
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 570,
+            "responseDuration": 47.79999999701977,
+            "domInteractiveDuration": 109.29999999701977,
+            "domContentLoadedDuration": 0.10000000894069672,
+            "loadDuration": 1
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1272,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.12000209780092594,
+            "unit": "",
+            "rating": "needs-improvement"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:15:06.374Z"
+      }
+    },
+    {
+      "path": "/api/observability/web-vitals",
+      "body": {
+        "pageMetrics": {
+          "url": "http://localhost:3000/support",
+          "timestamp": "2026-09-27T18:14:59.625Z",
+          "metrics": {
+            "ttfb": 579.5999999940395,
+            "fcp": 940,
+            "lcp": 1272,
+            "cls": 0.12000209780092594
+          },
+          "navigation": {
+            "dnsDuration": 0,
+            "tcpDuration": 0,
+            "tlsDuration": 0,
+            "requestDuration": 570,
+            "responseDuration": 47.79999999701977,
+            "domInteractiveDuration": 109.29999999701977,
+            "domContentLoadedDuration": 0.10000000894069672,
+            "loadDuration": 1
+          },
+          "memory": {
+            "jsHeapSizeLimit": 3760000000,
+            "totalJSHeapSize": 21700000,
+            "usedJSHeapSize": 16100000
+          },
+          "connection": {
+            "effectiveType": "4g",
+            "downlink": 9.4,
+            "rtt": 0,
+            "saveData": false
+          }
+        },
+        "webVitals": [
+          {
+            "name": "LCP",
+            "value": 1272,
+            "unit": "ms",
+            "rating": "good"
+          },
+          {
+            "name": "CLS",
+            "value": 0.12000209780092594,
+            "unit": "",
+            "rating": "needs-improvement"
+          }
+        ],
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+        "timestamp": "2026-09-27T18:15:06.375Z"
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/sessions/undefined/end",
+      "body": {
+        "terminationReason": "component_unmount",
+        "deviceInfo": {
+          "systemName": "Windows",
+          "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.7827.55 Safari/537.36",
+          "platform": "Win32",
+          "language": "en-GB",
+          "screenResolution": "1440x1000",
+          "viewportSize": "1440x1000",
+          "timezone": "Asia/Calcutta"
+        }
+      }
+    },
+    {
+      "path": "/api/control/v1/activity/page-visits",
+      "body": {
+        "sessionId": "undefined",
+        "pagePath": "/account/security",
+        "pageTitle": "KryptonVision | Security Operations",
+        "pageModule": "account",
+        "pageCategory": "administration",
+        "referrerPath": null,
+        "queryParameters": {}
+      }
+    }
+  ],
+  "errors": []
+}

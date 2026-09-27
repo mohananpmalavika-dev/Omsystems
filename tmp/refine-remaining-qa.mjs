@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+const path='tmp/remaining-workspaces-qa.mjs';let s=fs.readFileSync(path,'utf8');
+s=s.replace("try {\n // Guided", "try {\n if(!process.argv.includes('--tail')){\n // Guided");
+s=s.replace("unavailable=false;\n await open('/analytics/people'", "unavailable=false;\n }\n await open('/analytics/people'");
+s=s.replace(/console\.log\('Asset step'[\s\S]*?errors\);/, '');
+s=s.replace("assert.equal(submissions.at(-1).body.detectionType,'counting')","assert.equal(submissions.findLast(item=>item.path.endsWith('/analytics/rules')).body.detectionType,'counting')");
+s=s.replace("assert.equal(submissions.at(-1).body.enabled,false)","assert.equal(submissions.findLast(item=>item.path.endsWith('/analytics/rules/rule-1')).body.enabled,false)");
+s=s.replace('await page.waitForTimeout(80);','await page.waitForTimeout(400);');
+s=s.replace("getByLabel('Camera',{exact:true})", "getByLabel('Camera',{exact:false}).first()");
+s=s.replace("await open('/support','.support-panel');", "await open('/support','.support-panel');await page.getByText('Check platform health',{exact:true}).waitFor();");
+s=s.replace("await open('/account/security','.account-security-page');", "await open('/account/security','.account-security-page');await page.locator('#refresh-sessions-btn:not([disabled])').waitFor();");
+fs.writeFileSync(path,s);

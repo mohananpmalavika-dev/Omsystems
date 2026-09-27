@@ -1,5 +1,6 @@
 "use client";
 
+import { RecordComposer } from "@/components/record-composer";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
@@ -126,30 +127,27 @@ export default function CreateIncidentPage() {
 
         {error && <div className="page-alert error">{error}</div>}
 
-        <form className="incident-create-form card" onSubmit={(event) => void submit(event)}>
-          <div className="form-section-heading">
-            <div><span>Incident details</span><h2>Initial response record</h2></div>
-            <p>Fields marked required are needed to open the incident.</p>
-          </div>
-
-          <div className="incident-form-grid">
-            <label className="incident-field incident-field-wide">
+        <RecordComposer onSubmit={submit} busy={submitting} chapters={[
+ {title:"Event & priority",description:"Describe the event and choose its response priority.",content:<><label className="incident-field incident-field-wide">
               <span>Incident title *</span>
               <input className="input" value={form.title} onChange={(event) => update("title", event.target.value)} minLength={3} maxLength={200} placeholder="Briefly describe what happened" required />
             </label>
-            <label className="incident-field">
+<label className="incident-field">
               <span>Severity *</span>
               <select className="input" value={form.severity} onChange={(event) => update("severity", event.target.value as IncidentForm["severity"])}>
                 <option value="P1">P1 · Critical</option><option value="P2">P2 · High</option><option value="P3">P3 · Medium</option><option value="P4">P4 · Low</option><option value="P5">P5 · Informational</option>
               </select>
             </label>
-            <label className="incident-field">
+<label className="incident-field">
               <span>Incident type</span>
               <select className="input" value={form.incidentType} onChange={(event) => update("incidentType", event.target.value)}>
                 <option value="intrusion">Intrusion</option><option value="fire">Fire</option><option value="atm-tampering">ATM tampering</option><option value="tailgating">Tailgating</option><option value="fall-detection">Fall detection</option><option value="other">Other</option>
               </select>
-            </label>
-            <label className="incident-field">
+            </label><label className="incident-field incident-field-wide">
+              <span>Description</span>
+              <textarea className="input" rows={6} value={form.description} onChange={(event) => update("description", event.target.value)} maxLength={5000} placeholder="Add observations, immediate actions and relevant context" />
+            </label></>},
+ {title:"Scope & timing",description:"Place the incident in its branch, time and confidentiality context.",content:<><label className="incident-field">
               <span>Branch location</span>
               <select className="input" value={form.branchId || ""} onChange={(event) => update("branchId", event.target.value || undefined)}>
                 <option value="">-- Unassigned / Enterprise Global --</option>
@@ -160,32 +158,24 @@ export default function CreateIncidentPage() {
                 ))}
               </select>
             </label>
-            <label className="incident-field">
+<label className="incident-field">
               <span>Occurred at</span>
               <input className="input" type="datetime-local" value={form.occurredAt} onChange={(event) => update("occurredAt", event.target.value)} />
             </label>
-            <label className="incident-field">
+<label className="incident-field">
               <span>Confidentiality</span>
               <select className="input" value={form.confidentialityLevel} onChange={(event) => update("confidentialityLevel", event.target.value as IncidentForm["confidentialityLevel"])}>
                 <option value="public">Public</option><option value="internal">Internal</option><option value="confidential">Confidential</option><option value="restricted">Restricted</option><option value="highly-restricted">Highly restricted</option>
               </select>
-            </label>
-            <label className="incident-field incident-field-wide">
-              <span>Description</span>
-              <textarea className="input" rows={6} value={form.description} onChange={(event) => update("description", event.target.value)} maxLength={5000} placeholder="Add observations, immediate actions and relevant context" />
-            </label>
-          </div>
-
-          <div className="incident-requirements">
+            </label></>},
+ {title:"Follow-up",description:"Flag any police or insurance follow-up needed by the response team.",content:<><div className="incident-requirements">
             <label><input type="checkbox" checked={form.policeRequired} onChange={(event) => update("policeRequired", event.target.checked)} /><span><strong>Police follow-up</strong><small>Flag this incident for police intimation workflow.</small></span></label>
             <label><input type="checkbox" checked={form.insuranceRequired} onChange={(event) => update("insuranceRequired", event.target.checked)} /><span><strong>Insurance follow-up</strong><small>Prepare the record for a potential insurance claim.</small></span></label>
-          </div>
-
-          <div className="incident-form-actions">
+          </div></>}
+]} footer={<div className="incident-form-actions">
             <Link href="/incidents" className="btn-secondary">Cancel</Link>
             <button type="submit" className="btn-primary" disabled={submitting || form.title.trim().length < 3}><Save size={15} />{submitting ? "Creating..." : "Create incident"}</button>
-          </div>
-        </form>
+          </div>} />
       </main>
     </AppLayout>
   );

@@ -6,11 +6,11 @@ import {
   Phone, PhoneOff, Mic, MicOff, Volume2, Search, 
   Building2, User, Clock, CheckCircle2, XCircle, 
   PhoneMissed, AlertCircle, MessageSquare, RefreshCw,
-  Radio, ChevronRight, Filter
+  Radio, ChevronRight, Filter, Video, VideoOff, ScreenShare
 } from 'lucide-react';
 import { communicationAPI } from '@/services/communication-api';
 import { useCommunicationSignaling } from '@/hooks/use-communication-signaling';
-import { useWebRTCAudio } from '@/hooks/use-webrtc-audio';
+import { useWebRTCCall, type CallModality } from '@/hooks/use-webrtc-call';
 import type { 
   BranchContact, 
   EmployeeContact, 
@@ -30,6 +30,7 @@ type SelectedContact = { type: 'BRANCH'; branch: BranchContact } | { type: 'EMPL
 interface ActiveCall {
   session: CallSession;
   startTime: Date;
+  modality?: CallModality;
 }
 
 // ============================================================================
@@ -134,11 +135,27 @@ export default function CommunicationsCallsPage() {
   
   // Hooks
   const signaling = useCommunicationSignaling();
-  const webrtc = useWebRTCAudio();
+  const webrtc = useWebRTCCall();
   
   // Refs
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
+  const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const durationIntervalRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (remoteVideoRef.current && webrtc.remoteStream) {
+      remoteVideoRef.current.srcObject = webrtc.remoteStream;
+      remoteVideoRef.current.play().catch(() => {});
+    }
+  }, [webrtc.remoteStream]);
+
+  useEffect(() => {
+    if (localVideoRef.current && webrtc.localStream) {
+      localVideoRef.current.srcObject = webrtc.localStream;
+      localVideoRef.current.play().catch(() => {});
+    }
+  }, [webrtc.localStream]);
   
   // ============================================================================
   // LOAD DIRECTORY
@@ -325,68 +342,64 @@ export default function CommunicationsCallsPage() {
   // CALL ACTIONS
   // ============================================================================
   
-  const handleCallBranch = useCallback(async (branch: BranchContact) => {
+  const handleCallBranch = useCallback(async (branch: BranchContact, modality: CallModality = 'audio') => {
     try {
       setError(null);
+      const stream = await webrtc.initializeMedia({
+        audio: true,
+        video: modality === 'video',
+      });
+      if (!stream) return;
       
-      // Request microphone permission first
-      const permissionGranted = await webrtc.requestMicrophonePermission();
-      if (!permissionGranted) {
-        setError('Microphone permission required to make calls');
-        return;
-      }
-      
-      // Initiate call
       const session = await communicationAPI.callBranch(branch.branchId, 'VMS operator calling');
-      setActiveCall({ session, startTime: new Date() });
-      
+      setActiveCall({ session, startTime: new Date(), modality });
+
+      if (modality === 'screenshare') {
+        setTimeout(async () => {
+          await webrtc.startScreenShare();
+        }, 500);
+      }
     } catch (err: any) {
       console.error('[Communications] Failed to call branch:', err);
       setError(err.message || 'Failed to initiate call');
     }
   }, [webrtc]);
   
-  const handleCallEmployee = useCallback(async (employee: EmployeeContact) => {
+  const handleCallEmployee = useCallback(async (employee: EmployeeContact, modality: CallModality = 'audio') => {
     try {
       setError(null);
-      
-      const permissionGranted = await webrtc.requestMicrophonePermission();
-      if (!permissionGranted) {
-        setError('Microphone permission required to make calls');
-        return;
-      }
+      const stream = await webrtc.initializeMedia({
+        audio: true,
+        video: modality === 'video',
+      });
+      if (!stream) return;
       
       const session = await communicationAPI.callEmployee(employee.employeeId, 'VMS operator calling');
-      setActiveCall({ session, startTime: new Date() });
-      
+      setActiveCall({ session, startTime: new Date(), modality });
+
+      if (modality === 'screenshare') {
+        setTimeout(async () => {
+          await webrtc.startScreenShare();
+        }, 500);
+      }
     } catch (err: any) {
       console.error('[Communications] Failed to call employee:', err);
       setError(err.message || 'Failed to initiate call');
     }
   }, [webrtc]);
   
-  const handleAcceptCall = useCallback(async () => {
+  const handleAcceptCall = useCallback(async (modality: CallModality = 'video') => {
     if (!incomingCall) return;
     
     try {
       setError(null);
-      
-      // Request microphone permission
-      const permissionGranted = await webrtc.requestMicrophonePermission();
-      if (!permissionGranted) {
-        setError('Microphone permission required to accept calls');
-        return;
-      }
-      
-      // Accept call and get WebRTC credentials
+      await webrtc.initializeMedia({ audio: true, video: modality === 'video' });
       const { call, credentials } = await communicationAPI.acceptCall(incomingCall.callId);
       
-      // Connect WebRTC
-      await webrtc.connect(credentials, call.id);
+      await webrtc.connect(credentials, call.id, modality);
       
-      setActiveCall({ session: call, startTime: new Date() });
+      setActiveCall({ session: call, startTime: new Date(), modality });
       setIncomingCall(null);
-      
     } catch (err: any) {
       console.error('[Communications] Failed to accept call:', err);
       setError(err.message || 'Failed to accept call');
@@ -648,20 +661,36 @@ export default function CommunicationsCallsPage() {
                       <button
                         type="button"
                         className="call-btn primary"
-                        onClick={() => handleCallBranch(selectedContact.branch)}
+                        style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#fff' }}
+                        onClick={() => handleCallBranch(selectedContact.branch, 'video')}
                         disabled={selectedContact.branch.presence === 'OFFLINE' || !!activeCall}
+                        title="Start HD Video Call"
                       >
-                        <Phone size={20} />
-                        Call Branch
+                        <Video size={18} />
+                        Video Call
                       </button>
-                      
+
                       <button
                         type="button"
-                        className="message-btn"
-                        disabled={!!activeCall}
+                        className="call-btn primary"
+                        onClick={() => handleCallBranch(selectedContact.branch, 'audio')}
+                        disabled={selectedContact.branch.presence === 'OFFLINE' || !!activeCall}
+                        title="Start Voice Call"
                       >
-                        <MessageSquare size={20} />
-                        Message
+                        <Phone size={18} />
+                        Voice Call
+                      </button>
+
+                      <button
+                        type="button"
+                        className="call-btn primary"
+                        style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff' }}
+                        onClick={() => handleCallBranch(selectedContact.branch, 'screenshare')}
+                        disabled={selectedContact.branch.presence === 'OFFLINE' || !!activeCall}
+                        title="Start Call with Screen Sharing"
+                      >
+                        <ScreenShare size={18} />
+                        Share Screen
                       </button>
                     </div>
                     
@@ -684,19 +713,23 @@ export default function CommunicationsCallsPage() {
                                 <button
                                   type="button"
                                   className="mini-btn"
-                                  onClick={() => handleCallEmployee(employee)}
+                                  style={{ color: '#38bdf8' }}
+                                  onClick={() => handleCallEmployee(employee, 'video')}
                                   disabled={employee.presence === 'OFFLINE' || !!activeCall}
+                                  title="Video Call"
                                 >
-                                  <Phone size={14} />
-                                  Call
+                                  <Video size={13} />
+                                  Video
                                 </button>
                                 <button
                                   type="button"
                                   className="mini-btn"
-                                  disabled={!!activeCall}
+                                  onClick={() => handleCallEmployee(employee, 'audio')}
+                                  disabled={employee.presence === 'OFFLINE' || !!activeCall}
+                                  title="Voice Call"
                                 >
-                                  <MessageSquare size={14} />
-                                  Message
+                                  <Phone size={13} />
+                                  Voice
                                 </button>
                               </div>
                             </div>
@@ -727,20 +760,36 @@ export default function CommunicationsCallsPage() {
                       <button
                         type="button"
                         className="call-btn primary"
-                        onClick={() => handleCallEmployee(selectedContact.employee)}
+                        style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#fff' }}
+                        onClick={() => handleCallEmployee(selectedContact.employee, 'video')}
                         disabled={selectedContact.employee.presence === 'OFFLINE' || !!activeCall}
+                        title="Start HD Video Call"
                       >
-                        <Phone size={20} />
-                        Call Employee
+                        <Video size={18} />
+                        Video Call
                       </button>
-                      
+
                       <button
                         type="button"
-                        className="message-btn"
-                        disabled={!!activeCall}
+                        className="call-btn primary"
+                        onClick={() => handleCallEmployee(selectedContact.employee, 'audio')}
+                        disabled={selectedContact.employee.presence === 'OFFLINE' || !!activeCall}
+                        title="Start Voice Call"
                       >
-                        <MessageSquare size={20} />
-                        Message
+                        <Phone size={18} />
+                        Voice Call
+                      </button>
+
+                      <button
+                        type="button"
+                        className="call-btn primary"
+                        style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff' }}
+                        onClick={() => handleCallEmployee(selectedContact.employee, 'screenshare')}
+                        disabled={selectedContact.employee.presence === 'OFFLINE' || !!activeCall}
+                        title="Start Call with Screen Sharing"
+                      >
+                        <ScreenShare size={18} />
+                        Share Screen
                       </button>
                     </div>
                   </div>
@@ -909,6 +958,32 @@ export default function CommunicationsCallsPage() {
               )}
             </div>
             
+            {/* Video Stage if camera or screen sharing is active */}
+            {(webrtc.cameraEnabled || webrtc.isScreenSharing || webrtc.remoteStream?.getVideoTracks().length) ? (
+              <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: '12px', overflow: 'hidden', margin: '16px 0', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <video
+                  ref={remoteVideoRef}
+                  autoPlay
+                  playsInline
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                />
+                {(webrtc.cameraEnabled || webrtc.isScreenSharing) && (
+                  <div style={{ position: 'absolute', bottom: '12px', right: '12px', width: '120px', aspectRatio: '16/9', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.3)', background: '#0f172a' }}>
+                    <video
+                      ref={localVideoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                    <div style={{ position: 'absolute', top: '2px', left: '4px', fontSize: '9px', fontFamily: 'monospace', background: 'rgba(0,0,0,0.6)', color: '#fff', padding: '1px 4px', borderRadius: '4px' }}>
+                      {webrtc.isScreenSharing ? 'Screen' : 'You'}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
+
             {activeCall.session.status === 'CONNECTED' && (
               <>
                 <div className="call-controls">
@@ -920,13 +995,29 @@ export default function CommunicationsCallsPage() {
                     {webrtc.microphoneEnabled ? <Mic size={20} /> : <MicOff size={20} />}
                     <span>{webrtc.microphoneEnabled ? 'Mute' : 'Unmute'}</span>
                   </button>
-                  
+
                   <button
                     type="button"
-                    className="control-btn active"
+                    className={`control-btn ${webrtc.cameraEnabled ? 'active' : ''}`}
+                    onClick={() => void webrtc.toggleCamera()}
                   >
-                    <Volume2 size={20} />
-                    <span>Speaker</span>
+                    {webrtc.cameraEnabled ? <Video size={20} /> : <VideoOff size={20} />}
+                    <span>{webrtc.cameraEnabled ? 'Cam Off' : 'Cam On'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`control-btn ${webrtc.isScreenSharing ? 'active' : ''}`}
+                    onClick={() => {
+                      if (webrtc.isScreenSharing) {
+                        void webrtc.stopScreenShare();
+                      } else {
+                        void webrtc.startScreenShare();
+                      }
+                    }}
+                  >
+                    <ScreenShare size={20} />
+                    <span>{webrtc.isScreenSharing ? 'Stop Share' : 'Share Screen'}</span>
                   </button>
                 </div>
                 
@@ -991,10 +1082,20 @@ export default function CommunicationsCallsPage() {
               <button
                 type="button"
                 className="accept-btn"
-                onClick={handleAcceptCall}
+                style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#fff' }}
+                onClick={() => void handleAcceptCall('video')}
+              >
+                <Video size={20} />
+                Video
+              </button>
+
+              <button
+                type="button"
+                className="accept-btn"
+                onClick={() => void handleAcceptCall('audio')}
               >
                 <Phone size={20} />
-                Accept
+                Voice
               </button>
             </div>
           </div>

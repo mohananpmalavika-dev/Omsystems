@@ -76,6 +76,7 @@ const presets = {
 } as const;
 
 export function AnalyticsDomainWorkspace({ domainId }: { domainId: DomainId }) {
+  const [taskView, setTaskView] = useState("configure");
   const preset = presets[domainId];
   const Icon = preset.icon;
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -229,11 +230,12 @@ export function AnalyticsDomainWorkspace({ domainId }: { domainId: DomainId }) {
             {cameras.map((camera) => <option key={camera.id} value={camera.id}>{camera.name}</option>)}
           </select>
         </label>
-        <button type="button" onClick={() => void loadRules(cameraId)} disabled={!cameraId || loading} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-4 text-xs font-semibold text-slate-200 hover:border-cyan-500 disabled:opacity-40"><RefreshCw size={14} className={loading ? "animate-spin" : ""} />Refresh</button>
+        <button type="button" onClick={() => void loadRules(cameraId).catch(error => setMessage({ kind: "error", text: readable(error) }))} disabled={!cameraId || loading} className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-4 text-xs font-semibold text-slate-200 hover:border-cyan-500 disabled:opacity-40"><RefreshCw size={14} className={loading ? "animate-spin" : ""} />Refresh</button>
       </section>
 
-      <div className="grid gap-5 2xl:grid-cols-[1.08fr_.92fr]">
-        <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80">
+      <div className="analytics-task-workspace">
+  <nav className="analytics-task-rail" aria-label="Analytics tasks"><p className="workflow-kicker">CAMERA INTELLIGENCE</p>{[{id:"configure",title:"Build intelligence",detail:"Choose capabilities for this camera."},{id:"policy",title:"Manage policy",detail:"Review, pause or enable configured rules."},{id:"signals",title:"Read signals",detail:"Inspect events raised by camera rules."},...(domainId === "human" ? [{id:"specialist",title:"Specialist workspaces",detail:"Investigate violence and tailgating."}] : [])].map(task => <button type="button" key={task.id} aria-pressed={taskView === task.id} onClick={() => setTaskView(task.id)}><strong>{task.title}</strong><span>{task.detail}</span><ArrowUpRight size={16} /></button>)}<small>Branch and camera scope stays selected as you switch tasks.</small></nav>
+  <div className="analytics-task-canvas"><div hidden={taskView !== "configure"}><section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80">
           <header className="flex items-center justify-between gap-3 border-b border-slate-800 p-5">
             <div><p className="text-[10px] font-bold tracking-[.18em] text-cyan-400">CAPABILITY CATALOG</p><h2 className="mt-1 text-lg font-semibold">Enable camera intelligence</h2></div>
             <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-400">{configuredIds.size} configured</span>
@@ -249,24 +251,18 @@ export function AnalyticsDomainWorkspace({ domainId }: { domainId: DomainId }) {
               })}
             </div>
           )}
-        </section>
-
-        <div className="space-y-5">
-          <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80">
+        </section></div><div hidden={taskView !== "policy"}><section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80">
             <header className="flex items-center justify-between border-b border-slate-800 p-5"><div><p className="text-[10px] font-bold tracking-[.18em] text-cyan-400">CAMERA POLICY</p><h2 className="mt-1 text-lg font-semibold">Configured rules</h2></div><Camera size={20} className="text-slate-600" /></header>
             {domainRules.length === 0 ? <EmptyState text={cameraId ? "No rules from this domain are configured for the selected camera." : "Select a camera to review its rules."} /> : <div className="divide-y divide-slate-800">{domainRules.map((rule) => <div key={rule.id} className="flex items-center gap-3 p-4"><span className={`h-2.5 w-2.5 rounded-full ${rule.enabled ? "bg-emerald-400" : "bg-slate-600"}`} /><div className="min-w-0 flex-1"><strong className="block truncate text-sm">{rule.name}</strong><span className="text-xs text-slate-500">{Math.round(rule.minConfidence * 100)}% confidence · {rule.severity} · {rule.recordingPolicy.replace("-", " ")}</span></div><button disabled={Boolean(savingId)} onClick={() => void toggleRule(rule)} className="rounded-lg border border-slate-700 px-3 py-1.5 text-[10px] font-bold text-slate-300 hover:border-cyan-500 disabled:opacity-40">{savingId === rule.id ? "Saving…" : rule.enabled ? "Pause" : "Enable"}</button></div>)}</div>}
             <footer className="border-t border-slate-800 p-3"><Link href="/analytics" className="flex items-center justify-center gap-2 rounded-xl bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700">Open advanced rule configuration <ArrowUpRight size={13} /></Link></footer>
-          </section>
-
-          <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80">
+          </section></div><div hidden={taskView !== "signals"}><section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80">
             <header className="flex items-center justify-between border-b border-slate-800 p-5"><div><p className="text-[10px] font-bold tracking-[.18em] text-cyan-400">RECENT SIGNALS</p><h2 className="mt-1 text-lg font-semibold">Selected camera</h2></div><Link href="/operations/alerts" className="text-xs font-semibold text-cyan-400">All alerts →</Link></header>
             {domainAlerts.length === 0 ? <EmptyState text="No matching signals have been raised by these camera rules." /> : <div className="divide-y divide-slate-800">{domainAlerts.slice(0, 6).map((alert) => <article key={alert.id} className="p-4"><div className="flex items-center gap-2"><span className={`rounded px-2 py-0.5 text-[9px] font-bold ${alert.severity === "P1" ? "bg-red-500/15 text-red-300" : "bg-amber-500/15 text-amber-300"}`}>{alert.severity}</span><strong className="truncate text-sm">{alert.title}</strong><span className="ml-auto text-[10px] text-slate-600">{new Date(alert.firstDetectedAt || alert.createdAt || alert.lastDetectedAt).toLocaleTimeString()}</span></div><p className="mt-2 text-xs text-slate-500">{alert.status.replace("_", " ")} · {Math.round(alert.confidence * 100)}% confidence</p></article>)}</div>}
-          </section>
-        </div>
-      </div>
+          </section></div></div>
+</div>
 
       {domainId === "human" && (
-        <section className="mt-8 space-y-8">
+        <section hidden={taskView !== "specialist"} className="mt-8 space-y-8">
           <ViolenceDetectionWorkspace cameraId={cameraId || undefined} />
           <TailgatingDetectionWorkspace />
         </section>

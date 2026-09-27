@@ -4,7 +4,7 @@ import { InspectionDesk } from "@/components/inspection-desk";
 import { WorkflowNav } from "@/components/workflow-nav";
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Shield, Plus, Search, Filter, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 
 interface Requirement {
   id: string;

@@ -1,7 +1,6 @@
 "use client";
 
 import { RecordComposer } from "@/components/record-composer";
-import { FieldVisual } from "@/components/field-visual";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { maintenanceApi, organizationApi } from "@/lib/api-client";
@@ -85,13 +84,13 @@ export default function NewAssetPage() {
 
   return (
     <main className="record-form-page work-order-form-page">
-      <header className="record-form-hero workspace-heading">
+      <header className="workflow-heading composer-heading">
         <div>
           <span>Asset registry</span>
           <h1>Register asset</h1>
           <p>Add a real field asset with its identity, ownership, location, and lifecycle status.</p>
         </div>
-      <FieldVisual /></header>
+      </header>
 
       <RecordComposer onSubmit={handleSubmit} busy={loading} chapters={[{ title: "Identity", description: "Identify the hardware that joins your fleet.", content: <><label className="work-order-field">
             <span>Asset type <em>Required</em></span>

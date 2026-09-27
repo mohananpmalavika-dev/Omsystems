@@ -4,8 +4,7 @@ import { InspectionDesk } from "@/components/inspection-desk";
 import { WorkflowNav } from "@/components/workflow-nav";
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Shield, Search, CheckCircle2, XCircle, Clock, AlertCircle, FileText } from 'lucide-react';
-import { PageHero } from '@/components/page-hero';
+import { Search } from 'lucide-react';
 import { ComplianceHubNav } from '@/components/compliance/compliance-hub-nav';
 
 interface Control {

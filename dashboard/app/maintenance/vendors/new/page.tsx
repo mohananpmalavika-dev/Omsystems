@@ -1,7 +1,6 @@
 "use client";
 
 import { RecordComposer } from "@/components/record-composer";
-import { FieldVisual } from "@/components/field-visual";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { maintenanceApi } from "@/lib/api-client";
@@ -36,9 +35,9 @@ export default function NewVendorPage() {
 
   return (
     <div className="record-form-page" style={{ padding: 16 }}>
-      <header className="record-form-hero workspace-heading">
+      <header className="workflow-heading composer-heading">
         <div><span>Service network</span><h1>Add vendor</h1><p>Onboard a maintenance partner and record the primary escalation contact.</p></div>
-      <FieldVisual /></header>
+      </header>
       <RecordComposer onSubmit={handleSubmit} busy={loading} chapters={[{ title: "Partner", description: "Name the service partner.", content: <><div style={{ marginBottom: 8 }}>
           <label>Name<br />
             <input value={name} onChange={(e) => setName(e.target.value)} required />
