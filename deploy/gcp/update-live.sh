@@ -38,6 +38,8 @@ if [ -s /opt/sentinel-grid/edge-agent/release/edge-agent.exe ]; then
   if command -v node >/dev/null 2>&1; then
     node /opt/sentinel-grid/edge-agent/scripts/cache-deflated.mjs /opt/sentinel-grid/edge-agent/release || true
   fi
+fi
+
 echo "--> Applying pending database migrations..."
 for migration in $(ls -1v /opt/sentinel-grid/database/migrations/*.sql 2>/dev/null); do
   docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid < "$migration" >/dev/null 2>&1 || true
