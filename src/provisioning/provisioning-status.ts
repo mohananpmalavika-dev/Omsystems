@@ -202,7 +202,7 @@ export function projectProvisioningRun(input: {
     item.metrics.operationalStatus === "healthy" && item.metrics.writeVerification === "verified"
   ).length;
   const healthyPlatformStorage = input.storageNodes.filter((node) =>
-    node.status === "healthy" && node.lastWriteProbe?.status === "passed"
+    node.status === "healthy" && (node.lastWriteProbe?.status === "passed" || !node.lastWriteProbe)
   ).length;
   const storageHealthy = healthyRecorderStorage + healthyPlatformStorage;
   const recordingsVerified = archiveTelemetry.filter((item) =>
@@ -251,8 +251,8 @@ export function projectProvisioningRun(input: {
     ["critical", "failed"].includes(String(item.metrics.operationalStatus ?? item.metrics.smartStatus ?? "")) ||
     item.metrics.writeVerification === "failed"
   );
-  const storageEvidenceMissing = scanCompleted && importedChannels > 0 && storageHealthy === 0;
-  const recordingEvidenceMissing = scanCompleted && importedChannels > 0 && recordingsVerified < importedChannels;
+  const storageEvidenceMissing = scanCompleted && importedChannels > 0 && storageHealthy === 0 && !skippedStages["storage-verification"];
+  const recordingEvidenceMissing = scanCompleted && importedChannels > 0 && recordingsVerified < importedChannels && !skippedStages["recording-verification"];
   const noDevicesDiscovered = scanCompleted && discoveredDevices === 0;
   const noVerifiedStreams = scanCompleted && discoveredDevices > 0 && importedChannels === 0 && credentialsRequired === 0;
   const issues = provisioningIssues({
@@ -326,10 +326,10 @@ export function projectProvisioningRun(input: {
     ),
     step(
       "storage-verification", "Storage verification",
-      storageFailure ? "blocked" : storageHealthy > 0 || importedChannels > 0 ? "completed" : "pending",
+      storageFailure || storageEvidenceMissing ? "blocked" : storageHealthy > 0 || importedChannels > 0 ? "completed" : "pending",
       Math.max(storageHealthy, importedChannels > 0 ? 1 : 0), Math.max(1, diskTelemetry.length + input.storageNodes.length, 1),
       storageFailure ? "Recorder storage has a blocking health or write failure" : storageHealthy > 0 ? `${storageHealthy} writable storage target(s) verified` : importedChannels > 0 ? "Storage targets available for recording" : "Fresh storage write evidence is required",
-      storageFailure ? "STORAGE_DEGRADED" : undefined,
+      storageFailure ? "STORAGE_DEGRADED" : storageEvidenceMissing ? "STORAGE_EVIDENCE_REQUIRED" : undefined,
     ),
     step(
       "recording-verification", "Recording verification",
@@ -360,9 +360,10 @@ export function projectProvisioningRun(input: {
 
   const blockers = issues.filter((issue) => issue.severity === "blocker");
   const recordingConfigured = recordingsConfigured >= importedChannels && importedChannels > 0;
-  const recordingEvidenceReady = estimatedRecordings >= importedChannels || importedChannels === 0;
+  const recordingEvidenceReady = estimatedRecordings >= importedChannels || importedChannels === 0 || Boolean(skippedStages["recording-verification"]);
+  const storageEvidenceReady = storageHealthy >= 0 || Boolean(skippedStages["storage-verification"]);
   const evidenceReady = scanCompleted && onlineAgents.length > 0 && importedChannels > 0 &&
-    verifiedStreams > 0 && recordingConfigured && storageHealthy >= 0 && recordingEvidenceReady;
+    verifiedStreams > 0 && recordingConfigured && storageEvidenceReady && recordingEvidenceReady;
   const readyForActivation = evidenceReady && blockers.length === 0;
   computedSteps.push(step(
     "activation", "Activation policy",
