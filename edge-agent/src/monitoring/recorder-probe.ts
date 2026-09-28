@@ -151,42 +151,49 @@ export async function searchDeviceArchive(
   const credentials = config.username
     ? { username: config.username, password: config.password ?? "" }
     : undefined;
-  const base = `${config.secure ? "https" : "http"}://${config.host}:${config.port}`;
   // CP PLUS and other OEM brands can ship either API. Try the advertised family
   // first, then the other one if its endpoint is unavailable or unrecognized.
+  // The stream URI only carries the RTSP port; many DVRs expose their web API
+  // on a separate port (commonly 8080 or 8000). Probe the standard web ports
+  // after the configured port so installations with a non-default web port work
+  // without treating the RTSP port as an HTTP port.
   const preferred = family === "dahua-cgi" ? "dahua-cgi" : "hikvision-isapi";
   const alternate = preferred === "dahua-cgi" ? "hikvision-isapi" : "dahua-cgi";
   let selected: "hikvision-isapi" | "dahua-cgi" = preferred;
-  let result: ArchiveSearchResult;
-  const searchFamily = (candidate: typeof selected) => candidate === "hikvision-isapi"
-    ? searchHikvisionArchive(base, credentials, timeoutMs, hikvisionTrackId(channel), from, to, 500)
-    : searchDahuaArchive(base, credentials, timeoutMs, channel, from, to, 500);
-  try {
-    result = await searchFamily(preferred);
-  } catch (firstError) {
-    try {
-      result = await searchFamily(alternate);
-      selected = alternate;
-    } catch {
-      if (family === "hikvision-isapi" || family === "dahua-cgi") throw firstError;
-      throw new Error("camera_archive_search_unavailable_or_unsupported");
+  let firstError: unknown;
+  const probeTimeout = Math.min(timeoutMs, 2_500);
+  const ports = [...new Set([config.port, 80, 8080, 8000, 8899, 81, 443])];
+  for (const port of ports) {
+    const secure = port === 443 || (port === config.port && Boolean(config.secure));
+    const base = `${secure ? "https" : "http"}://${config.host}:${port}`;
+    for (const candidate of [preferred, alternate] as const) {
+      try {
+        const result = candidate === "hikvision-isapi"
+          ? await searchHikvisionArchive(base, credentials, probeTimeout, hikvisionTrackId(channel), from, to, 500)
+          : await searchDahuaArchive(base, credentials, probeTimeout, channel, from, to, 500);
+        selected = candidate;
+        if (!result.coverageComplete) throw new Error(result.reasonCodes[0] ?? "camera_archive_search_incomplete");
+        return result.segments
+          .filter((segment) => segment.endedAt > segment.startedAt)
+          .sort((left, right) => left.startedAt - right.startedAt)
+          .flatMap((segment) => {
+            const clips: Array<{ startTime: string; endTime: string; apiFamily?: "hikvision-isapi" | "dahua-cgi" }> = [];
+            for (let start = Math.max(segment.startedAt, from.getTime()); start < Math.min(segment.endedAt, to.getTime()); start += 10 * 60_000) {
+              clips.push({
+                startTime: new Date(start).toISOString(),
+                endTime: new Date(Math.min(start + 10 * 60_000, segment.endedAt, to.getTime())).toISOString(),
+                ...(family !== selected ? { apiFamily: selected } : {}),
+              });
+            }
+            return clips;
+          });
+      } catch (error) {
+        firstError ??= error;
+      }
     }
   }
-  if (!result.coverageComplete) throw new Error(result.reasonCodes[0] ?? "camera_archive_search_incomplete");
-  return result.segments
-    .filter((segment) => segment.endedAt > segment.startedAt)
-    .sort((left, right) => left.startedAt - right.startedAt)
-    .flatMap((segment) => {
-      const clips: Array<{ startTime: string; endTime: string }> = [];
-      for (let start = Math.max(segment.startedAt, from.getTime()); start < Math.min(segment.endedAt, to.getTime()); start += 10 * 60_000) {
-        clips.push({
-          startTime: new Date(start).toISOString(),
-          endTime: new Date(Math.min(start + 10 * 60_000, segment.endedAt, to.getTime())).toISOString(),
-          ...(family !== selected ? { apiFamily: selected } : {}),
-        });
-      }
-      return clips;
-    });
+  if (family === "hikvision-isapi" || family === "dahua-cgi") throw firstError;
+  throw new Error("camera_archive_search_unavailable_or_unsupported");
 }
 
 export function deviceArchivePlaybackUri(
@@ -524,6 +531,7 @@ async function searchDahuaArchive(base: string, credentials: { username: string;
       if (!next.ok) throw new Error(`dahua_archive_next_${next.status}`);
       const text = await next.text();
       const found = key(text, "found");
+      if (!found) throw new Error("dahua_archive_invalid_response");
       const page = parseDahuaArchiveSegments(text);
       if (!dahuaFoundResults(found)) return { segments, coverageComplete: true, reasonCodes: [] };
       if (page.length === 0) return { segments, coverageComplete: false, reasonCodes: ["dahua_archive_retention_unparseable"] };

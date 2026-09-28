@@ -64,6 +64,7 @@ interface ControlRoomStats {
   unacknowledgedAlerts: number;
   recordingCameras: number;
   storageUsagePercent: number;
+  storageCapacityAvailable: boolean;
   storageSummary: {
     totalCount: number;
     warningCount: number;
@@ -116,6 +117,7 @@ const DEFAULT_EMPTY_STATS: ControlRoomStats = {
   unacknowledgedAlerts: 0,
   recordingCameras: 0,
   storageUsagePercent: 0,
+  storageCapacityAvailable: false,
   storageSummary: {
     totalCount: 0,
     warningCount: 0,
@@ -211,6 +213,7 @@ function parseStats(body: unknown): ControlRoomStats {
     unacknowledgedAlerts: Number(data.unacknowledgedAlerts ?? data.unacknowledged_alerts ?? 0),
     recordingCameras: Number(data.camerasRecording ?? data.cameras_recording ?? 0),
     storageUsagePercent: Number(data.storageUsagePercent ?? data.storage_usage_percent ?? 0),
+    storageCapacityAvailable: Boolean(data.storageCapacityAvailable ?? data.storage_capacity_available ?? false),
     storageSummary: {
       totalCount: Number(storageSummary.totalCount ?? storageSummaryLegacy.total_count ?? 0),
       warningCount: Number(storageSummary.warningCount ?? storageSummaryLegacy.warning_count ?? 0),
@@ -1198,8 +1201,8 @@ function ControlRoomContent() {
         <div className="stat-card">
           <HardDrive size={20} className="stat-icon purple" aria-hidden="true" />
           <div>
-            <strong>{stats.storageUsagePercent}%</strong>
-            <span>Storage used</span>
+            <strong>{stats.storageCapacityAvailable ? `${stats.storageUsagePercent}%` : "—"}</strong>
+            <span>{stats.storageCapacityAvailable ? "Storage used" : "No capacity telemetry"}</span>
           </div>
         </div>
         <button type="button" className="stat-card ai-stat" onClick={() => setAiPanelOpen(true)}>

@@ -718,8 +718,11 @@ export default function KryptoVisionConnectPage() {
                 Assigned Branch
               </label>
               <div className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm">
-                {loadingDirectory ? 'Checking code...' : selectedBranch?.name || 'Enter and verify the admin code below'}
+                {loadingDirectory ? 'Checking code...' : selectedBranch?.name || 'Verify the enrollment code to load its VMS branch'}
               </div>
+              <p className="text-[11px] leading-snug text-slate-500">
+                The administrator selects a branch from the VMS branch list when creating your enrollment code. Verify that code below to assign this device to the same branch.
+              </p>
             </div>
 
             {/* 2. Device Mode Selector */}

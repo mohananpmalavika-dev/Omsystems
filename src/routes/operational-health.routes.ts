@@ -340,6 +340,84 @@ export async function registerOperationalHealthRoutes(
     const unackAlerts = projections.reduce((sum, branch) => sum + (branch.criticalAlerts ?? 0), 0);
     const onlineCamerasCount = cameras.filter((camera) => camera.onlineStatus === "online").length;
 
+    // Keep the Live Wall summary tied to the same tenant and node scope as the
+    // signed-in operator. The previous values were placeholders, so the UI
+    // always showed 0% even when storage nodes had current capacity telemetry.
+    let storageUsagePercent = 0;
+    let storageCapacityAvailable = false;
+    let storageSummary = {
+      totalCount: 0,
+      warningCount: 0,
+      smartIssueCount: 0,
+      raidIssueCount: 0,
+      writeProbeFailureCount: 0,
+    };
+    try {
+      const branchById = new Map(projections.map((branch) => [branch.id, branch]));
+      const branchIds = [...branchById.keys()];
+      const [accessibleNodes, tenantStorageNodes, telemetry] = await Promise.all([
+        store.listAccessibleNodes(request.currentUser, "live:view"),
+        store.listRecordingStorageNodes(request.currentUser.tenantId),
+        store.listLatestOperationalTelemetry(request.currentUser.tenantId, branchIds),
+      ]);
+      const accessibleNodeIds = new Set(accessibleNodes.map((node) => node.id));
+      const hasTenantWideAccess = accessibleNodes.some((node) => node.type === "company");
+      const storageNodes = tenantStorageNodes.filter((node) =>
+        node.scopeNodeId ? accessibleNodeIds.has(node.scopeNodeId) : hasTenantWideAccess
+      );
+      const disks = telemetry
+        .filter((item) => item.deviceType === "disk")
+        .flatMap((item) => {
+          const branch = branchById.get(item.branchId);
+          return branch ? [projectDiskHealth(item, branch)] : [];
+        });
+      // Edge disk telemetry is the freshest capacity source. Use provisioned
+      // storage nodes when no disk capacity samples have been reported yet.
+      const useDiskTelemetry = disks.some((disk) => disk.capacityBytes > 0);
+      const totalCapacityBytes = useDiskTelemetry
+        ? disks.reduce((sum, disk) => sum + Math.max(0, disk.capacityBytes), 0)
+        : storageNodes.reduce((sum, node) => sum + Math.max(0, node.capacityBytes || 0), 0);
+      const usedCapacityBytes = useDiskTelemetry
+        ? disks.reduce((sum, disk) => sum + Math.max(0, disk.usedBytes), 0)
+        : storageNodes.reduce((sum, node) => sum + Math.max(0, node.usedBytes || 0), 0);
+      storageUsagePercent = totalCapacityBytes > 0
+        ? Math.min(100, Math.round((usedCapacityBytes / totalCapacityBytes) * 100))
+        : 0;
+      storageCapacityAvailable = totalCapacityBytes > 0;
+      storageSummary = useDiskTelemetry
+        ? {
+            totalCount: disks.length,
+            warningCount: disks.filter((disk) =>
+              disk.operationalStatus === "warning" || disk.operationalStatus === "critical"
+            ).length,
+            smartIssueCount: disks.filter((disk) =>
+              ["warning", "degraded", "failure_predicted", "failed"].includes(disk.smartStatus)
+            ).length,
+            raidIssueCount: disks.filter((disk) =>
+              ["degraded", "rebuilding", "failed"].includes(disk.raidStatus)
+            ).length,
+            writeProbeFailureCount: disks.filter((disk) => disk.writeVerification === "failed").length,
+          }
+        : {
+            totalCount: storageNodes.length,
+            warningCount: storageNodes.filter((node) =>
+              node.status === "warning" || node.status === "critical" || node.status === "offline"
+            ).length,
+            smartIssueCount: storageNodes.filter((node) =>
+              node.smart?.overallStatus && node.smart.overallStatus !== "passed"
+            ).length,
+            raidIssueCount: storageNodes.filter((node) =>
+              node.raid?.status && node.raid.status !== "healthy"
+            ).length,
+            writeProbeFailureCount: storageNodes.filter((node) =>
+              node.lastWriteProbe?.status === "failed"
+            ).length,
+          };
+    } catch {
+      // Storage inventory is optional for this combined summary; keep camera
+      // and alert health available if storage telemetry has not been provisioned.
+    }
+
     return {
       success: true,
       data: {
@@ -362,14 +440,9 @@ export async function registerOperationalHealthRoutes(
         unacknowledgedAlerts: unackAlerts,
         openIncidents: unackAlerts > 0 ? Math.min(unackAlerts, 1) : 0,
         activeStreams: onlineCamerasCount,
-        storageUsagePercent: 0,
-        storageSummary: {
-          totalCount: 0,
-          warningCount: 0,
-          smartIssueCount: 0,
-          raidIssueCount: 0,
-          writeProbeFailureCount: 0,
-        },
+        storageUsagePercent,
+        storageCapacityAvailable,
+        storageSummary,
         totalEdgeAgents: agents.length,
         edgeAgentsOnline: projections.filter((branch) => branch.edgeAgentStatus === "online").length,
         edgeAgentsOffline: projections.filter((branch) => branch.edgeAgentStatus === "offline").length,

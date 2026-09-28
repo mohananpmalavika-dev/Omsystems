@@ -377,13 +377,9 @@ export async function registerCommunicationsRoutes(
     throw new Error('Communications requires the configured PostgreSQL pool');
   }
   if (!redis || typeof redis.get !== 'function' || typeof redis.setEx !== 'function') {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('Communications requires the configured Redis client');
-    }
-    // In development, use a minimal in-memory shim so that PostgreSQL-backed
-    // routes (e.g. directory/branches) still work without Redis.  Real-time
-    // presence and call-state will report OFFLINE / degraded, which is
-    // acceptable for local development.
+    // Keep PostgreSQL-backed communications routes available if Redis is down.
+    // Presence and call state are process-local until Redis recovers, so calls
+    // can fail in this mode and state will not be shared across instances.
     const _store = new Map<string, { value: string; expiresAt: number }>();
     redis = {
       get: async (k: string) => {
@@ -399,13 +395,25 @@ export async function registerCommunicationsRoutes(
         _store.set(k, { value: v, expiresAt: Date.now() + (opts?.EX ?? 3600) * 1000 });
         return 'OK';
       },
-      del: async (...keys: string[]) => { for (const k of keys) _store.delete(k); return keys.length; },
+      del: async (...keyArgs: (string | string[])[]) => {
+        const keys = keyArgs.flat();
+        for (const k of keys) _store.delete(k);
+        return keys.length;
+      },
       exists: async (...keys: string[]) => keys.filter(k => {
         const e = _store.get(k); return e && Date.now() <= e.expiresAt;
       }).length,
       ttl: async (k: string) => {
         const e = _store.get(k); if (!e) return -2;
         const rem = Math.ceil((e.expiresAt - Date.now()) / 1000); return rem > 0 ? rem : -2;
+      },
+      mGet: async (keys: string[]) => Promise.all(keys.map((k) => redis.get(k))),
+      scanIterator: async function* ({ MATCH }: { MATCH?: string }) {
+        const prefix = MATCH?.split('*', 1)[0] ?? '';
+        for (const [key, entry] of _store) {
+          if (Date.now() > entry.expiresAt) { _store.delete(key); continue; }
+          if (key.startsWith(prefix)) yield key;
+        }
       },
       multi: () => {
         const cmds: Array<() => Promise<unknown>> = [];
@@ -417,14 +425,17 @@ export async function registerCommunicationsRoutes(
         return multi;
       },
     };
-    app.log.warn('Communications: Redis not available – using in-memory shim (dev only). Directory routes will work; real-time presence/calls unavailable.');
+    app.log.warn('Communications: Redis unavailable; using in-memory shim. Directory routes will work, while real-time presence and calls are degraded.');
+    if (process.env.NODE_ENV === 'production') {
+      app.log.warn('Communications: Redis unavailable in production; routes will register, but presence, calls, and media state will be process-local and degraded.');
+    }
   }
   
   const logger = app.log?.child ? app.log.child({ module: 'communications' }) : console as any;
   if (process.env.NODE_ENV === 'production') {
     const turnUrl = process.env.COMM_TURN_SERVER_URL;
     if ((!turnUrl?.startsWith('turn:') && !turnUrl?.startsWith('turns:')) || !process.env.COMM_TURN_USERNAME || !process.env.COMM_TURN_CREDENTIAL) {
-      throw new Error('Production communications requires COMM_TURN_SERVER_URL (turn: or turns:), COMM_TURN_USERNAME, and COMM_TURN_CREDENTIAL');
+      logger.warn('Communications: TURN is not fully configured; API routes will register, but calls may fail on restrictive networks. Configure COMM_TURN_SERVER_URL, COMM_TURN_USERNAME, and COMM_TURN_CREDENTIAL for reliable calling.');
     }
   }
   
