@@ -65,6 +65,7 @@ export interface InitiateCallOptions {
    */
   targetBranchId?: string;
   targetEmployeeId?: string;
+  targetDeviceId?: string;
 
   /**
    * Initiated by user ID (for audit)
@@ -161,6 +162,7 @@ export class CommunicationCallService {
       targetType,
       targetBranchId,
       targetEmployeeId,
+      targetDeviceId,
       initiatedBy,
     } = options;
 
@@ -172,7 +174,8 @@ export class CommunicationCallService {
       tenantId,
       targetType,
       targetBranchId,
-      targetEmployeeId
+      targetEmployeeId,
+      targetDeviceId
     )).filter((participantId) => participantId !== sourceParticipantId);
     if (!participantIds.length) {
       throw new Error('TARGET_UNAVAILABLE');
@@ -184,11 +187,11 @@ export class CommunicationCallService {
         id, tenant_id, direction,
         source_type, source_branch_id, source_employee_id,
         source_device_id, source_operator_id,
-        target_type, target_branch_id, target_employee_id,
+        target_type, target_branch_id, target_employee_id, target_device_id, target_soc_queue,
         status, created_at
       ) VALUES (
         gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7,
-        $8, $9, $10, 'INITIATING', NOW()
+        $8, $9, $10, $11, $12, 'INITIATING', NOW()
       )
       RETURNING
         id, tenant_id as "tenantId", direction,
@@ -200,6 +203,7 @@ export class CommunicationCallService {
         target_type as "targetType",
         target_branch_id as "targetBranchId",
         target_employee_id as "targetEmployeeId",
+        target_device_id as "targetDeviceId",
         answered_device_id as "answeredDeviceId",
         answered_operator_id as "answeredOperatorId",
         status, media_session_id as "mediaSessionId",
@@ -220,6 +224,8 @@ export class CommunicationCallService {
         targetType,
         targetBranchId || null,
         targetEmployeeId || null,
+        targetDeviceId || null,
+        targetType === 'SOC_QUEUE' ? 'default' : null,
       ]
     );
 
@@ -279,6 +285,14 @@ export class CommunicationCallService {
       };
     }
 
+    const invited = await this.pool.query(
+      `SELECT 1 FROM communication_call_participants
+       WHERE call_id = $1 AND tenant_id = $2 AND connection_status IN ('INVITED', 'RINGING')
+         AND (device_id = $3 OR operator_id = $4) LIMIT 1`,
+      [callId, tenantId, deviceId || null, operatorId || null]
+    );
+    if (!invited.rowCount) return { success: false, reason: 'NOT_INVITED' };
+
     // Attempt first-answer-wins lock
     const lockResult = await this.stateMachine.attemptFirstAnswerWins(
       callId,
@@ -315,7 +329,7 @@ export class CommunicationCallService {
       SET
         answered_device_id = $1,
         answered_operator_id = $2,
-        media_session_id = $3,
+        media_session_id = COALESCE(media_session_id, $3),
         answered_at = NOW()
       WHERE id = $4 AND tenant_id = $5`,
       [deviceId || null, operatorId || null, mediaSessionId || null, callId, tenantId]
@@ -511,6 +525,7 @@ export class CommunicationCallService {
         target_type as "targetType",
         target_branch_id as "targetBranchId",
         target_employee_id as "targetEmployeeId",
+        target_device_id as "targetDeviceId",
         answered_device_id as "answeredDeviceId",
         answered_operator_id as "answeredOperatorId",
         status, media_session_id as "mediaSessionId",
@@ -546,6 +561,7 @@ export class CommunicationCallService {
         target_type as "targetType",
         target_branch_id as "targetBranchId",
         target_employee_id as "targetEmployeeId",
+        target_device_id as "targetDeviceId",
         answered_device_id as "answeredDeviceId",
         answered_operator_id as "answeredOperatorId",
         status, media_session_id as "mediaSessionId",
@@ -581,7 +597,8 @@ export class CommunicationCallService {
     tenantId: string,
     targetType: CallTargetType,
     targetBranchId?: string,
-    targetEmployeeId?: string
+    targetEmployeeId?: string,
+    targetDeviceId?: string
   ): Promise<string[]> {
     if (targetType === 'BRANCH' && targetBranchId) {
       // Get all online devices for branch
@@ -589,14 +606,20 @@ export class CommunicationCallService {
     }
 
     if (targetType === 'EMPLOYEE' && targetEmployeeId) {
-      // A VMS user can be reached both on linked employee devices and on the
-      // authenticated VMS workspace.  This makes operator-to-operator calls
-      // real calls instead of silently requiring a separate mobile device.
-      const deviceIds = await this.presenceService.getOnlineEmployeeDevices(tenantId, targetEmployeeId);
+      // VMS employee calls use the employee's logged-in VMS session.
       const operatorPresence = await this.presenceService.getOperatorPresence(tenantId, targetEmployeeId);
-      return operatorPresence.status === 'ONLINE'
-        ? [...new Set([...deviceIds, targetEmployeeId])]
-        : deviceIds;
+      return operatorPresence.status === 'ONLINE' ? [targetEmployeeId] : [];
+    }
+
+    if (targetType === 'DEVICE' && targetDeviceId) {
+      const device = await this.pool.query(
+        `SELECT 1 FROM communication_devices
+         WHERE id = $1 AND tenant_id = $2 AND status IN ('ACTIVE', 'OFFLINE') AND revoked_at IS NULL`,
+        [targetDeviceId, tenantId]
+      );
+      if (!device.rowCount) return [];
+      const presence = await this.presenceService.getDevicePresence(tenantId, targetDeviceId);
+      return presence?.status === 'ONLINE' ? [targetDeviceId] : [];
     }
 
     if (targetType === 'SOC_QUEUE') {

@@ -34,6 +34,18 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    if (body.action === "resolve") {
+      const code = typeof body.enrollmentCode === "string" ? body.enrollmentCode.trim() : "";
+      if (!code) return NextResponse.json({ success: false, error: "enrollment_code_required" }, { status: 400 });
+      const lookup = await fetch(controlPlaneUrl("/v1/communications/enrollment-codes/resolve"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code }),
+        cache: "no-store",
+      });
+      const payload = await lookup.json();
+      return NextResponse.json(lookup.ok ? { success: true, ...payload } : { success: false, error: payload.error || "invalid_enrollment_code" }, { status: lookup.status });
+    }
     const enrollmentCode = typeof body.enrollmentCode === "string" ? body.enrollmentCode.trim() : "";
     const deviceName = typeof body.deviceName === "string" ? body.deviceName.trim() : "";
     const publicKey = typeof body.publicKey === "string" ? body.publicKey : "";
@@ -54,7 +66,9 @@ export async function POST(request: NextRequest) {
         deviceUuid,
         linkedEmployeeIds: Array.isArray(body.linkedEmployeeIds)
           ? body.linkedEmployeeIds
-          : body.mode === "EMPLOYEE_SPECIFIC" && typeof body.employeeId === "string" ? [body.employeeId] : [],
+          : [],
+        assignedEmployeeCode: body.mode === "EMPLOYEE_SPECIFIC" && typeof body.employeeId === "string" ? body.employeeId.trim() : undefined,
+        assignedEmployeeName: body.mode === "EMPLOYEE_SPECIFIC" && typeof body.employeeName === "string" ? body.employeeName.trim() : undefined,
       }),
       cache: "no-store",
     });

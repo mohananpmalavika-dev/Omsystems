@@ -17,6 +17,7 @@ import type {
   EmployeeContact, 
   CommunicationEmployee,
   CallSession,
+  DirectMessage,
   WebRTCCredentials,
   CommunicationPresence,
   CommunicationCallStatus 
@@ -145,6 +146,8 @@ export default function CommunicationsCallsPage() {
   const [callDuration, setCallDuration] = useState(0);
   const [callHistory, setCallHistory] = useState<CallSession[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [directMessages, setDirectMessages] = useState<DirectMessage[]>([]);
+  const [directMessageText, setDirectMessageText] = useState('');
   
   // Hooks
   const signaling = useCommunicationSignaling();
@@ -214,6 +217,36 @@ export default function CommunicationsCallsPage() {
   useEffect(() => {
     void loadDirectory();
   }, [loadDirectory]);
+
+  const loadDirectMessages = useCallback(async () => {
+    try { setDirectMessages(await communicationAPI.getDirectMessages()); }
+    catch (cause) { console.warn('[Communications] Messages unavailable', cause); }
+  }, []);
+
+  useEffect(() => {
+    void loadDirectMessages();
+    const timer = window.setInterval(() => void loadDirectMessages(), 15_000);
+    const unsubscribe = signaling.onMessageCreated(() => void loadDirectMessages());
+    return () => { window.clearInterval(timer); unsubscribe(); };
+  }, [loadDirectMessages, signaling]);
+
+  const handleSendDirectMessage = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedContact || !directMessageText.trim()) return;
+    const target = selectedContact.type === 'BRANCH'
+      ? { type: 'BRANCH' as const, id: selectedContact.branch.branchId }
+      : selectedContact.type === 'INTERNAL_USER'
+        ? { type: 'OPERATOR' as const, id: selectedContact.user.employeeId }
+        : { type: 'DEVICE' as const, id: selectedContact.employee.deviceId };
+    if (!target.id) { setError('Select a registered device to message'); return; }
+    try {
+      await communicationAPI.sendDirectMessage(target.type, target.id, directMessageText.trim());
+      setDirectMessageText('');
+      await loadDirectMessages();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Message could not be sent');
+    }
+  };
   
   // ============================================================================
   // LOAD CALL HISTORY
@@ -440,7 +473,7 @@ export default function CommunicationsCallsPage() {
   }, [webrtc, signaling]);
   
   const handleCallEmployee = useCallback(async (
-    target: { employeeId: string; employeeName?: string; branchName?: string; role?: string; employeeRole?: string }, 
+    target: { employeeId: string; deviceId?: string; employeeName?: string; branchName?: string; role?: string; employeeRole?: string },
     modality: CallModality = 'audio'
   ) => {
     try {
@@ -451,7 +484,9 @@ export default function CommunicationsCallsPage() {
       });
       if (!stream) return;
       
-      const started = await communicationAPI.callEmployee(target.employeeId, 'VMS operator calling');
+      const started = target.deviceId
+        ? await communicationAPI.callRegisteredDevice(target.deviceId)
+        : await communicationAPI.callEmployee(target.employeeId, 'VMS operator calling');
       await signaling.joinCall(started.call.id);
       const session = started.call;
       const enhancedSession: CallSession = {
@@ -1081,6 +1116,25 @@ export default function CommunicationsCallsPage() {
                   <p>Choose an internal VMS operator or branch to initiate calls</p>
                 </div>
               )}
+              <section style={{ margin: '16px', padding: '16px', border: '1px solid #334155', borderRadius: '16px', background: '#0f172a', color: '#fff' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}><MessageSquare size={16} /> Messages</h3>
+                <div style={{ maxHeight: '180px', overflowY: 'auto', margin: '12px 0', display: 'grid', gap: '8px' }} aria-live="polite">
+                  {directMessages.length === 0 ? <p style={{ color: '#94a3b8', fontSize: '12px' }}>No messages yet.</p> :
+                    directMessages.slice(-20).map((message) => (
+                      <div key={message.id} style={{ background: '#1e293b', padding: '8px 10px', borderRadius: '8px', fontSize: '12px' }}>
+                        <div style={{ color: '#94a3b8' }}>{message.senderId === currentUserId ? 'You' : message.senderName || message.senderType} · {new Date(message.createdAt).toLocaleString()}</div>
+                        <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{message.body}</div>
+                      </div>
+                    ))}
+                </div>
+                <form onSubmit={handleSendDirectMessage} style={{ display: 'flex', gap: '8px' }}>
+                  <input value={directMessageText} onChange={(event) => setDirectMessageText(event.target.value)} maxLength={4000}
+                    placeholder={selectedContact ? 'Write a message to the selected contact' : 'Select a contact or branch to message'}
+                    style={{ minWidth: 0, flex: 1, padding: '9px', borderRadius: '8px', border: '1px solid #475569', background: '#020617', color: '#fff' }} />
+                  <button type="submit" disabled={!selectedContact || !directMessageText.trim()}
+                    style={{ padding: '9px 14px', borderRadius: '8px', background: '#2563eb', color: '#fff', opacity: !selectedContact || !directMessageText.trim() ? 0.5 : 1 }}>Send</button>
+                </form>
+              </section>
             </main>
           </>
         ) : (

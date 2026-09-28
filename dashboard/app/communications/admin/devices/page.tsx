@@ -11,7 +11,6 @@ import React, { useState, useEffect } from 'react';
 import { 
   Smartphone, 
   Plus, 
-  Copy, 
   Trash2, 
   RefreshCw, 
   Clock, 
@@ -19,6 +18,7 @@ import {
   XCircle,
   Settings,
   Users,
+  User,
   Building2,
   AlertCircle,
   Link as LinkIcon,
@@ -34,6 +34,7 @@ import type {
 
 interface EnrollmentCodeForm {
   branchId: string;
+  allowedDeviceType: 'BRANCH_SHARED' | 'EMPLOYEE_MOBILE';
   expiresInHours: number;
   note: string;
 }
@@ -50,6 +51,7 @@ export default function DeviceManagementPage() {
   // UI State
   const [activeTab, setActiveTab] = useState<'codes' | 'devices'>('codes');
   const [showCodeForm, setShowCodeForm] = useState(false);
+  const [newCode, setNewCode] = useState<string | null>(null);
   const [showLinkEmployeeModal, setShowLinkEmployeeModal] = useState(false);
   const [selectedDevice, setSelectedDevice] = useState<CommunicationDevice | null>(null);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
@@ -57,6 +59,7 @@ export default function DeviceManagementPage() {
   // Form State
   const [codeForm, setCodeForm] = useState<EnrollmentCodeForm>({
     branchId: '',
+    allowedDeviceType: 'BRANCH_SHARED',
     expiresInHours: 24,
     note: '',
   });
@@ -93,14 +96,16 @@ export default function DeviceManagementPage() {
   const handleGenerateCode = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await communicationAPI.generateEnrollmentCode({
+      const issued = await communicationAPI.generateEnrollmentCode({
         branchId: codeForm.branchId,
+        allowedDeviceType: codeForm.allowedDeviceType,
         expiresInHours: codeForm.expiresInHours,
         note: codeForm.note || undefined,
       });
 
       setShowCodeForm(false);
-      setCodeForm({ branchId: '', expiresInHours: 24, note: '' });
+      setCodeForm({ branchId: '', allowedDeviceType: 'BRANCH_SHARED', expiresInHours: 24, note: '' });
+      setNewCode(issued.code);
       await loadData();
     } catch (err: any) {
       alert('Failed to generate code: ' + err.message);
@@ -164,7 +169,7 @@ export default function DeviceManagementPage() {
 
   // Calculate stats
   const onlineDeviceCount = devices.filter(d => 
-    d.lastSeenAt && new Date(d.lastSeenAt) > new Date(Date.now() - 120000)
+    d.status === 'ACTIVE' && d.lastSeenAt && new Date(d.lastSeenAt) > new Date(Date.now() - 120000)
   ).length;
   const activeCodeCount = enrollmentCodes.filter(c => c.status === 'active').length;
 
@@ -246,6 +251,16 @@ export default function DeviceManagementPage() {
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
             <div className="text-red-800">{error}</div>
+          </div>
+        )}
+        {newCode && (
+          <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+            <p className="font-semibold">New enrollment code — copy it now. It will not be shown again.</p>
+            <div className="mt-2 flex items-center gap-3">
+              <code className="rounded bg-white px-3 py-2 font-mono text-lg">{newCode}</code>
+              <button type="button" onClick={() => copyToClipboard(newCode)} className="rounded bg-blue-600 px-3 py-2 font-medium text-white">Copy</button>
+              <button type="button" onClick={() => setNewCode(null)} className="rounded px-3 py-2 text-blue-700">Dismiss</button>
+            </div>
           </div>
         )}
 
@@ -337,6 +352,15 @@ export default function DeviceManagementPage() {
                         </div>
                       </div>
                       <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Device represents</label>
+                        <select value={codeForm.allowedDeviceType}
+                          onChange={(e) => setCodeForm({ ...codeForm, allowedDeviceType: e.target.value as EnrollmentCodeForm['allowedDeviceType'] })}
+                          className="w-full rounded-lg border border-gray-300 px-3 py-2">
+                          <option value="BRANCH_SHARED">A branch</option>
+                          <option value="EMPLOYEE_MOBILE">An employee without VMS login</option>
+                        </select>
+                      </div>
+                      <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Note (optional)
                         </label>
@@ -388,9 +412,7 @@ export default function DeviceManagementPage() {
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <div className="flex items-center gap-3 mb-2">
-                                <code className="text-lg font-mono font-semibold bg-gray-100 px-3 py-1 rounded">
-                                  {code.code}
-                                </code>
+                                <span className="text-sm font-semibold text-gray-900">Enrollment code</span>
                                 <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                                   code.status === 'active' && !isExpired
                                     ? 'bg-green-100 text-green-800'
@@ -418,13 +440,6 @@ export default function DeviceManagementPage() {
                               )}
                             </div>
                             <div className="flex items-center gap-2 ml-4">
-                              <button
-                                onClick={() => copyToClipboard(code.code)}
-                                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                                title="Copy code"
-                              >
-                                <Copy className="w-4 h-4 text-gray-600" />
-                              </button>
                               {code.status === 'active' && !isExpired && (
                                 <button
                                   onClick={() => handleRevokeCode(code.codeId)}
@@ -512,6 +527,12 @@ export default function DeviceManagementPage() {
                                       <span>{linkedEmployees.map(e => e.employeeName).join(', ')}</span>
                                     </div>
                                   )}
+                                  {device.assignedEmployeeCode && (
+                                    <div className="flex items-center gap-2">
+                                      <User className="w-4 h-4" />
+                                      <span>{device.assignedEmployeeName} ({device.assignedEmployeeCode})</span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -527,7 +548,7 @@ export default function DeviceManagementPage() {
                                   Approve
                                 </button>
                               )}
-                              <button
+                              {!device.assignedEmployeeCode && <button
                                 onClick={() => {
                                   setSelectedDevice(device);
                                   setShowLinkEmployeeModal(true);
@@ -536,7 +557,7 @@ export default function DeviceManagementPage() {
                               >
                                 <LinkIcon className="w-3.5 h-3.5" />
                                 Link
-                              </button>
+                              </button>}
                               <button
                                 onClick={() => handleRevokeDevice(device.deviceId)}
                                 className="p-2 hover:bg-red-50 rounded-lg transition-colors"

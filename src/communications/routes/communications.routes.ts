@@ -25,6 +25,7 @@ import type { RedisClientType } from 'redis';
 import type { Logger } from 'pino';
 import type { ControlPlaneStore } from '../../control-plane-store.js';
 import { redisModule } from '../../bootstrap/redis.module.js';
+import { REDIS_KEYS } from '../domain/constants.js';
 
 // Import all services
 import { DeviceEnrollmentService } from '../services/device-enrollment.service.js';
@@ -66,6 +67,8 @@ const enrollDeviceSchema = z.object({
   publicKey: z.string().min(100),
   deviceUuid: z.string().min(1).max(64),
   linkedEmployeeIds: z.array(z.string().uuid()).optional(),
+  assignedEmployeeCode: z.string().trim().min(1).max(100).optional(),
+  assignedEmployeeName: z.string().trim().min(2).max(160).optional(),
   deviceCapabilities: z.object({
     microphone: z.boolean().optional(),
     speaker: z.boolean().optional(),
@@ -124,6 +127,12 @@ const sendMessageSchema = z.object({
   messageType: z.enum(['TEXT', 'IMAGE', 'VOICE_NOTE', 'SYSTEM']).default('TEXT'),
 });
 
+const directMessageSchema = z.object({
+  recipientType: z.enum(['OPERATOR', 'DEVICE', 'BRANCH']),
+  recipientId: z.string().uuid(),
+  body: z.string().trim().min(1).max(4000),
+});
+
 // ============================================================================
 // INTERFACES
 // ============================================================================
@@ -141,7 +150,7 @@ interface RouteContext {
   callStateMachine: CallStateMachineService;
   callService: CommunicationCallService;
   messagingService: CommunicationMessagingService;
-  signalingGateway: CommunicationSignalingGateway;
+  signalingGateway: LazySignalingGateway;
   mediaProvider: VoiceMediaProvider;
 }
 
@@ -182,12 +191,14 @@ async function authenticateDevice(
   try {
     const deviceContext = await ctx.credentialService.verifyDeviceCredential(credential);
     
-    if (!deviceContext) {
+    if (!deviceContext.valid || !deviceContext.deviceId || !deviceContext.tenantId || !deviceContext.branchId) {
       await reply.code(401).send({ error: 'invalid_or_revoked_device' });
       return false;
     }
     
-    request.deviceContext = deviceContext;
+    request.deviceContext = {
+      deviceId: deviceContext.deviceId!, tenantId: deviceContext.tenantId!, branchId: deviceContext.branchId!,
+    };
     return true;
   } catch (error) {
     ctx.logger.error({ error }, 'Device authentication failed');
@@ -228,6 +239,17 @@ async function requirePermission(
     );
     branchId = employee.rows[0]?.branch_id;
   }
+  if (!branchId && typeof params.employeeId === 'string') {
+    const employee = await ctx.pool.query<{ branch_id: string }>(
+      'SELECT branch_id FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true LIMIT 1',
+      [params.employeeId, user.tenantId]
+    );
+    branchId = employee.rows[0]?.branch_id;
+    if (!branchId && employee.rowCount) {
+      const accessible = await ctx.store.listAccessibleNodes(request.currentUser, action, 'branch');
+      branchId = accessible.find((node) => node.tenantId === user.tenantId)?.id;
+    }
+  }
   const deviceId = typeof params.deviceId === 'string' ? params.deviceId : typeof params.id === 'string' ? params.id : undefined;
   if (!branchId && deviceId) {
     branchId = (await ctx.enrollmentService.getDevice(deviceId))?.branchId;
@@ -265,6 +287,10 @@ class LazySignalingGateway {
     } catch {
       return null;
     }
+  }
+
+  disconnectDevice(tenantId: string, deviceId: string): void {
+    this.getGateway()?.disconnectDevice(tenantId, deviceId);
   }
 
   private async ringingParticipants(callId: string): Promise<{ devices: string[]; operators: string[] }> {
@@ -307,20 +333,37 @@ class LazySignalingGateway {
     this.getGateway()?.broadcastCallEnd(tenantId, callId, typeof data === 'string' ? data : data.endReason || 'NORMAL');
   }
 
-  broadcastMessageCreated(tenantId: string, conversationId: string, message: any): void {
-    this.getGateway()?.broadcastMessageCreated(tenantId, conversationId, message);
+  async broadcastMessageCreated(tenantId: string, conversationId: string, message: any): Promise<void> {
+    const members = await this.pool.query(
+      `SELECT device_id::text, operator_id::text FROM communication_conversation_members
+       WHERE tenant_id = $1 AND conversation_id = $2 AND left_at IS NULL`,
+      [tenantId, conversationId]
+    );
+    this.getGateway()?.broadcastMessageCreated(
+      tenantId, conversationId, message,
+      members.rows.map((row: any) => row.device_id).filter(Boolean),
+      members.rows.map((row: any) => row.operator_id).filter(Boolean)
+    );
   }
 
   broadcastMessageDelivered(tenantId: string, conversationId: string, data: any): void {
-    this.getGateway()?.broadcastMessageDelivered(tenantId, conversationId, data);
+    this.getGateway()?.broadcastMessageDelivered(tenantId, conversationId, data.messageId, data.deliveredBy);
   }
 
   broadcastMessageRead(tenantId: string, conversationId: string, data: any): void {
-    this.getGateway()?.broadcastMessageRead(tenantId, conversationId, data);
+    this.getGateway()?.broadcastMessageRead(tenantId, conversationId, data.messageId, data.readBy);
   }
 
   broadcastPresenceChanged(tenantId: string, presence: any): void {
-    this.getGateway()?.broadcastPresenceChanged(tenantId, presence);
+    this.getGateway()?.broadcastPresenceChanged(tenantId, presence.entityType, presence.entityId, presence.status);
+  }
+
+  broadcastDeviceOnline(tenantId: string, _branchId: string, deviceId: string): void {
+    this.getGateway()?.broadcastDeviceOnline(tenantId, deviceId);
+  }
+
+  broadcastDirectMessage(tenantId: string, recipientType: 'OPERATOR' | 'DEVICE' | 'BRANCH', recipientIds: string[], message: Record<string, unknown>): void {
+    this.getGateway()?.broadcastDirectMessage(tenantId, recipientType, recipientIds, message);
   }
 }
 
@@ -395,10 +438,10 @@ export async function registerCommunicationsRoutes(
     pool,
     presenceService
   );
-  const messagingService = new CommunicationMessagingService(pool, redis);
+  const messagingService = new CommunicationMessagingService(pool, redis, presenceService);
   
   // Initialize WebSocket signaling gateway (lazy so it connects when Socket.IO attaches to app)
-  const signalingGateway = new LazySignalingGateway(() => app, pool) as unknown as CommunicationSignalingGateway;
+  const signalingGateway = new LazySignalingGateway(() => app, pool);
   
   // Initialize WebRTC media provider
   const mediaProvider = createVoiceMediaProvider({
@@ -428,14 +471,16 @@ export async function registerCommunicationsRoutes(
   const startDeviceTargetCall = async (
     request: AuthenticatedRequest,
     reply: FastifyReply,
-    targetType: 'BRANCH' | 'EMPLOYEE'
+    targetType: 'BRANCH' | 'EMPLOYEE' | 'DEVICE'
   ) => {
     if (!(await authenticateDevice(request, reply, ctx))) return null;
 
     const body = deviceTargetCallSchema.parse(request.body);
     const targetId = targetType === 'BRANCH'
       ? (request.params as { branchId: string }).branchId
-      : (request.params as { employeeId: string }).employeeId;
+      : targetType === 'DEVICE'
+        ? (request.params as { deviceId: string }).deviceId
+        : (request.params as { employeeId: string }).employeeId;
     const device = request.deviceContext!;
     let callerName = 'Branch device';
 
@@ -457,7 +502,7 @@ export async function registerCommunicationsRoutes(
       callerName = actor.rows[0].name;
     } else {
       const deviceName = await ctx.pool.query(
-        'SELECT device_name FROM communication_devices WHERE id = $1 AND tenant_id = $2 LIMIT 1',
+        'SELECT COALESCE(assigned_employee_name, device_name) AS device_name FROM communication_devices WHERE id = $1 AND tenant_id = $2 LIMIT 1',
         [device.deviceId, device.tenantId]
       );
       callerName = deviceName.rows[0]?.device_name || callerName;
@@ -473,13 +518,23 @@ export async function registerCommunicationsRoutes(
         await reply.code(404).send({ error: 'branch_not_found' });
         return null;
       }
-    } else {
+    } else if (targetType === 'EMPLOYEE') {
       const employee = await ctx.pool.query(
         `SELECT 1 FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true LIMIT 1`,
         [targetId, device.tenantId]
       );
       if (!employee.rowCount) {
         await reply.code(404).send({ error: 'employee_not_found' });
+        return null;
+      }
+    } else {
+      const targetDevice = await ctx.pool.query(
+        `SELECT 1 FROM communication_devices
+         WHERE id = $1 AND tenant_id = $2 AND status IN ('ACTIVE', 'OFFLINE') AND revoked_at IS NULL LIMIT 1`,
+        [targetId, device.tenantId]
+      );
+      if (!targetDevice.rowCount) {
+        await reply.code(404).send({ error: 'device_not_found' });
         return null;
       }
     }
@@ -493,6 +548,7 @@ export async function registerCommunicationsRoutes(
       targetType,
       targetBranchId: targetType === 'BRANCH' ? targetId : undefined,
       targetEmployeeId: targetType === 'EMPLOYEE' ? targetId : undefined,
+      targetDeviceId: targetType === 'DEVICE' ? targetId : undefined,
       tenantId: device.tenantId,
       initiatedBy: body.actorEmployeeId || device.deviceId,
     });
@@ -552,6 +608,20 @@ export async function registerCommunicationsRoutes(
   // ===========================================================================
   // 1. ENROLLMENT & DEVICE MANAGEMENT ROUTES
   // ===========================================================================
+
+  app.post('/v1/communications/enrollment-codes/resolve', { config: { noAuth: true } }, async (request, reply) => {
+    const parsed = z.object({ code: z.string().trim().min(1) }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_request' });
+    const validation = await ctx.enrollmentService.validateEnrollmentCode(parsed.data.code);
+    if (!validation.valid || !validation.branchId) {
+      return reply.code(404).send({ error: validation.reason || 'ENROLLMENT_CODE_NOT_FOUND' });
+    }
+    const branch = await store.getNode(validation.branchId);
+    if (!branch || branch.tenantId !== validation.tenantId) {
+      return reply.code(404).send({ error: 'branch_not_found' });
+    }
+    return reply.send({ branchId: branch.id, branchName: branch.name, allowedDeviceType: validation.allowedDeviceType });
+  });
   
   /**
    * Generate enrollment code (Admin)
@@ -601,21 +671,24 @@ export async function registerCommunicationsRoutes(
   /** List enrollment codes for the current tenant; code values are never exposed cross-tenant. */
   app.get('/v1/communications/enrollment-codes', async (request: AuthenticatedRequest, reply) => {
     try {
+      const accessible = await store.listAccessibleNodes(request.currentUser, 'device:configure', 'branch');
+      const branchIds = accessible.filter((node) => node.tenantId === request.currentUser.tenantId).map((node) => node.id);
+      if (!branchIds.length) return reply.send({ data: [] });
       const result = await ctx.pool.query(
-        `SELECT id::text, tenant_id::text, branch_id::text, code, expires_at, created_at,
+        `SELECT id::text, tenant_id::text, branch_id::text, expires_at, created_at,
                 consumed_at, revoked_at, uses_count, max_uses
          FROM communication_enrollment_codes
-         WHERE tenant_id = $1
+         WHERE tenant_id = $1 AND branch_id = ANY($2::uuid[])
          ORDER BY created_at DESC
          LIMIT 100`,
-        [request.currentUser.tenantId]
+        [request.currentUser.tenantId, branchIds]
       );
       return reply.send({
         data: result.rows.map((code: any) => ({
           codeId: code.id,
           tenantId: code.tenant_id,
           branchId: code.branch_id,
-          code: code.code,
+          code: '',
           status: code.revoked_at ? 'revoked'
             : new Date(code.expires_at).getTime() <= Date.now() ? 'expired'
             : code.max_uses > 0 && code.uses_count >= code.max_uses ? 'used'
@@ -636,6 +709,15 @@ export async function registerCommunicationsRoutes(
   app.delete('/v1/communications/enrollment-codes/:codeId', async (request: AuthenticatedRequest, reply) => {
     try {
       const { codeId } = request.params as { codeId: string };
+      const existing = await ctx.pool.query<{ branch_id: string }>(
+        'SELECT branch_id::text FROM communication_enrollment_codes WHERE id = $1 AND tenant_id = $2 LIMIT 1',
+        [codeId, request.currentUser.tenantId]
+      );
+      if (!existing.rowCount) return reply.code(404).send({ error: 'enrollment_code_not_found' });
+      const user = await store.getUser(request.currentUser.id);
+      if (!user || !(await store.checkAccess(user, 'device:configure', existing.rows[0]!.branch_id))?.allowed) {
+        return reply.code(403).send({ error: 'forbidden' });
+      }
       const result = await ctx.pool.query(
         `UPDATE communication_enrollment_codes
          SET revoked_at = NOW()
@@ -673,40 +755,40 @@ export async function registerCommunicationsRoutes(
         linkedEmployeeIds: body.linkedEmployeeIds ?? [],
       };
       
-      const result = await ctx.enrollmentService.enrollDevice(input);
+      const device = await ctx.enrollmentService.enrollDevice(input);
       
       // Generate device tokens
-      const tokens = await ctx.credentialService.createDeviceTokens(result.device);
+      const tokens = await ctx.credentialService.createDeviceTokens(device);
       
       // Audit event
       await store.writeAudit({
-        tenantId: result.device.tenantId,
+        tenantId: device.tenantId,
         actorUserId: null,
         action: 'COMM_DEVICE_ENROLLED',
-        resourceNodeId: result.device.branchId,
+        resourceNodeId: device.branchId,
         outcome: 'success',
         sourceIp: request.ip,
         details: {
-          deviceId: result.device.id,
-          deviceType: result.device.deviceType,
-          platform: result.device.platform,
+          deviceId: device.id,
+          deviceType: device.deviceType,
+          platform: device.platform,
         },
       });
-      const branch = await store.getNode(result.device.branchId);
+      const branch = await store.getNode(device.branchId);
       
       return reply.code(201).send({
         device: {
-          id: result.device.id,
-          deviceUuid: result.device.deviceUuid,
-          deviceName: result.device.deviceName,
-          branchId: result.device.branchId,
+          id: device.id,
+          deviceUuid: device.deviceUuid,
+          deviceName: device.deviceName,
+          branchId: device.branchId,
           branchName: branch?.name || '',
-          tenantId: result.device.tenantId,
-          status: result.device.status,
+          tenantId: device.tenantId,
+          status: device.status,
         },
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
-        expiresIn: tokens.expiresIn,
+        expiresIn: 3600,
       });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
@@ -725,7 +807,8 @@ export async function registerCommunicationsRoutes(
       const { refreshToken } = deviceRefreshSchema.parse(request.body);
       const tokens = await ctx.credentialService.refreshDeviceTokens(refreshToken);
       if (!tokens) return reply.code(401).send({ error: 'invalid_device_refresh_token' });
-      return reply.send(tokens);
+      const device = await ctx.enrollmentService.getDevice(tokens.deviceId);
+      return reply.send({ ...tokens, status: device?.status });
     } catch (error) {
       if (error instanceof z.ZodError) return reply.code(400).send({ error: 'invalid_request' });
       ctx.logger.error({ error }, 'Failed to refresh device credentials');
@@ -740,16 +823,20 @@ export async function registerCommunicationsRoutes(
   app.get('/v1/communications/devices', async (request: AuthenticatedRequest, reply) => {
     try {
       const { branchId, status } = request.query as { branchId?: string; status?: string };
+      const accessible = await store.listAccessibleNodes(request.currentUser, 'device:configure', 'branch');
+      const branchIds = accessible.filter((node) => node.tenantId === request.currentUser.tenantId).map((node) => node.id);
+      if (!branchIds.length) return { data: [] };
       
       let query = `
         SELECT d.id, d.tenant_id, d.branch_id, d.device_name, d.device_uuid, d.device_type, d.platform,
           d.status, d.app_version, d.last_seen_at, d.registered_at, d.approved_at,
+          d.assigned_employee_code, d.assigned_employee_name,
           ARRAY(SELECT employee_id::text FROM communication_device_employees e
                 WHERE e.device_id = d.id AND e.unlinked_at IS NULL) AS linked_employee_ids
         FROM communication_devices d
-        WHERE d.tenant_id = $1 AND d.status != 'REVOKED'
+        WHERE d.tenant_id = $1 AND d.branch_id = ANY($2::uuid[]) AND d.status != 'REVOKED'
       `;
-      const params: any[] = [request.currentUser.tenantId];
+      const params: any[] = [request.currentUser.tenantId, branchIds];
       
       if (branchId) {
         params.push(branchId);
@@ -778,6 +865,8 @@ export async function registerCommunicationsRoutes(
           appVersion: row.app_version,
           lastSeenAt: row.last_seen_at,
           linkedEmployeeIds: row.linked_employee_ids || [],
+          assignedEmployeeCode: row.assigned_employee_code,
+          assignedEmployeeName: row.assigned_employee_name,
           enrolledAt: row.registered_at,
           approvedAt: row.approved_at,
         })),
@@ -908,6 +997,8 @@ export async function registerCommunicationsRoutes(
       
       // Revoke device credentials
       await ctx.credentialService.revokeDeviceCredential(id);
+      await ctx.redis.del(REDIS_KEYS.DEVICE_PRESENCE(existing.tenantId, id));
+      ctx.signalingGateway.disconnectDevice(existing.tenantId, id);
       
       await store.writeAudit({
         tenantId: request.currentUser.tenantId,
@@ -1022,7 +1113,25 @@ export async function registerCommunicationsRoutes(
    * Device heartbeat (Device)
    * POST /v1/communications/devices/:id/heartbeat
    */
-  app.post('/v1/communications/devices/:id/heartbeat', async (request: AuthenticatedRequest, reply) => {
+  app.post('/v1/communications/device-logout', { config: { noAuth: true } }, async (request: AuthenticatedRequest, reply) => {
+    if (!(await authenticateDevice(request, reply, ctx))) return;
+    const { deviceId, tenantId } = request.deviceContext!;
+    const device = await ctx.enrollmentService.getDevice(deviceId);
+    if (!device || device.tenantId !== tenantId) return reply.code(404).send({ error: 'device_not_found' });
+    await ctx.pool.query(
+      `UPDATE communication_devices SET status = 'REVOKED', revoked_at = NOW(),
+       revoke_reason = 'Device logout', updated_at = NOW()
+       WHERE id = $1 AND tenant_id = $2`, [deviceId, tenantId]
+    );
+    await ctx.credentialService.revokeDeviceCredential(deviceId);
+    await ctx.redis.del(REDIS_KEYS.DEVICE_PRESENCE(tenantId, deviceId));
+    ctx.signalingGateway.disconnectDevice(tenantId, deviceId);
+    await store.writeAudit({ tenantId, actorUserId: null, action: 'COMM_DEVICE_LOGGED_OUT',
+      resourceNodeId: device.branchId, outcome: 'success', sourceIp: request.ip, details: { deviceId } });
+    return reply.code(204).send();
+  });
+
+  app.post('/v1/communications/devices/:id/heartbeat', { config: { noAuth: true } }, async (request: AuthenticatedRequest, reply) => {
     try {
       const { id } = request.params as { id: string };
       
@@ -1039,12 +1148,13 @@ export async function registerCommunicationsRoutes(
       const body = heartbeatSchema.parse(request.body);
       
       // Record heartbeat
-      await ctx.presenceService.recordDeviceHeartbeat(
-        id,
-        request.deviceContext!.tenantId,
-        body.appVersion,
-        body.capabilities
-      );
+      await ctx.presenceService.recordDeviceHeartbeat({
+        deviceId: id,
+        tenantId: request.deviceContext!.tenantId,
+        branchId: request.deviceContext!.branchId,
+        appVersion: body.appVersion,
+        metadata: body.capabilities,
+      });
       
       // Broadcast presence changed
       await ctx.signalingGateway.broadcastDeviceOnline(
@@ -1094,17 +1204,19 @@ export async function registerCommunicationsRoutes(
       const [enrolledRes, vmsUsersRes] = await Promise.all([
         ctx.pool.query(
           `SELECT DISTINCT
-             u.id::text        AS employee_id,
-             COALESCE(u.full_name, u.display_name, u.username) AS employee_name,
-             u.username,
+             d.id::text AS device_id,
+             COALESCE(d.assigned_employee_code, u.id::text) AS employee_id,
+             COALESCE(d.assigned_employee_name, u.full_name, u.display_name, u.username) AS employee_name,
              u.role,
              d.branch_id::text AS branch_id
            FROM communication_devices d
-           JOIN communication_device_employees e ON e.device_id = d.id AND e.unlinked_at IS NULL
-           JOIN users u ON u.id = e.employee_id
+           LEFT JOIN communication_device_employees e ON e.device_id = d.id AND e.unlinked_at IS NULL
+           LEFT JOIN users u ON u.id = e.employee_id AND u.is_active = true
            WHERE d.tenant_id = $1
              AND d.branch_id = ANY($2::uuid[])
-             AND d.status IN ('ACTIVE', 'APPROVED')
+             AND d.device_type IN ('EMPLOYEE_MOBILE', 'EMPLOYEE_DESKTOP')
+             AND d.status IN ('ACTIVE', 'OFFLINE') AND d.revoked_at IS NULL
+             AND (d.assigned_employee_name IS NOT NULL OR u.id IS NOT NULL)
            ORDER BY employee_name`,
           [user.tenantId, branchIds]
         ),
@@ -1128,15 +1240,16 @@ export async function registerCommunicationsRoutes(
           enrolledRes.rows
             .filter((emp: any) => emp.branch_id === branch.id)
             .map(async (emp: any) => {
-              const employeePresence = await ctx.presenceService.getEmployeePresence(user.tenantId, emp.employee_id);
+              const devicePresence = await ctx.presenceService.getDevicePresence(user.tenantId, emp.device_id);
               return {
                 employeeId: emp.employee_id,
-                employeeName: emp.employee_name || emp.username,
+                employeeName: emp.employee_name,
+                deviceId: emp.device_id,
                 role: emp.role || 'Staff',
                 branchId: branch.id,
                 branchName: branch.name,
-                presence: employeePresence.status,
-                onlineDeviceCount: employeePresence.onlineDeviceIds.length,
+                presence: devicePresence?.status || 'OFFLINE',
+                onlineDeviceCount: devicePresence?.status === 'ONLINE' ? 1 : 0,
               };
             })
         );
@@ -1177,37 +1290,29 @@ export async function registerCommunicationsRoutes(
    */
   app.get('/v1/communications/directory/employees', async (request: AuthenticatedRequest, reply) => {
     try {
-      let userRows: any[] = [];
-      try {
-        const uRes = await ctx.pool.query(
-          "SELECT id::text, username, role FROM users ORDER BY username ASC"
-        );
-        userRows = uRes.rows;
-      } catch (err) {
-        ctx.logger.warn({ err }, 'Failed to query users');
+      const currentUser = request.currentUser?.id ? await store.getUser(request.currentUser.id) : undefined;
+      if (!currentUser || currentUser.tenantId !== request.currentUser.tenantId) {
+        return reply.code(401).send({ error: 'unauthenticated' });
       }
-
-      let branchRows: any[] = [];
-      try {
-        const bRes = await ctx.pool.query(
-          "SELECT id::text, name FROM resource_nodes WHERE lower(node_type) = 'branch' ORDER BY name ASC"
-        );
-        branchRows = bRes.rows;
-      } catch {
-        // ignore
-      }
-
-      const defaultBranch = branchRows[0] || { id: 'default', name: 'Main Branch' };
-      const employees = userRows.map((u) => ({
-        employeeId: u.id,
-        employeeName: u.username,
-        employeeRole: u.role || 'Operator',
-        branchId: defaultBranch.id,
-        branchName: defaultBranch.name,
-        presence: 'ONLINE' as const,
-      }));
-
-      return { data: employees };
+      const accessible = await store.listAccessibleNodes(request.currentUser, 'device:view', 'branch');
+      const branches = accessible.filter((node) => node.tenantId === currentUser.tenantId);
+      const branchNames = new Map(branches.map((branch) => [branch.id, branch.name]));
+      const users = await ctx.pool.query(
+        `SELECT id::text, COALESCE(full_name, display_name, username) AS name,
+                role, branch_id::text AS branch_id
+         FROM users
+         WHERE tenant_id = $1 AND (branch_id = ANY($2::uuid[]) OR branch_id IS NULL) AND is_active = true
+         ORDER BY name`,
+        [currentUser.tenantId, [...branchNames.keys()]]
+      );
+      return { data: await Promise.all(users.rows.map(async (user: any) => ({
+        employeeId: user.id,
+        employeeName: user.name,
+        employeeRole: user.role || 'Operator',
+        branchId: user.branch_id,
+        branchName: branchNames.get(user.branch_id) || 'Central VMS',
+        presence: (await ctx.presenceService.getOperatorPresence(currentUser.tenantId, user.id)).status,
+      }))) };
     } catch (error) {
       ctx.logger.error({ error }, 'Failed to get employee directory');
       return reply.code(500).send({ error: 'internal_error' });
@@ -1222,37 +1327,29 @@ export async function registerCommunicationsRoutes(
     try {
       const { q } = request.query as { q?: string };
       const query = (q || '').trim().toLowerCase();
-
-      const bRes = await ctx.pool.query(
-        "SELECT id::text, name, code FROM resource_nodes WHERE lower(node_type) = 'branch' ORDER BY name ASC"
+      const currentUser = request.currentUser?.id ? await store.getUser(request.currentUser.id) : undefined;
+      if (!currentUser || currentUser.tenantId !== request.currentUser.tenantId) {
+        return reply.code(401).send({ error: 'unauthenticated' });
+      }
+      const accessible = await store.listAccessibleNodes(request.currentUser, 'device:view', 'branch');
+      const branchIds = accessible.filter((node) => node.tenantId === currentUser.tenantId).map((node) => node.id);
+      if (!branchIds.length) return { data: { branches: [], employees: [] } };
+      const branches = await ctx.pool.query(
+        `SELECT id::text, name, code FROM resource_nodes
+         WHERE tenant_id = $1 AND id = ANY($2::uuid[]) AND lower(node_type) = 'branch'
+         ORDER BY name`, [currentUser.tenantId, branchIds]
       );
-      const uRes = await ctx.pool.query("SELECT id::text, username, role FROM users ORDER BY username ASC");
-
-      const branches = bRes.rows.map((b) => ({
-        branchId: b.id,
-        branchName: b.name,
-        branchCode: b.code || `BR-${b.id.substring(0, 4).toUpperCase()}`,
-        presence: 'ONLINE' as const,
-        onlineDeviceCount: 1,
-        totalDeviceCount: 1,
-        employees: uRes.rows.map((u) => ({
-          employeeId: u.id,
-          employeeName: u.username,
-          role: u.role || 'Operator',
-          branchId: b.id,
-          branchName: b.name,
-          presence: 'ONLINE' as const,
-          onlineDeviceCount: 1,
-        })),
-      }));
-
-      const filtered = branches.filter((b) =>
-        b.branchName.toLowerCase().includes(query) ||
-        (b.branchCode && b.branchCode.toLowerCase().includes(query)) ||
-        b.employees.some((e) => e.employeeName.toLowerCase().includes(query))
+      const users = await ctx.pool.query(
+        `SELECT id::text, COALESCE(full_name, display_name, username) AS name,
+                role, branch_id::text AS branch_id FROM users
+         WHERE tenant_id = $1 AND branch_id = ANY($2::uuid[]) AND is_active = true
+         ORDER BY name`, [currentUser.tenantId, branchIds]
       );
-
-      return { data: filtered };
+      const matchingBranches = branches.rows.filter((branch: any) =>
+        branch.name.toLowerCase().includes(query) || branch.code?.toLowerCase().includes(query)
+      );
+      const matchingUsers = users.rows.filter((user: any) => user.name.toLowerCase().includes(query));
+      return { data: { branches: matchingBranches, employees: matchingUsers } };
     } catch (error) {
       ctx.logger.error({ error }, 'Failed to search directory');
       return reply.code(500).send({ error: 'internal_error' });
@@ -1268,7 +1365,7 @@ export async function registerCommunicationsRoutes(
     try {
       if (!(await authenticateDevice(request, reply, ctx))) return;
       const device = request.deviceContext!;
-      const [branchResult, employeeResult, linkedResult] = await Promise.all([
+      const [branchResult, employeeResult, linkedResult, vmsResult] = await Promise.all([
         ctx.pool.query(
           `SELECT id::text, name, code
            FROM resource_nodes
@@ -1277,10 +1374,16 @@ export async function registerCommunicationsRoutes(
           [device.tenantId]
         ),
         ctx.pool.query(
-          `SELECT id::text, COALESCE(full_name, display_name, username) AS name,
-                  role, branch_id::text AS branch_id
-           FROM users
-           WHERE tenant_id = $1 AND is_active = true AND branch_id IS NOT NULL
+          `SELECT d.id::text AS device_id,
+                  COALESCE(d.assigned_employee_code, u.id::text) AS id,
+                  COALESCE(d.assigned_employee_name, u.full_name, u.display_name, u.username) AS name,
+                  u.role, d.branch_id::text AS branch_id
+           FROM communication_devices d
+           LEFT JOIN communication_device_employees link ON link.device_id = d.id AND link.unlinked_at IS NULL
+           LEFT JOIN users u ON u.id = link.employee_id AND u.is_active = true
+           WHERE d.tenant_id = $1 AND d.device_type IN ('EMPLOYEE_MOBILE', 'EMPLOYEE_DESKTOP')
+             AND d.status IN ('ACTIVE', 'OFFLINE') AND d.revoked_at IS NULL
+             AND (d.assigned_employee_name IS NOT NULL OR u.id IS NOT NULL)
            ORDER BY name ASC`,
           [device.tenantId]
         ),
@@ -1295,19 +1398,26 @@ export async function registerCommunicationsRoutes(
            ORDER BY name ASC`,
           [device.deviceId, device.tenantId]
         ),
+        ctx.pool.query(
+          `SELECT id::text, COALESCE(full_name, display_name, username) AS name,
+                  role, branch_id::text AS branch_id
+           FROM users WHERE tenant_id = $1 AND is_active = true ORDER BY name ASC`,
+          [device.tenantId]
+        ),
       ]);
 
       const branchNames = new Map(branchResult.rows.map((branch: any) => [branch.id, branch.name]));
       const employeePresence = await Promise.all(employeeResult.rows.map(async (employee: any) => {
-        const presence = await ctx.presenceService.getEmployeePresence(device.tenantId, employee.id);
+        const presence = await ctx.presenceService.getDevicePresence(device.tenantId, employee.device_id);
         return {
           employeeId: employee.id,
           employeeName: employee.name,
+          deviceId: employee.device_id,
           role: employee.role || 'Staff',
           branchId: employee.branch_id,
           branchName: branchNames.get(employee.branch_id) || 'Unassigned branch',
-          presence: presence.status,
-          onlineDeviceCount: presence.onlineDeviceIds.length,
+          presence: presence?.status || 'OFFLINE',
+          onlineDeviceCount: presence?.status === 'ONLINE' ? 1 : 0,
         };
       }));
       const branches = await Promise.all(branchResult.rows.map(async (branch: any) => {
@@ -1335,6 +1445,14 @@ export async function registerCommunicationsRoutes(
             branchName: branchNames.get(employee.branch_id) || 'Unassigned branch',
             presence: 'ONLINE',
           })),
+          vmsUsers: await Promise.all(vmsResult.rows.map(async (user: any) => ({
+            employeeId: user.id,
+            employeeName: user.name,
+            employeeRole: user.role || 'Operator',
+            branchId: user.branch_id || '',
+            branchName: branchNames.get(user.branch_id) || 'Central VMS',
+            presence: (await ctx.presenceService.getOperatorPresence(device.tenantId, user.id)).status,
+          }))),
         },
       });
     } catch (error) {
@@ -1450,10 +1568,58 @@ export async function registerCommunicationsRoutes(
    * Call employee (VMS Operator → Employee)
    * POST /v1/communications/calls/employee/:employeeId
    */
+  app.post('/v1/communications/calls/device/:deviceId', async (request: AuthenticatedRequest, reply) => {
+    try {
+      const { deviceId } = request.params as { deviceId: string };
+      const device = await ctx.enrollmentService.getDevice(deviceId);
+      if (!device || device.tenantId !== request.currentUser.tenantId ||
+          !['ACTIVE', 'OFFLINE'].includes(device.status) ||
+          !['EMPLOYEE_MOBILE', 'EMPLOYEE_DESKTOP'].includes(device.deviceType)) {
+        return reply.code(404).send({ error: 'device_not_found' });
+      }
+      if (!(await requirePermission(request, reply, ctx, COMMUNICATION_PERMISSIONS.EMPLOYEE_CALL))) return;
+      const call = await ctx.callService.initiateCall({
+        direction: 'OUTBOUND', sourceType: 'OPERATOR', sourceOperatorId: request.currentUser.id,
+        targetType: 'DEVICE', targetDeviceId: deviceId,
+        tenantId: request.currentUser.tenantId, initiatedBy: request.currentUser.id,
+      });
+      const media = await ctx.mediaProvider.createSession({ callId: call.id, tenantId: request.currentUser.tenantId, maxParticipants: 2 });
+      await ctx.pool.query(
+        `UPDATE communication_call_sessions SET media_session_id = $1, media_provider = $2
+         WHERE id = $3 AND tenant_id = $4`,
+        [media.sessionId, 'self-hosted', call.id, request.currentUser.tenantId]
+      );
+      call.mediaSessionId = media.sessionId;
+      const participant = await ctx.mediaProvider.createParticipantToken({
+        sessionId: media.sessionId, participantId: request.currentUser.id,
+        participantType: 'operator', canPublish: true, canSubscribe: true,
+      });
+      await ctx.signalingGateway.broadcastCallInvite(request.currentUser.tenantId, call.id, {
+        callId: call.id, caller: { type: 'OPERATOR', id: request.currentUser.id, name: 'VMS user' },
+      });
+      await store.writeAudit({
+        tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
+        action: 'COMM_CALL_STARTED', resourceNodeId: device.branchId, outcome: 'success',
+        sourceIp: request.ip, details: { callId: call.id, targetDeviceId: deviceId },
+      });
+      return reply.code(201).send({ data: { call, credentials: {
+        participantToken: participant.token, turnServers: media.turnServers, iceServers: media.turnServers,
+      } } });
+    } catch (error: any) {
+      ctx.logger.error({ error }, 'Failed to initiate employee device call');
+      return reply.code(409).send({ error: error.message || 'call_initiation_failed' });
+    }
+  });
+
   app.post('/v1/communications/calls/employee/:employeeId', async (request: AuthenticatedRequest, reply) => {
     try {
       const { employeeId } = request.params as { employeeId: string };
       const body = request.body as { context?: any };
+      const target = await ctx.pool.query(
+        `SELECT 1 FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true LIMIT 1`,
+        [employeeId, request.currentUser.tenantId]
+      );
+      if (!target.rowCount) return reply.code(404).send({ error: 'employee_not_found' });
       
       if (!(await requirePermission(request, reply, ctx, COMMUNICATION_PERMISSIONS.EMPLOYEE_CALL))) {
         return;
@@ -1540,6 +1706,17 @@ export async function registerCommunicationsRoutes(
       return reply.code(error instanceof z.ZodError ? 400 : 409).send({
         error: error instanceof z.ZodError ? 'invalid_request' : error.message || 'call_initiation_failed',
       });
+    }
+  });
+
+  app.post('/v1/communications/device-calls/device/:deviceId', { config: { noAuth: true } }, async (request: AuthenticatedRequest, reply) => {
+    try {
+      const started = await startDeviceTargetCall(request, reply, 'DEVICE');
+      if (!started) return;
+      return reply.code(201).send({ data: started });
+    } catch (error: any) {
+      ctx.logger.error({ error }, 'Failed to initiate device-to-device call');
+      return reply.code(error instanceof z.ZodError ? 400 : 409).send({ error: error instanceof z.ZodError ? 'invalid_request' : error.message || 'call_initiation_failed' });
     }
   });
 
@@ -1636,7 +1813,7 @@ export async function registerCommunicationsRoutes(
       const tenantId = request.currentUser.tenantId;
       
       // Accept call (atomic first-answer-wins via Redis)
-      const acceptance = await ctx.callService.acceptCall({ callId, tenantId, operatorId: acceptorId, mediaSessionId: callId });
+      const acceptance = await ctx.callService.acceptCall({ callId, tenantId, operatorId: acceptorId });
       if (!acceptance.success || !acceptance.call) return reply.code(409).send({ error: acceptance.reason || 'call_already_accepted' });
       const callSession = acceptance.call;
       
@@ -1707,7 +1884,7 @@ export async function registerCommunicationsRoutes(
       const { callId } = request.params as { callId: string };
       const deviceId = request.deviceContext!.deviceId;
       const tenantId = request.deviceContext!.tenantId;
-      const acceptance = await ctx.callService.acceptCall({ callId, tenantId, deviceId, mediaSessionId: callId });
+      const acceptance = await ctx.callService.acceptCall({ callId, tenantId, deviceId });
       if (!acceptance.success || !acceptance.call) return reply.code(409).send({ error: acceptance.reason || 'call_already_accepted' });
       const participant = await ctx.mediaProvider.createParticipantToken({ sessionId: acceptance.call.mediaSessionId || callId, participantId: deviceId, participantType: 'device', canPublish: true, canSubscribe: true });
       const turnServer = { urls: process.env.COMM_TURN_SERVER_URL || 'stun:stun.l.google.com:19302', username: process.env.COMM_TURN_USERNAME || '', credential: process.env.COMM_TURN_CREDENTIAL || '' };
@@ -1971,6 +2148,119 @@ export async function registerCommunicationsRoutes(
   // ===========================================================================
   // 4. MESSAGING ROUTES
   // ===========================================================================
+
+  const directIdentity = async (request: AuthenticatedRequest, reply: FastifyReply, deviceRoute: boolean) => {
+    if (deviceRoute) {
+      if (!(await authenticateDevice(request, reply, ctx))) return null;
+      return { tenantId: request.deviceContext!.tenantId, type: 'DEVICE' as const,
+        id: request.deviceContext!.deviceId, branchId: request.deviceContext!.branchId };
+    }
+    const user = request.currentUser?.id ? await store.getUser(request.currentUser.id) : undefined;
+    if (!user || user.tenantId !== request.currentUser.tenantId) {
+      await reply.code(401).send({ error: 'unauthenticated' });
+      return null;
+    }
+    return { tenantId: user.tenantId, type: 'OPERATOR' as const, id: user.id, branchId: undefined };
+  };
+
+  const listDirectMessages = async (request: AuthenticatedRequest, reply: FastifyReply, deviceRoute: boolean) => {
+    const identity = await directIdentity(request, reply, deviceRoute);
+    if (!identity) return;
+    let branchInbox: string | null = null;
+    if (deviceRoute) {
+      const result = await ctx.pool.query<{ device_type: string }>(
+        'SELECT device_type FROM communication_devices WHERE id = $1 AND tenant_id = $2',
+        [identity.id, identity.tenantId]
+      );
+      if (result.rows[0]?.device_type?.startsWith('BRANCH_')) branchInbox = identity.branchId;
+    }
+    const result = await ctx.pool.query(
+      `SELECT m.id::text, m.sender_type AS "senderType", m.sender_id::text AS "senderId",
+              m.recipient_type AS "recipientType", m.recipient_id::text AS "recipientId",
+              m.body, m.created_at AS "createdAt",
+              CASE WHEN m.sender_type = 'OPERATOR' THEN
+                (SELECT COALESCE(u.full_name, u.display_name, u.username) FROM users u WHERE u.id = m.sender_id)
+              ELSE (SELECT COALESCE(d.assigned_employee_name, d.device_name) FROM communication_devices d WHERE d.id = m.sender_id)
+              END AS "senderName"
+       FROM communication_direct_messages m
+       WHERE m.tenant_id = $1 AND
+         ((m.sender_type = $2 AND m.sender_id = $3)
+          OR (m.recipient_type = $2 AND m.recipient_id = $3)
+          OR ($4::uuid IS NOT NULL AND m.recipient_type = 'BRANCH' AND m.recipient_id = $4))
+       ORDER BY m.created_at DESC LIMIT 100`,
+      [identity.tenantId, identity.type, identity.id, branchInbox]
+    );
+    return reply.send({ data: result.rows.reverse() });
+  };
+
+  const sendDirectMessage = async (request: AuthenticatedRequest, reply: FastifyReply, deviceRoute: boolean) => {
+    const identity = await directIdentity(request, reply, deviceRoute);
+    if (!identity) return;
+    const parsed = directMessageSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_message' });
+    const { recipientType, recipientId, body } = parsed.data;
+    if (recipientType === identity.type && recipientId === identity.id) {
+      return reply.code(400).send({ error: 'cannot_message_self' });
+    }
+    let targetBranchId: string | null = null;
+    if (recipientType === 'OPERATOR') {
+      const target = await ctx.pool.query(
+        'SELECT branch_id FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true LIMIT 1',
+        [recipientId, identity.tenantId]
+      );
+      if (!target.rowCount) return reply.code(404).send({ error: 'recipient_not_found' });
+      targetBranchId = target.rows[0].branch_id;
+    } else if (recipientType === 'DEVICE') {
+      const target = await ctx.pool.query(
+        `SELECT branch_id FROM communication_devices WHERE id = $1 AND tenant_id = $2
+         AND status IN ('ACTIVE', 'OFFLINE') AND revoked_at IS NULL LIMIT 1`,
+        [recipientId, identity.tenantId]
+      );
+      if (!target.rowCount) return reply.code(404).send({ error: 'recipient_not_found' });
+      targetBranchId = target.rows[0].branch_id;
+    } else {
+      const target = await ctx.pool.query(
+        `SELECT id FROM resource_nodes WHERE id = $1 AND tenant_id = $2
+         AND lower(node_type) = 'branch' LIMIT 1`, [recipientId, identity.tenantId]
+      );
+      if (!target.rowCount) return reply.code(404).send({ error: 'recipient_not_found' });
+      targetBranchId = recipientId;
+    }
+    const created = await ctx.pool.query(
+      `INSERT INTO communication_direct_messages
+       (tenant_id, sender_type, sender_id, recipient_type, recipient_id, body)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id::text, sender_type AS "senderType", sender_id::text AS "senderId",
+         recipient_type AS "recipientType", recipient_id::text AS "recipientId",
+         body, created_at AS "createdAt"`,
+      [identity.tenantId, identity.type, identity.id, recipientType, recipientId, body]
+    );
+    const message = created.rows[0];
+    let recipients = [recipientId];
+    if (recipientType === 'BRANCH') {
+      const branchDevices = await ctx.pool.query<{ id: string }>(
+        `SELECT id::text FROM communication_devices WHERE tenant_id = $1 AND branch_id = $2
+         AND device_type IN ('BRANCH_SHARED', 'BRANCH_MOBILE', 'EMERGENCY_DEVICE')
+         AND status = 'ACTIVE' AND revoked_at IS NULL`, [identity.tenantId, recipientId]
+      );
+      recipients = branchDevices.rows.map((row) => row.id);
+    }
+    ctx.signalingGateway.broadcastDirectMessage(identity.tenantId, recipientType, recipients, message);
+    await store.writeAudit({ tenantId: identity.tenantId, actorUserId: deviceRoute ? null : identity.id,
+      action: 'COMM_MESSAGE_SENT', resourceNodeId: targetBranchId, outcome: 'success',
+      sourceIp: request.ip, details: { messageId: message.id, recipientType, recipientId,
+        ...(deviceRoute ? { deviceId: identity.id } : {}) } });
+    return reply.code(201).send({ data: message });
+  };
+
+  app.get('/v1/communications/direct-messages', (request: AuthenticatedRequest, reply) =>
+    listDirectMessages(request, reply, false));
+  app.post('/v1/communications/direct-messages', (request: AuthenticatedRequest, reply) =>
+    sendDirectMessage(request, reply, false));
+  app.get('/v1/communications/device-direct-messages', { config: { noAuth: true } },
+    (request: AuthenticatedRequest, reply) => listDirectMessages(request, reply, true));
+  app.post('/v1/communications/device-direct-messages', { config: { noAuth: true } },
+    (request: AuthenticatedRequest, reply) => sendDirectMessage(request, reply, true));
   
   /**
    * List conversations

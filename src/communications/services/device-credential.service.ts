@@ -287,6 +287,12 @@ export class DeviceCredentialService {
       }
 
       const device = result.rows[0]!;
+      const credential = await this.pool.query(
+        `SELECT 1 FROM communication_device_credentials
+         WHERE device_id = $1 AND tenant_id = $2 AND expires_at > NOW() LIMIT 1`,
+        [device.id, device.tenantId]
+      );
+      if (!credential.rowCount) return { valid: false, reason: 'DEVICE_LOGGED_OUT' };
 
       // Check device status
       if (device.status === 'REVOKED' || device.revokedAt) {
@@ -381,7 +387,7 @@ export class DeviceCredentialService {
     const device = deviceResult.rows[0]!;
 
     // Check device status
-    if (device.status !== 'ACTIVE' && device.status !== 'OFFLINE') {
+    if (device.status !== 'ACTIVE' && device.status !== 'OFFLINE' && device.status !== 'PENDING') {
       return null;
     }
 

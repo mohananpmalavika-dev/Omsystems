@@ -163,17 +163,17 @@ export class DeviceEnrollmentService {
       [
         tenantId,
         branchId,
-        code,
+        codeHash.slice(0, 32),
         codeHash,
         allowedDeviceType || null,
-        employeeIds.length > 0 ? JSON.stringify(employeeIds) : null,
+        employeeIds.length > 0 ? employeeIds : null,
         maxUses,
         expiresAt,
         createdBy,
       ]
     );
 
-    return result.rows[0]!;
+    return { ...result.rows[0]!, code };
   }
 
   /**
@@ -186,18 +186,19 @@ export class DeviceEnrollmentService {
    * @returns Validation result with resolved identities
    */
   async validateEnrollmentCode(code: string): Promise<EnrollmentValidation> {
-    // Query enrollment code
-    const result = await this.pool.query<EnrollmentCode>(
+    const normalizedCode = code.trim();
+    const codeHash = createHash('sha256').update(normalizedCode.toLowerCase()).digest('hex');
+    const result = await this.pool.query<any>(
       `SELECT
         id, tenant_id as "tenantId", branch_id as "branchId",
         code, allowed_device_type as "allowedDeviceType",
-        required_employee_ids as "requiredEmployeeIds",
-        expires_at as "expiresAt", single_use as "singleUse",
-        used_at as "usedAt", created_by as "createdBy",
+        pre_assigned_employee_ids as "preAssignedEmployeeIds",
+        max_uses as "maxUses", uses_count as "usesCount",
+        expires_at as "expiresAt", revoked_at as "revokedAt", created_by as "createdBy",
         created_at as "createdAt"
       FROM communication_enrollment_codes
-      WHERE code = $1`,
-      [code]
+      WHERE code_hash = $1`,
+      [codeHash]
     );
 
     if (result.rows.length === 0) {
@@ -218,7 +219,10 @@ export class DeviceEnrollmentService {
     }
 
     // Check if already used (single-use)
-    if (enrollment.singleUse && enrollment.usedAt) {
+    if (enrollment.revokedAt) {
+      return { valid: false, reason: 'ENROLLMENT_CODE_REVOKED' };
+    }
+    if (enrollment.maxUses > 0 && enrollment.usesCount >= enrollment.maxUses) {
       return {
         valid: false,
         reason: 'ENROLLMENT_CODE_ALREADY_USED',
@@ -231,15 +235,14 @@ export class DeviceEnrollmentService {
       branchId: enrollment.branchId,
       tenantId: enrollment.tenantId,
       allowedDeviceType: enrollment.allowedDeviceType || undefined,
-      employeeIds: enrollment.requiredEmployeeIds || undefined,
+      employeeIds: enrollment.preAssignedEmployeeIds || undefined,
     };
   }
 
   /**
    * Enroll a new device using enrollment code
    * 
-   * This creates a new device record with PENDING status.
-   * The device must be approved before it can communicate.
+   * A valid, administrator-issued single-use code activates the device.
    * 
    * @param input - Device enrollment input
    * @returns Enrolled device
@@ -256,11 +259,12 @@ export class DeviceEnrollmentService {
         `SELECT id, tenant_id as "tenantId", branch_id as "branchId",
                 allowed_device_type as "allowedDeviceType", max_uses as "maxUses",
                 uses_count as "usesCount", pre_assigned_employee_ids as "preAssignedEmployeeIds",
-                expires_at as "expiresAt", consumed_at as "consumedAt", revoked_at as "revokedAt"
+                expires_at as "expiresAt", consumed_at as "consumedAt", revoked_at as "revokedAt",
+                created_by as "createdBy"
          FROM communication_enrollment_codes
-         WHERE code_hash = $1 AND lower(code) = lower($2)
+         WHERE code_hash = $1
          FOR UPDATE`,
-        [codeHash, input.enrollmentCode.trim()]
+        [codeHash]
       );
       const enrollment = codeResult.rows[0];
       if (!enrollment) throw new Error('ENROLLMENT_CODE_NOT_FOUND');
@@ -269,7 +273,17 @@ export class DeviceEnrollmentService {
       if (new Date(enrollment.expiresAt).getTime() <= Date.now()) throw new Error('ENROLLMENT_CODE_EXPIRED');
       if (enrollment.maxUses > 0 && enrollment.usesCount >= enrollment.maxUses) throw new Error('ENROLLMENT_CODE_ALREADY_USED');
 
-      const deviceType = enrollment.allowedDeviceType ?? (input.linkedEmployeeIds?.length ? 'EMPLOYEE_MOBILE' : 'BRANCH_SHARED');
+      const deviceType = enrollment.allowedDeviceType ?? (input.assignedEmployeeCode || input.linkedEmployeeIds?.length ? 'EMPLOYEE_MOBILE' : 'BRANCH_SHARED');
+      const externalEmployee = Boolean(input.assignedEmployeeCode || input.assignedEmployeeName);
+      if (externalEmployee && (!input.assignedEmployeeCode || !input.assignedEmployeeName)) {
+        throw new Error('ENROLLMENT_EMPLOYEE_ID_AND_NAME_REQUIRED');
+      }
+      if (externalEmployee && !['EMPLOYEE_MOBILE', 'EMPLOYEE_DESKTOP'].includes(deviceType)) {
+        throw new Error('ENROLLMENT_DEVICE_TYPE_MISMATCH');
+      }
+      if (!externalEmployee && ['EMPLOYEE_MOBILE', 'EMPLOYEE_DESKTOP'].includes(deviceType) && !input.linkedEmployeeIds?.length && !enrollment.preAssignedEmployeeIds?.length) {
+        throw new Error('ENROLLMENT_EMPLOYEE_ID_AND_NAME_REQUIRED');
+      }
       const employeeIds = [...new Set([...(enrollment.preAssignedEmployeeIds ?? []), ...(input.linkedEmployeeIds ?? [])])];
       if (enrollment.preAssignedEmployeeIds?.some((id: string) => !employeeIds.includes(id))) {
         throw new Error('ENROLLMENT_MISSING_REQUIRED_EMPLOYEES');
@@ -286,12 +300,12 @@ export class DeviceEnrollmentService {
       const deviceResult = await client.query<CommunicationDevice>(
         `INSERT INTO communication_devices (
           id, tenant_id, branch_id, device_uuid, credential_hash,
-          device_name, device_type, platform,
+          device_name, device_type, platform, assigned_employee_code, assigned_employee_name,
           public_key, device_capabilities, status,
-          registered_at, created_at, updated_at
+          registered_at, approved_at, approved_by, created_at, updated_at
         ) VALUES (
-          gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-          NOW(), NOW(), NOW()
+          gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+          NOW(), NOW(), $13, NOW(), NOW()
         )
         RETURNING
           id, tenant_id as "tenantId", branch_id as "branchId",
@@ -299,7 +313,8 @@ export class DeviceEnrollmentService {
           device_name as "deviceName", device_type as "deviceType",
           platform, public_key as "publicKey",
           certificate_id as "certificateId",
-          status, app_version as "appVersion",
+          status, assigned_employee_code as "assignedEmployeeCode",
+          assigned_employee_name as "assignedEmployeeName", app_version as "appVersion",
           last_seen_at as "lastSeenAt",
           registered_at as "registeredAt",
           approved_at as "approvedAt",
@@ -314,9 +329,12 @@ export class DeviceEnrollmentService {
           input.deviceName,
           deviceType,
           input.platform,
+          input.assignedEmployeeCode ?? null,
+          input.assignedEmployeeName ?? null,
           input.publicKey,
           JSON.stringify(input.deviceCapabilities ?? {}),
-          'PENDING', // Initial status
+          'ACTIVE',
+          enrollment.createdBy,
         ]
       );
 

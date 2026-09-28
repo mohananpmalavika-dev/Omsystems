@@ -35,6 +35,8 @@ import type {
   PresenceStatus,
 } from '../domain/types.js';
 import { WEBSOCKET_EVENTS, WEBSOCKET_ROOMS } from '../domain/constants.js';
+import { redisModule } from '../../bootstrap/redis.module.js';
+import { CommunicationPresenceService } from '../services/presence.service.js';
 
 type CallSignalingEvent = {
   type: string;
@@ -72,11 +74,34 @@ export class CommunicationSignalingGateway {
     this.setupCommunicationHandlers();
   }
 
+  disconnectDevice(tenantId: string, deviceId: string): void {
+    this.io.in(WEBSOCKET_ROOMS.DEVICE(tenantId, deviceId)).disconnectSockets(true);
+  }
+
+  broadcastDirectMessage(
+    tenantId: string, recipientType: 'OPERATOR' | 'DEVICE' | 'BRANCH',
+    recipientIds: string[], message: Record<string, unknown>
+  ): void {
+    const room = recipientType === 'OPERATOR' ? WEBSOCKET_ROOMS.OPERATOR : WEBSOCKET_ROOMS.DEVICE;
+    for (const recipientId of recipientIds) {
+      this.io.to(room(tenantId, recipientId)).emit('comm:message:created', message);
+    }
+  }
+
   /**
    * Setup communication-specific event handlers
    */
   private setupCommunicationHandlers(): void {
     this.io.on('connection', (socket: Socket) => {
+      const refreshOperatorPresence = async () => {
+        if (socket.data.identityType !== 'operator' || !socket.data.userId || !socket.data.tenantId) return;
+        const redis = redisModule.getClient();
+        if (!redis) return;
+        await new CommunicationPresenceService(redis, this.pool).setOperatorPresence(
+          socket.data.tenantId, socket.data.userId, 'ONLINE'
+        );
+        this.broadcastPresenceChanged(socket.data.tenantId, 'operator', socket.data.userId, 'ONLINE');
+      };
       // Join device-specific room after authentication
       socket.on('comm:register-device', (data: { deviceId: string; tenantId: string }) => {
         const { deviceId, tenantId } = data;
@@ -115,8 +140,13 @@ export class CommunicationSignalingGateway {
         // Join operator room
         socket.join(WEBSOCKET_ROOMS.OPERATOR(tenantId, operatorId));
         socket.data.operatorId = operatorId;
+        void refreshOperatorPresence().catch(() => socket.emit('error', { message: 'Presence unavailable' }));
 
         socket.emit('comm:operator-registered', { operatorId });
+      });
+
+      socket.on('comm:operator-heartbeat', () => {
+        void refreshOperatorPresence().catch(() => socket.emit('error', { message: 'Presence unavailable' }));
       });
 
       // Subscribe to branch room (for branch-wide calls)

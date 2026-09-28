@@ -11,7 +11,7 @@ import {
 import { communicationAPI } from '@/services/communication-api';
 import { useCommunicationSignaling } from '@/hooks/use-communication-signaling';
 import { useWebRTCCall, type CallModality } from '@/hooks/use-webrtc-call';
-import type { BranchContact, CallSession, CommunicationEmployee, WebRTCCredentials } from '@/services/communication-api';
+import type { BranchContact, CallSession, CommunicationEmployee, DirectMessage, WebRTCCredentials } from '@/services/communication-api';
 import type { CallInviteEvent } from '@/hooks/use-communication-signaling';
 
 interface BranchOption {
@@ -31,6 +31,7 @@ interface ActiveCall {
 
 type DeviceCallTarget =
   | { type: 'VMS'; label: string }
+  | { type: 'VMS_USER'; id: string; label: string }
   | { type: 'BRANCH'; id: string; label: string }
   | { type: 'EMPLOYEE'; id: string; label: string };
 
@@ -55,6 +56,9 @@ export default function KryptoVisionConnectPage() {
   const [linkedEmployee, setLinkedEmployee] = useState<{ id: string; name: string; role?: string } | null>(null);
   const [linkedEmployees, setLinkedEmployees] = useState<CommunicationEmployee[]>([]);
   const [deviceDirectory, setDeviceDirectory] = useState<BranchContact[]>([]);
+  const [vmsUsers, setVmsUsers] = useState<CommunicationEmployee[]>([]);
+  const [directMessages, setDirectMessages] = useState<DirectMessage[]>([]);
+  const [directMessageText, setDirectMessageText] = useState('');
   const [loadingCallDirectory, setLoadingCallDirectory] = useState(false);
   const [callTarget, setCallTarget] = useState<DeviceCallTarget>({ type: 'VMS', label: 'VMS Command Center' });
   
@@ -63,6 +67,7 @@ export default function KryptoVisionConnectPage() {
   const [selectedBranchId, setSelectedBranchId] = useState('');
   const [regMode, setRegMode] = useState<'BRANCH_COMMON' | 'EMPLOYEE_SPECIFIC'>('BRANCH_COMMON');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+  const [selectedEmployeeName, setSelectedEmployeeName] = useState('');
   const [customDeviceName, setCustomDeviceName] = useState('');
   const [enrollmentCode, setEnrollmentCode] = useState('');
   const [registering, setRegistering] = useState(false);
@@ -83,7 +88,7 @@ export default function KryptoVisionConnectPage() {
   const [paBroadcastActive, setPaBroadcastActive] = useState(false);
 
   // Media & WebRTC
-  const signaling = useCommunicationSignaling();
+  const signaling = useCommunicationSignaling('device');
   const webrtc = useWebRTCCall();
 
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -136,15 +141,43 @@ export default function KryptoVisionConnectPage() {
   useEffect(() => {
     if (!deviceEnrolled || deviceStatus !== 'ACTIVE') return;
     const sendHeartbeat = () => {
-      if (document.visibilityState === 'visible') {
-        void communicationAPI.deviceHeartbeat().catch((heartbeatError) => {
-          console.warn('[Connect Device] Heartbeat failed:', heartbeatError);
-        });
-      }
+      void communicationAPI.deviceHeartbeat().catch((heartbeatError) => {
+        console.warn('[Connect Device] Heartbeat failed:', heartbeatError);
+      });
     };
     sendHeartbeat();
     const timer = window.setInterval(sendHeartbeat, 20_000);
     return () => window.clearInterval(timer);
+  }, [deviceEnrolled, deviceStatus]);
+
+  useEffect(() => {
+    if (!deviceEnrolled || deviceStatus !== 'PENDING') return;
+    let cancelled = false;
+    const checkApproval = async () => {
+      const refreshToken = localStorage.getItem('commDeviceRefreshToken');
+      if (!refreshToken) return;
+      try {
+        const response = await fetch('/v1/communications/devices/refresh', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+        if (!response.ok) return;
+        const result = await response.json();
+        if (cancelled) return;
+        localStorage.setItem('commDeviceToken', result.accessToken);
+        localStorage.setItem('commDeviceRefreshToken', result.refreshToken);
+        if (result.status === 'ACTIVE' || result.status === 'OFFLINE') {
+          localStorage.setItem('commDeviceStatus', 'ACTIVE');
+          setDeviceStatus('ACTIVE');
+          window.dispatchEvent(new Event('comm-device-enrolled'));
+        }
+      } catch {
+        // Keep the setup screen visible until connectivity returns.
+      }
+    };
+    void checkApproval();
+    const timer = window.setInterval(() => void checkApproval(), 30_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
   }, [deviceEnrolled, deviceStatus]);
 
   // An enrolled terminal receives a tenant-scoped directory using only its
@@ -159,8 +192,9 @@ export default function KryptoVisionConnectPage() {
     }
     setLoadingCallDirectory(true);
     void communicationAPI.getDeviceDirectory()
-      .then(({ branches: callBranches, linkedEmployees: deviceEmployees }) => {
+      .then(({ branches: callBranches, linkedEmployees: deviceEmployees, vmsUsers: users }) => {
         setDeviceDirectory(callBranches);
+        setVmsUsers(users || []);
         setLinkedEmployees(deviceEmployees);
         if (deviceEmployees.length && !deviceEmployees.some((employee) => employee.employeeId === linkedEmployee?.id)) {
           const employee = deviceEmployees[0];
@@ -176,25 +210,40 @@ export default function KryptoVisionConnectPage() {
       .finally(() => setLoadingCallDirectory(false));
   }, [deviceEnrolled, deviceStatus, linkedEmployee?.id]);
 
-  // 2. Load directory for enrollment screen if not enrolled
+  const loadDirectMessages = useCallback(async () => {
+    try { setDirectMessages(await communicationAPI.getDirectMessages(true)); }
+    catch (cause) { console.warn('[Connect Device] Messages unavailable', cause); }
+  }, []);
+
   useEffect(() => {
-    if (!deviceEnrolled) {
-      setLoadingDirectory(true);
-      const sessionToken = sessionStorage.getItem('activityAccessToken') || sessionStorage.getItem('accessToken') || localStorage.getItem('accessToken');
-      fetch('/api/communications/devices/register', {
-        headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.success && data.branches?.length > 0) {
-            setBranches(data.branches);
-            setSelectedBranchId(data.branches[0].id);
-          }
-        })
-        .catch((err) => console.error('Failed to load branches for enrollment:', err))
-        .finally(() => setLoadingDirectory(false));
+    if (!deviceEnrolled || deviceStatus !== 'ACTIVE') return;
+    void loadDirectMessages();
+    const timer = window.setInterval(() => void loadDirectMessages(), 15_000);
+    const unsubscribe = signaling.onMessageCreated(() => void loadDirectMessages());
+    return () => { window.clearInterval(timer); unsubscribe(); };
+  }, [deviceEnrolled, deviceStatus, loadDirectMessages, signaling]);
+
+  // The single-use admin code supplies the branch. Setup needs no VMS session.
+  const resolveEnrollmentCode = async () => {
+    if (!enrollmentCode.trim()) throw new Error('Enter an enrollment code');
+    setLoadingDirectory(true);
+    try {
+      const response = await fetch('/api/communications/devices/register', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'resolve', enrollmentCode }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Invalid enrollment code');
+      setBranches([{ id: data.branchId, name: data.branchName, employees: [] }]);
+      setSelectedBranchId(data.branchId);
+      if (data.allowedDeviceType?.startsWith('EMPLOYEE_')) setRegMode('EMPLOYEE_SPECIFIC');
+      else if (data.allowedDeviceType?.startsWith('BRANCH_')) setRegMode('BRANCH_COMMON');
+      setError(null);
+      return data;
+    } finally {
+      setLoadingDirectory(false);
     }
-  }, [deviceEnrolled]);
+  };
 
   // Load branch CCTV cameras for live camera injection during call
   useEffect(() => {
@@ -224,12 +273,11 @@ export default function KryptoVisionConnectPage() {
     if (regMode === 'BRANCH_COMMON') {
       setCustomDeviceName(`${curBranch.name} Intercom`);
     } else {
-      const curEmp = curBranch.employees.find((e) => e.id === selectedEmployeeId) || curBranch.employees[0];
-      if (curEmp) {
-        setCustomDeviceName(`${curEmp.name}'s Device`);
+      if (selectedEmployeeName.trim()) {
+        setCustomDeviceName(`${selectedEmployeeName.trim()}'s Device`);
       }
     }
-  }, [selectedBranchId, regMode, selectedEmployeeId, branches]);
+  }, [selectedBranchId, regMode, selectedEmployeeName, branches]);
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -245,12 +293,14 @@ export default function KryptoVisionConnectPage() {
     setRegistering(true);
 
     try {
-      const curBranch = branches.find((b) => b.id === selectedBranchId);
+      const resolved = await resolveEnrollmentCode();
+      const curBranch = branches.find((b) => b.id === resolved.branchId) || { id: resolved.branchId, name: resolved.branchName };
       if (!curBranch) throw new Error('Please select a valid branch');
 
       let curEmployee = null;
       if (regMode === 'EMPLOYEE_SPECIFIC') {
-        curEmployee = curBranch.employees.find((e) => e.id === selectedEmployeeId) || curBranch.employees[0];
+        if (!selectedEmployeeId.trim() || !selectedEmployeeName.trim()) throw new Error('Enter the employee ID and name');
+        curEmployee = { id: selectedEmployeeId.trim(), name: selectedEmployeeName.trim() };
       }
 
       if (!enrollmentCode.trim()) throw new Error('Enter the enrollment code provided by your administrator');
@@ -285,7 +335,6 @@ export default function KryptoVisionConnectPage() {
 
       localStorage.setItem('commDeviceToken', data.accessToken);
       localStorage.setItem('commDeviceRefreshToken', data.refreshToken);
-      window.dispatchEvent(new Event('comm-device-enrolled'));
       localStorage.setItem('commDeviceId', data.deviceId);
       localStorage.setItem('commDeviceName', data.deviceName);
       localStorage.setItem('commBranchId', data.branchId);
@@ -296,6 +345,7 @@ export default function KryptoVisionConnectPage() {
       if (data.linkedEmployee) {
         localStorage.setItem('commLinkedEmployee', JSON.stringify(data.linkedEmployee));
       }
+      window.dispatchEvent(new Event('comm-device-enrolled'));
 
       checkEnrollment();
     } catch (err: any) {
@@ -306,10 +356,17 @@ export default function KryptoVisionConnectPage() {
     }
   };
 
-  const handleResetDevice = () => {
-    if (confirm('Are you sure you want to disconnect and switch this device?')) {
+  const handleResetDevice = async () => {
+    if (confirm('Log out this device? An administrator must issue a new enrollment code to install it again.')) {
+      try {
+        await communicationAPI.logoutDevice();
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : 'Unable to log out device while offline');
+        return;
+      }
       localStorage.removeItem('commDeviceToken');
       localStorage.removeItem('commDeviceRefreshToken');
+      localStorage.removeItem('commDeviceUuid');
       localStorage.removeItem('commDeviceId');
       localStorage.removeItem('commDeviceName');
       localStorage.removeItem('commBranchId');
@@ -318,6 +375,7 @@ export default function KryptoVisionConnectPage() {
       localStorage.removeItem('commDeviceStatus');
       localStorage.removeItem('commDeviceMode');
       localStorage.removeItem('commLinkedEmployee');
+      window.dispatchEvent(new Event('comm-device-enrolled'));
       setDeviceEnrolled(false);
       webrtc.disconnect();
       setActiveCall(null);
@@ -481,17 +539,23 @@ export default function KryptoVisionConnectPage() {
   const handleStartCall = async (modality: CallModality, target: DeviceCallTarget = callTarget) => {
     try {
       setError(null);
+      if (deviceStatus !== 'ACTIVE') throw new Error('Device is awaiting administrator approval');
       const stream = await webrtc.initializeMedia({
         audio: true,
         video: modality === 'video',
       });
       if (!stream) return;
 
+      const actorEmployeeId = linkedEmployees.some((employee) => employee.employeeId === linkedEmployee?.id)
+        ? linkedEmployee?.id : undefined;
+
       const started = target.type === 'VMS'
-        ? await communicationAPI.callVMS(linkedEmployee?.id)
+        ? await communicationAPI.callVMS(actorEmployeeId)
+        : target.type === 'VMS_USER'
+          ? await communicationAPI.callDeviceEmployee(target.id, actorEmployeeId)
         : target.type === 'BRANCH'
-          ? await communicationAPI.callDeviceBranch(target.id, linkedEmployee?.id)
-          : await communicationAPI.callDeviceEmployee(target.id, linkedEmployee?.id);
+          ? await communicationAPI.callDeviceBranch(target.id, actorEmployeeId)
+          : await communicationAPI.callDeviceToDevice(target.id, actorEmployeeId);
       await signaling.joinCall(started.call.id);
       const nextCall = { session: started.call, credentials: started.credentials, startTime: new Date(), modality, peerLabel: target.label };
       activeCallRef.current = nextCall;
@@ -505,6 +569,23 @@ export default function KryptoVisionConnectPage() {
     } catch (err: any) {
       console.error('[Connect Device] Call initiation failed:', err);
       setError(err.message || `Failed to call ${target.label}`);
+    }
+  };
+
+  const handleSendDirectMessage = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!directMessageText.trim() || deviceStatus !== 'ACTIVE') return;
+    if (callTarget.type === 'VMS') {
+      setError('Select a named VMS user, employee device, or branch to message.');
+      return;
+    }
+    try {
+      const recipientType = callTarget.type === 'VMS_USER' ? 'OPERATOR' : callTarget.type === 'BRANCH' ? 'BRANCH' : 'DEVICE';
+      await communicationAPI.sendDirectMessage(recipientType, callTarget.id, directMessageText.trim(), true);
+      setDirectMessageText('');
+      await loadDirectMessages();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Message could not be sent');
     }
   };
 
@@ -525,7 +606,7 @@ export default function KryptoVisionConnectPage() {
     try {
       setError(null);
       await webrtc.initializeMedia({ audio: true, video: modality === 'video' });
-      const { call, credentials } = await communicationAPI.acceptCall(incomingCall.callId);
+      const { call, credentials } = await communicationAPI.acceptCall(incomingCall.callId, true);
 
       const nextCall = {
         session: call,
@@ -550,7 +631,7 @@ export default function KryptoVisionConnectPage() {
   const handleRejectCall = async () => {
     if (!incomingCall) return;
     try {
-      await communicationAPI.rejectCall(incomingCall.callId);
+      await communicationAPI.rejectCall(incomingCall.callId, undefined, true);
       setIncomingCall(null);
     } catch {
       setIncomingCall(null);
@@ -560,7 +641,7 @@ export default function KryptoVisionConnectPage() {
   const handleEndCall = async () => {
     if (!activeCall) return;
     try {
-      await communicationAPI.endCall(activeCall.session.id);
+      await communicationAPI.endCall(activeCall.session.id, true);
       handleCallEnd();
     } catch {
       handleCallEnd();
@@ -630,30 +711,15 @@ export default function KryptoVisionConnectPage() {
           )}
 
           <form onSubmit={handleRegisterDevice} className="space-y-4">
-            {/* 1. Branch Selector */}
+            {/* The enrollment code fixes the branch identity. */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                 <Building2 className="w-4 h-4 text-blue-400" />
-                Select Branch Location
+                Assigned Branch
               </label>
-              {loadingDirectory ? (
-                <div className="h-10 bg-slate-800/50 rounded-xl animate-pulse flex items-center px-3 text-xs text-slate-400">
-                  Loading branches...
-                </div>
-              ) : (
-                <select
-                  value={selectedBranchId}
-                  onChange={(e) => setSelectedBranchId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm focus:outline-none focus:border-blue-500"
-                  required
-                >
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name} {b.code ? `(${b.code})` : ''}
-                    </option>
-                  ))}
-                </select>
-              )}
+              <div className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm">
+                {loadingDirectory ? 'Checking code...' : selectedBranch?.name || 'Enter and verify the admin code below'}
+              </div>
             </div>
 
             {/* 2. Device Mode Selector */}
@@ -699,24 +765,21 @@ export default function KryptoVisionConnectPage() {
             </div>
 
             {/* 3. Employee selector if mode is Employee Specific */}
-            {regMode === 'EMPLOYEE_SPECIFIC' && selectedBranch && (
+            {regMode === 'EMPLOYEE_SPECIFIC' && (
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                   <User className="w-4 h-4 text-blue-400" />
-                  Select Assigned Employee
+                  Employee ID and name
                 </label>
-                <select
+                <input
                   value={selectedEmployeeId}
                   onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                  placeholder="Employee ID"
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm focus:outline-none focus:border-blue-500"
                   required
-                >
-                  {selectedBranch.employees.map((emp) => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.name} ({emp.role || 'Staff'})
-                    </option>
-                  ))}
-                </select>
+                />
+                <input value={selectedEmployeeName} onChange={(e) => setSelectedEmployeeName(e.target.value)}
+                  placeholder="Employee name" className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-sm focus:outline-none focus:border-blue-500" required />
               </div>
             )}
 
@@ -745,6 +808,8 @@ export default function KryptoVisionConnectPage() {
                 required
                 className="mt-2 w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-xs font-mono text-white"
               />
+              <button type="button" onClick={() => void resolveEnrollmentCode().catch((cause) => setError(cause instanceof Error ? cause.message : 'Unable to verify code'))}
+                disabled={loadingDirectory || !enrollmentCode.trim()} className="mt-2 text-xs text-blue-300 disabled:opacity-50">Verify code and branch</button>
             </div>
 
             {/* Submit Button */}
@@ -824,7 +889,7 @@ export default function KryptoVisionConnectPage() {
             className="text-xs text-slate-400 hover:text-slate-200 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 transition-all"
             title="Switch device or re-enroll"
           >
-            Switch Device
+            Log out device
           </button>
         </div>
       </header>
@@ -1211,12 +1276,15 @@ export default function KryptoVisionConnectPage() {
                 onChange={(event) => {
                   const value = event.target.value;
                   if (value === 'VMS') return setCallTarget({ type: 'VMS', label: 'VMS Command Center' });
-                  const [type, id] = value.split(':') as ['BRANCH' | 'EMPLOYEE', string];
+                  const [type, id] = value.split(':') as ['BRANCH' | 'EMPLOYEE' | 'VMS_USER', string];
                   if (type === 'BRANCH') {
                     const branch = deviceDirectory.find((entry) => entry.branchId === id);
                     if (branch) setCallTarget({ type, id, label: branch.branchName });
+                  } else if (type === 'VMS_USER') {
+                    const user = vmsUsers.find((entry) => entry.employeeId === id);
+                    if (user) setCallTarget({ type, id, label: user.employeeName });
                   } else {
-                    const employee = deviceDirectory.flatMap((branch) => branch.employees).find((entry) => entry.employeeId === id);
+                    const employee = deviceDirectory.flatMap((branch) => branch.employees).find((entry) => entry.deviceId === id);
                     if (employee) setCallTarget({ type, id, label: employee.employeeName });
                   }
                 }}
@@ -1224,16 +1292,23 @@ export default function KryptoVisionConnectPage() {
                 className="w-full rounded-xl border border-slate-600 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-blue-500 disabled:opacity-60"
               >
                 <option value="VMS">VMS Command Center</option>
+                {vmsUsers.length > 0 && <optgroup label="VMS users">
+                  {vmsUsers.map((user) => (
+                    <option key={`vms-${user.employeeId}`} value={`VMS_USER:${user.employeeId}`}>
+                      {user.employeeName}{user.presence === 'OFFLINE' ? ' — offline for calls' : ''}
+                    </option>
+                  ))}
+                </optgroup>}
                 {deviceDirectory.length > 0 && <optgroup label="Branches">
                   {deviceDirectory.map((branch) => (
-                    <option key={`branch-${branch.branchId}`} value={`BRANCH:${branch.branchId}`} disabled={branch.onlineDeviceCount === 0}>
+                    <option key={`branch-${branch.branchId}`} value={`BRANCH:${branch.branchId}`}>
                       {branch.branchName}{branch.onlineDeviceCount === 0 ? ' — offline' : ` — ${branch.onlineDeviceCount} device${branch.onlineDeviceCount === 1 ? '' : 's'} online`}
                     </option>
                   ))}
                 </optgroup>}
                 {deviceDirectory.length > 0 && <optgroup label="Employees">
                   {deviceDirectory.flatMap((branch) => branch.employees).map((employee) => (
-                    <option key={`employee-${employee.employeeId}`} value={`EMPLOYEE:${employee.employeeId}`} disabled={employee.onlineDeviceCount === 0}>
+                    <option key={`employee-${employee.deviceId}`} value={`EMPLOYEE:${employee.deviceId}`} disabled={!employee.deviceId}>
                       {employee.employeeName} · {employee.branchName}{employee.onlineDeviceCount === 0 ? ' — offline' : ''}
                     </option>
                   ))}
@@ -1265,6 +1340,7 @@ export default function KryptoVisionConnectPage() {
               {/* Option 1: Video Call */}
               <button
                 onClick={() => void handleStartCall('video', callTarget)}
+                disabled={deviceStatus !== 'ACTIVE' || !signaling.connected}
                 className="group p-6 rounded-3xl bg-gradient-to-b from-blue-600/10 to-blue-600/5 hover:from-blue-600/20 hover:to-blue-600/10 border border-blue-500/30 hover:border-blue-500/60 transition-all text-center space-y-3 flex flex-col items-center justify-center shadow-xl hover:scale-[1.02] active:scale-[0.98]"
               >
                 <div className="w-16 h-16 rounded-2xl bg-blue-600/20 text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-all flex items-center justify-center shadow-lg shadow-blue-600/20">
@@ -1282,6 +1358,7 @@ export default function KryptoVisionConnectPage() {
               {/* Option 2: Audio Voice Call */}
               <button
                 onClick={() => void handleStartCall('audio', callTarget)}
+                disabled={deviceStatus !== 'ACTIVE' || !signaling.connected}
                 className="group p-6 rounded-3xl bg-gradient-to-b from-blue-600/10 to-blue-600/5 hover:from-blue-600/20 hover:to-blue-600/10 border border-blue-500/30 hover:border-blue-500/60 transition-all text-center space-y-3 flex flex-col items-center justify-center shadow-xl hover:scale-[1.02] active:scale-[0.98]"
               >
                 <div className="w-16 h-16 rounded-2xl bg-blue-600/20 text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-all flex items-center justify-center shadow-lg shadow-blue-600/20">
@@ -1299,6 +1376,7 @@ export default function KryptoVisionConnectPage() {
               {/* Option 3: Screen Sharing */}
               <button
                 onClick={() => void handleStartCall('screenshare', callTarget)}
+                disabled={deviceStatus !== 'ACTIVE' || !signaling.connected}
                 className="group p-6 rounded-3xl bg-gradient-to-b from-purple-600/10 to-purple-600/5 hover:from-purple-600/20 hover:to-purple-600/10 border border-purple-500/30 hover:border-purple-500/60 transition-all text-center space-y-3 flex flex-col items-center justify-center shadow-xl hover:scale-[1.02] active:scale-[0.98]"
               >
                 <div className="w-16 h-16 rounded-2xl bg-purple-600/20 text-purple-400 group-hover:bg-purple-600 group-hover:text-white transition-all flex items-center justify-center shadow-lg shadow-purple-600/20">
@@ -1313,6 +1391,26 @@ export default function KryptoVisionConnectPage() {
                 </span>
               </button>
             </div>
+
+            <section className="max-w-3xl mx-auto rounded-2xl border border-slate-700 bg-slate-900/70 p-4 text-left space-y-3">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-white"><MessageSquare className="h-4 w-4 text-blue-400" /> Messages</h3>
+              <div className="max-h-48 overflow-y-auto space-y-2" aria-live="polite">
+                {directMessages.length === 0 ? <p className="text-xs text-slate-400">No messages yet.</p> :
+                  directMessages.slice(-20).map((message) => (
+                    <div key={message.id} className="rounded-lg bg-slate-800 px-3 py-2 text-xs">
+                      <div className="text-slate-400">{message.senderId === deviceId ? 'You' : message.senderName || message.senderType} · {new Date(message.createdAt).toLocaleString()}</div>
+                      <p className="mt-1 text-slate-100 whitespace-pre-wrap break-words">{message.body}</p>
+                    </div>
+                  ))}
+              </div>
+              <form onSubmit={handleSendDirectMessage} className="flex gap-2">
+                <input value={directMessageText} onChange={(event) => setDirectMessageText(event.target.value)}
+                  maxLength={4000} placeholder={callTarget.type === 'VMS' ? 'Select a named user, employee, or branch to message' : `Message ${callTarget.label}`}
+                  className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
+                <button type="submit" disabled={deviceStatus !== 'ACTIVE' || !directMessageText.trim() || callTarget.type === 'VMS'}
+                  className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><Send className="h-4 w-4" /></button>
+              </form>
+            </section>
 
             {/* Inbound Call Alert Notice */}
             <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 max-w-md mx-auto flex items-center justify-center gap-2 text-xs text-slate-400">

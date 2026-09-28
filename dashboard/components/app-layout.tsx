@@ -229,6 +229,7 @@ export const navigation: NavGroup[] = [
       { label: "Gateway enrollment & activation", href: "/admin/zero-touch", icon: Cpu },
       { label: "Camera import & export", href: "/admin/camera-import-export", icon: FileSpreadsheet },
       { label: "Feature Management", href: "/admin/features", icon: ToggleLeft },
+      { label: "Alert Controls & Toggles", href: "/settings/alerts", icon: Bell },
       { label: "Platform & update management", href: "/admin/system", icon: Settings },
       { label: "Account & Security Settings", href: "/account/security", icon: LockKeyhole },
     ],
@@ -380,6 +381,7 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/communications/calls",
     "/communications/connect",
     "/communications/admin/devices",
+    "/settings/alerts",
   ],
 };
 

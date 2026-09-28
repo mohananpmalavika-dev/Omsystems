@@ -129,6 +129,8 @@ import { registerEmployeeActivityTrackingRoutes } from "./routes/employee-activi
 import { registerProvisioningRoutes } from "./routes/provisioning.routes.js";
 import { registerStorageHealthRoutes } from "./routes/storage-health.routes.js";
 import { registerAlertOperationsRoutes } from "./routes/alert-operations.routes.js";
+import { registerAlertSuppressionRoutes } from "./routes/alert-suppression.routes.js";
+import { AlertSuppressionService } from "./alerts/services/alert-suppression.service.js";
 import { registerClockMonitoringRoutes } from "./routes/clock-monitoring.routes.js";
 import { registerBiometricPrivacyRoutes } from "./routes/biometric-privacy.routes.js";
 import { registerDigitalTwinHealthRoutes } from "./routes/digital-twin-health.routes.js";
@@ -3256,6 +3258,15 @@ export async function buildApp(options?: {
     app.log.info('Real-time alert operations routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register real-time alert operations routes');
+  }
+
+  // Register Alert Suppression (activate/deactivate) routes
+  try {
+    const alertSuppressionService = new AlertSuppressionService(pool || undefined);
+    await registerAlertSuppressionRoutes(app, alertSuppressionService);
+    app.log.info('Alert suppression configuration routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register alert suppression routes');
   }
 
   // Register Clock & Time-Drift Monitoring routes

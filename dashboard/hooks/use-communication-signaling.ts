@@ -107,7 +107,7 @@ export interface CommunicationSignalingHook {
 // HOOK
 // ============================================================================
 
-export function useCommunicationSignaling(): CommunicationSignalingHook {
+export function useCommunicationSignaling(identity: 'operator' | 'device' = 'operator'): CommunicationSignalingHook {
   const [connected, setConnected] = useState(false);
   const [deviceToken, setDeviceToken] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
@@ -138,7 +138,7 @@ export function useCommunicationSignaling(): CommunicationSignalingHook {
 
   useEffect(() => {
     const token = typeof window !== 'undefined'
-      ? (deviceToken || sessionStorage.getItem('activityAccessToken') || sessionStorage.getItem('accessToken') || localStorage.getItem('accessToken'))
+      ? (identity === 'device' ? deviceToken : sessionStorage.getItem('activityAccessToken') || sessionStorage.getItem('accessToken') || localStorage.getItem('accessToken'))
       : null;
     
     if (!token) {
@@ -147,7 +147,7 @@ export function useCommunicationSignaling(): CommunicationSignalingHook {
     }
     
     // Connect to Socket.IO server
-    const socket = io({
+    const socket = io(process.env.NEXT_PUBLIC_WS_URL || window.location.origin, {
       path: '/ws',
       auth: {
         token,
@@ -170,7 +170,7 @@ export function useCommunicationSignaling(): CommunicationSignalingHook {
       // identity is supplied by the authenticated application session.
       const deviceId = localStorage.getItem('commDeviceId');
       const tenantId = localStorage.getItem('commTenantId');
-      if (deviceId && tenantId && localStorage.getItem('commDeviceToken')) {
+      if (identity === 'device' && deviceId && tenantId && deviceToken) {
         socket.emit('comm:register-device', { deviceId, tenantId });
       } else {
         // The server derives the operator and tenant from the verified socket
@@ -178,6 +178,9 @@ export function useCommunicationSignaling(): CommunicationSignalingHook {
         socket.emit('comm:register-operator');
       }
     });
+    const presenceTimer = window.setInterval(() => {
+      if (socket.connected && identity === 'operator') socket.emit('comm:operator-heartbeat');
+    }, 20_000);
 
     socket.on('comm:device-registered', () => {
       localStorage.setItem('commDeviceStatus', 'ACTIVE');
@@ -257,9 +260,9 @@ export function useCommunicationSignaling(): CommunicationSignalingHook {
       handlersRef.current.get('messageRead')?.forEach(handler => handler(event));
     });
     
-    socket.on('comm:presence:changed', (event: PresenceEvent) => {
-      console.log('[CommunicationSignaling] PRESENCE_CHANGED:', event);
-      handlersRef.current.get('presenceChanged')?.forEach(handler => handler(event));
+    socket.on('PRESENCE_CHANGED', (event: { entityType: string; entityId: string; status: CommunicationPresence }) => {
+      const normalized = { entityType: event.entityType.toUpperCase(), entityId: event.entityId, presence: event.status } as PresenceEvent;
+      handlersRef.current.get('presenceChanged')?.forEach(handler => handler(normalized));
     });
     socket.on('comm:webrtc:offer', (event: WebRtcSignalEvent) => {
       dispatchCallSignal('webrtcOffer', event);
@@ -276,13 +279,14 @@ export function useCommunicationSignaling(): CommunicationSignalingHook {
     
     // Cleanup on unmount
     return () => {
+      window.clearInterval(presenceTimer);
       console.log('[CommunicationSignaling] Cleaning up connection');
       socket.disconnect();
       socketRef.current = null;
       handlersRef.current.clear();
       pendingCallSignalsRef.current.clear();
     };
-  }, [deviceToken, dispatchCallSignal]);
+  }, [deviceToken, dispatchCallSignal, identity]);
   
   // Event registration helper
   const registerHandler = useCallback((eventType: string, handler: Function) => {

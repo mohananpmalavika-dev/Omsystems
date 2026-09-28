@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   BookmarkPlus,
   BrainCircuit,
+  Bell,
   Camera as CameraIcon,
   Expand,
   LoaderCircle,
@@ -1596,6 +1597,14 @@ function CameraTileComponent({
               <SlidersHorizontal size={15} />
             </button>
           )}
+          <Link
+            href={`/settings/alerts?branchId=${encodeURIComponent(camera.branchId || "")}&cameraId=${encodeURIComponent(camera.id)}`}
+            aria-label="Alert suppression and toggle settings"
+            title="Configure Alert Toggles & Suppression for this camera"
+            className="inline-flex items-center justify-center p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-amber-400 transition-colors"
+          >
+            <Bell size={15} />
+          </Link>
           <button
             type="button"
             aria-label="360 Dewarp"

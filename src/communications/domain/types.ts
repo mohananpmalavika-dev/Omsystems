@@ -39,6 +39,8 @@ export interface CommunicationDevice {
   deviceUuid: string;
   deviceType: CommunicationDeviceType;
   platform: CommunicationDevicePlatform;
+  assignedEmployeeCode?: string | null;
+  assignedEmployeeName?: string | null;
   
   // Cryptographic identity
   publicKey: string;
@@ -131,6 +133,11 @@ export type CommunicationCallEntityType =
   | 'DEVICE'
   | 'SOC_QUEUE';
 
+export type CallDirection = CommunicationCallDirection;
+export type CallSourceType = 'BRANCH' | 'EMPLOYEE' | 'OPERATOR' | 'DEVICE';
+export type CallTargetType = 'BRANCH' | 'EMPLOYEE' | 'DEVICE' | 'SOC_QUEUE';
+export type CallEndReason = string;
+
 export type CommunicationCallStatus =
   | 'INITIATING'    // Call being initiated
   | 'RINGING'       // Ringing on target devices
@@ -161,6 +168,7 @@ export interface CallSession {
   targetType: CommunicationCallEntityType;
   targetBranchId: string | null;
   targetEmployeeId: string | null;
+  targetDeviceId?: string | null;
   targetSocQueue: string | null;
   
   // Answered (first-answer-wins)
@@ -376,13 +384,25 @@ export type PresenceStatus =
   | 'IN_CALL'
   | 'UNAVAILABLE';
 
+export type CommunicationPresence = PresenceStatus;
+
+export interface PresenceHeartbeat {
+  deviceId: string;
+  tenantId: string;
+  branchId: string;
+  appVersion: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface DevicePresence {
   deviceId: string;
   tenantId: string;
   branchId: string;
   status: PresenceStatus;
   lastSeen: string;
-  publicIp: string | null;
+  publicIp?: string | null;
+  appVersion?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface EmployeePresence {
@@ -390,7 +410,8 @@ export interface EmployeePresence {
   tenantId: string;
   status: PresenceStatus;
   onlineDeviceIds: string[];
-  lastSeen: string;
+  lastSeen: string | null;
+  deviceCount: number;
 }
 
 export interface BranchPresence {
@@ -398,15 +419,16 @@ export interface BranchPresence {
   tenantId: string;
   status: PresenceStatus;
   onlineDeviceIds: string[];
-  onlineDeviceCount: number;
-  lastSeen: string;
+  onlineDeviceCount?: number;
+  lastSeen: string | null;
+  deviceCount: number;
 }
 
 export interface OperatorPresence {
   operatorId: string;
   tenantId: string;
   status: PresenceStatus;
-  lastSeen: string;
+  lastSeen: string | null;
 }
 
 // ============================================================================
@@ -475,6 +497,8 @@ export interface EnrollDeviceInput {
   publicKey: string;
   deviceUuid: string;
   linkedEmployeeIds?: string[];
+  assignedEmployeeCode?: string;
+  assignedEmployeeName?: string;
   deviceCapabilities?: DeviceCapabilities;
 }
 

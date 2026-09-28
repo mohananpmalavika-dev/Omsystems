@@ -47,6 +47,7 @@ export interface EmployeeContact {
   branchName: string;
   presence: CommunicationPresence;
   onlineDeviceCount: number;
+  deviceId?: string;
 }
 
 export interface CallSession {
@@ -123,6 +124,17 @@ export interface Message {
   readAt?: string;
 }
 
+export interface DirectMessage {
+  id: string;
+  senderType: 'OPERATOR' | 'DEVICE';
+  senderId: string;
+  senderName?: string;
+  recipientType: 'OPERATOR' | 'DEVICE' | 'BRANCH';
+  recipientId: string;
+  body: string;
+  createdAt: string;
+}
+
 export interface DeviceEnrollmentCode {
   code: string;
   branchId: string;
@@ -148,13 +160,10 @@ class CommunicationAPIClient {
     };
     
     if (typeof window !== 'undefined') {
-      const deviceToken = localStorage.getItem('commDeviceToken');
       const sessionToken = sessionStorage.getItem('activityAccessToken') || sessionStorage.getItem('accessToken') || localStorage.getItem('accessToken');
-      const token = deviceToken || sessionToken;
-      if (token) {
-        headers['x-sentinel-session'] = token;
-        headers['x-device-token'] = token;
-        headers['Authorization'] = `Bearer ${token}`;
+      if (sessionToken) {
+        headers['x-sentinel-session'] = sessionToken;
+        headers['Authorization'] = `Bearer ${sessionToken}`;
       }
     }
     
@@ -167,18 +176,23 @@ class CommunicationAPIClient {
     retried = false
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
+    const deviceRequest = endpoint.startsWith('/v1/communications/device-') ||
+      endpoint === '/v1/communications/calls/soc' ||
+      /^\/v1\/communications\/devices\/[^/]+\/heartbeat$/.test(endpoint);
+    const deviceToken = typeof window !== 'undefined' ? localStorage.getItem('commDeviceToken') : null;
+    const authHeaders = { ...this.getHeaders(), ...(deviceRequest && deviceToken ? { Authorization: `Bearer ${deviceToken}`, 'x-device-token': deviceToken } : {}) };
     
     const response = await fetch(url, {
       ...options,
       headers: {
-        ...this.getHeaders(),
+        ...authHeaders,
         ...options.headers,
       },
       credentials: 'include',
     });
     
     if (!response.ok) {
-      if (response.status === 401 && !retried && typeof window !== 'undefined') {
+      if (response.status === 401 && deviceRequest && !retried && typeof window !== 'undefined') {
         const refreshToken = localStorage.getItem('commDeviceRefreshToken');
         if (refreshToken) {
           const refreshed = await fetch(`${this.baseUrl}/v1/communications/devices/refresh`, {
@@ -205,6 +219,7 @@ class CommunicationAPIClient {
       throw new Error(error.message || error.error || 'Request failed');
     }
     
+    if (response.status === 204) return undefined as T;
     return response.json();
   }
   
@@ -213,98 +228,12 @@ class CommunicationAPIClient {
   // ============================================================================
   
   async getBranchDirectory(): Promise<BranchContact[]> {
-    let commBranches: BranchContact[] = [];
-    try {
-      const response = await this.request<{ data: BranchContact[] }>(
-        '/v1/communications/directory/branches'
-      );
-      if (Array.isArray(response?.data)) {
-        commBranches = response.data;
-      }
-    } catch (err) {
-      console.warn('[CommunicationsAPI] Failed to fetch branch directory:', err);
-    }
-
-    // Ensure calling module branches match the VMS module branches:
-    try {
-      const vmsRes = await this.request<{ data: Array<{ id: string; name: string; code?: string; branchCode?: string }> }>(
-        '/v1/branches'
-      ).catch(() => null);
-
-      const vmsBranches = Array.isArray(vmsRes?.data) ? vmsRes.data : [];
-      if (vmsBranches.length === 0) {
-        return commBranches;
-      }
-
-      const branchMap = new Map<string, BranchContact>();
-      for (const b of commBranches) {
-        branchMap.set(b.branchId, b);
-      }
-
-      for (const vb of vmsBranches) {
-        const id = vb.id;
-        const name = vb.name;
-        if (!id || !name) continue;
-
-        if (!branchMap.has(id)) {
-          branchMap.set(id, {
-            branchId: id,
-            branchName: name,
-            branchCode: vb.code || vb.branchCode,
-            presence: 'ONLINE',
-            onlineDeviceCount: 1,
-            totalDeviceCount: 1,
-            employees: [
-              {
-                employeeId: `emp_${id.substring(0, 8)}`,
-                employeeName: `${name} Station`,
-                role: 'Operator',
-                branchId: id,
-                branchName: name,
-                presence: 'ONLINE',
-                onlineDeviceCount: 1,
-              }
-            ],
-          });
-        }
-      }
-
-      return Array.from(branchMap.values()).sort((a, b) => a.branchName.localeCompare(b.branchName));
-    } catch {
-      return commBranches;
-    }
+    const response = await this.request<{ data: BranchContact[] }>('/v1/communications/directory/branches');
+    return Array.isArray(response.data) ? response.data : [];
   }
   
   async getEmployeeDirectory(): Promise<{ data: CommunicationEmployee[] }> {
-    try {
-      const response = await this.request<{ data: CommunicationEmployee[] }>(
-        '/v1/communications/directory/employees'
-      );
-      if (response && response.data) return response;
-    } catch {
-      // Fallback: derive from branch directory
-    }
-    const branches = await this.getBranchDirectory();
-    const allEmployees: CommunicationEmployee[] = [];
-    const seen = new Set<string>();
-    for (const b of (Array.isArray(branches) ? branches : [])) {
-      if (Array.isArray(b.employees)) {
-        for (const emp of b.employees) {
-          if (!seen.has(emp.employeeId)) {
-            seen.add(emp.employeeId);
-            allEmployees.push({
-              employeeId: emp.employeeId,
-              employeeName: emp.employeeName,
-              employeeRole: emp.role || 'Operator',
-              branchId: emp.branchId || b.branchId,
-              branchName: emp.branchName || b.branchName,
-              presence: (emp.presence as any) || 'ONLINE',
-            });
-          }
-        }
-      }
-    }
-    return { data: allEmployees };
+    return this.request<{ data: CommunicationEmployee[] }>('/v1/communications/directory/employees');
   }
   
   async getBranchPresence(branchId: string): Promise<{ presence: CommunicationPresence; devices: any[] }> {
@@ -353,6 +282,14 @@ class CommunicationAPIClient {
     );
     return response.data;
   }
+
+  async callRegisteredDevice(deviceId: string): Promise<StartedCall> {
+    const response = await this.request<{ data: StartedCall }>(
+      `/v1/communications/calls/device/${encodeURIComponent(deviceId)}`,
+      { method: 'POST' }
+    );
+    return response.data;
+  }
   
   async callVMS(employeeId?: string, context?: string): Promise<StartedCall> {
     const payload: { actorType: 'BRANCH_DEVICE' | 'EMPLOYEE'; actorEmployeeId?: string; context?: string } = {
@@ -398,23 +335,32 @@ class CommunicationAPIClient {
     return response.data;
   }
 
+  async callDeviceToDevice(deviceId: string, actorEmployeeId?: string): Promise<StartedCall> {
+    const response = await this.request<{ data: StartedCall }>(
+      `/v1/communications/device-calls/device/${encodeURIComponent(deviceId)}`,
+      { method: 'POST', body: JSON.stringify({ actorEmployeeId }) }
+    );
+    return response.data;
+  }
+
   async getDeviceDirectory(): Promise<{
     branches: BranchContact[];
     employees: EmployeeContact[];
     linkedEmployees: CommunicationEmployee[];
+    vmsUsers: CommunicationEmployee[];
   }> {
     const response = await this.request<{
       data: {
         branches: BranchContact[];
         employees: EmployeeContact[];
         linkedEmployees: CommunicationEmployee[];
+        vmsUsers: CommunicationEmployee[];
       };
     }>('/v1/communications/device-directory');
     return response.data;
   }
   
-  async acceptCall(callId: string): Promise<{ call: CallSession; credentials: WebRTCCredentials }> {
-    const isDevice = typeof window !== 'undefined' && Boolean(localStorage.getItem('commDeviceToken'));
+  async acceptCall(callId: string, isDevice = false): Promise<{ call: CallSession; credentials: WebRTCCredentials }> {
     const response = await this.request<{ data: { call: CallSession; credentials: WebRTCCredentials } }>(
       isDevice
         ? `/v1/communications/device-calls/${encodeURIComponent(callId)}/accept`
@@ -426,8 +372,7 @@ class CommunicationAPIClient {
     return response.data;
   }
   
-  async rejectCall(callId: string, reason?: string): Promise<CallSession> {
-    const isDevice = typeof window !== 'undefined' && Boolean(localStorage.getItem('commDeviceToken'));
+  async rejectCall(callId: string, reason?: string, isDevice = false): Promise<CallSession> {
     const response = await this.request<{ data: CallSession }>(
       isDevice
         ? `/v1/communications/device-calls/${encodeURIComponent(callId)}/reject`
@@ -440,8 +385,7 @@ class CommunicationAPIClient {
     return response.data;
   }
   
-  async cancelCall(callId: string): Promise<CallSession> {
-    const isDevice = typeof window !== 'undefined' && Boolean(localStorage.getItem('commDeviceToken'));
+  async cancelCall(callId: string, isDevice = false): Promise<CallSession> {
     const response = await this.request<{ data: CallSession }>(
       isDevice
         ? `/v1/communications/device-calls/${encodeURIComponent(callId)}/cancel`
@@ -453,8 +397,7 @@ class CommunicationAPIClient {
     return response.data;
   }
   
-  async endCall(callId: string): Promise<CallSession> {
-    const isDevice = typeof window !== 'undefined' && Boolean(localStorage.getItem('commDeviceToken'));
+  async endCall(callId: string, isDevice = false): Promise<CallSession> {
     const response = await this.request<{ data: CallSession }>(
       isDevice
         ? `/v1/communications/device-calls/${encodeURIComponent(callId)}/end`
@@ -491,6 +434,21 @@ class CommunicationAPIClient {
   // ============================================================================
   // MESSAGING
   // ============================================================================
+
+  async getDirectMessages(isDevice = false): Promise<DirectMessage[]> {
+    const response = await this.request<{ data: DirectMessage[] }>(
+      isDevice ? '/v1/communications/device-direct-messages' : '/v1/communications/direct-messages'
+    );
+    return response.data;
+  }
+
+  async sendDirectMessage(recipientType: 'OPERATOR' | 'DEVICE' | 'BRANCH', recipientId: string, body: string, isDevice = false): Promise<DirectMessage> {
+    const response = await this.request<{ data: DirectMessage }>(
+      isDevice ? '/v1/communications/device-direct-messages' : '/v1/communications/direct-messages',
+      { method: 'POST', body: JSON.stringify({ recipientType, recipientId, body }) }
+    );
+    return response.data;
+  }
   
   async getConversations(): Promise<Conversation[]> {
     const response = await this.request<{ data: { conversations: Conversation[] } }>(
@@ -587,6 +545,10 @@ class CommunicationAPIClient {
       }
     );
   }
+
+  async logoutDevice(): Promise<void> {
+    await this.request<void>('/v1/communications/device-logout', { method: 'POST' });
+  }
   
   // ============================================================================
   // ADMIN - ENROLLMENT CODE MANAGEMENT
@@ -595,6 +557,7 @@ class CommunicationAPIClient {
   async generateEnrollmentCode(params: {
     branchId: string;
     expiresInHours: number;
+    allowedDeviceType: 'BRANCH_SHARED' | 'EMPLOYEE_MOBILE';
     note?: string;
   }): Promise<CommunicationEnrollmentCode> {
     const response = await this.request<{ id: string; code: string; branchId: string; expiresAt: string }>(
@@ -603,6 +566,7 @@ class CommunicationAPIClient {
         method: 'POST',
         body: JSON.stringify({
           branchId: params.branchId,
+          allowedDeviceType: params.allowedDeviceType,
           expiresInMinutes: Math.max(1, Math.min(10080, Math.round(params.expiresInHours * 60))),
         }),
       }

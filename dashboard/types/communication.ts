@@ -179,6 +179,8 @@ export interface CommunicationDevice {
   platform: string;
   status: CommunicationDeviceStatus;
   linkedEmployeeIds: string[];
+  assignedEmployeeCode?: string | null;
+  assignedEmployeeName?: string | null;
   lastSeenAt?: string;
   enrolledAt: string;
   revokedAt?: string;

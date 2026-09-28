@@ -221,6 +221,7 @@ export class CommunicationPresenceService {
       `SELECT id, device_name as "deviceName"
       FROM communication_devices
       WHERE branch_id = $1 AND tenant_id = $2
+        AND device_type IN ('BRANCH_SHARED', 'BRANCH_MOBILE', 'EMERGENCY_DEVICE')
         AND status IN ('ACTIVE', 'OFFLINE')`,
       [branchId, tenantId]
     );
@@ -457,17 +458,8 @@ export class CommunicationPresenceService {
    * @returns Array of available operator IDs
    */
   async getAvailableOperators(tenantId: string): Promise<string[]> {
-    // In production, this would scan a Redis set of operators
-    // For now, query from user table with communication permissions
     const result = await this.pool.query<{ id: string }>(
-      `SELECT DISTINCT u.id
-      FROM users u
-      INNER JOIN tenant_memberships tm ON u.id = tm.user_id
-      INNER JOIN role_permissions rp ON tm.role_id = rp.role_id
-      WHERE tm.tenant_id = $1
-        AND tm.status = 'active'
-        AND u.status = 'active'
-        AND rp.action IN ('communication.receive.call', 'communication.branch.call')`,
+      `SELECT id FROM users WHERE tenant_id = $1 AND is_active = true`,
       [tenantId]
     );
 

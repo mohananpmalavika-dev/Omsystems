@@ -22,6 +22,7 @@ import {
   MemoryOperationalAlertRepository,
   type AlertFilter,
 } from "../repositories/postgres-operational-alert.repository.js";
+import { AlertSuppressionService } from "./alert-suppression.service.js";
 
 export interface AlertRealtimeEvent {
   type:
@@ -30,7 +31,8 @@ export interface AlertRealtimeEvent {
     | "ALERT_EVIDENCE_UPDATED"
     | "ALERT_ACKNOWLEDGED"
     | "ALERT_ESCALATED"
-    | "ALERT_RESOLVED";
+    | "ALERT_RESOLVED"
+    | "ALERT_SUPPRESSED";
   alertId: string;
   tenantId: string;
   revision: number;
@@ -44,6 +46,7 @@ export class AlertOperationsService {
   private readonly evidencePipeline: AlertEvidencePipelineService;
   private readonly outbox: TransactionalOutboxService;
   private repository: IOperationalAlertRepository;
+  private suppressionService: AlertSuppressionService | null = null;
 
   private readonly subscribers = new Set<(event: AlertRealtimeEvent) => void>();
 
@@ -77,6 +80,11 @@ export class AlertOperationsService {
     this.pool = databasePool;
     this.outbox.setPool(databasePool);
     this.repository = new PostgresOperationalAlertRepository(databasePool);
+    try {
+      this.suppressionService = new AlertSuppressionService(databasePool);
+    } catch {
+      this.suppressionService = null;
+    }
   }
 
   private getActivePool(): Pool | null {
@@ -103,6 +111,43 @@ export class AlertOperationsService {
     options?: { mockEvidenceFailure?: "RECORDER_OFFLINE" | "NO_RECORDING_FOUND" | "TIMEOUT" },
   ): Promise<OperationalAlert> {
     const candidate = this.normalizer.normalize(rawEvent);
+
+    // 0. Suppression Gate — check before dedup or any DB write
+    if (this.suppressionService) {
+      try {
+        const suppression = await this.suppressionService.isSuppressed(
+          candidate.tenantId,
+          candidate.branch.id,
+          candidate.camera?.id,
+          candidate.detection.type,
+        );
+        if (suppression.suppressed) {
+          // Return a minimal non-persisted sentinel so callers don't error
+          return {
+            id: `suppressed-${randomUUID()}`,
+            tenantId: candidate.tenantId,
+            revision: 0,
+            branch: candidate.branch,
+            camera: candidate.camera,
+            detection: candidate.detection,
+            severity: candidate.severity,
+            status: "DISMISSED" as const,
+            occurredAt: candidate.occurredAt,
+            responseDeadline: candidate.occurredAt,
+            resolutionDeadline: candidate.occurredAt,
+            evidence: { state: "FAILED", snapshotState: "FAILED", clipState: "FAILED" },
+            escalationLevel: 0,
+            occurrenceCount: 0,
+            firstSeenAt: candidate.occurredAt,
+            lastSeenAt: candidate.occurredAt,
+            dedupKey: candidate.dedupKey,
+            tags: ["suppressed", `scope:${suppression.matchedScope}`],
+          } as OperationalAlert;
+        }
+      } catch {
+        // Suppression check failures must never block alert creation
+      }
+    }
 
     // 1. Pre-generate ID and Check Deduplication & Suppression Window
     const alertId = `alert-${randomUUID()}`;

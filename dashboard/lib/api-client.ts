@@ -7040,7 +7040,79 @@ export const behavioralApi = {
     ),
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Alert Suppression API
+// Activate / deactivate alerts at global, branch, camera, or detection-type scope
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type SuppressionScope = "global" | "branch" | "camera";
+
+export interface SuppressionConfig {
+  id: string;
+  tenantId: string;
+  branchId: string | null;
+  cameraId: string | null;
+  detectionType: string | null;
+  suppressed: boolean;
+  label: string;
+  updatedBy: string;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface ToggleSuppressionInput {
+  branchId?: string | null;
+  cameraId?: string | null;
+  detectionType?: string | null;
+  suppressed: boolean;
+  label?: string;
+  reason?: string;
+}
+
+export const alertSuppressionApi = {
+  /** List all suppression configs for the current tenant */
+  list: (params?: { branchId?: string; cameraId?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.branchId) qs.set('branchId', params.branchId);
+    if (params?.cameraId) qs.set('cameraId', params.cameraId);
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return fetchApi<{ success: boolean; count: number; data: SuppressionConfig[] }>(
+      `/v1/alerts/suppression${query}`
+    );
+  },
+
+  /** Toggle a specific detection type at a specific scope (upsert) */
+  toggle: (input: ToggleSuppressionInput) =>
+    fetchApi<{ success: boolean; data: SuppressionConfig }>('/v1/alerts/suppression/toggle', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  /** Toggle ALL alert types at once for a given scope */
+  bulkToggle: (input: { branchId?: string | null; cameraId?: string | null; suppressed: boolean; reason?: string }) =>
+    fetchApi<{ success: boolean; data: SuppressionConfig }>('/v1/alerts/suppression/bulk-toggle', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  /** Delete a suppression config (alerts will resume) */
+  delete: (id: string) =>
+    fetchApi<{ success: boolean; message: string }>(`/v1/alerts/suppression/${id}`, {
+      method: 'DELETE',
+    }),
+
+  /** Check if a specific event would be suppressed */
+  check: (params: { branchId: string; cameraId?: string; detectionType: string }) => {
+    const qs = new URLSearchParams({ branchId: params.branchId, detectionType: params.detectionType });
+    if (params.cameraId) qs.set('cameraId', params.cameraId);
+    return fetchApi<{ success: boolean; data: { suppressed: boolean; matchedScope: string; configId: string | null } }>(
+      `/v1/alerts/suppression/check?${qs.toString()}`
+    );
+  },
+};
+
 export { ApiError };
+
 
 
 
