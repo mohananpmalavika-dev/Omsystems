@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ClipboardCheck } from "lucide-react";
 import { ModulePage, ModuleStatus } from "@/components/module-page";
 import { WorkflowNav } from "@/components/workflow-nav";
+import { WorkstreamFocus } from "@/components/workstream-focus";
 import { maintenanceApi } from "@/lib/api-client";
 import type { MaintenanceAsset, WorkOrder } from "@/lib/types";
 
@@ -68,6 +69,24 @@ export default function WorkOrdersListPage() {
     { id: "working", title: "In the field", description: "Work in progress", items: matchingItems.filter(item => item.status === "in_progress") },
     { id: "complete", title: "Resolved", description: "Resolved and closed", items: matchingItems.filter(item => ["resolved", "closed"].includes(item.status)) },
   ];
+  const workOrderFocus = [...matchingItems]
+    .filter((item) => !["resolved", "closed"].includes(item.status))
+    .sort((left, right) => {
+      const priority = (value: WorkOrder["severity"]) => ({ critical: 0, high: 1, medium: 2, low: 3 }[value]);
+      const leftOverdue = left.slaDueAt && Date.parse(left.slaDueAt) < Date.now() ? -1 : 0;
+      const rightOverdue = right.slaDueAt && Date.parse(right.slaDueAt) < Date.now() ? -1 : 0;
+      return leftOverdue - rightOverdue || priority(left.severity) - priority(right.severity);
+    })
+    .slice(0, 4)
+    .map((item) => ({
+      key: item.id,
+      title: item.problem,
+      detail: `${item.workOrderNumber} · ${item.assetId ? assetLabel(assetsById.get(item.assetId)) : "No linked asset"}`,
+      meta: `${item.severity} · ${item.status.replaceAll("_", " ")}`,
+      action: "Open work order",
+      tone: (item.severity === "critical" ? "critical" : "warning") as "critical" | "warning",
+      href: `/maintenance/workorders/${item.id}`,
+    }));
 
   return (
     <ModulePage
@@ -88,6 +107,7 @@ export default function WorkOrdersListPage() {
     >
       <div className="work-order-board-page">
         <div className="service-board-toolbar"><WorkflowNav label="Work order view" value={view} onChange={setView} items={[{id:"board",label:"Service board"},{id:"table",label:"Record view"}]} /><input className="input" aria-label="Search work orders" placeholder="Find an order, asset or problem" value={query} onChange={event=>setQuery(event.target.value)}/></div>
+        <WorkstreamFocus eyebrow="Service priority" title="Field work that needs movement." description="Open orders are ranked by overdue SLA first, then by their reported severity." items={workOrderFocus} emptyMessage={loading ? "Refreshing field service work…" : "No open work orders match this view."} />
         <div hidden={view!=="board"} className="service-board">
           {lanes.map(lane=><section key={lane.id} className={`service-board-lane service-board-${lane.id}`}><header><p className="workflow-kicker">{lane.description}</p><h2>{lane.title}<span>{lane.items.length}</span></h2></header><div>{lane.items.map(item=><Link className="service-order-card" href={`/maintenance/workorders/${item.id}`} key={item.id}><div><span className="module-id">{item.workOrderNumber}</span><span className={`module-priority ${item.severity}`}>{item.severity}</span></div><h3>{item.problem}</h3><p>{item.assetId?assetLabel(assetsById.get(item.assetId)):"No linked asset"}</p><footer><SlaDueCell value={item.slaDueAt} status={item.status}/><span>Open order ↗</span></footer></Link>)}{lane.items.length===0&&<p className="service-board-empty">No matching orders in this stage.</p>}</div></section>)}
         </div>

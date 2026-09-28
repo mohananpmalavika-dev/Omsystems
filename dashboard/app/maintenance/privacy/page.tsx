@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Camera, FileCheck2, Plus, ShieldAlert, ShieldCheck } from "lucide-react";
 import { PageHero } from "@/components/page-hero";
 import { privacyApi } from "@/lib/api-client";
+import { WorkstreamFocus } from "@/components/workstream-focus";
 
 export default function MaintenancePrivacyPage() {
   const [summary, setSummary] = useState<any>(null);
@@ -63,6 +64,42 @@ export default function MaintenancePrivacyPage() {
         </div>
         </div>
       </div>
+
+      <WorkstreamFocus
+        eyebrow="Privacy readiness"
+        title="Keep lawful processing and response coverage current."
+        description="Open the workstream that needs governance attention before moving into the full privacy register."
+        items={[
+          {
+            key: "open-breaches",
+            title: `${loading ? "…" : summary?.openBreaches ?? 0} breach cases awaiting closure`,
+            detail: "Review the response stage, remediation record, and accountable owner.",
+            meta: "Breach response",
+            action: "Open breach log",
+            tone: ((summary?.openBreaches ?? 0) > 0 ? "critical" : "neutral") as "critical" | "neutral",
+            href: "/maintenance/privacy/breaches",
+          },
+          {
+            key: "camera-controls",
+            title: `${loading ? "…" : summary?.assignedPurposes ?? 0} camera purpose assignments`,
+            detail: "Confirm capture devices only process data for approved purposes.",
+            meta: "Camera safeguards",
+            action: "Review controls",
+            tone: "warning" as const,
+            href: "/maintenance/privacy/controls",
+          },
+          {
+            key: "lawful-purpose",
+            title: `${loading ? "…" : summary?.activePurposes ?? 0} active lawful purposes`,
+            detail: "Maintain the processing register and its documented lawful basis.",
+            meta: "Processing register",
+            action: "Open register",
+            tone: "neutral" as const,
+            href: "/maintenance/privacy/purposes",
+          },
+        ]}
+        emptyMessage="Privacy readiness is being calculated."
+      />
 
       <section className="privacy-register-panel">
         <div className="privacy-panel-heading">

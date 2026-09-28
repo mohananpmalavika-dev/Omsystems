@@ -45,6 +45,7 @@ import { AppLayout, defaultMenuAccessForRole, menuKey, navigation } from "@/comp
 import { useOrgBranding } from "@/components/ui/org-branding-provider";
 import { organizationApi, userApi } from "@/lib/api-client";
 import { CameraPermissionManager } from "@/components/camera-permission-manager";
+import { WorkstreamFocus } from "@/components/workstream-focus";
 import { getCurrentUser, isSuperAdminOrgCreator } from "@/lib/auth-manager";
 
 type OrgNode = {
@@ -1431,6 +1432,41 @@ export default function OrganizationHierarchyPage() {
     );
   }
 
+  const pendingFaceEmployees = employees.filter((employee) => !employee.photoUrl && !employee.avatarUrl && !employee.facePhotoBase64);
+  const organizationFocus = [
+    {
+      key: "branch-hierarchy",
+      title: `${flatNodes.filter((node) => node.type === "branch").length} branch workspaces`,
+      detail: "Review the organization tree and branch-level location coverage.",
+      meta: "Estate structure",
+      action: "Open hierarchy",
+      tone: "neutral" as const,
+      onClick: () => handleTabChange("hierarchy"),
+    },
+    {
+      key: "biometric-enrollment",
+      title: `${pendingFaceEmployees.length} employees awaiting face enrollment`,
+      detail: "Filter the employee directory to complete biometric readiness.",
+      meta: "Identity readiness",
+      action: "Review employees",
+      tone: (pendingFaceEmployees.length > 0 ? "warning" : "neutral") as "warning" | "neutral",
+      onClick: () => {
+        setEmpFaceFilter("pending");
+        setEmpCurrentPage(1);
+        handleTabChange("employees");
+      },
+    },
+    {
+      key: "role-governance",
+      title: `${roles.length} custom access roles`,
+      detail: "Review scoped menus and permission assignments before operational changes.",
+      meta: "Access governance",
+      action: "Review roles",
+      tone: "neutral" as const,
+      onClick: () => handleTabChange("roles"),
+    },
+  ];
+
   return (
     <AppLayout>
       <main className="min-h-screen bg-slate-950 text-slate-100 p-6 max-w-7xl mx-auto space-y-6">
@@ -1548,6 +1584,14 @@ export default function OrganizationHierarchyPage() {
             </span>
           </div>
         </div>
+
+        <WorkstreamFocus
+          eyebrow="Identity & access"
+          title="Keep the operational identity model ready."
+          description="Use these shortcuts to close biometric, location, and access-governance gaps before they become an operational blocker."
+          items={organizationFocus}
+          emptyMessage="Organization readiness is being calculated."
+        />
 
         {/* Tab Navigation */}
         <div className="flex border-b border-slate-800 gap-2">

@@ -6,6 +6,7 @@ import { Boxes, Download, Filter, Search } from "lucide-react";
 import { ModulePage, ModuleStatus } from "@/components/module-page";
 import { RecordBrowser } from "@/components/record-browser";
 import { WorkflowNav } from "@/components/workflow-nav";
+import { WorkstreamFocus } from "@/components/workstream-focus";
 import { maintenanceApi, organizationApi } from "@/lib/api-client";
 import type { MaintenanceAsset, MaintenanceVendor } from "@/lib/types";
 
@@ -86,6 +87,23 @@ export default function AssetsListPage() {
       );
     });
   }, [assets, categoryFilter, statusFilter, searchQuery, vendorMap, branchMap]);
+
+  const assetFocus = useMemo(() => filteredAssets
+    .filter((asset) => ["offline", "degraded", "maintenance_due"].includes(asset.status))
+    .sort((left, right) => {
+      const priority = (value: MaintenanceAsset["status"]) => ({ offline: 0, degraded: 1, maintenance_due: 2, operational: 3, retired: 4 }[value]);
+      return priority(left.status) - priority(right.status);
+    })
+    .slice(0, 4)
+    .map((asset) => ({
+      key: asset.id,
+      title: [asset.make, asset.model].filter(Boolean).join(" ") || asset.assetType,
+      detail: `${asset.branchNodeId ? branchMap.get(asset.branchNodeId) || asset.branchNodeId : "Tenant-level"} · ${asset.location || "Location not set"}`,
+      meta: asset.status.replaceAll("_", " "),
+      action: "Review asset",
+      tone: (asset.status === "offline" ? "critical" : "warning") as "critical" | "warning",
+      href: `/maintenance/assets/${asset.id}`,
+    })), [filteredAssets, branchMap]);
 
   const exportAllAssetReport = () => {
     if (assets.length === 0) return;
@@ -265,6 +283,14 @@ export default function AssetsListPage() {
           Export All Asset Report
         </button>
       </div>
+
+      <WorkstreamFocus
+        eyebrow="Fleet attention"
+        title="Assets that need a service decision."
+        description="Offline, degraded, and maintenance-due assets are surfaced before the full asset catalogue."
+        items={assetFocus}
+        emptyMessage={loading ? "Refreshing the asset register…" : "No assets in the current view need service attention."}
+      />
 
       <section hidden={view!=="browse"}><RecordBrowser label="Asset records" records={filteredAssets.map(asset=>({id:asset.id,title:[asset.make,asset.model].filter(Boolean).join(" ")||asset.assetType,subtitle:`${asset.assetType} · ${asset.serialNumber||asset.id}`,status:asset.status,href:`/maintenance/assets/${asset.id}`,fields:[{label:"Branch",value:asset.branchNodeId?branchMap.get(asset.branchNodeId)||asset.branchNodeId:"Tenant-level"},{label:"Location",value:asset.location},{label:"Vendor",value:asset.vendorId?vendorMap.get(asset.vendorId)||asset.vendorId:undefined},{label:"Firmware",value:asset.firmwareVersion},{label:"Installed",value:asset.installationDate?.split("T")[0]},{label:"Warranty expires",value:asset.warrantyExpiresAt?.split("T")[0]}],actionHref:`/maintenance/workorders/new?assetId=${encodeURIComponent(asset.id)}`,actionLabel:"Plan service for this asset"}))}/></section>
       <div hidden={view!=="table"} className="module-table-wrap" style={{ overflowX: "auto" }}>

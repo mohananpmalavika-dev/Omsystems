@@ -4,6 +4,7 @@ import { FieldVisual } from "@/components/field-visual";
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, Search, Filter, TrendingUp, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
+import { WorkstreamFocus } from "@/components/workstream-focus";
 
 interface Finding {
   id: string;
@@ -67,6 +68,19 @@ export default function FindingsPage() {
 
     return matchesSearch && matchesSeverity && matchesStatus;
   });
+  const findingFocus = [...filteredFindings]
+    .filter((finding) => !["resolved", "closed"].includes(finding.status))
+    .sort((left, right) => severityScore(right.severity) - severityScore(left.severity) || right.riskScore - left.riskScore)
+    .slice(0, 4)
+    .map((finding) => ({
+      key: finding.id,
+      title: finding.title,
+      detail: `Risk score ${finding.riskScore} · Identified by ${finding.identifiedBy}`,
+      meta: `${finding.severity} · ${finding.status.replaceAll("_", " ")}`,
+      action: "Open finding",
+      tone: (["critical", "high"].includes(finding.severity) ? "critical" : "warning") as "critical" | "warning",
+      href: `/compliance/findings/${finding.id}`,
+    }));
 
   const severityConfig = {
     critical: { color: 'bg-red-100 text-red-800 border-red-500', icon: '🔴' },
@@ -170,6 +184,14 @@ export default function FindingsPage() {
             </div>
           </div>
         </div>
+
+        <WorkstreamFocus
+          eyebrow="Assurance queue"
+          title="Close the risk gaps that matter first."
+          description="Open findings are ordered by their severity and risk score, while the full evidence-backed register stays available below."
+          items={findingFocus}
+          emptyMessage={loading ? "Refreshing compliance evidence…" : "No open compliance findings require action."}
+        />
 
         {/* Filters */}
         <div className="bg-white rounded-xl shadow-md p-6 mb-6">

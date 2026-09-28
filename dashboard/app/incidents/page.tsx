@@ -7,6 +7,7 @@ import { PageHero } from "@/components/page-hero";
 import { Plus, Siren, Camera, FileVideo, MapPin, Building2, Eye } from "lucide-react";
 import { IncidentMediaModal } from "@/components/incident-media-modal";
 import { InvestigationFlowNav } from "@/components/investigation-flow-nav";
+import { WorkstreamFocus } from "@/components/workstream-focus";
 import { useSearchParams } from "next/navigation";
 
 type Incident = {
@@ -146,6 +147,22 @@ function IncidentsPageContent() {
     }
     return true;
   });
+  const incidentFocus = [...filteredIncidents]
+    .filter((incident) => !["closed", "resolved", "false-positive", "cancelled"].includes(incident.status))
+    .sort((left, right) => {
+      const priority = (value: string) => ({ P1: 0, P2: 1, P3: 2, P4: 3, P5: 4 }[value] ?? 5);
+      return priority(left.severity) - priority(right.severity) || Date.parse(right.occurredAt || right.createdAt) - Date.parse(left.occurredAt || left.createdAt);
+    })
+    .slice(0, 4)
+    .map((incident) => ({
+      key: incident.id,
+      title: incident.title,
+      detail: `${incident.branchName || incident.branchId || "Headquarters"} · ${incident.status.replaceAll("-", " ")}`,
+      meta: `${incident.severity} · ${incident.incidentNumber}`,
+      action: "Open incident",
+      tone: (["P1", "P2"].includes(incident.severity) ? "critical" : "warning") as "critical" | "warning",
+      href: `/incidents/${incident.id}`,
+    }));
 
   return (
     <AppLayout>
@@ -189,6 +206,14 @@ function IncidentsPageContent() {
             />
           </div>
         )}
+
+        <WorkstreamFocus
+          eyebrow="Response queue"
+          title="Decide what needs an owner next."
+          description="Open incidents are ranked by severity and recency; the complete register remains below."
+          items={incidentFocus}
+          emptyMessage={loading ? "Refreshing the response queue…" : "No open incidents require triage right now."}
+        />
 
         {/* View Tabs */}
         <div className="incident-view-tabs flex gap-2 mb-4 pb-2 border-b border-slate-800">

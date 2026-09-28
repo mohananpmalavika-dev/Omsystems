@@ -45,6 +45,7 @@ import {
   normalizeAlertDate,
   formatDisplayDate,
 } from "@/components/alerts/alerts-graphical-analytics";
+import { WorkstreamFocus } from "@/components/workstream-focus";
 
 export default function AiAlertsIncidentHubPage() {
   const [alerts, setAlerts] = useState<AnalyticsAlert[]>([]);
@@ -270,6 +271,27 @@ export default function AiAlertsIncidentHubPage() {
     return { total, active, converted, unconverted, critical, falseAlarms };
   }, [isFiltered, summary, filteredAlerts, alerts]);
 
+  const alertFocus = useMemo(() => alerts
+    .filter((alert) => !alert.incidentId && !alert.incidentNumber && !["resolved", "false_alarm", "suppressed"].includes(alert.status))
+    .sort((left, right) => {
+      const priority = (value: string) => ({ P1: 0, P2: 1, P3: 2, P4: 3, P5: 4 }[value] ?? 5);
+      return priority(left.severity) - priority(right.severity) || Date.parse(right.lastDetectedAt || right.createdAt) - Date.parse(left.lastDetectedAt || left.createdAt);
+    })
+    .slice(0, 4)
+    .map((alert) => ({
+      key: alert.id,
+      title: alert.title,
+      detail: `${alert.branchName || normalizeBranch(alert)} · ${alert.cameraName || alert.cameraId}`,
+      meta: `${alert.severity} · Awaiting conversion`,
+      action: "Open alert queue",
+      tone: (["P1", "P2"].includes(alert.severity) ? "critical" : "warning") as "critical" | "warning",
+      onClick: () => {
+        setSearchQuery(alert.title);
+        setConversionFilter("unconverted");
+        setViewMode("table");
+      },
+    })), [alerts]);
+
   // Convert to incident handler
   const handleConvertIncident = async (alertId: string) => {
     setConvertingId(alertId);
@@ -493,6 +515,14 @@ export default function AiAlertsIncidentHubPage() {
               </button>
             </div>
           }
+        />
+
+        <WorkstreamFocus
+          eyebrow="Incident conversion"
+          title="Alerts waiting for a response decision."
+          description="The highest-priority unconverted detections are surfaced first. Opening one narrows the live alert queue."
+          items={alertFocus}
+          emptyMessage={loading ? "Refreshing alert telemetry…" : "Every active alert is already converted, resolved, or suppressed."}
         />
 
         {/* Graphical Representation of Alerts (Zone-wise, Region-wise, Area-wise, Branch-wise, Alert Type-wise, Date-wise) */}
