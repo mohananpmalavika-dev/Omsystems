@@ -122,6 +122,22 @@ describe("reports routes", () => {
     expect(unsupported.statusCode).toBe(400);
   });
 
+  it("requires export permission for the requested branch", async () => {
+    const branchManager = { "x-user-id": "user-branch-manager" };
+    const allowed = await app.inject({
+      method: "POST", url: "/v1/reports/export", headers: branchManager,
+      payload: { reportType: "operations", format: "json", filters: { branchId: "A005" } },
+    });
+    expect(allowed.statusCode).toBe(200);
+    expect(allowed.json().data.branchSummaries.every((branch: { branchId: string }) => branch.branchId === "A005")).toBe(true);
+
+    const denied = await app.inject({
+      method: "POST", url: "/v1/reports/export", headers: branchManager,
+      payload: { reportType: "operations", format: "json", filters: { branchId: "A006" } },
+    });
+    expect(denied.statusCode).toBe(403);
+  });
+
   it("reports observed compliance and maintenance facts", async () => {
     const compliance = await app.inject({
       method: "GET",

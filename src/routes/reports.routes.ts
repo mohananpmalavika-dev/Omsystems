@@ -141,6 +141,9 @@ export async function registerReportsRoutes(
     if (!await canReadReportType(store, request.currentUser, body.reportType)) {
       return forbidden(reply);
     }
+    if (!await canExportReportScope(store, request.currentUser, body.reportType, body.filters?.branchId)) {
+      return forbidden(reply);
+    }
 
     const reportData = await buildExportReport(store, request.currentUser, body);
     if (reportData === null) {
@@ -243,7 +246,10 @@ async function buildOperationsReport(
   const offlineCount = branchSummaries.reduce((sum, branch) => sum + branch.offlineCount, 0);
   const degradedCount = branchSummaries.reduce((sum, branch) => sum + branch.degradedCount, 0);
   const unknownCount = branchSummaries.reduce((sum, branch) => sum + branch.unknownCount, 0);
-  const incidentResult = await listScopedIncidents(store, user, { branchId });
+  const incidentResult = await listScopedIncidents(store, user, {
+    branchId,
+    branchIds: branches.map((branch) => branch.id),
+  });
   const incidents = incidentResult.data;
 
   return {
@@ -295,7 +301,9 @@ async function buildSystemHealthReport(store: ControlPlaneStore, user: User) {
   ));
   const cameras = cameraLists.flat();
   const storageNodes = await listScopedStorageNodes(store, user, "live:view");
-  const incidentsResult = await listScopedIncidents(store, user);
+  const incidentsResult = await listScopedIncidents(store, user, {
+    branchIds: branches.map((branch) => branch.id),
+  });
   const onlineCameras = cameras.filter((camera) => camera.status === "online").length;
   const offlineCameras = cameras.filter((camera) => camera.status === "offline").length;
   const degradedCameras = cameras.filter((camera) => camera.status === "degraded").length;
@@ -593,12 +601,13 @@ async function buildActivityReport(
 async function listScopedIncidents(
   store: ControlPlaneStore,
   user: User,
-  filters: { branchId?: string; from?: string; to?: string; limit?: number } = {},
+  filters: { branchId?: string; branchIds?: string[]; from?: string; to?: string; limit?: number } = {},
 ) {
   const accessibleNodes = await store.listAccessibleNodes(user, "incident:view");
   const accessibleBranchIds = new Set(accessibleNodes
     .filter((node) => node.type === "branch")
-    .map((node) => node.id));
+    .map((node) => node.id)
+    .filter((id) => !filters.branchIds || filters.branchIds.includes(id)));
   const tenantWide = accessibleNodes.some((node) => node.type === "company");
   if (filters.branchId && !accessibleBranchIds.has(filters.branchId)) {
     return {
@@ -620,7 +629,7 @@ async function listScopedIncidents(
   const branchIds = filters.branchId ? [filters.branchId] : [...accessibleBranchIds];
   const candidates = await store.listIncidents(user.tenantId, {
     branchIds,
-    includeUnscoped: tenantWide && !filters.branchId,
+    includeUnscoped: tenantWide && !filters.branchId && !filters.branchIds,
     from: filters.from,
     to: filters.to,
     limit: limit + 1,
@@ -628,7 +637,7 @@ async function listScopedIncidents(
   const scoped = candidates.filter((incident) =>
     incident.branchId
       ? branchIds.includes(incident.branchId)
-      : tenantWide && !filters.branchId
+      : tenantWide && !filters.branchId && !filters.branchIds
   );
   return {
     data: scoped.slice(0, limit),
@@ -684,6 +693,32 @@ async function canReadReportType(store: ControlPlaneStore, user: User, reportTyp
         ? "device:configure"
         : "live:view";
   return hasAnyAccess(store, user, action);
+}
+
+async function canExportReportScope(
+  store: ControlPlaneStore,
+  user: User,
+  reportType: ReportType,
+  branchId?: string,
+) {
+  if (reportType === "privacy" || reportType === "compliance") {
+    return hasTenantWideAccess(store, user, "analytics:export");
+  }
+  const action: Action = reportType === "incidents" || reportType === "activity"
+    ? "incident:view"
+    : reportType === "analytics"
+      ? "analytics:view"
+      : reportType === "maintenance"
+        ? "device:configure"
+        : "live:view";
+  const [exportable, readable] = await Promise.all([
+    store.listAccessibleNodes(user, "analytics:export", "branch"),
+    store.listAccessibleNodes(user, action, "branch"),
+  ]);
+  const exportableIds = new Set(exportable.map((branch) => branch.id));
+  const readableIds = new Set(readable.map((branch) => branch.id));
+  if (branchId) return exportableIds.has(branchId) && readableIds.has(branchId);
+  return readableIds.size > 0 && [...readableIds].every((id) => exportableIds.has(id));
 }
 
 async function hasAnyAccess(store: ControlPlaneStore, user: User, action: Action) {
