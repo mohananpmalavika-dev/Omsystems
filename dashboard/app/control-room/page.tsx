@@ -1198,13 +1198,18 @@ function ControlRoomContent() {
             <span>Unacknowledged</span>
           </div>
         </div>
-        <div className="stat-card">
+        <Link
+          href="/operations/storage"
+          className="stat-card storage-stat"
+          aria-label="Open storage and disk health details"
+        >
           <HardDrive size={20} className="stat-icon purple" aria-hidden="true" />
           <div>
-            <strong>{stats.storageCapacityAvailable ? `${stats.storageUsagePercent}%` : "—"}</strong>
+            <strong>{stats.storageCapacityAvailable ? `${stats.storageUsagePercent}%` : "N/A"}</strong>
             <span>{stats.storageCapacityAvailable ? "Storage used" : "No capacity telemetry"}</span>
           </div>
-        </div>
+          <ArrowUpRight size={15} aria-hidden="true" />
+        </Link>
         <button type="button" className="stat-card ai-stat" onClick={() => setAiPanelOpen(true)}>
           <BrainCircuit size={20} className="stat-icon cyan" aria-hidden="true" />
           <div>

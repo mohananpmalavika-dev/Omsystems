@@ -164,6 +164,10 @@ html[data-theme] .app-shell .experience-surface .operations-stage-room {
 .operations-stage-room .stats-bar .stat-icon.red { color: #ff8291 !important; }
 .operations-stage-room .stats-bar .stat-icon.amber { color: #f4bd69 !important; }
 .operations-stage-room .stats-bar .stat-icon.purple { color: #b49aff !important; }
+.operations-stage-room .stats-bar .storage-stat { color: inherit; text-decoration: none; cursor: pointer; }
+.operations-stage-room .stats-bar .storage-stat>svg:last-child { flex: 0 0 auto; margin-left: auto; color: #79d9cf; opacity: .55; transition: opacity .18s ease, transform .18s ease; }
+.operations-stage-room .stats-bar .storage-stat:hover>svg:last-child { opacity: 1; transform: translate(2px, -2px); }
+.operations-stage-room .stats-bar .storage-stat:focus-visible { outline: 2px solid #71ded0; outline-offset: 2px; }
 .operations-stage-room .control-room-content { position: relative; }
 .operations-stage-room .los-mode-bar { gap: 18px; padding: 5px 0 11px; }
 .operations-stage-room .los-mode-bar>nav { border-color: rgba(112, 150, 192, .2); border-radius: 11px; background: rgba(15, 28, 46, .82); }
