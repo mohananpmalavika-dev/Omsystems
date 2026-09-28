@@ -64,6 +64,60 @@ interface LiveStorageTelemetryResponse {
   observedAt: string;
 }
 
+interface StorageOverviewPayload {
+  success: boolean;
+  storageDevices?: Record<string, unknown>[];
+}
+
+function numberValue(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isMemoryCard(disk: Record<string, unknown>) {
+  const identity = [disk.id, disk.deviceId, disk.devicePath, disk.name, disk.model, disk.mediaType]
+    .filter((value): value is string => typeof value === 'string')
+    .join(' ')
+    .toLowerCase();
+  return /(?:sdcard|sd-card|micro\s*sd|\bsd\b)/.test(identity);
+}
+
+function normalizeStorageDevice(disk: Record<string, unknown>): StorageDevice {
+  const deviceId = String(disk.deviceId || disk.id || '');
+  const model = String(disk.model || disk.name || disk.devicePath || 'Storage device');
+  const capacityBytes = numberValue(disk.capacityBytes ?? disk.totalBytes);
+  const usedBytes = numberValue(disk.usedBytes);
+  const availableBytes = numberValue(disk.availableBytes ?? disk.freeBytes)
+    || (capacityBytes > 0 ? Math.max(0, capacityBytes - usedBytes) : 0);
+  const usagePercent = numberValue(disk.usagePercent)
+    || (capacityBytes > 0 ? (usedBytes / capacityBytes) * 100 : 0);
+  const memoryCard = isMemoryCard(disk);
+
+  return {
+    id: String(disk.id || deviceId),
+    deviceId,
+    name: String(disk.name || disk.devicePath || model),
+    model,
+    type: memoryCard ? 'MicroSD' : (disk.mediaType === 'SSD' ? 'SSD' : 'HDD'),
+    capacityBytes,
+    usedBytes,
+    availableBytes,
+    usagePercent,
+    smartStatus: String(disk.smartStatus || disk.healthStatus || disk.operationalStatus || 'UNKNOWN').toUpperCase() as StorageDevice['smartStatus'],
+    temperature: numberValue(disk.temperature ?? disk.temperatureC),
+    reallocatedSectors: numberValue(disk.reallocatedSectors),
+    pendingSectors: numberValue(disk.pendingSectors),
+    powerOnHours: numberValue(disk.powerOnHours),
+    estimatedDaysRemaining: numberValue(disk.estimatedDaysRemaining ?? disk.daysRemaining) || 999,
+    dailyGrowthGb: numberValue(disk.dailyGrowthGb ?? disk.dailyIngestGb),
+    branchId: typeof disk.branchId === 'string' ? disk.branchId : undefined,
+    branchName: typeof disk.branchName === 'string' ? disk.branchName : undefined,
+    cameraId: typeof disk.cameraId === 'string' ? disk.cameraId : undefined,
+    cameraName: typeof disk.cameraName === 'string' ? disk.cameraName : undefined,
+    observedAt: typeof disk.observedAt === 'string' ? disk.observedAt : new Date().toISOString(),
+  };
+}
+
 export function LiveStorageTelemetryWidget() {
   const [data, setData] = useState<LiveStorageTelemetryResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,55 +129,28 @@ export function LiveStorageTelemetryWidget() {
       setLoading(true);
       setError(null);
       
-      // Fetch operational health telemetry for disks
-      const response = await fetch('/v1/operations/health/disks', {
+      // Use the same authenticated inventory response as the Storage page.
+      // Previously this panel queried a separate route, so new camera
+      // volumes could be present in the tier summary but absent here.
+      const response = await fetch('/api/operations/storage', {
         credentials: 'include',
+        cache: 'no-store',
       });
 
       if (!response.ok) {
         throw new Error(`Failed to fetch storage telemetry: ${response.statusText}`);
       }
 
-      const disks = await response.json();
+      const payload = await response.json() as StorageOverviewPayload;
+      if (!payload.success) throw new Error('Storage inventory is unavailable');
 
       // Separate MicroSD and HDD
       const memoryCards: StorageDevice[] = [];
       const hardDisks: StorageDevice[] = [];
 
-      for (const disk of Array.isArray(disks) ? disks : (disks.data || [])) {
-        const deviceId = disk.deviceId || disk.id || '';
-        const model = disk.model || disk.name || '';
-        const isMicroSD = deviceId.includes(':sdcard') || 
-                         model.toLowerCase().includes('microsd') || 
-                         model.toLowerCase().includes('sd card') ||
-                         model.toLowerCase().includes('sandisk') ||
-                         (disk.capacityBytes && disk.capacityBytes < 500e9); // < 500GB
-
-        const device: StorageDevice = {
-          id: disk.id || deviceId,
-          deviceId,
-          name: disk.name || model,
-          model: model,
-          type: isMicroSD ? 'MicroSD' : (disk.mediaType === 'SSD' ? 'SSD' : 'HDD'),
-          capacityBytes: disk.capacityBytes || disk.totalBytes || 0,
-          usedBytes: disk.usedBytes || 0,
-          availableBytes: disk.availableBytes || disk.freeBytes || 0,
-          usagePercent: disk.usagePercent || ((disk.usedBytes || 0) / (disk.capacityBytes || 1)) * 100,
-          smartStatus: (disk.smartStatus || disk.healthStatus || 'UNKNOWN').toUpperCase() as any,
-          temperature: disk.temperature || disk.temperatureC || 0,
-          reallocatedSectors: disk.reallocatedSectors || 0,
-          pendingSectors: disk.pendingSectors || 0,
-          powerOnHours: disk.powerOnHours || 0,
-          estimatedDaysRemaining: disk.estimatedDaysRemaining || disk.daysRemaining || 999,
-          dailyGrowthGb: disk.dailyGrowthGb || disk.dailyIngestGb || 0,
-          branchId: disk.branchId,
-          branchName: disk.branchName,
-          cameraId: disk.cameraId,
-          cameraName: disk.cameraName,
-          observedAt: disk.observedAt || new Date().toISOString(),
-        };
-
-        if (isMicroSD) {
+      for (const disk of payload.storageDevices ?? []) {
+        const device = normalizeStorageDevice(disk);
+        if (device.type === 'MicroSD') {
           memoryCards.push(device);
         } else {
           hardDisks.push(device);

@@ -52,6 +52,8 @@ export interface CameraStorageMapping {
 export interface StorageOverviewResponse {
   success: boolean;
   cameras: CameraStorageMapping[];
+  /** Individual local volumes for the live MicroSD/HDD panel. */
+  storageDevices: DiskTelemetry[];
   summary: {
     totalCameras: number;
     tier1SdCardCount: number;
@@ -93,6 +95,7 @@ type DiskTelemetry = {
   id?: string;
   deviceId?: string;
   devicePath?: string;
+  name?: string;
   model?: string;
   operationalStatus?: string;
   smartStatus?: string;
@@ -100,6 +103,21 @@ type DiskTelemetry = {
   usedBytes?: number;
   availableBytes?: number;
   usagePercent?: number;
+  temperature?: number;
+  temperatureC?: number;
+  reallocatedSectors?: number;
+  pendingSectors?: number;
+  powerOnHours?: number;
+  estimatedDaysRemaining?: number;
+  daysRemaining?: number;
+  dailyGrowthGb?: number;
+  dailyIngestGb?: number;
+  branchId?: string;
+  branchName?: string;
+  cameraId?: string;
+  cameraName?: string;
+  observedAt?: string;
+  mediaType?: string;
 };
 
 function diskId(disk: DiskTelemetry) {
@@ -186,6 +204,7 @@ export async function GET(request: NextRequest) {
           SELECT 
             device_id as id,
             device_id,
+            metrics,
             metrics->>'model' as model,
             metrics->>'name' as name,
             metrics->>'smartStatus' as operational_status,
@@ -202,9 +221,10 @@ export async function GET(request: NextRequest) {
       rawCameras = camerasRes.rows;
       rawStorageNodes = nodesRes.rows;
       rawDisks = disksRes.rows.map((r: any) => ({
+        ...(r.metrics ?? {}),
         id: r.id,
         deviceId: r.device_id,
-        model: r.model || r.name,
+        model: r.model || r.metrics?.name,
         operationalStatus: r.operational_status?.toLowerCase() || 'healthy',
         smartStatus: r.smart_status?.toLowerCase() || 'healthy',
         capacityBytes: Number(r.capacity_bytes),
@@ -452,6 +472,7 @@ export async function GET(request: NextRequest) {
   const response: StorageOverviewResponse = {
     success: true,
     cameras,
+    storageDevices: rawDisks,
     summary: {
       totalCameras: cameras.length,
       tier1SdCardCount: tier1Count,

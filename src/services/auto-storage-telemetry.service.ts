@@ -32,6 +32,8 @@ export interface StorageTelemetryConfig {
 }
 
 export interface StorageMetrics {
+  /** Stable physical-volume identifier used for telemetry idempotency. */
+  deviceId: string;
   totalBytes: number;
   capacityBytes: number;
   capacityGB: number;
@@ -119,7 +121,11 @@ export class AutoStorageTelemetryService {
 
     // 2. Hard Disk (DVR / NVR SATA HDD)
     // Add whenever it's an NVR/DVR, or camera backed by recorder, or tier asks for dvr_hdd / both / auto
-    const wantsHdd = isNVR || isDVR || isStorage || config.storageTier === 'dvr_hdd' || config.storageTier === 'both' || config.storageTier === 'auto' || Boolean(config.recorderId);
+    // Camera storage selection chooses the primary recording target; it must
+    // not suppress discovery of the companion local volume.  Every camera
+    // therefore emits both its MicroSD and HDD telemetry, even when the
+    // operator selected "SD card" as the primary tier.
+    const wantsHdd = isCamera || isNVR || isDVR || isStorage || config.storageTier === 'dvr_hdd' || config.storageTier === 'both' || config.storageTier === 'auto' || Boolean(config.recorderId);
     
     if (isNVR) {
       // System drive
@@ -257,6 +263,10 @@ export class AutoStorageTelemetryService {
       const capacityGB = Math.round(totalBytes / 1e9);
 
       profiles.push({
+        // Preserve the exact volume id generated above.  Deriving this from
+        // the display name caused all recorder disks to collapse into one
+        // telemetry row and could hide a camera's companion HDD.
+        deviceId: storageConfig.deviceId,
         totalBytes,
         capacityBytes: totalBytes,
         capacityGB,
@@ -299,9 +309,7 @@ export class AutoStorageTelemetryService {
   ): Promise<void> {
     const observedAt = new Date();
     const quality = 'verified';
-    const diskDeviceId = metrics.name.toLowerCase().includes('sd') 
-      ? (config.deviceId.includes(':sdcard') ? config.deviceId : `${config.deviceId}:sdcard`)
-      : (metrics.name.toLowerCase().includes('system') ? `${config.deviceId}:disk:sys` : `${config.recorderId || config.deviceId}:disk:1`);
+    const diskDeviceId = metrics.deviceId;
 
     const idempotencyKey = `auto-storage:${config.tenantId}:${config.branchId}:${diskDeviceId}`;
 

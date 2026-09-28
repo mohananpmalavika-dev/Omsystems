@@ -52,6 +52,9 @@ describe("Storage Operations Live API", () => {
       expect(data.summary.tier2DvrHddCount).toBe(1);
       expect(data.summary.dvrHddNode.capacity).toBe("4.0 TB");
       expect(data.cameras[0].activeStorageTier).toBe("dvr_hdd");
+      expect(data.storageDevices).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: "recorder-1:disk:1", capacityBytes: 4_000_000_000_000 }),
+      ]));
       expect(fetchMock).toHaveBeenCalledTimes(3);
     } finally {
       if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
@@ -81,6 +84,10 @@ describe("Storage Operations Live API", () => {
       expect(data.summary.tier2DvrHddCount).toBe(1);
       expect(data.summary.sdCardNode.capacity).toBe("128.0 GB");
       expect(data.summary.dvrHddNode.capacity).toBe("2.0 TB");
+      expect(data.storageDevices).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: "camera:pending:sdcard", capacityBytes: 128_000_000_000 }),
+        expect.objectContaining({ id: "recorder-2:disk:1", capacityBytes: 2_000_000_000_000 }),
+      ]));
     } finally {
       if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
       else process.env.DATABASE_URL = originalDatabaseUrl;
