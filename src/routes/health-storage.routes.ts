@@ -48,6 +48,7 @@ export async function registerStorageTelemetryHealthRoutes(app: FastifyInstance,
           COUNT(DISTINCT device_id)::int as unique_devices
         FROM operational_health_telemetry
         WHERE device_type = 'disk'
+          AND idempotency_key NOT LIKE 'auto-storage:%'
           AND observed_at > NOW() - INTERVAL '7 days'`,
         []
       );
@@ -125,6 +126,7 @@ export async function registerStorageTelemetryHealthRoutes(app: FastifyInstance,
         LEFT JOIN operational_health_telemetry ot 
           ON ot.branch_id = rn.id 
           AND ot.device_type = 'disk'
+          AND ot.idempotency_key NOT LIKE 'auto-storage:%'
           AND ot.observed_at > NOW() - INTERVAL '7 days'
         WHERE rn.node_type = 'branch'
           AND rn.is_active = true
@@ -176,23 +178,9 @@ export async function registerStorageTelemetryHealthRoutes(app: FastifyInstance,
    * trigger actual storage collection from NVRs/edge agents.
    */
   app.post('/v1/health/storage-telemetry/refresh', async (request, reply) => {
-    const db = (store as any).db || (store as any).pool;
-    let provisioned = { camerasProcessed: 0, storageRecordsCreated: 0 };
-    if (db) {
-      try {
-        const { AutoStorageTelemetryService } = await import('../services/auto-storage-telemetry.service.js');
-        const autoStorage = new AutoStorageTelemetryService(db);
-        provisioned = await autoStorage.ensureAllCamerasAndDevicesStorage();
-      } catch (err) {
-        request.log.error({ err }, 'Error during storage telemetry refresh');
-      }
-    }
-    
-    return {
-      success: true,
-      message: 'Storage telemetry refresh triggered',
-      provisioned,
-      timestamp: new Date().toISOString(),
-    };
+    return reply.code(409).send({
+      success: false,
+      error: 'Storage telemetry is collected by connected edge agents and recorders; registration cannot create physical storage.',
+    });
   });
 }

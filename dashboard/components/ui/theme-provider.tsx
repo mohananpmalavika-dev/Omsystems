@@ -23,9 +23,9 @@ export const AVAILABLE_THEMES: ThemeConfig[] = [
   {
     id: "navy",
     name: "Deep Navy",
-    description: "Deep ocean blue with luminous cyan details",
+    description: "Deep ocean surfaces with KryptonVision blue details",
     previewBg: "#071322",
-    previewAccent: "#76cfff",
+    previewAccent: "#83aaff",
   },
   {
     id: "light",
@@ -36,10 +36,10 @@ export const AVAILABLE_THEMES: ThemeConfig[] = [
   },
   {
     id: "emerald",
-    name: "Aurora",
-    description: "Deep teal with luminous mint highlights",
-    previewBg: "#081a19",
-    previewAccent: "#72e0bf",
+    name: "Midnight Blue",
+    description: "Layered midnight surfaces with KryptonVision blue details",
+    previewBg: "#101d32",
+    previewAccent: "#83aaff",
   },
 ];
 

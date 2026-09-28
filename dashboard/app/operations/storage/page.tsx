@@ -28,14 +28,14 @@ interface CameraStorageMapping {
   branchId?: string;
   cameraName: string;
   ipAddress: string;
-  activeStorageTier: "sd_card" | "dvr_hdd" | "online_cloud";
-  sdCardStatus: "detected" | "not_present" | "unformatted";
-  dvrStatus: "mapped" | "unmapped" | "offline";
-  cloudStatus: "active" | "standby";
+  activeStorageTier: "sd_card" | "dvr_hdd" | "online_cloud" | "unavailable";
+  sdCardStatus: "detected" | "not_present" | "unformatted" | "unavailable";
+  dvrStatus: "mapped" | "unmapped" | "offline" | "unavailable";
+  cloudStatus: "active" | "standby" | "unavailable";
   storageDetails: string;
   capacity: string;
   used: string;
-  retentionDays: number;
+  retentionDays: number | null;
 }
 
 export default function StoragePage() {
@@ -43,6 +43,7 @@ export default function StoragePage() {
   const [loading, setLoading] = useState(true);
   const [selectedTierFilter, setSelectedTierFilter] = useState<string>("all");
   const [cameras, setCameras] = useState<CameraStorageMapping[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [summary, setSummary] = useState<{
     tier1SdCardCount: number;
     tier2DvrHddCount: number;
@@ -67,13 +68,17 @@ export default function StoragePage() {
         const data = await res.json();
         if (data.success) {
           setCameras(data.cameras || []);
+          setLoadError(null);
           if (data.summary) {
             setSummary(data.summary);
           }
         }
+      } else {
+        setLoadError("Storage inventory is unavailable. Check the control plane connection and retry.");
       }
     } catch (err) {
       console.error("Failed to load live storage operations data:", err);
+      setLoadError("Storage inventory is unavailable. Check the control plane connection and retry.");
     } finally {
       setRefreshing(false);
       setLoading(false);
@@ -85,45 +90,6 @@ export default function StoragePage() {
     const interval = setInterval(loadStorageData, 20000);
     return () => clearInterval(interval);
   }, []);
-
-  const provisionAllStorage = async () => {
-    try {
-      setRefreshing(true);
-      await fetch("/api/operations/storage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "provision_all" }),
-      });
-      await loadStorageData();
-    } catch (err) {
-      console.error("Failed to auto-provision all storage:", err);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const switchCameraStorageTier = async (id: string, targetTier: "sd_card" | "dvr_hdd" | "online_cloud") => {
-    try {
-      const res = await fetch("/api/operations/storage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cameraId: id,
-          targetTier,
-          reason: `Operator manual switch to ${targetTier}`,
-        }),
-      });
-      if (res.ok) {
-        await loadStorageData();
-      }
-    } catch (err) {
-      console.error("Failed to switch camera storage tier:", err);
-    }
-  };
-
-  const switchCameraToCloud = async (id: string) => {
-    await switchCameraStorageTier(id, "online_cloud");
-  };
 
   const filteredCameras = cameras.filter((c) => {
     if (selectedTierFilter === "all") return true;
@@ -141,15 +107,12 @@ export default function StoragePage() {
             </div>
             <div>
               <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                3-Tier Storage Auto-Detection & Fallback Engine
-                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Zero Footage Loss
-                </span>
+                Storage Detection &amp; Fallback Readiness
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Automatic chronological detection: <strong>Tier 1: Camera SD Card</strong> &rarr;{" "}
+                Preferred available medium: <strong>Tier 1: Camera SD Card</strong> &rarr;{" "}
                 <strong>Tier 2: DVR/NVR Hard Disk</strong> &rarr;{" "}
-                <strong>Tier 3: Online Cloud Recording</strong> (Fallback if neither local storage exists).
+                <strong>Tier 3: Online Cloud</strong>. Verify actual recording in the recording module.
               </p>
             </div>
           </div>
@@ -172,21 +135,12 @@ export default function StoragePage() {
               Multi-Cam Playback
             </Link>
             <button
-              onClick={() => void provisionAllStorage()}
-              disabled={refreshing}
-              className="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 transition-all font-medium disabled:opacity-50"
-              title="Automatically detect and create both MicroSD and SATA HDD storage for all devices"
-            >
-              <HardDrive className="w-3.5 h-3.5" />
-              Auto-Provision Storage
-            </button>
-            <button
               onClick={() => void loadStorageData()}
               disabled={refreshing}
               className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center gap-1.5 transition-all disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
-              {refreshing ? "Scanning Hardware..." : "Re-Scan Storage Devices"}
+              {refreshing ? "Refreshing..." : "Refresh Storage Telemetry"}
             </button>
           </div>
         </div>
@@ -203,7 +157,7 @@ export default function StoragePage() {
             </div>
             <h4 className="font-bold text-sm text-slate-200">On-Camera Memory Card</h4>
             <p className="text-xs text-slate-400">
-              Direct edge flash recording. Probed via ONVIF/ISAPI storage profile. Store-and-forward buffer on WAN loss.
+              Memory cards reported by camera telemetry. Recording must be verified separately.
             </p>
             <div className="pt-2 border-t border-slate-800 text-[11px] flex justify-between text-slate-400">
               <span>Status:</span>
@@ -223,12 +177,12 @@ export default function StoragePage() {
             </div>
             <h4 className="font-bold text-sm text-slate-200">Local Recorder SATA HDD</h4>
             <p className="text-xs text-slate-400">
-              NVR multi-terabyte SATA storage. Mapped via DVR channel binding with continuous SMART telemetry.
+              Recorder disks reported by hardware telemetry and matched to camera channels.
             </p>
             <div className="pt-2 border-t border-slate-800 text-[11px] flex justify-between text-slate-400">
               <span>Status:</span>
               <strong className="text-blue-400">
-                {summary.tier2DvrHddCount > 0 ? `${summary.tier2DvrHddCount} Active (${summary.dvrHddNode.capacity})` : "0 Active"}
+                {summary.tier2DvrHddCount > 0 ? `${summary.tier2DvrHddCount} Healthy (${summary.dvrHddNode.capacity})` : "0 Healthy"}
               </strong>
             </div>
           </div>
@@ -243,12 +197,12 @@ export default function StoragePage() {
             </div>
             <h4 className="font-bold text-sm text-slate-200">Online Cloud Recording</h4>
             <p className="text-xs text-slate-400">
-              Automatic zero-downtime fallback. Direct RTSP ingest to Sentinel Media Gateway S3 storage pool.
+              Cloud storage is shown only when a healthy configured storage node is reported.
             </p>
             <div className="pt-2 border-t border-slate-800 text-[11px] flex justify-between text-slate-400">
               <span>Status:</span>
               <strong className="text-purple-400">
-                Active ({summary.cloudNode.capacity} Pool • {summary.tier3OnlineCloudCount} Ingest Streams)
+                {summary.cloudNode.status === "healthy" ? `Available (${summary.cloudNode.capacity})` : "Unavailable"}
               </strong>
             </div>
           </div>
@@ -263,7 +217,7 @@ export default function StoragePage() {
             </h3>
 
             <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
-              {(["all", "sd_card", "dvr_hdd", "online_cloud"] as const).map((tier) => (
+              {(["all", "sd_card", "dvr_hdd", "online_cloud", "unavailable"] as const).map((tier) => (
                 <button
                   key={tier}
                   onClick={() => setSelectedTierFilter(tier)}
@@ -280,11 +234,12 @@ export default function StoragePage() {
           </div>
 
           <div className="rounded-xl border border-slate-800 bg-slate-950 overflow-hidden">
+            {loadError && <p role="alert" className="px-4 py-3 text-sm text-amber-300">{loadError}</p>}
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-900/90 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
                 <tr>
                   <th className="px-4 py-3">Camera & IP</th>
-                  <th className="px-4 py-3">Active Storage Medium</th>
+                  <th className="px-4 py-3">Available Storage Medium</th>
                   <th className="px-4 py-3">Storage Specifications</th>
                   <th className="px-4 py-3">Capacity / Usage</th>
                   <th className="px-4 py-3">Retention</th>
@@ -331,8 +286,12 @@ export default function StoragePage() {
                         {cam.activeStorageTier === "online_cloud" && (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-300 font-mono text-[11px] font-semibold border border-purple-500/30">
                             <Cloud className="w-3 h-3" />
-                            Tier 3: Online Cloud Fallback
+                            Tier 3: Cloud Available
                           </span>
+                        )}
+                        {cam.activeStorageTier === "unavailable" && <span className="text-amber-300">No verified target</span>}
+                        {cam.activeStorageTier !== "unavailable" && (
+                          <div className="mt-1 text-[10px] text-amber-300">Recording on this medium is unverified</div>
                         )}
                       </td>
 
@@ -346,7 +305,7 @@ export default function StoragePage() {
                       </td>
 
                       <td className="px-4 py-3 font-mono font-bold text-amber-400">
-                        {cam.retentionDays} Days
+                        {cam.retentionDays == null ? "Unverified" : `${cam.retentionDays} Days`}
                       </td>
 
                       <td className="px-4 py-3 text-right">
@@ -359,23 +318,6 @@ export default function StoragePage() {
                             <Play className="w-3 h-3 fill-current" />
                             View Footage
                           </Link>
-                          {cam.activeStorageTier !== "online_cloud" ? (
-                            <button
-                              onClick={() => void switchCameraToCloud(cam.cameraId)}
-                              className="px-2.5 py-1 rounded bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-[11px] font-medium border border-purple-500/30 transition-all"
-                              title="Failover to online cloud recording"
-                            >
-                              Cloud Fallback
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => void switchCameraStorageTier(cam.cameraId, "sd_card")}
-                              className="px-2.5 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 text-[11px] font-medium border border-emerald-500/30 transition-all"
-                              title="Restore to camera local MicroSD storage"
-                            >
-                              Use SD Card
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>

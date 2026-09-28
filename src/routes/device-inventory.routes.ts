@@ -1,7 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
-import { AutoStorageTelemetryService } from "../services/auto-storage-telemetry.service.js";
 
 const lifecycleStates = [
   "discovered",
@@ -95,13 +94,6 @@ export async function registerDeviceInventoryRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore,
 ) {
-  // Initialize auto storage telemetry service
-  const pool = (store as any).pool || (store as any).db;
-  const autoStorageService = pool ? new AutoStorageTelemetryService(pool) : null;
-  
-  if (!autoStorageService) {
-    app.log.warn('Auto storage telemetry service not initialized - database pool not available');
-  }
   app.get("/v1/device-inventory", async (request, reply) => {
     const query = listQuerySchema.parse(request.query);
     if (query.tenant && query.tenant !== request.currentUser.tenantId) {
@@ -147,21 +139,6 @@ export async function registerDeviceInventoryRoutes(
       lifecycleState: body.lifecycleState,
     });
 
-    // Automatically collect storage telemetry (Memory Card and/or Hard Disk) for all devices
-    if (autoStorageService) {
-      try {
-        const telemetryCount = await autoStorageService.collectStorageTelemetryForDevice(record);
-        app.log.info({
-          deviceId: record.deviceId,
-          deviceType: record.deviceType,
-          telemetryCount,
-        }, 'Auto-collected storage telemetry (Memory Card & HDD) for new device');
-      } catch (error) {
-        app.log.error({ error, deviceId: record.deviceId }, 'Failed to auto-collect storage telemetry');
-        // Don't fail the device creation if telemetry collection fails
-      }
-    }
-
     return reply.code(201).send(record);
   });
 
@@ -196,38 +173,12 @@ export async function registerDeviceInventoryRoutes(
       tenant: existing.tenant,
     });
 
-    // If lifecycle state changed to operational, collect storage telemetry
-    if (autoStorageService && 
-        body.lifecycleState === 'operational' && 
-        existing.lifecycleState !== 'operational') {
-      try {
-        const telemetryCount = await autoStorageService.collectStorageTelemetryForDevice({
-          ...existing,
-          lifecycleState: 'operational',
-        });
-        app.log.info({
-          deviceId: existing.deviceId,
-          deviceType: existing.deviceType,
-          telemetryCount,
-        }, 'Auto-collected storage telemetry when device became operational');
-      } catch (error) {
-        app.log.error({ error, deviceId: existing.deviceId }, 'Failed to auto-collect storage telemetry on state change');
-      }
-    }
-
     return updated ?? reply.code(404).send({ error: "device_not_found" });
   });
 
-  // Manual storage telemetry refresh endpoint
+  // Inventory registration does not probe hardware or create a disk.
   app.post("/v1/device-inventory/:id/refresh-storage", async (request, reply) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
-    
-    if (!autoStorageService) {
-      return reply.code(503).send({ 
-        error: "service_unavailable", 
-        message: "Auto storage telemetry service not available" 
-      });
-    }
     
     const existing = await store.getDeviceInventory(id);
     if (!existing) return reply.code(404).send({ error: "device_not_found" });
@@ -243,25 +194,10 @@ export async function registerDeviceInventoryRoutes(
       });
     }
 
-    try {
-      const telemetryCount = await autoStorageService.refreshStorageTelemetry(
-        existing.deviceId,
-        existing.branch,
-        existing.tenantId
-      );
-
-      return {
-        success: true,
-        message: "Storage telemetry refreshed",
-        deviceId: existing.deviceId,
-        telemetryRecordsCreated: telemetryCount,
-      };
-    } catch (error) {
-      app.log.error({ error, deviceId: existing.deviceId }, 'Failed to refresh storage telemetry');
-      return reply.code(500).send({
-        error: "refresh_failed",
-        message: error instanceof Error ? error.message : "Failed to refresh storage telemetry"
-      });
-    }
+    return reply.code(409).send({
+      success: false,
+      error: "hardware_probe_required",
+      message: "Refresh storage from the connected edge agent or recorder.",
+    });
   });
 }

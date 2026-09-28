@@ -7376,9 +7376,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
   --muted: #91a9c7;
   --line: #1c3861;
   --line-strong: #2b4d7a;
-  --blue: #54c7ff;
-  --blue-dark: #9de1ff;
-  --blue-soft: rgba(38,178,238,.14);
+  --blue: #83aaff;
+  --blue-dark: #bdd2ff;
+  --blue-soft: rgba(91,137,245,.17);
   --cyan: #54d9df;
   --green: #41d7a6;
   --amber: #f2bb5e;
@@ -7387,29 +7387,29 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 
 [data-theme="emerald"] {
-  --canvas: #03110d;
-  --surface: #071d17;
-  --surface-soft: #09271f;
-  --surface-strong: #0d362a;
-  --ink: #effff8;
-  --muted: #8dbbad;
-  --line: #15503f;
-  --line-strong: #1f6a54;
-  --blue: #45d5a6;
-  --blue-dark: #8af2c9;
-  --blue-soft: rgba(43,207,157,.14);
+  --canvas: #07101e;
+  --surface: #101d32;
+  --surface-soft: #15253f;
+  --surface-strong: #1b3150;
+  --ink: #f0f5ff;
+  --muted: #9fb1cc;
+  --line: #284367;
+  --line-strong: #38547b;
+  --blue: #83aaff;
+  --blue-dark: #bdd2ff;
+  --blue-soft: rgba(91,137,245,.17);
   --cyan: #52d8d1;
   --green: #55dfae;
   --amber: #f4c25d;
   --red: #ff8290;
-  --topbar-bg: rgba(5, 28, 21, .86);
+  --topbar-bg: rgba(9, 23, 42, .86);
 }
 
 html { background: var(--canvas); }
 body {
   background:
     radial-gradient(circle at 84% -12%, color-mix(in srgb, var(--blue) 9%, transparent), transparent 30rem),
-    radial-gradient(circle at 8% 24%, color-mix(in srgb, var(--cyan) 5%, transparent), transparent 24rem),
+    radial-gradient(circle at 8% 24%, color-mix(in srgb, var(--blue) 5%, transparent), transparent 24rem),
     var(--canvas);
 }
 

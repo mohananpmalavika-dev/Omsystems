@@ -148,6 +148,8 @@ export default function CommunicationsCallsPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [directMessages, setDirectMessages] = useState<DirectMessage[]>([]);
   const [directMessageText, setDirectMessageText] = useState('');
+  const [messagesError, setMessagesError] = useState<string | null>(null);
+  const [messageRouteMissing, setMessageRouteMissing] = useState(false);
   
   // Hooks
   const signaling = useCommunicationSignaling();
@@ -194,18 +196,17 @@ export default function CommunicationsCallsPage() {
     try {
       setLoading(true);
       setError(null);
-      const [branchData, empRes] = await Promise.all([
-        communicationAPI.getBranchDirectory().catch(err => {
-          console.error('[Communications] Failed to load branch directory:', err);
-          return [] as BranchContact[];
-        }),
-        communicationAPI.getEmployeeDirectory().catch(err => {
-          console.error('[Communications] Failed to load internal users:', err);
-          return { data: [] as CommunicationEmployee[] };
-        }),
+      const [branchResult, employeeResult] = await Promise.allSettled([
+        communicationAPI.getBranchDirectory(),
+        communicationAPI.getEmployeeDirectory(),
       ]);
-      setBranches(branchData);
-      setInternalUsers(empRes.data || []);
+      if (branchResult.status === 'fulfilled') setBranches(branchResult.value);
+      else console.error('[Communications] Failed to load branch directory:', branchResult.reason);
+      if (employeeResult.status === 'fulfilled') setInternalUsers(employeeResult.value.data || []);
+      else console.error('[Communications] Failed to load internal users:', employeeResult.reason);
+      if (branchResult.status === 'rejected' || employeeResult.status === 'rejected') {
+        setError('The calling directory is unavailable. Please refresh to retry.');
+      }
     } catch (err: any) {
       console.error('[Communications] Failed to load directory:', err);
       setError(err.message || 'Failed to load directory');
@@ -219,16 +220,27 @@ export default function CommunicationsCallsPage() {
   }, [loadDirectory]);
 
   const loadDirectMessages = useCallback(async () => {
-    try { setDirectMessages(await communicationAPI.getDirectMessages()); }
-    catch (cause) { console.warn('[Communications] Messages unavailable', cause); }
+    try {
+      setDirectMessages(await communicationAPI.getDirectMessages());
+      setMessagesError(null);
+      setMessageRouteMissing(false);
+    } catch (cause) {
+      console.warn('[Communications] Messages unavailable', cause);
+      const missing = cause instanceof Error && 'status' in cause && cause.status === 404;
+      setMessageRouteMissing(missing);
+      setMessagesError(missing
+        ? 'Messaging is unavailable on this server.'
+        : 'Unable to load messages. Please refresh to retry.');
+    }
   }, []);
 
   useEffect(() => {
+    if (messageRouteMissing) return;
     void loadDirectMessages();
     const timer = window.setInterval(() => void loadDirectMessages(), 15_000);
     const unsubscribe = signaling.onMessageCreated(() => void loadDirectMessages());
     return () => { window.clearInterval(timer); unsubscribe(); };
-  }, [loadDirectMessages, signaling]);
+  }, [loadDirectMessages, messageRouteMissing, signaling]);
 
   const handleSendDirectMessage = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -635,13 +647,13 @@ export default function CommunicationsCallsPage() {
         <div className="comm-header-right">
           <div className={`service-status ${signaling.connected ? 'online' : 'offline'}`}>
             <Radio size={14} className={signaling.connected ? 'pulse' : ''} />
-            <span>{signaling.connected ? 'Service Online' : 'Connecting...'}</span>
+            <span>{signaling.connected ? 'Service Online' : 'Calling Offline'}</span>
           </div>
           
           <button
             type="button"
             className="refresh-btn"
-            onClick={() => void loadDirectory()}
+            onClick={() => { void loadDirectory(); void loadDirectMessages(); }}
             disabled={loading}
           >
             <RefreshCw size={14} className={loading ? 'spin' : ''} />
@@ -1119,7 +1131,8 @@ export default function CommunicationsCallsPage() {
               <section style={{ margin: '16px', padding: '16px', border: '1px solid #334155', borderRadius: '16px', background: '#0f172a', color: '#fff' }}>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}><MessageSquare size={16} /> Messages</h3>
                 <div style={{ maxHeight: '180px', overflowY: 'auto', margin: '12px 0', display: 'grid', gap: '8px' }} aria-live="polite">
-                  {directMessages.length === 0 ? <p style={{ color: '#94a3b8', fontSize: '12px' }}>No messages yet.</p> :
+                  {messagesError ? <p role="status" style={{ color: '#fca5a5', fontSize: '12px' }}>{messagesError}</p> :
+                    directMessages.length === 0 ? <p style={{ color: '#94a3b8', fontSize: '12px' }}>No messages yet.</p> :
                     directMessages.slice(-20).map((message) => (
                       <div key={message.id} style={{ background: '#1e293b', padding: '8px 10px', borderRadius: '8px', fontSize: '12px' }}>
                         <div style={{ color: '#94a3b8' }}>{message.senderId === currentUserId ? 'You' : message.senderName || message.senderType} · {new Date(message.createdAt).toLocaleString()}</div>
@@ -1131,8 +1144,8 @@ export default function CommunicationsCallsPage() {
                   <input value={directMessageText} onChange={(event) => setDirectMessageText(event.target.value)} maxLength={4000}
                     placeholder={selectedContact ? 'Write a message to the selected contact' : 'Select a contact or branch to message'}
                     style={{ minWidth: 0, flex: 1, padding: '9px', borderRadius: '8px', border: '1px solid #475569', background: '#020617', color: '#fff' }} />
-                  <button type="submit" disabled={!selectedContact || !directMessageText.trim()}
-                    style={{ padding: '9px 14px', borderRadius: '8px', background: '#2563eb', color: '#fff', opacity: !selectedContact || !directMessageText.trim() ? 0.5 : 1 }}>Send</button>
+                  <button type="submit" disabled={messageRouteMissing || !selectedContact || !directMessageText.trim()}
+                    style={{ padding: '9px 14px', borderRadius: '8px', background: '#2563eb', color: '#fff', opacity: messageRouteMissing || !selectedContact || !directMessageText.trim() ? 0.5 : 1 }}>Send</button>
                 </form>
               </section>
             </main>

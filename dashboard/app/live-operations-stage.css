@@ -309,3 +309,182 @@ html[data-theme] .app-shell .experience-surface .operations-stage-room {
 @media(prefers-reduced-motion:reduce) {
   .operations-stage-room .los-dock-items>button { transition: none; }
 }
+
+/* Signal observatory: the feed is the central instrument; sectors and telemetry orbit it. */
+html[data-theme] .app-shell .experience-surface .operations-stage-room {
+  --wall-ink: #f1f2e9;
+  --wall-line: rgba(193, 205, 183, .16);
+  padding-top: 13px !important;
+  gap: 8px !important;
+  background:
+    radial-gradient(ellipse at 77% -10%, rgba(200, 221, 89, .105), transparent 34rem),
+    radial-gradient(ellipse at 4% 40%, rgba(111, 104, 224, .095), transparent 32rem),
+    linear-gradient(155deg, #0c1113, #0b1119 58%, #0c1012) !important;
+}
+.operations-stage-room::before {
+  opacity: .32;
+  background-size: 52px 52px;
+  background-image: linear-gradient(rgba(203, 219, 164, .075) 1px, transparent 1px), linear-gradient(90deg, rgba(203, 219, 164, .075) 1px, transparent 1px);
+}
+.operations-stage-room .los-eyebrow { color: #cbdf80; }
+.operations-stage-room .los-page-heading {
+  min-height: 0;
+  align-items: center;
+  margin: 0;
+  padding: 15px 20px !important;
+  border: 1px solid rgba(204, 225, 127, .25);
+  border-radius: 4px 22px 4px 22px;
+  background:
+    radial-gradient(circle at 58% 45%, rgba(204, 227, 113, .11) 0 1px, transparent 2px 100%),
+    repeating-radial-gradient(circle at 58% 45%, transparent 0 35px, rgba(208, 225, 142, .055) 36px 37px),
+    linear-gradient(105deg, #1b2424, #121b20 54%, #111b19);
+  box-shadow: inset 0 1px rgba(243, 255, 207, .05), 0 16px 40px rgba(0, 0, 0, .14);
+}
+.operations-stage-room .los-page-heading::before { left: 0; width: 92px; background: #d8ee83; box-shadow: 0 0 20px rgba(216, 238, 131, .7); }
+.operations-stage-room .los-page-heading::after { content: "OBSERVATORY / 01"; right: 18px; bottom: -6px; color: rgba(220, 235, 181, .05); font-size: clamp(48px, 5.6vw, 94px); }
+.operations-stage-room .los-hero-title { margin: 7px 0 3px; gap: 11px; }
+.operations-stage-room .los-hero-mark { width: 40px; height: 40px; border-radius: 50%; color: #deef9d; border-color: rgba(216, 238, 131, .5); background: rgba(216, 238, 131, .08); }
+.operations-stage-room .los-hero-mark svg { animation: observatory-breathe 5s ease-in-out infinite; }
+.operations-stage-room .los-hero-title h1 { font-size: clamp(31px, 3vw, 43px); letter-spacing: -.075em; }
+.operations-stage-room .los-hero-title h1 span,.operations-stage-room .los-mode-intro h2 span { color: #e1ed96; }
+.operations-stage-room .los-hero-title h1 small { margin-top: 3px; color: #a1ad9f; }
+.operations-stage-room .los-hero-copy>p { margin: 3px 0; color: #b9c7b9; }
+.operations-stage-room .los-hero-snapshot { margin-top: 8px; color: #9aaba3; }
+.operations-stage-room .los-hero-snapshot>span { border-color: rgba(208, 226, 145, .2); }
+.operations-stage-room .los-hero-snapshot strong { color: #e1ed96; }
+.operations-stage-room .los-page-actions { align-self: center; }
+.operations-stage-room .los-page-actions .los-data-state { color: #d8e5c3; border-color: rgba(217, 235, 146, .28); background: rgba(43, 56, 38, .5); }
+.operations-stage-room .los-page-actions .los-data-state.live i { background: #d8ef86; box-shadow: 0 0 14px #d8ef86; }
+.operations-stage-room .los-page-actions :is(a,button) { color: #d9e1d3; border-color: rgba(204, 224, 172, .2); background: rgba(12, 20, 22, .65); }
+.operations-stage-room .los-page-actions :is(a,button):hover { border-color: #d9ed8b; background: rgba(68, 84, 42, .4); }
+.operations-stage-room :is(.los-scope-sheet,.los-patrol-sheet) { border: 0; border-bottom: 1px solid rgba(196, 216, 181, .16); border-radius: 0; background: transparent; box-shadow: none; }
+.operations-stage-room :is(.los-scope-sheet,.los-patrol-sheet)>summary { min-height: 35px; padding: 6px 13px; color: #bdc9ba; }
+.operations-stage-room :is(.los-scope-sheet,.los-patrol-sheet)>summary>span>svg { color: #d2e58e; }
+.operations-stage-room .stats-bar { gap: 0 !important; margin: 3px 0 1px; border-top: 1px solid rgba(202, 223, 164, .18) !important; border-bottom: 1px solid rgba(202, 223, 164, .18) !important; }
+.operations-stage-room .stats-bar .stat-card {
+  min-width: 110px;
+  min-height: 54px !important;
+  padding: 7px 10px !important;
+  gap: 7px;
+  border: 0 !important;
+  border-right: 1px solid rgba(202, 223, 164, .12) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.operations-stage-room .stats-bar .stat-card::before { inset: auto 8px 0; width: auto; height: 1px; background: #dce994; opacity: .35; }
+.operations-stage-room .stats-bar .stat-card:hover { transform: none !important; border-color: rgba(202, 223, 164, .25) !important; background: rgba(209, 234, 137, .07) !important; box-shadow: none !important; }
+.operations-stage-room .stats-bar .stat-card strong { color: #e9eddb !important; font-size: 17px !important; }
+.operations-stage-room .stats-bar .stat-card span { color: #9dac9e !important; }
+.operations-stage-room .stats-bar .stat-icon { color: #cddd86 !important; }
+.operations-stage-room .stats-bar .stat-icon.red { color: #ff8f78 !important; }
+.operations-stage-room .stats-bar .stat-icon.amber { color: #eac47d !important; }
+.operations-stage-room .stats-bar .storage-stat>svg:last-child { color: #dce994; }
+.operations-stage-room .los-mode-bar { margin-top: 1px; padding: 6px 0 9px; border-top: 0; border-bottom-color: rgba(207, 227, 164, .13); }
+.operations-stage-room .los-mode-intro h2 { font-size: 20px; color: #ecf0e5 !important; }
+.operations-stage-room .los-mode-bar>nav { border: 0; border-radius: 0; background: transparent; padding: 0; gap: 2px; }
+.operations-stage-room .los-mode-bar>nav button { position: relative; border-radius: 3px; padding: 10px 14px; color: #aab8ae; }
+.operations-stage-room .los-mode-bar>nav button:hover { color: #f0f4e1; background: rgba(213, 235, 141, .07); }
+.operations-stage-room .los-mode-bar>nav button[aria-pressed="true"] { color: #e5f19e; background: rgba(216, 239, 134, .08); box-shadow: inset 0 -2px #d9ed83; }
+.operations-stage-room .los-context-toggle { border-radius: 5px; color: #d0dcbb; border-color: rgba(207, 227, 164, .23); background: rgba(216, 239, 134, .05); }
+.operations-stage-room .los-context-count { color: #271b13; background: #ffab86; }
+.operations-stage-room .los-workspace { grid-template-columns: minmax(0, 1fr); gap: 0 19px; }
+.operations-stage-room .los-workspace:has(.los-context) { grid-template-columns: minmax(0, 1fr) 282px; }
+.operations-stage-room .los-scene-nav {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 176px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 14px;
+  padding: 7px 0 13px;
+  border: 0;
+}
+.operations-stage-room .los-scene-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.operations-stage-room .los-scene-heading>div { min-width: 0; }
+.operations-stage-room .los-scene-heading p { margin: 2px 0 0; color: #e2e9d6; font-size: 13px; font-weight: 650; }
+.operations-stage-room .los-scene-heading .los-eyebrow { font-size: 8px; }
+.operations-stage-room .los-scene-radar { display: grid; place-items: center; flex: 0 0 auto; width: 42px; height: 42px; border: 1px solid rgba(212, 234, 137, .36); border-radius: 50%; color: #d7eb91; background: repeating-radial-gradient(circle, transparent 0 7px, rgba(217, 239, 147, .1) 8px 9px); }
+.operations-stage-room .los-scene-total { display: none; }
+.operations-stage-room .los-scene-track { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; min-width: 0; background: rgba(200, 223, 166, .11); border: 1px solid rgba(200, 223, 166, .13); }
+.operations-stage-room .los-scene-track>button { position: relative; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; gap: 4px 5px; align-content: center; min-width: 0; min-height: 61px; margin: 0; padding: 7px 13px; text-align: left; border: 0; border-radius: 0; color: #bac6b8; background: #101b1d; transition: background .2s ease, color .2s ease; }
+.operations-stage-room .los-scene-track>button::before { content: ""; position: absolute; inset: auto 0 0; height: 2px; background: transparent; }
+.operations-stage-room .los-scene-track>button:hover { transform: none; color: #f0f5da; background: #26362d; }
+.operations-stage-room .los-scene-track>button[aria-pressed="true"] { color: #f2f7dd; border-color: transparent; background: linear-gradient(145deg, #34462e, #233329); box-shadow: none; }
+.operations-stage-room .los-scene-track>button[aria-pressed="true"]::before { background: #dced8f; box-shadow: 0 0 17px #dced8f; }
+.operations-stage-room .los-sector-code { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; font: 9px ui-monospace,monospace; letter-spacing: .11em; color: #93a98c; }
+.operations-stage-room .los-sector-code i { width: 4px; height: 4px; border-radius: 50%; background: #dce994; box-shadow: 0 0 8px #dce994; }
+.operations-stage-room .los-scene-track>button:disabled .los-sector-code i { background: #657267; box-shadow: none; }
+.operations-stage-room .los-scene-track>button strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 650; }
+.operations-stage-room .los-scene-track>button small { color: #a5b69e; font: 9px ui-monospace,monospace; white-space: nowrap; }
+.operations-stage-room .los-main { grid-column: 1; min-width: 0; }
+.operations-stage-room .los-context { grid-column: 2; grid-row: 2; border: 1px solid rgba(207, 229, 155, .18); border-radius: 3px 16px 3px 3px; background: linear-gradient(160deg, #1b2b24, #151e22 43%, #11191e); box-shadow: inset 2px 0 rgba(216, 239, 134, .45); }
+.operations-stage-room .los-stage-heading { margin: 4px 0 12px; }
+.operations-stage-room .los-stage-heading h3 { color: #edf1e9 !important; }
+.operations-stage-room .los-stage-heading p { color: #a7b5a9; }
+.operations-stage-room .los-stage-heading>div:last-child { align-items: center; }
+.operations-stage-room .los-focus-index { margin-right: 8px; color: #e1ed97; font: 600 20px ui-monospace,monospace; letter-spacing: -.06em; white-space: nowrap; }
+.operations-stage-room .los-focus-index b { margin: 0 4px; color: #647766; font-weight: 400; }
+.operations-stage-room .los-stage-heading button { border-radius: 3px; border-color: rgba(202, 224, 163, .25); color: #d5e0cc; background: rgba(210, 231, 163, .07); }
+.operations-stage-room .los-video-stage { border: 1px solid rgba(216, 237, 151, .34) !important; border-radius: 3px 18px 3px 3px !important; box-shadow: 0 0 0 5px rgba(216, 237, 151, .025), 0 25px 65px rgba(0, 0, 0, .4); }
+.operations-stage-room .los-video-stage::after { border-color: rgba(235, 247, 198, .08); }
+.operations-stage-room .los-monitor-bar { min-height: 30px; padding: 7px 12px; border-bottom-color: rgba(216, 237, 151, .2); color: #a6b79d; background: #17231f; }
+.operations-stage-room .los-monitor-bar>span:first-child { color: #e1eea0; }
+.operations-stage-room .los-monitor-bar i { background: #dced8f; box-shadow: 0 0 10px #dced8f; }
+html[data-theme] .app-shell .experience-surface .operations-stage-room .mode-watch .los-video-stage .feed-stage { height: clamp(330px, 51vh, 660px); }
+.operations-stage-room .los-feed-dock { padding-top: 19px; }
+.operations-stage-room .los-feed-dock>header { border-color: rgba(207, 227, 164, .18); }
+.operations-stage-room .los-feed-dock h3 { color: #e2e9d9 !important; }
+.operations-stage-room .los-dock-items>button { flex-basis: 190px; min-height: 117px; border: 0; border-top: 1px solid rgba(209, 233, 154, .26); border-radius: 0 0 10px 2px; background: linear-gradient(155deg, #1c2925, #141f23); }
+.operations-stage-room .los-dock-items>button:hover { border-color: #ddeb91; background: #27382d; }
+.operations-stage-room .los-feed-symbol { color: #d4e78f; }
+.operations-stage-room .los-feed-symbol i[data-status="online"] { background: #dced8f; box-shadow: 0 0 8px #dced8f; }
+.operations-stage-room .los-event-ribbon { border-color: rgba(202, 223, 164, .18); border-radius: 3px 16px 3px 3px; background: #121d1e; }
+.operations-stage-room .los-event-ribbon>header { border-color: rgba(202, 223, 164, .15); background: rgba(216, 239, 134, .045); }
+.operations-stage-room .los-event-ribbon>header>svg { color: #d9e991; }
+.operations-stage-room .los-event-track>button[aria-pressed="true"] { background: rgba(216, 239, 134, .11); }
+.operations-stage-room :is(button,a,summary):focus-visible { outline-color: #deed91; }
+@keyframes observatory-breathe { 50% { transform: scale(1.12); filter: drop-shadow(0 0 7px rgba(219, 239, 142, .7)); } }
+@media(max-width:1150px) {
+  .operations-stage-room .los-workspace:has(.los-context) { grid-template-columns: minmax(0, 1fr); }
+  .operations-stage-room .los-context { grid-column: 1; grid-row: auto; margin-top: 16px; }
+  .operations-stage-room .los-scene-nav { grid-template-columns: 1fr; gap: 9px; }
+  .operations-stage-room .los-scene-heading { justify-content: space-between; }
+  .operations-stage-room .los-scene-total { display: block; margin-left: auto; color: #a9b9a4; font: 9px ui-monospace,monospace; }
+}
+@media(max-width:800px) {
+  .operations-stage-room .los-page-heading { padding: 15px !important; }
+  .operations-stage-room .los-scene-nav { display: grid; padding: 7px 0 12px; }
+  .operations-stage-room .los-scene-track { display: flex; overflow-x: auto; scrollbar-width: thin; }
+  .operations-stage-room .los-scene-track>button { flex: 0 0 139px; min-height: 58px; }
+  .operations-stage-room .los-mode-bar>nav { border-radius: 0; }
+  .operations-stage-room .los-mode-bar>nav button { border-radius: 2px; }
+  html[data-theme] .app-shell .experience-surface .operations-stage-room .mode-watch .los-video-stage .feed-stage { height: clamp(250px, 42vh, 390px); }
+}
+@media(max-width:520px) {
+  .operations-stage-room .los-page-heading::after { opacity: .35; }
+  .operations-stage-room .los-hero-snapshot { gap: 4px 0; }
+  .operations-stage-room .los-hero-snapshot>span { padding-inline: 8px; }
+  .operations-stage-room .los-mode-intro { flex-basis: 100%; }
+  .operations-stage-room .los-mode-bar>nav { overflow-x: auto; flex-wrap: nowrap; }
+  .operations-stage-room .los-mode-bar>nav button { flex: 0 0 auto; }
+  .operations-stage-room .los-stage-heading>div:last-child { width: 100%; justify-content: flex-start; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .operations-stage-room .los-hero-mark svg { animation: none; }
+}
+
+/* Secondary telemetry follows the live picture in the document and visual order. */
+html[data-theme] .app-shell .experience-surface .operations-stage-room .stats-bar .stat-card {
+  background: #17231f !important;
+  color: #e7eddb !important;
+  border-color: rgba(202, 223, 164, .12) !important;
+}
+html[data-theme] .app-shell .experience-surface .operations-stage-room .stats-bar .stat-card:hover { background: #26372b !important; }
+html[data-theme] .app-shell .experience-surface .operations-stage-room .stats-bar .stat-card strong { color: #edf2df !important; text-shadow: none !important; }
+html[data-theme] .app-shell .experience-surface .operations-stage-room .stats-bar .stat-card span { color: #afc0aa !important; }
+html[data-theme] .app-shell .experience-surface .operations-stage-room .los-feed-dock input { background: transparent !important; color: #e3edd3 !important; box-shadow: none !important; }
+html[data-theme] .app-shell .experience-surface .operations-stage-room .los-feed-dock>header>label { background: #172522; border-color: rgba(207, 227, 164, .2); }
+.operations-stage-room .los-focus-stepper { display: flex; align-items: center; gap: 3px; margin-right: 4px; }
+.operations-stage-room .los-focus-stepper button { width: 31px; height: 32px; display: grid; place-items: center; padding: 0; border: 1px solid rgba(202, 224, 163, .18); border-radius: 3px; }
+.operations-stage-room .los-focus-stepper button:hover:not(:disabled) { color: #e5f19e; border-color: #d8eb8a; }
+.operations-stage-room .los-focus-stepper .los-focus-index { min-width: 60px; margin: 0; text-align: center; }

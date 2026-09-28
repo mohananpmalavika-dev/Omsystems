@@ -33,13 +33,13 @@ interface StorageDevice {
   usedBytes: number;
   availableBytes: number;
   usagePercent: number;
-  smartStatus: 'HEALTHY' | 'WARNING' | 'CRITICAL';
-  temperature: number;
+  smartStatus: 'HEALTHY' | 'WARNING' | 'CRITICAL' | 'UNKNOWN' | 'FAILED' | 'MISSING' | 'DEGRADED' | 'FAILURE_PREDICTED';
+  temperature: number | null;
   reallocatedSectors: number;
   pendingSectors: number;
-  powerOnHours: number;
-  estimatedDaysRemaining: number;
-  dailyGrowthGb: number;
+  powerOnHours: number | null;
+  estimatedDaysRemaining: number | null;
+  dailyGrowthGb: number | null;
   branchId?: string;
   branchName?: string;
   cameraId?: string;
@@ -74,6 +74,12 @@ function numberValue(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function optionalNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function isMemoryCard(disk: Record<string, unknown>) {
   const identity = [disk.id, disk.deviceId, disk.devicePath, disk.name, disk.model, disk.mediaType]
     .filter((value): value is string => typeof value === 'string')
@@ -104,12 +110,12 @@ function normalizeStorageDevice(disk: Record<string, unknown>): StorageDevice {
     availableBytes,
     usagePercent,
     smartStatus: String(disk.smartStatus || disk.healthStatus || disk.operationalStatus || 'UNKNOWN').toUpperCase() as StorageDevice['smartStatus'],
-    temperature: numberValue(disk.temperature ?? disk.temperatureC),
+    temperature: optionalNumber(disk.temperature ?? disk.temperatureC),
     reallocatedSectors: numberValue(disk.reallocatedSectors),
     pendingSectors: numberValue(disk.pendingSectors),
-    powerOnHours: numberValue(disk.powerOnHours),
-    estimatedDaysRemaining: numberValue(disk.estimatedDaysRemaining ?? disk.daysRemaining) || 999,
-    dailyGrowthGb: numberValue(disk.dailyGrowthGb ?? disk.dailyIngestGb),
+    powerOnHours: optionalNumber(disk.powerOnHours),
+    estimatedDaysRemaining: optionalNumber(disk.estimatedDaysRemaining ?? disk.daysRemaining),
+    dailyGrowthGb: optionalNumber(disk.dailyGrowthGb ?? disk.dailyIngestGb),
     branchId: typeof disk.branchId === 'string' ? disk.branchId : undefined,
     branchName: typeof disk.branchName === 'string' ? disk.branchName : undefined,
     cameraId: typeof disk.cameraId === 'string' ? disk.cameraId : undefined,
@@ -191,7 +197,7 @@ export function LiveStorageTelemetryWidget() {
   }, []);
 
   const formatBytes = (bytes: number): string => {
-    if (bytes === 0) return '0 B';
+    if (bytes <= 0) return 'Unavailable';
     if (bytes >= 1e12) return `${(bytes / 1e12).toFixed(2)} TB`;
     if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(2)} GB`;
     if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(2)} MB`;
@@ -203,8 +209,12 @@ export function LiveStorageTelemetryWidget() {
       case 'HEALTHY':
         return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
       case 'WARNING':
+      case 'DEGRADED':
         return 'text-amber-400 bg-amber-500/10 border-amber-500/30';
       case 'CRITICAL':
+      case 'FAILED':
+      case 'FAILURE_PREDICTED':
+      case 'MISSING':
         return 'text-red-400 bg-red-500/10 border-red-500/30';
       default:
         return 'text-gray-400 bg-gray-500/10 border-gray-500/30';
@@ -398,16 +408,16 @@ export function LiveStorageTelemetryWidget() {
                     {formatBytes(device.capacityBytes)}
                   </div>
                   <div className="text-xs text-slate-500 mt-1">
-                    Used: {formatBytes(device.usedBytes)}
+                    Used: {device.capacityBytes > 0 && device.usedBytes === 0 ? '0 B' : formatBytes(device.usedBytes)}
                   </div>
-                  <div className="w-full bg-slate-800 rounded-full h-1.5 mt-2">
+                  {device.capacityBytes > 0 && <div className="w-full bg-slate-800 rounded-full h-1.5 mt-2">
                     <div
                       className={`h-1.5 rounded-full transition-all ${getUsageColor(device.usagePercent)}`}
                       style={{ width: `${Math.min(100, device.usagePercent)}%` }}
                     />
-                  </div>
+                  </div>}
                   <div className="text-xs text-slate-400 mt-1">
-                    {device.usagePercent.toFixed(1)}% used
+                    {device.capacityBytes > 0 ? `${device.usagePercent.toFixed(1)}% used` : 'Usage unavailable'}
                   </div>
                 </div>
 
@@ -417,11 +427,11 @@ export function LiveStorageTelemetryWidget() {
                     <Flame className="w-3 h-3" />
                     Temperature
                   </div>
-                  <div className={`text-xl font-bold ${getTempColor(device.temperature)}`}>
-                    {device.temperature}°C
+                  <div className={`text-xl font-bold ${device.temperature == null ? 'text-slate-400' : getTempColor(device.temperature)}`}>
+                    {device.temperature == null ? 'Unavailable' : `${device.temperature}°C`}
                   </div>
                   <div className="text-xs text-slate-500 mt-1">
-                    {device.temperature < 45 ? 'Normal' : device.temperature < 55 ? 'Elevated' : 'High'}
+                    {device.temperature == null ? 'No temperature reading' : device.temperature < 45 ? 'Normal' : device.temperature < 55 ? 'Elevated' : 'High'}
                   </div>
                 </div>
 
@@ -432,14 +442,14 @@ export function LiveStorageTelemetryWidget() {
                     Days Remaining
                   </div>
                   <div className={`text-xl font-bold ${
-                    device.estimatedDaysRemaining < 7 ? 'text-red-400' :
-                    device.estimatedDaysRemaining < 30 ? 'text-amber-400' :
+                    device.estimatedDaysRemaining != null && device.estimatedDaysRemaining < 7 ? 'text-red-400' :
+                    device.estimatedDaysRemaining != null && device.estimatedDaysRemaining < 30 ? 'text-amber-400' :
                     'text-emerald-400'
                   }`}>
-                    {device.estimatedDaysRemaining > 365 ? '365+' : device.estimatedDaysRemaining}
+                    {device.estimatedDaysRemaining == null ? 'Unavailable' : device.estimatedDaysRemaining > 365 ? '365+' : device.estimatedDaysRemaining}
                   </div>
                   <div className="text-xs text-slate-500 mt-1">
-                    {device.dailyGrowthGb.toFixed(1)} GB/day
+                    {device.dailyGrowthGb == null ? 'Growth unavailable' : `${device.dailyGrowthGb.toFixed(1)} GB/day`}
                   </div>
                 </div>
 
@@ -465,7 +475,7 @@ export function LiveStorageTelemetryWidget() {
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-400">Power-On:</span>
                       <span className="text-slate-300">
-                        {Math.floor(device.powerOnHours / 24 / 365)}y
+                        {device.powerOnHours == null ? 'Unavailable' : `${Math.floor(device.powerOnHours / 24 / 365)}y`}
                       </span>
                     </div>
                   </div>
@@ -473,7 +483,7 @@ export function LiveStorageTelemetryWidget() {
               </div>
 
               {/* Warning Messages */}
-              {device.smartStatus !== 'HEALTHY' && (
+              {['CRITICAL', 'WARNING', 'FAILED', 'FAILURE_PREDICTED', 'DEGRADED'].includes(device.smartStatus) && (
                 <div className={`mt-3 p-3 rounded-lg border ${
                   device.smartStatus === 'CRITICAL' 
                     ? 'bg-red-950/30 border-red-500/30' 
@@ -486,10 +496,10 @@ export function LiveStorageTelemetryWidget() {
                     <div className="text-xs">
                       {device.smartStatus === 'CRITICAL' && (
                         <p className="text-red-300 font-semibold">
-                          Critical: Immediate replacement required. Failure predicted within {device.estimatedDaysRemaining} days.
+                          Critical: Inspect or replace this device immediately.
                         </p>
                       )}
-                      {device.smartStatus === 'WARNING' && (
+                      {device.smartStatus !== 'CRITICAL' && (
                         <p className="text-amber-300 font-semibold">
                           Warning: Monitor closely. Consider replacement planning.
                         </p>

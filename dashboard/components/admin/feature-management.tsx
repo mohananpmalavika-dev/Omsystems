@@ -73,6 +73,7 @@ export function FeatureManagementDashboard() {
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [usageStats, setUsageStats] = useState<FeatureStats[]>([]);
@@ -369,7 +370,7 @@ export function FeatureManagementDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="admin-feature-workspace min-h-screen bg-slate-950">
       {/* Header */}
       <div className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-6 py-4">
@@ -462,40 +463,16 @@ export function FeatureManagementDashboard() {
             </div>
           )}
 
-          {/* Search and Filters */}
-          <div className="flex items-center gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search features by name, key, or description..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="all">All Categories</option>
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat.charAt(0).toUpperCase() + cat.slice(1).replace("-", " ")}
-                </option>
-              ))}
-            </select>
-
-            <button
-              onClick={loadFeatures}
-              className="p-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:text-slate-100 hover:bg-slate-700 transition-colors"
-              title="Refresh features list"
-            >
-              <RefreshCw className={`w-5 h-5 ${loading ? "animate-spin text-indigo-400" : ""}`} />
-            </button>
+          <div className="admin-feature-filter-row">
+            {viewMode !== "usage" && <>
+              <div className="admin-feature-category-chips" role="group" aria-label="Feature categories">
+                {["all", ...categories].map((category) => <button key={category} type="button" aria-pressed={selectedCategory === category} onClick={() => setSelectedCategory(category)}>{category === "all" ? "All capabilities" : category.replaceAll("-", " ")}</button>)}
+              </div>
+              <button type="button" className="admin-feature-search-toggle" aria-expanded={searchOpen} onClick={() => { if (searchOpen) setSearchQuery(""); setSearchOpen(!searchOpen); }}><Search size={16} />{searchOpen ? "Close search" : "Find feature"}</button>
+            </>}
+            <button type="button" className="admin-feature-refresh" onClick={loadFeatures} title="Refresh features list" aria-label="Refresh features list"><RefreshCw size={17} className={loading ? "animate-spin" : ""} /></button>
           </div>
+          {viewMode !== "usage" && searchOpen && <label className="admin-feature-search-field"><span>Find a specific feature</span><input type="search" placeholder="Name, key, or description" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} /></label>}
         </div>
       </div>
 

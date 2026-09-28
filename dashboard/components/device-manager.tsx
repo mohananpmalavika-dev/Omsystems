@@ -1755,25 +1755,9 @@ export function DeviceManager() {
         capabilities: inventoryForm.capabilities.split(',').map((item) => item.trim()).filter(Boolean),
       };
       await deviceInventoryApi.create(payload);
-      // Auto-provision storage telemetry (memory card and hard disk) for the new inventory device
-      await fetch("/api/operations/storage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cameraId: payload.deviceId,
-          cameraName: `${payload.manufacturer} ${payload.model}`,
-          branchId: selectedBranch,
-          ipAddress: payload.ipAddress,
-          targetTier: payload.deviceType?.includes('nvr') || payload.deviceType?.includes('dvr') ? "dvr_hdd" : "sd_card",
-          memoryCardCapacityGb: 128,
-          hardDiskCapacityTb: payload.deviceType?.includes('nvr') ? 10 : 4,
-          enableBothStorage: true,
-          reason: `Inventory device registration storage provision: ${payload.deviceId}`,
-        }),
-      }).catch(() => null);
       setInventoryForm({ ...emptyInventoryForm, branch: selectedBranch, tenant: inventoryForm.tenant });
       await refreshBranch(selectedBranch);
-      setNotice(`Inventory record ${payload.deviceId || "created"} was saved with storage telemetry.`);
+      setNotice(`Inventory record ${payload.deviceId || "created"} was saved. Storage appears after hardware telemetry arrives.`);
     } catch (reason) {
       setError(messageOf(reason, "Failed to save device inventory record."));
     } finally {
@@ -1811,7 +1795,7 @@ export function DeviceManager() {
       }
 
       const streamProfile = cameraProfilePayload(cameraForm);
-      const approveResult = await cameraInventoryApi.approveCamera(selectedBranch, {
+      await cameraInventoryApi.approveCamera(selectedBranch, {
         discoveryId: "",
         name: cameraForm.name,
         channel: Number(cameraForm.channel),
@@ -1838,27 +1822,8 @@ export function DeviceManager() {
         ...(cameraForm.streamRole !== "unknown" ? { streamProfile: cameraForm.streamRole } : {}),
         ...(streamProfile ? { profile: streamProfile } : {}),
       });
-      const createdCamId = approveResult?.id || approveResult?.data?.id;
-      if (createdCamId) {
-        await fetch("/api/operations/storage", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            cameraId: createdCamId,
-            cameraName: cameraForm.name,
-            branchId: selectedBranch,
-            ipAddress: cameraForm.ipAddress,
-            recorderId: cameraForm.recorderId || undefined,
-            targetTier: cameraForm.storageTier,
-            memoryCardCapacityGb: Number(cameraForm.memoryCardCapacity || 128),
-            hardDiskCapacityTb: Number(cameraForm.hardDiskCapacity || 4),
-            enableBothStorage: cameraForm.enableBothStorage !== false,
-            reason: `Storage provision during onboarding: ${cameraForm.name} (SD: ${cameraForm.memoryCardCapacity || 128}GB, HDD: ${cameraForm.hardDiskCapacity || 4}TB)`,
-          }),
-        }).catch(() => null);
-      }
       setShowCameraForm(false);
-      setNotice(`${cameraForm.name} was added to ${activeBranch?.name ?? "the branch"} with ${cameraForm.retentionDays}-day ${cameraForm.recordingMode} storage retention.`);
+      setNotice(`${cameraForm.name} was added to ${activeBranch?.name ?? "the branch"}. Verify its recording and storage telemetry after the device connects.`);
       await refreshBranch(selectedBranch);
     } catch (reason) {
       setError(messageOf(reason, "Camera onboarding failed."));

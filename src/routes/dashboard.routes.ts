@@ -250,7 +250,10 @@ export async function registerDashboardRoutes(
       const telemetry = await store.listLatestOperationalTelemetry(tenantId, branches.map(b => b.id));
       
       // Aggregate disk metrics from all branches
-      const diskTelemetry = telemetry.filter(t => t.deviceType === "disk");
+      const diskTelemetry = telemetry.filter(t =>
+        t.deviceType === "disk" && !t.idempotencyKey.startsWith("auto-storage:") &&
+        Date.now() - Date.parse(t.observedAt) <= 24 * 60 * 60 * 1000,
+      );
       
       let totalCapacity = BigInt(0);
       let usedCapacity = BigInt(0);

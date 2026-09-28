@@ -19,6 +19,7 @@ import "./command-atlas.css";
 import "./workflow-experience.css";
 import "./live-operations-stage.css";
 import "./command-workspaces.css";
+import "./brand-unity.css";
 
 export const metadata: Metadata = {
   title: "KryptonVision | Security Operations",

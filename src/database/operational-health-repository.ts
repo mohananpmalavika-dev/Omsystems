@@ -43,6 +43,7 @@ export class OperationalHealthRepository {
                 metrics, reason_codes
          FROM operational_health_latest
          WHERE tenant_id = $1
+           AND NOT (device_type = 'disk' AND idempotency_key LIKE 'auto-storage:%')
            AND ($2::uuid[] IS NULL OR branch_id = ANY($2::uuid[]))
          ORDER BY tenant_id, branch_id, device_type, device_id`,
         [tenantId, branchIds?.length ? branchIds : null],
@@ -56,6 +57,7 @@ export class OperationalHealthRepository {
            t.metrics, t.reason_codes
          FROM operational_health_telemetry t
          WHERE t.tenant_id = $1
+           AND NOT (t.device_type = 'disk' AND t.idempotency_key LIKE 'auto-storage:%')
            AND ($2::uuid[] IS NULL OR t.branch_id = ANY($2::uuid[]))
          ORDER BY t.tenant_id, t.branch_id, t.device_type, t.device_id, t.observed_at DESC, t.received_at DESC`,
         [tenantId, branchIds?.length ? branchIds : null],
@@ -71,6 +73,7 @@ export class OperationalHealthRepository {
               metrics,reason_codes
        FROM operational_health_telemetry
        WHERE tenant_id=$1 AND branch_id=$2
+         AND NOT (device_type = 'disk' AND idempotency_key LIKE 'auto-storage:%')
          AND observed_at >= $3::timestamptz AND observed_at <= $4::timestamptz
        ORDER BY observed_at DESC,received_at DESC
        LIMIT $5`,

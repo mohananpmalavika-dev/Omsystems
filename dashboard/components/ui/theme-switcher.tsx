@@ -24,9 +24,9 @@ export function ThemeSwitcher() {
       case "light":
         return <Sun size={14} className="text-amber-500" />;
       case "navy":
-        return <Shield size={14} className="text-cyan-400" />;
+        return <Shield size={14} className="text-blue-400" />;
       case "emerald":
-        return <Sparkles size={14} className="text-emerald-400" />;
+        return <Sparkles size={14} className="text-blue-400" />;
       case "dark":
       default:
         return <Moon size={14} className="text-blue-400" />;

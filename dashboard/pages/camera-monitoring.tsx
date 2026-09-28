@@ -231,10 +231,10 @@ export function CameraMonitoringDashboard() {
           <div className="flex items-center justify-between mb-2">
             <HardDrive size={24} className="text-blue-600" />
             <span className="text-sm font-bold text-slate-800">
-              {storageSummary.tier1SdCardCount + storageSummary.tier2DvrHddCount} Local / {storageSummary.tier3OnlineCloudCount} Cloud
+              {storageSummary.tier1SdCardCount + storageSummary.tier2DvrHddCount} local disks
             </span>
           </div>
-          <div className="text-sm text-gray-600 font-medium">Storage Routing</div>
+          <div className="text-sm text-gray-600 font-medium">Storage Availability</div>
           <div className="text-[11px] text-gray-500 mt-1">
             SD: {storageSummary.tier1SdCardCount} • DVR: {storageSummary.tier2DvrHddCount} • Cloud: {storageSummary.tier3OnlineCloudCount}
           </div>
@@ -343,7 +343,6 @@ export function CameraMonitoringDashboard() {
             {sortedCameras.map((camera) => {
               const metrics = qualityMetricsMap.get(camera.id);
               const storageInfo = storageMappings[camera.id];
-              const isRecording = camera.streamActive || camera.status === 'online';
               
               return (
                 <Link
@@ -357,8 +356,8 @@ export function CameraMonitoringDashboard() {
                       name: camera.name,
                       branchName: '', // Would come from branch data
                       onlineStatus: camera.status,
-                      recordingStatus: isRecording ? 'healthy' : 'stream_unavailable',
-                      activeStorageTier: storageInfo?.activeStorageTier || (camera.status === 'online' ? 'online_cloud' : undefined),
+                      recordingStatus: 'unknown',
+                      activeStorageTier: storageInfo?.activeStorageTier,
                       storageDetails: storageInfo?.storageDetails,
                       storageCapacity: storageInfo?.capacity,
                       storageUsed: storageInfo?.used,

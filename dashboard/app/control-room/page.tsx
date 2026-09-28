@@ -849,9 +849,9 @@ function ControlRoomContent() {
       <EmergencyAlarmPopup />
       <header className="los-page-heading">
         <div className="los-hero-copy">
-          <span className="los-eyebrow">KRYPTONVISION <span aria-hidden="true">/</span> COMMAND CENTER <span aria-hidden="true">/</span> 01</span>
-          <div className="los-hero-title"><span className="los-hero-mark" aria-hidden="true"><Radio size={24} /></span><h1>Live Wall<span>.</span><small>Live Operations Stage</small></h1></div>
-          <p>Every feed in focus. Move from live coverage to the moment that matters.</p>
+          <span className="los-eyebrow">KRYPTONVISION <span aria-hidden="true">/</span> SIGNAL OBSERVATORY <span aria-hidden="true">/</span> 01</span>
+          <div className="los-hero-title"><span className="los-hero-mark" aria-hidden="true"><Radio size={24} /></span><h1>Live Wall<span>.</span><small>Signal Observatory</small></h1></div>
+          <p>A living field of feeds, areas and events. Shift focus with a single touch.</p>
           <div className="los-hero-snapshot" aria-label="Current wall coverage">
             <span><strong>{displayedOnlineCameras}</strong> online</span>
             <span><strong>{wallSelection.branchCount}</strong> branches</span>
@@ -1082,59 +1082,7 @@ function ControlRoomContent() {
         </div>
       </section></details>
 
-      {/* 2.5 Virtual Guard Patrol Tour Bar */}
-      <details className="los-patrol-sheet"><summary><span><Compass size={16} />Patrol & advanced operations</span><small>{isPatrolActive ? PATROL_STAGES[patrolStageIndex].name : "Manual operator focus"}</small><ChevronRight size={16} /></summary><section className="patrol-tour-bar" aria-label="Virtual Guard Patrol Tour Mode">
-        <div className="patrol-meta">
-          <div className="patrol-brand">
-            <Compass size={16} className={isPatrolActive ? "spin-slow text-indigo-400" : "text-slate-400"} />
-            <strong>Virtual Guard Patrol Tour</strong>
-            <span className={`patrol-badge ${isPatrolActive ? "active" : ""}`}>
-              {isPatrolActive ? "AUTOPILOT PATROL ON" : "PATROL STANDBY"}
-            </span>
-          </div>
-          {isPatrolActive && (
-            <div className="patrol-current-stage">
-              <span className="stage-tag">{PATROL_STAGES[patrolStageIndex].name}</span>
-              <span className="countdown-tag">Next Zone in {patrolSecondsLeft}s</span>
-            </div>
-          )}
-        </div>
-        <div className="patrol-controls">
-          <div className="interval-pills">
-            <span>Cycle:</span>
-            {[10, 15, 30].map((sec) => (
-              <button
-                key={sec}
-                type="button"
-                className={`interval-btn ${patrolIntervalSec === sec ? "active" : ""}`}
-                onClick={() => {
-                  setPatrolIntervalSec(sec);
-                  setPatrolSecondsLeft(sec);
-                }}
-              >
-                {sec}s
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            className={`patrol-toggle-btn ${isPatrolActive ? "pause" : "start"}`}
-            onClick={() => setIsPatrolActive((prev) => !prev)}
-          >
-            {isPatrolActive ? (
-              <>
-                <Pause size={13} /> Pause Patrol
-              </>
-            ) : (
-              <>
-                <Play size={13} /> Start Auto-Patrol Tour
-              </>
-            )}
-          </button>
-        </div>
-      </section><div className="los-advanced-actions"><button type="button" onClick={() => setEmergencyLockdownOpen(true)}><Siren size={14} />Panic / lockdown cockpit</button><button type="button" onClick={() => setAudioDeterrenceOpen(true)}><Megaphone size={14} />Audio broadcast console</button></div></details>
-
-      {/* 3. Single Branch Hero Banner (if a single branch is selected) */}
+      {/* Single branch context */}
       {activeSingleBranch && (
         <div className="single-branch-banner">
           <div className="branch-info-left">
@@ -1171,7 +1119,44 @@ function ControlRoomContent() {
         </div>
       )}
 
-      {/* 4. Monitoring Stats Bar */}
+      {/* Primary live camera stage */}
+      <section className="control-room-content" aria-label="Camera wall">
+        {filteredCameras.length > 0 ? <LiveOperationsStage cameras={filteredCameras} alerts={liveAi.alerts} aiByCamera={aiByCamera} showAiOverlay={showAiOverlays} focusCameraId={focusCameraId} maxConcurrentStreams={CONTROL_ROOM_MAX_CONCURRENT_STREAMS} analyticsError={liveAi.error} analyticsLoading={liveAi.loading} onRefresh={liveAi.refresh} onActiveStreamsChange={setActiveStreams} onMonitoredCamerasChange={handleMonitoredCamerasChange} onOpenCameraAi={cameraId => { setSelectedAiCameraId(cameraId); setFocusCameraId(cameraId); setAiPanelOpen(true); }} /> : cameras.length > 0 ? (
+          <div className="empty-control-room-card">
+            <div className="empty-icon-wrap">
+              <Filter size={36} />
+            </div>
+            <h2>No cameras match current filter</h2>
+            <p>
+              No cameras match the selected location, status, search, or availability filters.
+            </p>
+            <button type="button" className="primary-action" onClick={resetAllFilters}>
+              Clear All Filters
+            </button>
+          </div>
+        ) : cameraDataState === "error" ? (
+          <div className="empty-control-room-card">
+            <div className="empty-icon-wrap error">
+              <AlertTriangle size={36} />
+            </div>
+            <h2>Camera inventory is unavailable</h2>
+            <p>The wall could not load its authorized camera list. Check the control plane connection and try again.</p>
+            <button type="button" className="primary-action" onClick={() => void loadData()} disabled={refreshing}>
+              <RefreshCw size={15} className={refreshing ? "spin" : ""} /> Try again
+            </button>
+          </div>
+        ) : (
+          <div className="empty-control-room-card">
+            <div className="empty-icon-wrap">
+              <Video size={36} />
+            </div>
+            <h2>No cameras available</h2>
+            <p>No authorized cameras were found for this control room session.</p>
+          </div>
+        )}
+      </section>
+
+      {/* Secondary monitoring telemetry */}
       <section className="stats-bar" aria-label="Live monitoring summary">
         <div className="stat-card">
           <Camera size={20} className="stat-icon" aria-hidden="true" />
@@ -1244,42 +1229,57 @@ function ControlRoomContent() {
         </div>
       )}
 
-      {/* 5. Main Camera Video Wall Grid */}
-      <section className="control-room-content" aria-label="Camera wall">
-        {filteredCameras.length > 0 ? <LiveOperationsStage cameras={filteredCameras} alerts={liveAi.alerts} aiByCamera={aiByCamera} showAiOverlay={showAiOverlays} focusCameraId={focusCameraId} maxConcurrentStreams={CONTROL_ROOM_MAX_CONCURRENT_STREAMS} analyticsError={liveAi.error} analyticsLoading={liveAi.loading} onRefresh={liveAi.refresh} onActiveStreamsChange={setActiveStreams} onMonitoredCamerasChange={handleMonitoredCamerasChange} onOpenCameraAi={cameraId => { setSelectedAiCameraId(cameraId); setFocusCameraId(cameraId); setAiPanelOpen(true); }} /> : cameras.length > 0 ? (
-          <div className="empty-control-room-card">
-            <div className="empty-icon-wrap">
-              <Filter size={36} />
-            </div>
-            <h2>No cameras match current filter</h2>
-            <p>
-              No cameras match the selected location, status, search, or availability filters.
-            </p>
-            <button type="button" className="primary-action" onClick={resetAllFilters}>
-              Clear All Filters
-            </button>
+      {/* Virtual Guard patrol and advanced operations */}
+      <details className="los-patrol-sheet"><summary><span><Compass size={16} />Patrol & advanced operations</span><small>{isPatrolActive ? PATROL_STAGES[patrolStageIndex].name : "Manual operator focus"}</small><ChevronRight size={16} /></summary><section className="patrol-tour-bar" aria-label="Virtual Guard Patrol Tour Mode">
+        <div className="patrol-meta">
+          <div className="patrol-brand">
+            <Compass size={16} className={isPatrolActive ? "spin-slow text-indigo-400" : "text-slate-400"} />
+            <strong>Virtual Guard Patrol Tour</strong>
+            <span className={`patrol-badge ${isPatrolActive ? "active" : ""}`}>
+              {isPatrolActive ? "AUTOPILOT PATROL ON" : "PATROL STANDBY"}
+            </span>
           </div>
-        ) : cameraDataState === "error" ? (
-          <div className="empty-control-room-card">
-            <div className="empty-icon-wrap error">
-              <AlertTriangle size={36} />
+          {isPatrolActive && (
+            <div className="patrol-current-stage">
+              <span className="stage-tag">{PATROL_STAGES[patrolStageIndex].name}</span>
+              <span className="countdown-tag">Next Zone in {patrolSecondsLeft}s</span>
             </div>
-            <h2>Camera inventory is unavailable</h2>
-            <p>The wall could not load its authorized camera list. Check the control plane connection and try again.</p>
-            <button type="button" className="primary-action" onClick={() => void loadData()} disabled={refreshing}>
-              <RefreshCw size={15} className={refreshing ? "spin" : ""} /> Try again
-            </button>
+          )}
+        </div>
+        <div className="patrol-controls">
+          <div className="interval-pills">
+            <span>Cycle:</span>
+            {[10, 15, 30].map((sec) => (
+              <button
+                key={sec}
+                type="button"
+                className={`interval-btn ${patrolIntervalSec === sec ? "active" : ""}`}
+                onClick={() => {
+                  setPatrolIntervalSec(sec);
+                  setPatrolSecondsLeft(sec);
+                }}
+              >
+                {sec}s
+              </button>
+            ))}
           </div>
-        ) : (
-          <div className="empty-control-room-card">
-            <div className="empty-icon-wrap">
-              <Video size={36} />
-            </div>
-            <h2>No cameras available</h2>
-            <p>No authorized cameras were found for this control room session.</p>
-          </div>
-        )}
-      </section>
+          <button
+            type="button"
+            className={`patrol-toggle-btn ${isPatrolActive ? "pause" : "start"}`}
+            onClick={() => setIsPatrolActive((prev) => !prev)}
+          >
+            {isPatrolActive ? (
+              <>
+                <Pause size={13} /> Pause Patrol
+              </>
+            ) : (
+              <>
+                <Play size={13} /> Start Auto-Patrol Tour
+              </>
+            )}
+          </button>
+        </div>
+      </section><div className="los-advanced-actions"><button type="button" onClick={() => setEmergencyLockdownOpen(true)}><Siren size={14} />Panic / lockdown cockpit</button><button type="button" onClick={() => setAudioDeterrenceOpen(true)}><Megaphone size={14} />Audio broadcast console</button></div></details>
 
       <InvestigationFlowNav />
 

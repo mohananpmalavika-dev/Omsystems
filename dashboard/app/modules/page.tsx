@@ -14,7 +14,7 @@ import { authApi } from "@/lib/api-client";
 const missions = [
   {id:"watch",title:"Watch the estate",verb:"Observe",description:"Start with live coverage, check device continuity, then review the signals that need attention.",routes:["/control-room","/operations/cameras","/analytics/alerts"]},
   {id:"investigate",title:"Follow an event",verb:"Investigate",description:"Search for the moment, replay the context, and preserve the evidence.",routes:["/video-search","/playback/synced","/evidence"]},
-  {id:"restore",title:"Restore readiness",verb:"Recover",description:"Identify the affected hardware, coordinate service, and verify recording continuity.",routes:["/maintenance/assets","/maintenance/workorders","/operations/recording"]},
+  {id:"restore",title:"Restore readiness",verb:"Recover",description:"Identify the affected hardware, inspect storage, and verify recording continuity.",routes:["/maintenance/assets","/operations/storage","/operations/recording","/maintenance/workorders"]},
   {id:"assure",title:"Prepare for assurance",verb:"Prove",description:"Review your controls, collect supporting evidence, and inspect branch audit readiness.",routes:["/compliance","/compliance/evidence","/audit/branch-compliance"]},
   {id:"expand",title:"Bring a branch online",verb:"Connect",description:"Set up the branch, activate its gateway, and import its cameras.",routes:["/admin/branch-onboarding","/admin/zero-touch","/admin/camera-import-export"]},
 ];

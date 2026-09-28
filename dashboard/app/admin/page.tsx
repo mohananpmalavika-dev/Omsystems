@@ -46,6 +46,7 @@ export default function AdminPage() {
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get("tab");
     if (requested === "users" || requested === "devices") setTab(requested);
+    if (requested === "users" && new URLSearchParams(window.location.search).get("action") === "create-user") setCreatingUser(true);
   }, []);
 
   const checkOrganizationExists = async () => {

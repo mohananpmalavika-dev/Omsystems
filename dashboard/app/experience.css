@@ -1,9 +1,5 @@
 /* Complete product experience: legacy routes and specialist workspaces. */
 .experience-surface { --area-accent: var(--blue); }
-.experience-surface:is([data-area="analytics"], [data-area="digital-twin"], [data-area="infrastructure-twin"]) { --area-accent: var(--cyan); }
-.experience-surface:is([data-area="compliance"], [data-area="audit"]) { --area-accent: var(--green); }
-.experience-surface:is([data-area="incidents"], [data-area="security-operations"], [data-area="evidence"]) { --area-accent: var(--red); }
-.experience-surface:is([data-area="maintenance"], [data-area="security-devices"]) { --area-accent: var(--cyan); }
 .experience-surface { background: radial-gradient(950px 460px at 100% 0%, color-mix(in srgb, var(--area-accent) 10%, transparent), transparent 75%), var(--canvas) !important; }
 .experience-surface .product-section-shell { background: transparent; }
 html[data-theme] .app-shell .experience-surface :is(.governance-section, .audit-section) > div:not(.module-page) { background: transparent !important; border: 0; box-shadow: none; }
@@ -11,12 +7,12 @@ html[data-theme] .app-shell .experience-surface :is(.governance-section, .audit-
 html[data-theme] .app-shell .experience-surface :is(.maintenance-summary-card, .maintenance-feature-card, .metric-card, .metric-chart, .chart-card) { background: var(--surface) !important; border-color: var(--line) !important; box-shadow: var(--shadow-sm); }
 html[data-theme] .app-shell .experience-surface :is(.metric-label, .metric-chart h3, .chart-summary, .maintenance-summary-card > p:last-child) { color: var(--muted) !important; }
 html[data-theme] .app-shell .experience-surface :is(.metric-value, .maintenance-summary-card > p:nth-child(2)) { color: var(--ink) !important; }
-html[data-theme] .app-shell .experience-surface :is(.page-hero, .module-hero) { background: radial-gradient(500px 290px at 100% 0%, #7371ff42, transparent 70%), radial-gradient(440px 260px at 65% 120%, #39c8e51c, transparent 75%), linear-gradient(125deg, var(--hero-start), var(--hero-end)) !important; border-color: #8f8ff033 !important; }
+html[data-theme] .app-shell .experience-surface :is(.page-hero, .module-hero) { background: radial-gradient(500px 290px at 100% 0%, rgba(111, 153, 249, .24), transparent 70%), radial-gradient(440px 260px at 65% 120%, rgba(92, 139, 232, .12), transparent 75%), linear-gradient(125deg, var(--hero-start), var(--hero-end)) !important; border-color: rgba(155, 190, 255, .24) !important; }
 html[data-theme] .app-shell .experience-surface :is(.page-hero, .module-hero) h1 { color: #f5f6ff !important; }
 html[data-theme] .app-shell .experience-surface :is(.page-hero-description, .module-description) { color: #bbc7e4 !important; }
-html[data-theme] .app-shell .experience-surface :is(.page-hero-eyebrow, .module-eyebrow) { color: #b9b0ff !important; }
-html[data-theme] .app-shell .experience-surface :is(.page-hero-icon, .module-icon) { color: #c3beff !important; background: #9485ff28 !important; border-color: #b5b5ff38 !important; }
-html[data-theme] .app-shell .experience-surface .page-hero-actions :is(.page-hero-back, .btn-secondary) { color: #e0e6ff !important; background: #ffffff0a !important; border-color: #b5b5ff38 !important; }
+html[data-theme] .app-shell .experience-surface :is(.page-hero-eyebrow, .module-eyebrow) { color: #b9d0ff !important; }
+html[data-theme] .app-shell .experience-surface :is(.page-hero-icon, .module-icon) { color: #c5d9ff !important; background: rgba(133, 171, 246, .16) !important; border-color: rgba(181, 209, 255, .24) !important; }
+html[data-theme] .app-shell .experience-surface .page-hero-actions :is(.page-hero-back, .btn-secondary) { color: #e0e9ff !important; background: #ffffff0a !important; border-color: rgba(181, 209, 255, .24) !important; }
 html[data-theme] .app-shell .experience-surface .page-hero-actions .btn-primary { color: #fff !important; }
 .experience-surface .investigation-page-body { width: min(1500px, calc(100% - 32px)); margin: 20px auto; }
 .experience-surface .investigation-page-body > .page-hero { margin-bottom: 24px; }

@@ -175,10 +175,13 @@ class CommunicationAPIClient {
     options: RequestInit = {},
     retried = false
   ): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
     const deviceRequest = endpoint.startsWith('/v1/communications/device-') ||
       endpoint === '/v1/communications/calls/soc' ||
       /^\/v1\/communications\/devices\/[^/]+\/heartbeat$/.test(endpoint);
+    // Operator requests go through the dashboard BFF so the HttpOnly session
+    // cookie, silent refresh, and /api/v1 -> /v1 fallback all apply.
+    const requestPath = deviceRequest ? endpoint : endpoint.replace(/^\/v1\//, '/api/v1/');
+    const url = `${this.baseUrl}${requestPath}`;
     const deviceToken = typeof window !== 'undefined' ? localStorage.getItem('commDeviceToken') : null;
     const authHeaders = { ...this.getHeaders(), ...(deviceRequest && deviceToken ? { Authorization: `Bearer ${deviceToken}`, 'x-device-token': deviceToken } : {}) };
     
@@ -216,7 +219,9 @@ class CommunicationAPIClient {
         error: 'Request failed',
         message: `HTTP ${response.status}`,
       }));
-      throw new Error(error.message || error.error || 'Request failed');
+      throw Object.assign(new Error(error.message || error.error || 'Request failed'), {
+        status: response.status,
+      });
     }
     
     if (response.status === 204) return undefined as T;
@@ -228,12 +233,18 @@ class CommunicationAPIClient {
   // ============================================================================
   
   async getBranchDirectory(): Promise<BranchContact[]> {
-    const response = await this.request<{ data: BranchContact[] }>('/v1/communications/directory/branches');
+    const response = await this.request<{ data: BranchContact[] }>(
+      '/v1/communications/directory/branches',
+      { signal: AbortSignal.timeout(12_000) },
+    );
     return Array.isArray(response.data) ? response.data : [];
   }
   
   async getEmployeeDirectory(): Promise<{ data: CommunicationEmployee[] }> {
-    return this.request<{ data: CommunicationEmployee[] }>('/v1/communications/directory/employees');
+    return this.request<{ data: CommunicationEmployee[] }>(
+      '/v1/communications/directory/employees',
+      { signal: AbortSignal.timeout(12_000) },
+    );
   }
   
   async getBranchPresence(branchId: string): Promise<{ presence: CommunicationPresence; devices: any[] }> {
@@ -437,7 +448,8 @@ class CommunicationAPIClient {
 
   async getDirectMessages(isDevice = false): Promise<DirectMessage[]> {
     const response = await this.request<{ data: DirectMessage[] }>(
-      isDevice ? '/v1/communications/device-direct-messages' : '/v1/communications/direct-messages'
+      isDevice ? '/v1/communications/device-direct-messages' : '/v1/communications/direct-messages',
+      { signal: AbortSignal.timeout(12_000) },
     );
     return response.data;
   }

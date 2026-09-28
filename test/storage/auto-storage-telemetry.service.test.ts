@@ -1,25 +1,15 @@
-import { describe, expect, it } from "vitest";
-import { AutoStorageTelemetryService, type StorageMetrics } from "../../src/services/auto-storage-telemetry.service.js";
+import { describe, expect, it, vi } from "vitest";
+import { AutoStorageTelemetryService } from "../../src/services/auto-storage-telemetry.service.js";
 
 describe("AutoStorageTelemetryService", () => {
-  it("provisions distinct MicroSD and HDD volumes when an SD-card camera is added", () => {
-    const service = new AutoStorageTelemetryService({} as never) as unknown as {
-      generateStorageProfile(config: Record<string, unknown>): StorageMetrics[];
-    };
-
-    const volumes = service.generateStorageProfile({
-      deviceId: "camera-1",
-      deviceName: "Entrance camera",
-      branchId: "branch-1",
-      tenantId: "tenant-1",
-      deviceType: "ip-camera",
-      storageTier: "sd_card",
+  it("never creates disk evidence from inventory registration", async () => {
+    const query = vi.fn();
+    const service = new AutoStorageTelemetryService({ query } as never);
+    expect(await service.collectStorageTelemetryForDevice({ id: "camera-1" })).toBe(0);
+    expect(await service.ensureAllCamerasAndDevicesStorage()).toEqual({
+      camerasProcessed: 0,
+      storageRecordsCreated: 0,
     });
-
-    expect(volumes.map((volume) => volume.deviceId)).toEqual([
-      "camera-1:sdcard",
-      "rec-camera-1:disk:1",
-    ]);
-    expect(new Set(volumes.map((volume) => volume.deviceId)).size).toBe(2);
+    expect(query).not.toHaveBeenCalled();
   });
 });

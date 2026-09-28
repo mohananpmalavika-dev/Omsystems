@@ -11,8 +11,8 @@ function createStore(options: { failCameraDelete?: boolean } = {}) {
       calls.push({ sql, params });
       const normalized = sql.replace(/\s+/g, " ").trim();
 
-      if (normalized.startsWith("SELECT resource_node_id FROM cameras")) {
-        return { rows: [{ resource_node_id: "node-123" }], rowCount: 1 };
+      if (normalized.startsWith("SELECT resource_node_id, branch_node_id, ip_address, serial_number, device_identity_id, connection_secret_ref FROM cameras")) {
+        return { rows: [{ resource_node_id: "node-123", branch_node_id: "branch-123", connection_secret_ref: "edge://agent-1/discovery-1" }], rowCount: 1 };
       }
       if (normalized.includes("FROM pg_constraint")) {
         return {
@@ -85,6 +85,9 @@ describe("admin camera deletion", () => {
       expect(statements.some((sql) => /status\s*=\s*'inactive'/i.test(sql))).toBe(false);
       expect(statements.indexOf('DELETE FROM "public"."recording_jobs" WHERE "camera_id" = $1'))
         .toBeLessThan(statements.indexOf("DELETE FROM cameras WHERE id::text = $1"));
+      const diskCleanup = calls.find(({ sql }) => sql.includes("DELETE FROM operational_health_telemetry") && sql.includes("device_type = 'disk'"));
+      expect(diskCleanup?.params).toEqual(["camera-123:sdcard", "camera:camera-123:sdcard:%", "camera:discovery-1:sdcard:%"]);
+      expect(diskCleanup?.sql).not.toContain("LIKE '%sdcard%'");
     },
     15_000,
   );
@@ -131,7 +134,7 @@ describe("admin camera deletion", () => {
     store.checkAccess.mockResolvedValue({ allowed: false, reason: "outside_scope" });
     const app = Fastify();
     apps.push(app);
-    registerAsAdmin(app);
+    registerAsAdmin(app, "operator");
     await adminCameraManagementRoutes(app, store);
 
     const response = await app.inject({
@@ -144,7 +147,7 @@ describe("admin camera deletion", () => {
   });
 });
 
-function registerAsAdmin(app: ReturnType<typeof Fastify>) {
+function registerAsAdmin(app: ReturnType<typeof Fastify>, role = "super_admin") {
   app.decorateRequest("currentUser");
   app.addHook("preHandler", async (request) => {
     request.currentUser = {
@@ -153,7 +156,7 @@ function registerAsAdmin(app: ReturnType<typeof Fastify>) {
       username: "admin",
       displayName: "Administrator",
       email: "admin@example.test",
-      role: "super_admin",
+      role,
       status: "active",
     };
   });

@@ -235,7 +235,7 @@ export async function registerOperationalHealthRoutes(
     const receivedAt = new Date().toISOString();
     const previousTelemetry = await store.listLatestOperationalTelemetry(branch.tenantId, [branch.id]);
     const previousByDeviceId = new Map(previousTelemetry
-      .filter((item) => item.deviceType === "disk")
+      .filter((item) => item.deviceType === "disk" && !item.idempotencyKey.startsWith("auto-storage:"))
       .map((item) => [item.deviceId, item]));
     const results = [];
     for (const [index, normalizedDisk] of disks.entries()) {
@@ -366,7 +366,7 @@ export async function registerOperationalHealthRoutes(
         node.scopeNodeId ? accessibleNodeIds.has(node.scopeNodeId) : hasTenantWideAccess
       );
       const disks = telemetry
-        .filter((item) => item.deviceType === "disk")
+        .filter((item) => item.deviceType === "disk" && !item.idempotencyKey.startsWith("auto-storage:"))
         .flatMap((item) => {
           const branch = branchById.get(item.branchId);
           return branch ? [projectDiskHealth(item, branch)] : [];
@@ -570,7 +570,7 @@ export async function registerOperationalHealthRoutes(
     // is approved. Storage evidence must remain visible independently of the
     // camera inventory; deletion paths remove telemetry for retired devices.
     let disks = telemetry
-      .filter((item) => item.deviceType === "disk")
+      .filter((item) => item.deviceType === "disk" && !item.idempotencyKey.startsWith("auto-storage:"))
       .flatMap((item) => {
         const branch = branchById.get(item.branchId);
         return branch ? [projectDiskHealth(item, branch)] : [];
@@ -999,7 +999,7 @@ export async function registerOperationalHealthRoutes(
     const policyByBranch = new Map(policies);
     const now = Date.now();
     const diskAlerts = diskTelemetry
-      .filter((item) => item.deviceType === "disk")
+      .filter((item) => item.deviceType === "disk" && !item.idempotencyKey.startsWith("auto-storage:"))
       .flatMap((item) => {
         const branch = branchById.get(item.branchId);
         if (!branch) return [];

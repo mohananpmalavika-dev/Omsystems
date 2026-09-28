@@ -51,4 +51,17 @@ describe("device inventory routes", () => {
     expect(response.statusCode).toBe(400);
     expect(updateDeviceInventory).not.toHaveBeenCalled();
   });
+
+  it("does not report a synthetic storage refresh as successful", async () => {
+    const app = await createApp({
+      getDeviceInventory: vi.fn().mockResolvedValue({
+        id: "record-1", deviceId: "recorder-1", tenantId: "tenant-a", branch: "branch-a", deviceType: "nvr",
+      }),
+      getNode: vi.fn().mockResolvedValue(branch),
+      checkAccess: vi.fn().mockResolvedValue({ allowed: true }),
+    });
+    const response = await app.inject({ method: "POST", url: "/v1/device-inventory/record-1/refresh-storage" });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ success: false, error: "hardware_probe_required" });
+  });
 });

@@ -56,7 +56,6 @@ export function CameraDetailView() {
   const [storageMapping, setStorageMapping] = useState<any>(null);
   const [storageSummary, setStorageSummary] = useState<any>(null);
   const [cameraStatusApi, setCameraStatusApi] = useState<any>(null);
-  const [isSwitchingTier, setIsSwitchingTier] = useState(false);
   const [healthHistory, setHealthHistory] = useState<any[]>([]);
   const [qualityHistory, setQualityHistory] = useState<any[]>([]);
   const [uptimeStats, setUptimeStats] = useState<any>(null);
@@ -104,34 +103,6 @@ export function CameraDetailView() {
       })
       .catch((err) => console.warn('Failed to load camera status API:', err));
   }, [cameraId]);
-
-  const handleSwitchStorageTier = async (targetTier: "online_cloud" | "sd_card" | "dvr_hdd") => {
-    if (!cameraId) return;
-    setIsSwitchingTier(true);
-    try {
-      const res = await fetch('/api/operations/storage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cameraId,
-          targetTier,
-          reason: `Manual tier selection from camera detail view: ${targetTier}`,
-        }),
-      });
-      if (res.ok) {
-        const refreshRes = await fetch('/api/operations/storage');
-        const refreshData = await refreshRes.json();
-        if (refreshData.success && Array.isArray(refreshData.cameras)) {
-          const match = refreshData.cameras.find((c: any) => c.cameraId === cameraId);
-          if (match) setStorageMapping(match);
-        }
-      }
-    } catch (e) {
-      console.error('Failed to change storage tier:', e);
-    } finally {
-      setIsSwitchingTier(false);
-    }
-  };
 
   // Fetch health history
   useEffect(() => {
@@ -261,8 +232,8 @@ export function CameraDetailView() {
         currentCam.status === 'warning' ? 'bg-yellow-100' :
           'bg-orange-100';
 
-  const isRecordingActive = currentCam.streamActive || currentCam.status === 'online';
-  const activeTier = storageMapping?.activeStorageTier || (currentCam.status === 'online' ? 'online_cloud' : 'online_cloud');
+  const isRecordingActive = cameraStatusApi?.status?.recording === true;
+  const activeTier = storageMapping?.activeStorageTier || 'unavailable';
 
   return (
     <AppLayout><main className="legacy-camera-detail-page min-h-screen bg-gray-50 p-6">
@@ -290,16 +261,16 @@ export function CameraDetailView() {
                 <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full ${isRecordingActive ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
                   <span className={`w-2 h-2 rounded-full ${isRecordingActive ? 'bg-red-600 animate-pulse' : 'bg-gray-400'}`}></span>
                   <span className="text-xs font-bold uppercase tracking-wider">
-                    {isRecordingActive ? 'RECORDING ACTIVE' : 'RECORDING STOPPED'}
+                    {isRecordingActive ? 'RECORDING REPORTED' : 'RECORDING UNVERIFIED'}
                   </span>
                 </div>
                 {/* Storage Tier Badge */}
                 <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-medium">
                   <HardDrive size={13} />
                   <span>
-                    {activeTier === 'sd_card' ? 'Storage: Device MicroSD' :
-                     activeTier === 'dvr_hdd' ? 'Storage: DVR/NVR SATA HDD' :
-                     'Storage: Online Cloud Pool (Fallback)'}
+                    {activeTier === 'sd_card' ? 'Available: Device MicroSD' :
+                     activeTier === 'dvr_hdd' ? 'Available: DVR/NVR SATA HDD' :
+                     activeTier === 'online_cloud' ? 'Available: Cloud Pool' : 'Storage unverified'}
                   </span>
                 </div>
                 {isConnected ? (
@@ -373,33 +344,15 @@ export function CameraDetailView() {
               </div>
               <div>
                 <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                  Recording Storage Hierarchy & Auto-Detection Engine
-                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    Zero Footage Loss
-                  </span>
+                  Storage Availability
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  <strong>Policy:</strong> If the device has its own internal storage (MicroSD card or local DVR/NVR hard drive), footage records locally. If no device storage is found or is unformatted, recording automatically fails over to the <strong>Online Cloud Storage Pool</strong>.
+                  Detected memory card, recorder disk, and cloud availability are shown below. Verify the actual recording destination in the recordings workspace.
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              {activeTier !== 'online_cloud' ? (
-                <button
-                  onClick={() => handleSwitchStorageTier('online_cloud')}
-                  disabled={isSwitchingTier}
-                  className="px-3 py-1.5 rounded-lg bg-purple-600/30 hover:bg-purple-600/40 text-purple-200 border border-purple-500/40 text-xs font-medium flex items-center gap-1.5 transition-all disabled:opacity-50"
-                >
-                  <Cloud className="w-3.5 h-3.5" />
-                  {isSwitchingTier ? 'Switching...' : 'Force Failover to Cloud'}
-                </button>
-              ) : (
-                <span className="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-medium flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  Cloud Redundancy Active
-                </span>
-              )}
               <Link
                 href="/operations/storage"
                 className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-1.5 transition-all"
@@ -431,7 +384,9 @@ export function CameraDetailView() {
               <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
                 <span className="text-slate-500">Hardware:</span>
                 <span className={storageMapping?.sdCardStatus === 'detected' ? 'text-emerald-400 font-bold' : 'text-slate-400 font-medium'}>
-                  {storageMapping?.sdCardStatus === 'detected' ? `Detected (${storageMapping?.capacity || 'Active'})` : 'No SD Card Detected'}
+                  {storageMapping?.sdCardStatus === 'detected' ? 'Detected' :
+                   storageMapping?.sdCardStatus === 'unformatted' ? 'Unformatted' :
+                   storageMapping?.sdCardStatus === 'unavailable' ? 'Unavailable' : 'No SD card detected'}
                 </span>
               </div>
             </div>
@@ -455,7 +410,7 @@ export function CameraDetailView() {
               <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
                 <span className="text-slate-500">Recorder Mapping:</span>
                 <span className={storageMapping?.dvrStatus === 'mapped' ? 'text-blue-400 font-bold' : 'text-slate-400 font-medium'}>
-                  {storageMapping?.dvrStatus === 'mapped' ? `Mapped (${storageMapping?.capacity || 'Active'})` : 'Not Connected to DVR'}
+                  {storageMapping?.dvrStatus === 'mapped' ? 'Disk detected' : 'No healthy recorder disk'}
                 </span>
               </div>
             </div>
@@ -474,12 +429,12 @@ export function CameraDetailView() {
               </div>
               <h4 className="font-bold text-sm text-slate-200">Online Cloud Recording Pool</h4>
               <p className="text-xs text-slate-400 mt-1">
-                Zero-loss automatic fallback when camera has no local disk.
+                Cloud storage availability depends on a configured, healthy storage node.
               </p>
               <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
                 <span className="text-slate-500">Cloud Status:</span>
                 <span className={activeTier === 'online_cloud' ? 'text-purple-300 font-bold flex items-center gap-1' : 'text-slate-400 font-medium'}>
-                  {activeTier === 'online_cloud' ? '● Active Recording Target' : 'Standby Pool Ready'}
+                  {storageSummary?.cloudNode?.status === 'healthy' ? 'Available; recording unverified' : 'Unavailable'}
                 </span>
               </div>
             </div>

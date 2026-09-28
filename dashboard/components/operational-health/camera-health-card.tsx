@@ -165,11 +165,13 @@ export function CameraHealthCard({
             <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
             Tier 2 • DVR/NVR HDD
           </span>
-        ) : (
-          <span className="px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-medium flex items-center gap-1" title="Device has no local storage; automatically recorded to Cloud pool">
+        ) : camera.activeStorageTier === 'online_cloud' ? (
+          <span className="px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-medium flex items-center gap-1" title="Cloud storage node available; recording on it is unverified">
             <Cloud size={11} />
-            Tier 3 • Online Cloud
+            Tier 3 • Cloud available
           </span>
+        ) : (
+          <span className="px-2 py-0.5 rounded bg-gray-50 text-gray-600 border border-gray-200 font-medium">Unverified</span>
         )}
       </div>
 

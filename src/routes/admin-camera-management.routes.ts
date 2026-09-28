@@ -142,7 +142,7 @@ async function cleanupResourceNodes(
 
 async function deleteCamera(client: any, id: string, app: FastifyInstance) {
   const cameraResult = await client.query(
-    `SELECT resource_node_id, branch_node_id, ip_address, serial_number, device_identity_id
+    `SELECT resource_node_id, branch_node_id, ip_address, serial_number, device_identity_id, connection_secret_ref
      FROM cameras
      WHERE id::text = $1
      FOR UPDATE`,
@@ -159,6 +159,7 @@ async function deleteCamera(client: any, id: string, app: FastifyInstance) {
   const ipAddress = row?.ip_address as string | null;
   const serialNumber = row?.serial_number as string | null;
   const deviceIdentityId = row?.device_identity_id as string | null;
+  const storageDiscoveryId = /^edge:\/\/[^/]+\/([^/]+)$/.exec(String(row?.connection_secret_ref ?? ""))?.[1];
 
   // 1. Unlink device_identities so this hardware identity is freed for re-addition
   await client.query(
@@ -203,26 +204,27 @@ async function deleteCamera(client: any, id: string, app: FastifyInstance) {
 
   // 6. Clean up storage nodes and disk telemetry associated with this removed camera/device
   try {
-    // Remove camera-specific onboard MicroSD storage telemetry
+    // Match only this camera's legacy synthetic SD row or its direct probe.
+    // Broad '%sdcard%' patterns removed unrelated cameras' live telemetry.
     await client.query(
       `DELETE FROM operational_health_telemetry 
        WHERE device_type = 'disk' 
-         AND (device_id LIKE $1 OR device_id LIKE $2 OR device_id LIKE '%sdcard%' OR device_id LIKE '%cam%')`,
-      [`%${id}%`, `%${ipAddress ?? '___'}%`]
+         AND (device_id = $1 OR device_id LIKE $2 OR ($3::text IS NOT NULL AND device_id LIKE $3))`,
+      [`${id}:sdcard`, `camera:${id}:sdcard:%`, storageDiscoveryId ? `camera:${storageDiscoveryId}:sdcard:%` : null]
     ).catch(() => null);
 
     await client.query(
       `DELETE FROM operational_health_latest 
        WHERE device_type = 'disk' 
-         AND (device_id LIKE $1 OR device_id LIKE $2 OR device_id LIKE '%sdcard%' OR device_id LIKE '%cam%')`,
-      [`%${id}%`, `%${ipAddress ?? '___'}%`]
+         AND (device_id = $1 OR device_id LIKE $2 OR ($3::text IS NOT NULL AND device_id LIKE $3))`,
+      [`${id}:sdcard`, `camera:${id}:sdcard:%`, storageDiscoveryId ? `camera:${storageDiscoveryId}:sdcard:%` : null]
     ).catch(() => null);
 
     // Remove camera-specific recording storage node
     await client.query(
       `DELETE FROM recording_storage_nodes 
-       WHERE external_id = $1 OR external_id LIKE $2`,
-      [`cam-sdcard-${id}`, `%${id}%`]
+       WHERE external_id = $1`,
+      [`cam-sdcard-${id}`]
     ).catch(() => null);
 
     // NOTE: Do NOT delete branch-level or system-wide disk telemetry here.

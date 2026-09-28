@@ -175,7 +175,7 @@ export interface CameraHealth {
   };
   onlineStatus: 'online' | 'offline' | 'warning' | 'degraded' | 'unknown';
   recordingStatus: RecordingStatus;
-  activeStorageTier?: 'sd_card' | 'dvr_hdd' | 'online_cloud';
+  activeStorageTier?: 'sd_card' | 'dvr_hdd' | 'online_cloud' | 'unavailable';
   storageDetails?: string;
   storageCapacity?: string;
   storageUsed?: string;

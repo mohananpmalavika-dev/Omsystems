@@ -1118,6 +1118,7 @@ export async function buildApp(options?: {
     return {
       data: result.cameras.map((camera) => ({
         ...safeCamera(camera),
+        storageDiscoveryId: /^edge:\/\/[^/]+\/([^/]+)$/.exec(camera.connectionSecretRef)?.[1],
         branchName: branches.get(camera.branchId)?.name ?? "Unknown branch",
       })),
       total: result.total,
