@@ -15,13 +15,28 @@ export class RuntimeGuard {
   register(app: FastifyInstance) {
     app.addHook("onRequest", async (request, reply) => {
       this.started.set(request, performance.now());
+
+      // Health checks, readiness probes, and metrics must never be rejected by backpressure
+      if (isBypassRoute(request.url)) {
+        return;
+      }
+
+      // Streaming / SSE requests do not consume transactional request concurrency slots
+      if (isStreamingRequest(request)) {
+        this.attachRawSocketCleanup(request, reply);
+        return;
+      }
+
       if (this.inFlight >= this.maxInFlight) {
         this.rejected += 1;
         return reply.header("retry-after", "1").code(503).send({ error: "control_plane_backpressure", retryAfterSeconds: 1 });
       }
+
       this.inFlight += 1;
       this.admitted.add(request);
+      this.attachRawSocketCleanup(request, reply);
     });
+
     app.addHook("onResponse", async (request, reply) => this.complete(request, reply));
     app.addHook("onSend", async (_request, reply, payload) => {
       reply.header("x-content-type-options", "nosniff");
@@ -76,14 +91,61 @@ export class RuntimeGuard {
     return `${lines.join("\n")}\n`;
   }
 
+  private attachRawSocketCleanup(request: FastifyRequest, reply: FastifyReply) {
+    const cleanup = () => {
+      this.complete(request, reply);
+    };
+    request.raw.once("close", cleanup);
+    reply.raw.once("finish", cleanup);
+  }
+
   private complete(request: FastifyRequest, reply: FastifyReply) {
-    const started = this.started.get(request);
-    if (started === undefined) return;
-    if (this.admitted.has(request)) this.inFlight = Math.max(0, this.inFlight - 1);
+    if (!this.started.has(request)) return;
+    const started = this.started.get(request)!;
+    this.started.delete(request);
+
+    if (this.admitted.has(request)) {
+      this.admitted.delete(request);
+      this.inFlight = Math.max(0, this.inFlight - 1);
+    }
+
     this.total += 1;
-    this.samples.push({ route: request.routeOptions.url ?? "unmatched", method: request.method, status: reply.statusCode, durationMs: performance.now() - started });
+    this.samples.push({
+      route: request.routeOptions?.url ?? request.url.split("?")[0] ?? "unmatched",
+      method: request.method,
+      status: reply.statusCode || (reply.raw?.statusCode ?? 200),
+      durationMs: performance.now() - started,
+    });
     if (this.samples.length > this.maxSamples) this.samples.splice(0, this.samples.length - this.maxSamples);
   }
+}
+
+function isBypassRoute(url: string): boolean {
+  const path = url.split("?")[0] ?? "";
+  return (
+    path === "/health" ||
+    path === "/live" ||
+    path === "/ready" ||
+    path === "/metrics" ||
+    path === "/capabilities" ||
+    path.startsWith("/api/observability/") ||
+    path.startsWith("/v1/observability/")
+  );
+}
+
+function isStreamingRequest(request: FastifyRequest): boolean {
+  const accept = request.headers.accept;
+  if (accept && accept.includes("text/event-stream")) return true;
+  const path = (request.url ?? "").split("?")[0] ?? "";
+  return (
+    path.endsWith("/stream") ||
+    path.endsWith("/events") ||
+    path.endsWith("/events/stream") ||
+    path.includes("/events/stream") ||
+    path.startsWith("/v1/operations/events") ||
+    path.startsWith("/v1/alerts/events") ||
+    path.startsWith("/v1/digital-twin/events/stream")
+  );
 }
 
 function percentile(values: number[], quantile: number) {
