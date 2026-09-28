@@ -1,0 +1,144 @@
+/* Administration uses the same control plane language across every route. */
+.admin-command-scope {
+  --admin-signal: #72e4d2;
+  --admin-signal-soft: rgba(114, 228, 210, .16);
+  --admin-line: rgba(125, 198, 207, .23);
+  min-width: 0;
+  width: 100%;
+}
+
+.app-shell .experience-surface[data-area="admin"] {
+  background:
+    radial-gradient(700px 360px at 90% 0%, rgba(51, 169, 165, .11), transparent 76%),
+    var(--canvas) !important;
+}
+
+html[data-theme] .app-shell .experience-surface[data-area="admin"] .admin-command-scope :is(.workspace-heading, .admin-header),
+.admin-command-scope :is(.workspace-heading, .admin-header) {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 230px;
+  border: 1px solid var(--admin-line) !important;
+  border-radius: 20px !important;
+  background:
+    radial-gradient(ellipse at 82% 48%, rgba(49, 195, 181, .23), transparent 37%),
+    radial-gradient(ellipse at 10% 120%, rgba(48, 112, 185, .25), transparent 50%),
+    linear-gradient(115deg, #0a1828 0%, #0d2432 60%, #0b1b2b 100%) !important;
+  box-shadow: 0 22px 46px rgba(4, 16, 30, .17), inset 0 1px rgba(208, 255, 248, .07) !important;
+}
+
+html[data-theme] .app-shell .experience-surface[data-area="admin"] .admin-command-scope :is(.workspace-heading, .admin-header)::before,
+.admin-command-scope :is(.workspace-heading, .admin-header)::before {
+  content: "KRYPTONVISION  /  ADMIN CONTROL PLANE";
+  position: absolute;
+  inset: 0 0 auto;
+  width: auto;
+  height: 34px;
+  padding: 10px 28px;
+  border: 0;
+  border-bottom: 1px solid rgba(139, 217, 208, .17);
+  border-radius: 0;
+  background: rgba(3, 15, 25, .3);
+  color: #8fd4c9;
+  font: 600 9px/1.5 ui-monospace, monospace;
+  letter-spacing: .17em;
+  pointer-events: none;
+}
+
+html[data-theme] .app-shell .experience-surface[data-area="admin"] .admin-command-scope :is(.workspace-heading, .admin-header)::after,
+.admin-command-scope :is(.workspace-heading, .admin-header)::after {
+  content: "";
+  position: absolute;
+  inset: 34px 0 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(143, 222, 213, .07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(143, 222, 213, .07) 1px, transparent 1px),
+    linear-gradient(105deg, transparent 25%, rgba(119, 235, 214, .08) 50%, transparent 75%);
+  background-size: 39px 39px, 39px 39px, 220% 100%;
+  background-position: 0 0, 0 0, 100% 0;
+  mask-image: linear-gradient(90deg, transparent 4%, #000 100%);
+  animation: admin-grid-sweep 16s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes admin-grid-sweep {
+  to { background-position: 0 0, 0 0, 0 0; }
+}
+
+.admin-command-scope :is(.workspace-heading, .admin-header) h1 {
+  text-wrap: balance;
+}
+.admin-command-scope :is(.workspace-heading, .admin-header) :is(.admin-back, a[href="/admin"]) {
+  color: #b9e7e1 !important;
+}
+.admin-command-scope :is(.workspace-heading, .admin-header) :is(.admin-title > span, h1 svg) {
+  color: var(--admin-signal) !important;
+}
+
+/* The artwork is a decorative schematic, not operational telemetry. */
+.admin-command-scope .field-visual {
+  color: #86e8d5;
+  filter: drop-shadow(0 0 20px rgba(69, 223, 199, .23));
+}
+.admin-command-scope .field-visual::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  width: min(88%, 188px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(129, 230, 214, .17);
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0 280deg, rgba(100, 240, 217, .21) 335deg, rgba(123, 235, 216, .03) 360deg);
+  animation: admin-radar-turn 12s linear infinite;
+}
+.admin-command-scope .field-visual svg { position: relative; z-index: 1; }
+.admin-command-scope .field-art-orbit ellipse:first-child {
+  transform-origin: 160px 110px;
+  animation: admin-orbit-turn 30s linear infinite;
+}
+.admin-command-scope .field-art-orbit ellipse:nth-child(2) {
+  transform-origin: 160px 110px;
+  animation: admin-orbit-return 35s linear infinite;
+}
+.admin-command-scope .field-art-orbit circle:nth-of-type(2) {
+  animation: admin-core-glow 3.5s ease-in-out infinite alternate;
+}
+.admin-command-scope :is(.field-visual-coordinate, .field-visual-caption) { color: #94d9d1; }
+
+@keyframes admin-radar-turn { to { transform: rotate(360deg); } }
+@keyframes admin-orbit-turn { from { transform: rotate(-24deg); } to { transform: rotate(336deg); } }
+@keyframes admin-orbit-return { from { transform: rotate(34deg); } to { transform: rotate(-326deg); } }
+@keyframes admin-core-glow { to { opacity: .45; } }
+
+.admin-command-scope :is(.admin-panel, .ztp-panel) {
+  border-color: color-mix(in srgb, var(--admin-signal) 12%, var(--line)) !important;
+  box-shadow: var(--shadow-sm), inset 0 1px rgba(255, 255, 255, .025);
+}
+.admin-command-scope :is(.admin-tabs, .filter-tabs) [aria-selected="true"],
+.admin-command-scope .admin-tabs button.active {
+  box-shadow: inset 0 -2px var(--admin-signal);
+}
+.admin-command-scope :is(.admin-panel, .ztp-panel) :is(button, a):focus-visible {
+  outline-color: var(--admin-signal);
+}
+
+@media (max-width: 760px) {
+  html[data-theme] .app-shell .experience-surface[data-area="admin"] .admin-command-scope :is(.workspace-heading, .admin-header),
+  .admin-command-scope :is(.workspace-heading, .admin-header) { min-height: 0; }
+  .admin-command-scope :is(.workspace-heading, .admin-header)::before { padding-inline: 22px; font-size: 8px; }
+  .admin-command-scope .field-visual { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-command-scope :is(.workspace-heading, .admin-header)::after,
+  .admin-command-scope .field-visual::before,
+  .admin-command-scope .field-art-orbit :is(ellipse, circle) { animation: none !important; }
+}
+
+@media print {
+  html[data-theme] .app-shell .experience-surface[data-area="admin"] .admin-command-scope :is(.workspace-heading, .admin-header) { background: white !important; color: black !important; box-shadow: none !important; }
+  .admin-command-scope :is(.workspace-heading, .admin-header)::after,
+  .admin-command-scope .field-visual::before { display: none; }
+}

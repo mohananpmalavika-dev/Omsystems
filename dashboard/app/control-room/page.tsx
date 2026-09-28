@@ -847,7 +847,19 @@ function ControlRoomContent() {
   return (
     <div className="control-room operations-stage-room">
       <EmergencyAlarmPopup />
-      <header className="los-page-heading"><div><span className="los-eyebrow">KRYPTONVISION / LIVE OPERATIONS</span><h1>Live Operations Stage</h1><p>A situation-first workspace. Choose a scene, follow an event, coordinate the response.</p></div><div className="los-page-actions"><span className={"los-data-state " + dataMode}><i />{dataMode === "live" ? "Inventory connected" : dataMode === "partial" ? "Partial service availability" : "Services unavailable"}</span><Link href="/operations/alerts">Alert centre <ArrowUpRight size={15} /></Link><button type="button" onClick={() => void loadData()} disabled={refreshing}><RefreshCw size={15} />{refreshing ? "Refreshing…" : "Refresh scope"}</button></div></header>
+      <header className="los-page-heading">
+        <div className="los-hero-copy">
+          <span className="los-eyebrow">KRYPTONVISION <span aria-hidden="true">/</span> COMMAND CENTER <span aria-hidden="true">/</span> 01</span>
+          <div className="los-hero-title"><span className="los-hero-mark" aria-hidden="true"><Radio size={24} /></span><h1>Live Wall<span>.</span><small>Live Operations Stage</small></h1></div>
+          <p>Every feed in focus. Move from live coverage to the moment that matters.</p>
+          <div className="los-hero-snapshot" aria-label="Current wall coverage">
+            <span><strong>{displayedOnlineCameras}</strong> online</span>
+            <span><strong>{wallSelection.branchCount}</strong> branches</span>
+            <span><strong>{stats.unacknowledgedAlerts}</strong> need attention</span>
+          </div>
+        </div>
+        <div className="los-page-actions"><span className={"los-data-state " + dataMode}><i />{dataMode === "live" ? "Inventory connected" : dataMode === "partial" ? "Partial service availability" : "Services unavailable"}</span><Link href="/operations/alerts">Alert centre <ArrowUpRight size={15} /></Link><button type="button" onClick={() => void loadData()} disabled={refreshing}><RefreshCw size={15} />{refreshing ? "Refreshing…" : "Refresh scope"}</button></div>
+      </header>
 
       {/* 2. Interactive Zone / Region / Area / Branch Scope Filter Toolbar */}
       <details className="los-scope-sheet"><summary><span><Globe2 size={17} />Wall scope & filters</span><strong>{activeSingleBranch?.branchName ?? "Across branches"} · {filteredCameras.length} cameras</strong><ChevronRight size={16} /></summary><section className="hierarchy-filter-bar" aria-label="Live Wall Scope Selection">
