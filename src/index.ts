@@ -46,7 +46,7 @@ if (!config.DATABASE_URL && config.NODE_ENV === "production") {
 }
 
 const store: ControlPlaneStore = config.DATABASE_URL
-  ? new PostgresStore(createPool(config.DATABASE_URL))
+  ? (new PostgresStore(createPool(config.DATABASE_URL)) as unknown as ControlPlaneStore)
   : (new MemoryStore() as unknown as ControlPlaneStore);
 
 const eventBus = getEventBus({

@@ -64,7 +64,7 @@ function mapBranchConnectivityProfile(row: any): BranchConnectivityProfile {
 
 export class PostgresStore
   extends InfrastructureRepository
-  implements ControlPlaneStore
+  implements Partial<ControlPlaneStore>
 {
   private readonly users: UserRepository;
   private readonly resources: ResourceRepository;

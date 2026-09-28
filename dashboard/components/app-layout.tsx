@@ -94,6 +94,7 @@ import { AlertNotificationTray } from "@/components/alerts/alert-notification-tr
 import { defaultRoleWorkspace } from "@/lib/role-workspaces";
 import { hasUnrestrictedMenuAccess } from "@/lib/navigation-access";
 import { markInAppNavigation } from "@/lib/session-guard";
+import { CommandWorkspaceNav } from "@/components/command-workspace-nav";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -144,6 +145,7 @@ export const navigation: NavGroup[] = [
     items: [
       { label: "Bank & NBFC security operations", href: "/nbfc-operations", icon: Landmark },
       { label: "Command Center", href: "/", icon: LayoutDashboard },
+      { label: "Executive dashboard", href: "/dashboards", icon: BarChart3 },
       { label: "My workspace", href: "/role-dashboard", icon: BarChart3 },
       { label: "Module directory", href: "/modules", icon: LayoutGrid },
     ],
@@ -207,6 +209,7 @@ export const navigation: NavGroup[] = [
     label: "AUDIT, MIS & COMPLIANCE",
     icon: FileText,
     items: [
+      { label: "Report studio", href: "/reports", icon: FileText },
       { label: "Executive reports", href: "/reports/mis", icon: FileSpreadsheet },
       { label: "Cost & value analysis", href: "/reports/financial", icon: TrendingUp },
       { label: "Compliance Frameworks", href: "/compliance", icon: ShieldCheck },
@@ -1217,7 +1220,10 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
         </header>
         <div className="route-surface experience-surface" data-area={pathname.split("/")[1] || "overview"} data-section={currentPage.section.toLowerCase().replaceAll(" ", "-")}>
           {isRouteAuthorized ? (
-            children
+            <>
+              <CommandWorkspaceNav pathname={pathname} visibleHrefs={visibleHrefs} unrestricted={hasUnrestrictedMenuAccess(operator) && !hasCustomMenuConfiguration(operator)} />
+              {children}
+            </>
           ) : (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 space-y-4">
               <div className="w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 mb-2">
