@@ -50,10 +50,33 @@
 .command-workspace-nav-links a:hover { border-color: #81d7bf; background: rgb(255 255 255 / 10%); color: #fff; }
 .command-workspace-nav-links a.is-current { border-color: rgb(129 215 191 / 50%); color: #e9fff5; background: rgb(97 210 173 / 17%); }
 .command-workspace-nav :is(a):focus-visible { outline: 2px solid #81d7bf; outline-offset: 2px; }
+
+/* Carry the Command Center's operational palette into the first-phase pages. */
+html[data-theme] .app-shell .experience-surface:is([data-area="dashboards"], [data-area="role-dashboard"], [data-area="mis-dashboard"], [data-area="reports"]) :is(.field-hero, .workspace-heading) {
+  border-color: #2b5551 !important;
+  background: radial-gradient(ellipse at 80% 60%, rgb(60 178 154 / 16%), transparent 55%), linear-gradient(145deg, #0b292e, #0e1d28 78%) !important;
+}
+html[data-theme] .app-shell .experience-surface:is([data-area="dashboards"], [data-area="role-dashboard"], [data-area="mis-dashboard"], [data-area="reports"]) :is(.field-hero, .workspace-heading)::before {
+  content: "KRYPTON / DECISION INTELLIGENCE";
+  color: #81d7bf;
+  border-color: rgb(193 230 221 / 16%);
+}
+html[data-theme] .app-shell .experience-surface:is([data-area="dashboards"], [data-area="role-dashboard"], [data-area="mis-dashboard"], [data-area="reports"]) :is(.field-hero, .workspace-heading) .page-hero-eyebrow { color: #81d7bf !important; }
+html[data-theme] .app-shell .experience-surface[data-area="reports"] .report-studio-heading {
+  padding: 26px;
+  border: 1px solid #2b5551;
+  border-radius: 18px;
+  background: radial-gradient(440px 220px at 96% -30%, rgb(60 178 154 / 22%), transparent 75%), linear-gradient(145deg, #0b292e, #0e1d28 78%);
+}
+html[data-theme] .app-shell .experience-surface[data-area="reports"] .report-studio-heading h1 { color: #f7fffb; }
+html[data-theme] .app-shell .experience-surface[data-area="reports"] .report-studio-heading h1 em,
+html[data-theme] .app-shell .experience-surface[data-area="reports"] .report-studio-heading .workflow-kicker { color: #81d7bf; }
+html[data-theme] .app-shell .experience-surface[data-area="reports"] .report-studio-heading p:last-child { color: #aec6c6; }
 @media (max-width: 640px) {
   .command-workspace-nav { width: calc(100% - 28px); margin-top: 14px; border-radius: 14px; }
   .command-workspace-nav-intro { align-items: flex-start; flex-direction: column; gap: 12px; padding: 16px; }
   .command-workspace-nav-groups { padding: 12px 16px 16px; gap: 14px; }
   .command-workspace-nav-group { align-items: flex-start; flex-direction: column; }
+  html[data-theme] .app-shell .experience-surface[data-area="reports"] .report-studio-heading { padding: 20px 16px; }
 }
 @media print { .command-workspace-nav { display: none !important; } }
