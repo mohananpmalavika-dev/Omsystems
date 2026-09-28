@@ -13,9 +13,9 @@ import {
   SecurityDeviceType,
   DeviceProtocol,
   BulkEnrollDevicesRequest,
-} from '../domain/security-device.types';
-import { adapterRegistry } from '../adapters/index';
-import { getSecurityDeviceService } from './security-device.service';
+} from '../domain/security-device.types.js';
+import { adapterRegistry } from '../adapters/index.js';
+import { getSecurityDeviceService } from './security-device.service.js';
 
 export interface DiscoveryJob {
   id: string;
@@ -71,7 +71,7 @@ export class SecurityDeviceDiscoveryService {
       throw new Error('invalid_network_range');
     }
     const supportedProtocols = new Set(['ONVIF', 'SNMP', 'REST', 'MQTT']);
-    if (!options.protocols?.length || options.protocols.some((protocol) => !supportedProtocols.has(protocol.toUpperCase()))) {
+    if (!options.protocols?.length || options.protocols.some((protocol: string) => !supportedProtocols.has(protocol.toUpperCase()))) {
       throw new Error('at_least_one_protocol_required');
     }
     // Create discovery job record

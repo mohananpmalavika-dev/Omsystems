@@ -23,8 +23,8 @@ import {
   SecurityDeviceType,
   DeviceStatus,
   DeviceHealth,
-} from '../domain/security-device.types';
-import { adapterRegistry } from '../adapters/index';
+} from '../domain/security-device.types.js';
+import { adapterRegistry } from '../adapters/index.js';
 
 export class SecurityDeviceService {
   constructor(private readonly pool: Pool) {}
