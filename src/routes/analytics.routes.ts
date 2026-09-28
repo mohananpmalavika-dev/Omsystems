@@ -551,48 +551,17 @@ export async function registerAnalyticsRoutes(
     if (query.branchId && !await authorizedNode(
       request, reply, store, query.branchId, "analytics:view",
     )) return;
-    let candidates = await store.listAnalyticsAlerts(
+    const cameraIds = await accessibleAlertCameraIds(request, store, query.branchId);
+    if (cameraIds.length === 0) return { data: [], summary: emptyAlertSummary(), total: 0 };
+    const candidates = await store.listAnalyticsAlerts(
       request.currentUser.tenantId,
-      { ...query, limit: Math.min(1_000, query.limit * 5) },
+      { ...query, cameraIds, limit: query.limit },
     );
-    if (candidates.length === 0 && (request.currentUser.role === "super_admin" || request.currentUser.role === "company_admin")) {
-      candidates = await store.listAnalyticsAlerts(
-        "00000000-0000-4000-8000-000000000001",
-        { ...query, limit: Math.min(1_000, query.limit * 5) },
-      );
-    }
-    
-    // Batch fetch all cameras to avoid N+1 queries
-    const cameraIds = [...new Set(candidates.map((alert) => alert.cameraId))];
-    const cameras = await store.listCamerasByIds(cameraIds);
-    const camerasById = new Map(cameras.map((camera) => [camera.id, camera]));
-
-    // Build access map by checking permissions for each camera
-    const accessMap = new Map<string, boolean>();
-    for (const camera of cameras) {
-      const hasAccess = await hasCameraAccess(request, store, camera, "analytics:view");
-      accessMap.set(camera.id, hasAccess);
-    }
-
-    const data: AnalyticsAlert[] = [];
-    for (const alert of candidates) {
-      const camera = camerasById.get(alert.cameraId);
-      if ((camera && accessMap.get(alert.cameraId)) || request.currentUser.role === "super_admin") {
-        data.push(alert);
-        if (data.length >= query.limit) break;
-      }
-    }
-    let summary = await store.getAnalyticsAlertsSummary(
+    const summary = await store.getAnalyticsAlertsSummary(
       request.currentUser.tenantId,
-      { branchId: query.branchId, cameraId: query.cameraId },
+      { cameraIds, branchId: query.branchId, cameraId: query.cameraId },
     );
-    if (summary.total === 0 && (request.currentUser.role === "super_admin" || request.currentUser.role === "company_admin")) {
-      summary = await store.getAnalyticsAlertsSummary(
-        "00000000-0000-4000-8000-000000000001",
-        { branchId: query.branchId, cameraId: query.cameraId },
-      );
-    }
-    return { data, summary, total: summary.total };
+    return { data: candidates, summary, total: summary.total };
   });
 
   app.get("/v1/analytics/alerts/summary", async (request, reply) => {
@@ -602,16 +571,12 @@ export async function registerAnalyticsRoutes(
     }).parse(request.query);
     if (query.cameraId && !await authorizedCamera(request, reply, store, query.cameraId, "analytics:view")) return;
     if (query.branchId && !await authorizedNode(request, reply, store, query.branchId, "analytics:view")) return;
-    let summary = await store.getAnalyticsAlertsSummary(
+    const cameraIds = await accessibleAlertCameraIds(request, store, query.branchId);
+    if (cameraIds.length === 0) return emptyAlertSummary();
+    const summary = await store.getAnalyticsAlertsSummary(
       request.currentUser.tenantId,
-      { branchId: query.branchId, cameraId: query.cameraId },
+      { cameraIds, branchId: query.branchId, cameraId: query.cameraId },
     );
-    if (summary.total === 0 && (request.currentUser.role === "super_admin" || request.currentUser.role === "company_admin")) {
-      summary = await store.getAnalyticsAlertsSummary(
-        "00000000-0000-4000-8000-000000000001",
-        { branchId: query.branchId, cameraId: query.cameraId },
-      );
-    }
     return summary;
   });
 
@@ -1368,6 +1333,23 @@ async function hasCameraAccess(
     ? await store.checkCameraAccess(request.currentUser.id, camera.id, action)
     : await store.checkAccess(request.currentUser, action, camera.nodeId);
   return Boolean(decision?.allowed);
+}
+
+async function accessibleAlertCameraIds(
+  request: FastifyRequest,
+  store: ControlPlaneStore,
+  branchId?: string,
+): Promise<string[]> {
+  const branches = await store.listAccessibleNodes(request.currentUser, "analytics:view", "branch");
+  const scoped = branchId ? branches.filter((branch) => branch.id === branchId) : branches;
+  const cameras = await Promise.all(scoped.map((branch) =>
+    store.listCamerasByBranch(request.currentUser, branch.id, "analytics:view")
+  ));
+  return [...new Set(cameras.flat().map((camera) => camera.id))];
+}
+
+function emptyAlertSummary() {
+  return { total: 0, active: 0, converted: 0, unconverted: 0, critical: 0, falseAlarms: 0 };
 }
 
 async function authorizedNode(

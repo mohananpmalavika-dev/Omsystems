@@ -1306,7 +1306,7 @@ export interface ControlPlaneStore {
   ): Promise<Record<AnalyticsAlert["severity"], number>>;
   getAnalyticsAlertsSummary(
     tenantId: string,
-    filters?: { branchId?: string; cameraId?: string },
+    filters?: { branchId?: string; cameraId?: string; cameraIds?: string[] },
   ): Promise<AnalyticsAlertsAggregateSummary>;
   getAnalyticsAlert(id: string, tenantId: string): Promise<AnalyticsAlert | undefined>;
   updateAnalyticsAlertEvidence(

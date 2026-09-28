@@ -1,24 +1,36 @@
 "use client";
 
-/**
- * Executive Dashboard
- * Role-based operational dashboard with real-time metrics
- */
-
-import React, { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
+import {
+  Activity,
+  AlertTriangle,
+  ArrowDownRight,
+  ArrowRight,
+  ArrowUpRight,
+  BarChart3,
+  Camera,
+  CheckCircle2,
+  CircleDot,
+  Clock3,
+  FileText,
+  Gauge,
+  HardDrive,
+  RefreshCw,
+  ShieldAlert,
+} from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
-import { PageHero } from "@/components/page-hero";
-import { AlertTriangle, BarChart3, Camera, CircleDot, Gauge, HardDrive, Zap } from "lucide-react";
+import "./executive-decision.css";
 
-interface DashboardSummary {
+type FeedStatus = "AVAILABLE" | "UNAVAILABLE";
+type DashboardSummary = {
   systemStatus: string;
   systemHealthScore: number | null;
-  criticalAlerts: number | null;
   activeIncidents: number;
   lastUpdated: string;
-}
-
-interface CameraMetrics {
+  status?: FeedStatus;
+};
+type CameraMetrics = {
   totalRegistered: number;
   operational: number;
   online: number;
@@ -26,498 +38,432 @@ interface CameraMetrics {
   degraded: number;
   underMaintenance: number | null;
   availabilityPercentage: number | null;
-}
-
-interface RecordingMetrics {
+  status?: FeedStatus;
+};
+type RecordingMetrics = {
   recordingNormally: number | null;
   recordingWithGaps: number | null;
   recordingStopped: number | null;
   verificationPending: number | null;
   availabilityPercentage: number | null;
-}
-
-interface StorageMetrics {
+  status?: FeedStatus;
+};
+type StorageMetrics = {
   totalCapacityBytes: string | null;
   usedCapacityBytes: string | null;
   availableCapacityBytes: string | null;
   utilizationPercentage: number | null;
   forecastFullDays: number | null;
   criticalNodes: number;
-}
-
-interface AlertMetrics {
+  status?: FeedStatus;
+};
+type AlertMetrics = {
   totalActive: number;
   unacknowledged: number;
   critical: number;
   escalated: number | null;
   slaBreached: number | null;
-}
-
-interface CapacityAssessment {
+  status?: FeedStatus;
+};
+type CapacityAssessment = {
   capability: string;
   status: string;
   verifiedCompletion: number;
   summary: string;
-  metrics: {
-    branches: number;
-    cameras: number;
-    branchScaleTarget: number;
-    cameraScaleTarget: number;
-  };
-  evidence: {
+  metrics?: { branches: number; cameras: number; branchScaleTarget?: number; cameraScaleTarget?: number };
+  evidence?: {
     loadTestCompleted: boolean;
     productionBenchmarkCompleted: boolean;
     enduranceBenchmarkCompleted: boolean;
     failoverValidated: boolean;
   };
-  futureBranches?: {
-    capability: string;
-    status: string;
-    verifiedCompletion: number;
-    summary: string;
-  };
+};
+type Incident = {
+  id?: string;
+  incidentNumber?: string;
+  incidentType?: string;
+  branchName?: string;
+  severity?: string;
+  status?: string;
+  occurredAt?: string;
+};
+type DashboardData = {
+  summary: DashboardSummary | null;
+  cameras: CameraMetrics | null;
+  recording: RecordingMetrics | null;
+  storage: StorageMetrics | null;
+  alerts: AlertMetrics | null;
+  incidents: Incident[] | null;
+  capacity: CapacityAssessment | null;
+};
+type Decision = {
+  id: string;
+  title: string;
+  detail: string;
+  count: number;
+  label: string;
+  tone: "critical" | "warning";
+  href: string;
+};
+
+const initialData: DashboardData = {
+  summary: null,
+  cameras: null,
+  recording: null,
+  storage: null,
+  alerts: null,
+  incidents: null,
+  capacity: null,
+};
+
+async function readFeed<T>(path: string, signal: AbortSignal): Promise<T> {
+  const base = process.env.NEXT_PUBLIC_API_BASE || "/api/control";
+  const response = await fetch(`${base}${path}`, { credentials: "include", cache: "no-store", signal });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const payload = await response.json();
+  if (payload?.success === false) throw new Error(payload?.error || "Feed unavailable");
+  return (payload?.data ?? payload) as T;
+}
+
+function formatCount(value: number | null | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? value.toLocaleString() : "—";
+}
+
+function formatPercent(value: number | null | undefined, digits = 1) {
+  return typeof value === "number" && Number.isFinite(value) ? `${value.toFixed(digits)}%` : "—";
+}
+
+function formatBytes(value: string | null | undefined) {
+  if (value == null) return "—";
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes < 0) return "—";
+  if (bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** index).toFixed(1)} ${units[index]}`;
+}
+
+function confirmed<T extends { status?: FeedStatus }>(feed: T | null): feed is T {
+  return feed !== null && feed.status !== "UNAVAILABLE";
+}
+
+function getDecisions(data: DashboardData): Decision[] {
+  const decisions: Decision[] = [];
+  if (confirmed(data.alerts) && data.alerts.critical > 0) {
+    decisions.push({
+      id: "alerts", title: "Critical alerts need triage",
+      detail: `${formatCount(data.alerts.unacknowledged)} unacknowledged across the monitored estate.`,
+      count: data.alerts.critical, label: "critical alerts", tone: "critical", href: "#executive-alerts",
+    });
+  }
+  if (data.summary && Number.isFinite(data.summary.activeIncidents) && data.summary.activeIncidents > 0) {
+    decisions.push({
+      id: "incidents", title: "Active incidents need a decision",
+      detail: "Review the latest cases and their current response state.",
+      count: data.summary.activeIncidents, label: "active incidents", tone: "critical", href: "#executive-incidents",
+    });
+  }
+  if (confirmed(data.cameras) && data.cameras.offline > 0) {
+    decisions.push({
+      id: "cameras", title: "Camera coverage has gaps",
+      detail: `${formatCount(data.cameras.degraded)} more cameras are degraded.`,
+      count: data.cameras.offline, label: "offline cameras", tone: "warning", href: "#executive-cameras",
+    });
+  }
+  if (confirmed(data.recording) && (data.recording.recordingStopped ?? 0) > 0) {
+    decisions.push({
+      id: "recording", title: "Recording has stopped",
+      detail: "Inspect continuity before an evidence request is affected.",
+      count: data.recording.recordingStopped!, label: "stopped streams", tone: "critical", href: "#executive-recording",
+    });
+  } else if (confirmed(data.recording) && (data.recording.recordingWithGaps ?? 0) > 0) {
+    decisions.push({
+      id: "recording", title: "Recording continuity has gaps",
+      detail: "Inspect the affected streams and verify retained footage.",
+      count: data.recording.recordingWithGaps!, label: "streams with gaps", tone: "warning", href: "#executive-recording",
+    });
+  }
+  if (confirmed(data.storage) && data.storage.criticalNodes > 0) {
+    decisions.push({
+      id: "storage", title: "Storage nodes are critical",
+      detail: "Review capacity and device health at the affected nodes.",
+      count: data.storage.criticalNodes, label: "critical nodes", tone: "critical", href: "#executive-storage",
+    });
+  } else if (confirmed(data.storage) && (data.storage.utilizationPercentage ?? 0) >= 90) {
+    decisions.push({
+      id: "storage", title: "Storage is nearing capacity",
+      detail: "Review available capacity and plan the next action.",
+      count: data.storage.utilizationPercentage!, label: "percent used", tone: "warning", href: "#executive-storage",
+    });
+  }
+  return decisions.sort((a, b) => (a.tone === b.tone ? 0 : a.tone === "critical" ? -1 : 1));
 }
 
 export default function DashboardPage() {
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [cameraMetrics, setCameraMetrics] = useState<CameraMetrics | null>(null);
-  const [recordingMetrics, setRecordingMetrics] = useState<RecordingMetrics | null>(null);
-  const [storageMetrics, setStorageMetrics] = useState<StorageMetrics | null>(null);
-  const [alertMetrics, setAlertMetrics] = useState<AlertMetrics | null>(null);
-  const [capacityAssessment, setCapacityAssessment] = useState<CapacityAssessment | null>(null);
-  const [incidents, setIncidents] = useState<any[]>([]);
+  const [data, setData] = useState<DashboardData>(initialData);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [feedError, setFeedError] = useState<string | null>(null);
+  const [lastChecked, setLastChecked] = useState<string | null>(null);
+  const inFlight = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    fetchDashboardData();
-    
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchDashboardData, 30000);
-    return () => clearInterval(interval);
+  const load = useCallback(async () => {
+    if (inFlight.current) return;
+    const controller = new AbortController();
+    inFlight.current = controller;
+    setRefreshing(true);
+    let timedOut = false;
+    const timeout = window.setTimeout(() => { timedOut = true; controller.abort(); }, 15_000);
+    const results = await Promise.allSettled([
+      readFeed<DashboardSummary>("/v1/dashboard/summary", controller.signal),
+      readFeed<CameraMetrics>("/v1/dashboard/camera-health", controller.signal),
+      readFeed<RecordingMetrics>("/v1/dashboard/recording-status", controller.signal),
+      readFeed<StorageMetrics>("/v1/dashboard/storage", controller.signal),
+      readFeed<AlertMetrics>("/v1/dashboard/alerts", controller.signal),
+      readFeed<Incident[]>("/v1/dashboard/incidents?limit=5", controller.signal),
+      readFeed<CapacityAssessment>("/v1/capacity/assessment", controller.signal),
+    ]);
+    window.clearTimeout(timeout);
+    if (controller.signal.aborted && !timedOut) return;
+
+    const next: Partial<DashboardData> = {};
+    if (results[0].status === "fulfilled") next.summary = results[0].value;
+    if (results[1].status === "fulfilled") next.cameras = results[1].value;
+    if (results[2].status === "fulfilled") next.recording = results[2].value;
+    if (results[3].status === "fulfilled") next.storage = results[3].value;
+    if (results[4].status === "fulfilled") next.alerts = results[4].value;
+    if (results[5].status === "fulfilled") next.incidents = Array.isArray(results[5].value) ? results[5].value : [];
+    if (results[6].status === "fulfilled") next.capacity = results[6].value;
+
+    const failures = results.filter((result) => result.status === "rejected").length;
+    setData((current) => ({ ...current, ...next }));
+    setFeedError(failures ? `${failures} of 7 live feeds could not be refreshed. Showing the last confirmed values where available.` : null);
+    if (failures < results.length) setLastChecked(new Date().toISOString());
+    if (inFlight.current === controller) {
+      inFlight.current = null;
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
 
-  const fetchDashboardData = async () => {
-    try {
-      const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api/control';
-      
-      const [summaryRes, cameraRes, recordingRes, storageRes, alertRes, incidentsRes, capacityRes] = await Promise.all([
-        fetch(`${API_BASE}/v1/dashboard/summary`),
-        fetch(`${API_BASE}/v1/dashboard/camera-health`),
-        fetch(`${API_BASE}/v1/dashboard/recording-status`),
-        fetch(`${API_BASE}/v1/dashboard/storage`),
-        fetch(`${API_BASE}/v1/dashboard/alerts`),
-        fetch(`${API_BASE}/v1/dashboard/incidents?limit=5`),
-        fetch(`${API_BASE}/v1/capacity/assessment`)
-      ]);
+  useEffect(() => {
+    void load();
+    const timer = window.setInterval(() => void load(), 30_000);
+    return () => {
+      window.clearInterval(timer);
+      inFlight.current?.abort();
+      inFlight.current = null;
+    };
+  }, [load]);
 
-      if (!summaryRes.ok) throw new Error('Failed to fetch dashboard data');
-
-      const [summaryData, cameraData, recordingData, storageData, alertData, incidentsData, capacityData] = await Promise.all([
-        summaryRes.json(),
-        cameraRes.json(),
-        recordingRes.json(),
-        storageRes.json(),
-        alertRes.json(),
-        incidentsRes.json(),
-        capacityRes.json()
-      ]);
-
-      setSummary(summaryData.data);
-      setCameraMetrics(cameraData.data);
-      setRecordingMetrics(recordingData.data);
-      setStorageMetrics(storageData.data);
-      setAlertMetrics(alertData.data);
-      setIncidents(incidentsData.data || []);
-      setCapacityAssessment(capacityData?.data ?? capacityData);
-      setError(null);
-    } catch (err) {
-      console.error('Dashboard fetch error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load dashboard');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading && !summary) {
-    return (
-      <AppLayout>
-        <div className="content" style={{ padding: 40, textAlign: 'center' }}>
-          <p>Loading dashboard...</p>
-        </div>
-      </AppLayout>
-    );
-  }
+  const { summary, cameras, recording, storage, alerts, incidents, capacity } = data;
+  const decisions = getDecisions(data);
+  const health = summary?.status === "UNAVAILABLE" ? null : summary?.systemHealthScore;
+  const cameraAvailable = confirmed(cameras);
+  const recordingAvailable = confirmed(recording);
+  const storageAvailable = confirmed(storage);
+  const alertAvailable = confirmed(alerts);
+  const capacityAvailable = capacity && ((capacity.metrics?.branches ?? 0) > 0 || (capacity.metrics?.cameras ?? 0) > 0);
+  const confirmedFeedCount = [
+    confirmed(summary), cameraAvailable, recordingAvailable, storageAvailable,
+    alertAvailable, incidents !== null, Boolean(capacityAvailable),
+  ].filter(Boolean).length;
+  const checkedAt = lastChecked || summary?.lastUpdated;
 
   return (
     <AppLayout>
-      <div className="content executive-dashboard-page">
-        <div className="executive-dashboard-inner" style={{ padding: 20, maxWidth: 1600, margin: "0 auto" }}>
-          {/* Dashboard Header */}
-          <PageHero
-            eyebrow="Executive intelligence"
-            title="Security operations dashboard"
-            description="A leadership view of estate health, active risk, camera availability, recording continuity and scale readiness."
-            icon={BarChart3}
-            actions={
-              <div className={`page-hero-status ${summary?.systemStatus === "operational" ? "" : "caution"}`}>
-                <i />
-                <div><span>System status</span><strong>{summary?.systemStatus || "Unknown"}</strong></div>
+      <main className="content decision-board-page">
+        <div className="decision-board-inner">
+          <header className="decision-board-hero">
+            <div className="decision-board-hero-copy">
+              <p className="decision-board-kicker"><span /> EXECUTIVE / DECISION DESK</p>
+              <h1>Know what needs<br /><em>a decision.</em></h1>
+              <p>One live view of risk, continuity and readiness. Follow each signal into its evidence and next action.</p>
+              <div className="decision-board-hero-actions">
+                <span className="decision-board-system"><CircleDot size={14} /> {summary?.systemStatus || "Status unavailable"}</span>
+                <span><Clock3 size={14} /> {checkedAt ? `Checked ${new Date(checkedAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}` : "Awaiting live data"}</span>
+                <button type="button" onClick={() => void load()} disabled={refreshing} aria-label="Refresh executive dashboard"><RefreshCw size={15} className={refreshing ? "decision-spin" : undefined} /> Refresh</button>
               </div>
-            }
-          />
-
-          {error && (
-            <div className="page-alert error" style={{ marginBottom: 24, padding: 16, background: "#fee", border: "1px solid #fbb", borderRadius: 12, color: "#900" }}>
-              {error}
             </div>
-          )}
-
-          {/* Key Metrics Row */}
-          <div className="executive-metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
-            <MetricCard 
-              label="System Health Score" 
-              value={typeof summary?.systemHealthScore === 'number' ? `${summary.systemHealthScore.toFixed(1)}%` : '—'}
-              trend="stable"
-              status={getHealthStatus(summary?.systemHealthScore)}
-            />
-            <MetricCard 
-              label="Critical Alerts" 
-              value={alertMetrics?.critical ?? 0}
-              detail={`${alertMetrics?.unacknowledged || 0} unacknowledged`}
-              status={alertMetrics && alertMetrics.critical > 0 ? 'critical' : 'good'}
-            />
-            <MetricCard 
-              label="Active Incidents" 
-              value={summary?.activeIncidents || 0}
-              status={summary && summary.activeIncidents > 5 ? 'warning' : 'good'}
-            />
-            <MetricCard 
-              label="Camera Availability" 
-              value={typeof cameraMetrics?.availabilityPercentage === 'number' ? `${cameraMetrics.availabilityPercentage.toFixed(2)}%` : '—'}
-              detail={`${cameraMetrics?.offline || 0} offline`}
-              status={getAvailabilityStatus(cameraMetrics?.availabilityPercentage)}
-            />
-            <MetricCard 
-              label="Scale Readiness" 
-              value={typeof capacityAssessment?.verifiedCompletion === 'number' ? `${capacityAssessment.verifiedCompletion}%` : '—'}
-              detail={capacityAssessment?.status || 'Pending assessment'}
-              status={getVerificationStatus(capacityAssessment?.verifiedCompletion)}
-            />
-            <MetricCard 
-              label="Storage Utilization" 
-              value={typeof storageMetrics?.utilizationPercentage === 'number' ? `${storageMetrics.utilizationPercentage.toFixed(1)}%` : '—'}
-              detail={storageMetrics?.forecastFullDays != null ? `${storageMetrics.forecastFullDays} days remaining` : 'No forecast available'}
-              status={getStorageStatus(storageMetrics?.utilizationPercentage)}
-            />
-          </div>
-
-          <DashboardPanel title="Capacity assessment" icon={<Gauge size={17} />} style={{ marginBottom: 24 }}>
-            {capacityAssessment ? (
-              <>
-                <p style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 700 }}>{capacityAssessment.capability}</p>
-                <p style={{ margin: '0 0 16px', color: '#6b7280', lineHeight: 1.5 }}>{capacityAssessment.summary}</p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
-                  <StatBox label="Status" value={capacityAssessment.status} color="#3b82f6" />
-                  <StatBox label="Verified Completion" value={`${capacityAssessment.verifiedCompletion}%`} color="#8b5cf6" />
-                  <StatBox label="Branches Target" value={capacityAssessment.metrics.branches} color="#10b981" />
-                  <StatBox label="Cameras Target" value={capacityAssessment.metrics.cameras} color="#f59e0b" />
-                </div>
-                <div style={{ marginTop: 16, padding: 12, background: '#f9fafb', borderRadius: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span style={{ color: '#6b7280' }}>Load test completed</span>
-                    <strong>{capacityAssessment.evidence.loadTestCompleted ? 'Yes' : 'No'}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span style={{ color: '#6b7280' }}>Production benchmark completed</span>
-                    <strong>{capacityAssessment.evidence.productionBenchmarkCompleted ? 'Yes' : 'No'}</strong>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#6b7280' }}>Endurance benchmark completed</span>
-                    <strong>{capacityAssessment.evidence.enduranceBenchmarkCompleted ? 'Yes' : 'No'}</strong>
-                  </div>
-                </div>
-                {capacityAssessment.futureBranches && (
-                  <div style={{ marginTop: 16, padding: 12, background: '#eff6ff', borderRadius: 8 }}>
-                    <div style={{ fontWeight: 700, marginBottom: 6 }}>{capacityAssessment.futureBranches.capability}</div>
-                    <div style={{ color: '#374151', fontSize: 14 }}>{capacityAssessment.futureBranches.summary}</div>
-                  </div>
-                )}
-              </>
-            ) : (
-              <p style={{ color: '#6b7280', margin: 0 }}>Loading capacity assessment...</p>
-            )}
-          </DashboardPanel>
-
-          {/* Main Widgets Grid */}
-          <div className="executive-widget-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 24, marginBottom: 24 }}>
-            {/* Camera Status */}
-            <DashboardPanel title="Camera status" icon={<Camera size={17} />}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-                <StatBox label="Total Cameras" value={cameraMetrics?.totalRegistered || 0} />
-                <StatBox label="Operational" value={cameraMetrics?.operational || 0} />
-                <StatBox label="Online" value={cameraMetrics?.online || 0} color="#10b981" />
-                <StatBox label="Offline" value={cameraMetrics?.offline || 0} color="#ef4444" />
-                <StatBox label="Degraded" value={cameraMetrics?.degraded || 0} color="#f59e0b" />
-                <StatBox label="Maintenance" value={cameraMetrics?.underMaintenance || 0} color="#8b5cf6" />
+            <div className="decision-board-health" aria-label={health == null ? "System health unavailable" : `System health ${formatPercent(health)}`}>
+              <div className="decision-board-health-ring" style={{ background: health == null ? undefined : `conic-gradient(#a3e7bb ${Math.max(0, Math.min(health, 100))}%, #ffffff24 0)` }}>
+                <div><Gauge size={22} /><strong>{formatPercent(health, 0)}</strong><span>System health</span></div>
               </div>
-            </DashboardPanel>
+              <small>{health == null ? "No confirmed coverage score" : "Based on online camera coverage"}</small>
+            </div>
+            <nav className="decision-board-path" aria-label="Executive decision workflow">
+              <a href="#decision-priorities"><span>01</span><strong>See the signal</strong><ArrowDownRight size={16} /></a>
+              <a href="#decision-evidence"><span>02</span><strong>Inspect the evidence</strong><ArrowDownRight size={16} /></a>
+              <Link href="/reports/mis"><span>03</span><strong>Explain the outcome</strong><ArrowUpRight size={16} /></Link>
+            </nav>
+          </header>
 
-            {/* Recording Status */}
-            <DashboardPanel title="Recording status" icon={<CircleDot size={17} />}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-                <StatBox label="Recording Normally" value={recordingMetrics?.recordingNormally ?? '—'} color="#10b981" />
-                <StatBox label="With Gaps" value={recordingMetrics?.recordingWithGaps ?? '—'} color="#f59e0b" />
-                <StatBox label="Recording Stopped" value={recordingMetrics?.recordingStopped ?? '—'} color="#ef4444" />
-                <StatBox label="Verification Pending" value={recordingMetrics?.verificationPending ?? '—'} color="#6366f1" />
+          {feedError && <div className="decision-board-notice" role="alert"><AlertTriangle size={18} /> {feedError}</div>}
+
+          <section className="decision-board-pulse" aria-label="Current executive measures">
+            <Pulse href="#executive-alerts" label="Critical alerts" value={alertAvailable ? formatCount(alerts.critical) : "—"} note={alertAvailable ? `${formatCount(alerts.unacknowledged)} unacknowledged` : "Feed unavailable"} tone={alertAvailable && alerts.critical > 0 ? "critical" : "neutral"} />
+            <Pulse href="#executive-incidents" label="Active incidents" value={formatCount(summary?.activeIncidents)} note={summary ? "Cases requiring response" : "Feed unavailable"} tone={summary && summary.activeIncidents > 0 ? "warning" : "neutral"} />
+            <Pulse href="#executive-cameras" label="Camera availability" value={cameraAvailable ? formatPercent(cameras.availabilityPercentage) : "—"} note={cameraAvailable ? `${formatCount(cameras.offline)} offline` : "No confirmed coverage"} tone={cameraAvailable && cameras.offline > 0 ? "warning" : "neutral"} />
+            <Pulse href="#executive-storage" label="Storage used" value={storageAvailable ? formatPercent(storage.utilizationPercentage, 0) : "—"} note={storageAvailable ? `${formatCount(storage.criticalNodes)} critical nodes` : "Feed unavailable"} tone={storageAvailable && storage.criticalNodes > 0 ? "critical" : "neutral"} />
+          </section>
+
+          <section id="decision-priorities" className="decision-board-main" aria-label="Decision priorities">
+            <div className="decision-board-priorities">
+              <div className="decision-board-section-heading">
+                <div><p>LIVE SIGNAL / 01</p><h2>What needs attention</h2><span>Ranked from confirmed operating data.</span></div>
+                <strong>{decisions.length} {decisions.length === 1 ? "priority" : "priorities"}</strong>
               </div>
-              <div style={{ marginTop: 16, padding: 12, background: '#f9fafb', borderRadius: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 14, color: '#666' }}>Average Availability</span>
-                  <strong>{typeof recordingMetrics?.availabilityPercentage === 'number' ? `${recordingMetrics.availabilityPercentage.toFixed(2)}%` : '—'}</strong>
+              {decisions.length ? (
+                <div className="decision-board-priority-list">
+                  {decisions.slice(0, 5).map((decision, index) => (
+                    <a href={decision.href} className={`decision-board-priority is-${decision.tone}`} key={decision.id}>
+                      <span className="decision-board-priority-order">{String(index + 1).padStart(2, "0")}</span>
+                      <span className="decision-board-priority-icon">{decision.tone === "critical" ? <ShieldAlert size={20} /> : <Activity size={20} />}</span>
+                      <span className="decision-board-priority-copy"><strong>{decision.title}</strong><small>{decision.detail}</small></span>
+                      <span className="decision-board-priority-count"><b>{formatCount(decision.count)}</b><small>{decision.label}</small></span>
+                      <ArrowUpRight size={17} className="decision-board-priority-arrow" />
+                    </a>
+                  ))}
                 </div>
-              </div>
-            </DashboardPanel>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 24, marginBottom: 24 }}>
-            {/* Storage Capacity */}
-            <DashboardPanel title="Storage capacity" icon={<HardDrive size={17} />}>
-              {storageMetrics ? (
-                <>
-                  <div style={{ marginBottom: 16 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <span style={{ fontSize: 14, color: '#666' }}>Utilization</span>
-                      <strong>
-                        {typeof storageMetrics.utilizationPercentage === 'number'
-                          ? `${storageMetrics.utilizationPercentage.toFixed(1)}%`
-                          : '—'}
-                      </strong>
-                    </div>
-                    <div style={{ height: 24, background: '#e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
-                      <div 
-                        style={{ 
-                          height: '100%', 
-                          background: typeof storageMetrics.utilizationPercentage === 'number' && storageMetrics.utilizationPercentage > 90
-                            ? '#ef4444' 
-                            : typeof storageMetrics.utilizationPercentage === 'number' && storageMetrics.utilizationPercentage > 80 
-                            ? '#f59e0b' 
-                            : '#10b981',
-                          width: typeof storageMetrics.utilizationPercentage === 'number'
-                            ? `${Math.min(Math.max(storageMetrics.utilizationPercentage, 0), 100)}%`
-                            : '0%',
-                          transition: 'width 0.5s ease'
-                        }} 
-                      />
-                    </div>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-                    <StatBox label="Total" value={formatBytes(storageMetrics.totalCapacityBytes)} />
-                    <StatBox label="Used" value={formatBytes(storageMetrics.usedCapacityBytes)} />
-                    <StatBox label="Available" value={formatBytes(storageMetrics.availableCapacityBytes)} />
-                    <StatBox
-                      label="Forecast Full"
-                      value={storageMetrics.forecastFullDays != null ? `${storageMetrics.forecastFullDays} days` : '—'}
-                    />
-                  </div>
-                  {storageMetrics.criticalNodes > 0 && (
-                    <div style={{ marginTop: 12, padding: 12, background: '#fee', border: '1px solid #fca', borderRadius: 8, color: '#dc2626' }}>
-                      ⚠️ {storageMetrics.criticalNodes} storage node(s) in critical state
-                    </div>
-                  )}
-                </>
               ) : (
-                <p style={{ color: '#6b7280', margin: 0 }}>Loading storage metrics...</p>
+                <div className="decision-board-clear">
+                  {confirmedFeedCount ? <CheckCircle2 size={28} /> : <Activity size={28} />}
+                  <strong>{loading ? "Checking live feeds" : confirmedFeedCount ? `No priority exception in ${confirmedFeedCount} confirmed ${confirmedFeedCount === 1 ? "feed" : "feeds"}` : "Live feeds are unavailable"}</strong>
+                  <p>{confirmedFeedCount ? "Continue through the evidence map below. Unavailable measures remain clearly marked." : "Refresh to retry the connection. No status is inferred from missing telemetry."}</p>
+                </div>
               )}
-            </DashboardPanel>
+            </div>
 
-            {/* Alert Status */}
-            <DashboardPanel title="Active alerts" icon={<AlertTriangle size={17} />}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-                <StatBox label="Total Active" value={alertMetrics?.totalActive || 0} />
-                <StatBox label="Unacknowledged" value={alertMetrics?.unacknowledged || 0} color="#f59e0b" />
-                <StatBox label="Critical" value={alertMetrics?.critical || 0} color="#ef4444" />
-                <StatBox label="Escalated" value={alertMetrics?.escalated || 0} color="#8b5cf6" />
-                <StatBox label="SLA Breached" value={alertMetrics?.slaBreached || 0} color="#dc2626" />
+            <aside className="decision-board-context" aria-label="Executive context">
+              <p className="decision-board-context-kicker">READOUT / NOW</p>
+              <h2>The estate in context.</h2>
+              <p>Use these measures to distinguish an isolated exception from a wider continuity risk.</p>
+              <dl>
+                <div><dt><Camera size={16} /> Cameras registered</dt><dd>{cameraAvailable ? formatCount(cameras.totalRegistered) : "—"}</dd></div>
+                <div><dt><CircleDot size={16} /> Recording normally</dt><dd>{recordingAvailable ? formatCount(recording.recordingNormally) : "—"}</dd></div>
+                <div><dt><HardDrive size={16} /> Capacity available</dt><dd>{storageAvailable ? formatBytes(storage.availableCapacityBytes) : "—"}</dd></div>
+                <div><dt><Gauge size={16} /> Scale readiness</dt><dd>{capacityAvailable ? formatPercent(capacity.verifiedCompletion, 0) : "—"}</dd></div>
+              </dl>
+              <Link href="/reports/mis">Open executive reports <ArrowUpRight size={16} /></Link>
+            </aside>
+          </section>
+
+          <section id="decision-evidence" className="decision-board-evidence" aria-label="Operational evidence">
+            <div className="decision-board-section-heading">
+              <div><p>EVIDENCE MAP / 02</p><h2>Follow the signal</h2><span>Each measure opens the operational workspace behind it.</span></div>
+              <Link href="/reports">Build a report <ArrowUpRight size={16} /></Link>
+            </div>
+            <div className="decision-board-evidence-grid">
+              <EvidenceCard id="executive-cameras" icon={<Camera size={20} />} label="Coverage" title="Camera estate" value={cameraAvailable ? formatPercent(cameras.availabilityPercentage) : "—"} description={cameraAvailable ? `${formatCount(cameras.online)} online · ${formatCount(cameras.offline)} offline · ${formatCount(cameras.degraded)} degraded` : "No confirmed camera availability"} href="/operations/cameras" action="Inspect cameras" progress={cameraAvailable ? cameras.availabilityPercentage : null} />
+              <EvidenceCard id="executive-recording" icon={<CircleDot size={20} />} label="Continuity" title="Recording" value={recordingAvailable ? formatPercent(recording.availabilityPercentage) : "—"} description={recordingAvailable ? `${formatCount(recording.recordingNormally)} normal · ${formatCount(recording.recordingStopped)} stopped · ${formatCount(recording.recordingWithGaps)} with gaps` : "Recording telemetry unavailable"} href="/operations/recording" action="Inspect recording" progress={recordingAvailable ? recording.availabilityPercentage : null} />
+              <EvidenceCard id="executive-storage" icon={<HardDrive size={20} />} label="Resilience" title="Storage" value={storageAvailable ? formatPercent(storage.utilizationPercentage, 0) : "—"} description={storageAvailable ? `${formatBytes(storage.usedCapacityBytes)} used of ${formatBytes(storage.totalCapacityBytes)} · ${formatCount(storage.criticalNodes)} critical nodes` : "Storage telemetry unavailable"} href="/operations/storage" action="Inspect storage" progress={storageAvailable ? storage.utilizationPercentage : null} reverse />
+              <EvidenceCard id="executive-capacity" icon={<Gauge size={20} />} label="Readiness" title="Scale assessment" value={capacityAvailable ? formatPercent(capacity.verifiedCompletion, 0) : "—"} description={capacityAvailable ? capacity.summary : "No verified scale assessment yet"} href="/reports/benchmarking" action="Review benchmarks" progress={capacityAvailable ? capacity.verifiedCompletion : null} />
+            </div>
+          </section>
+
+          <section className="decision-board-bottom">
+            <article id="executive-alerts" className="decision-board-detail">
+              <div className="decision-board-detail-heading"><span><AlertTriangle size={18} /></span><div><p>RISK SIGNALS</p><h2>Alert state</h2></div></div>
+              <div className="decision-board-detail-grid">
+                <Fact label="Active" value={alertAvailable ? alerts.totalActive : null} />
+                <Fact label="Critical" value={alertAvailable ? alerts.critical : null} />
+                <Fact label="Unacknowledged" value={alertAvailable ? alerts.unacknowledged : null} />
+                <Fact label="SLA breached" value={alertAvailable ? alerts.slaBreached : null} />
               </div>
-            </DashboardPanel>
-          </div>
+              <Link href="/operations/alerts">Open alert workspace <ArrowRight size={15} /></Link>
+            </article>
 
-          {/* Recent Incidents */}
-          <DashboardPanel title="Recent critical incidents" icon={<Zap size={17} />}>
-            {incidents.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {incidents.map((incident, idx) => (
-                  <div 
-                    key={incident.id || idx} 
-                    style={{ 
-                      padding: 16, 
-                      background: '#f9fafb', 
-                      borderRadius: 8,
-                      borderLeft: `4px solid ${getSeverityColor(incident.severity)}`
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
-                          <strong>{incident.incidentNumber}</strong>
-                          <span style={{ 
-                            padding: '2px 8px', 
-                            background: getSeverityColor(incident.severity),
-                            color: 'white',
-                            borderRadius: 4,
-                            fontSize: 12,
-                            fontWeight: 600
-                          }}>
-                            {incident.severity}
-                          </span>
-                          <span style={{ fontSize: 14, color: '#666' }}>{incident.branchName}</span>
-                        </div>
-                        <p style={{ margin: '4px 0', color: '#374151' }}>{incident.incidentType}</p>
-                        <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6b7280' }}>
-                          {new Date(incident.occurredAt).toLocaleString()}
-                        </p>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ 
-                          padding: '4px 12px', 
-                          background: 'white',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: 6,
-                          fontSize: 12,
-                          fontWeight: 600
-                        }}>
-                          {incident.status}
-                        </div>
-                      </div>
+            <article id="executive-incidents" className="decision-board-detail">
+              <div className="decision-board-detail-heading"><span><ShieldAlert size={18} /></span><div><p>RESPONSE RECORD</p><h2>Recent incidents</h2></div></div>
+              {incidents === null ? <p className="decision-board-detail-empty">Incident feed unavailable.</p> : incidents.length ? (
+                <div className="decision-board-incident-list">
+                  {incidents.slice(0, 4).map((incident, index) => (
+                    <div key={incident.id ?? index}>
+                      <span>{incident.incidentNumber || `Case ${index + 1}`}</span>
+                      <strong>{incident.incidentType || "Incident"}</strong>
+                      <small>{[incident.branchName, incident.status].filter(Boolean).join(" · ")}</small>
                     </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p style={{ color: '#6b7280', textAlign: 'center', padding: 24 }}>No recent critical incidents</p>
-            )}
-          </DashboardPanel>
+                  ))}
+                </div>
+              ) : <p className="decision-board-detail-empty">No recent incidents in the current feed.</p>}
+              <Link href="/incidents">Open incident response <ArrowRight size={15} /></Link>
+            </article>
+          </section>
+
+          <details className="decision-board-ledger">
+            <summary><span><BarChart3 size={18} /> Detailed operational measures</span><span>Camera · recording · storage · scale <ArrowDownRight size={16} /></span></summary>
+            <div className="decision-board-ledger-grid">
+              <div><h3>Camera estate</h3><dl>
+                <Measure label="Registered" value={cameraAvailable ? formatCount(cameras.totalRegistered) : "—"} />
+                <Measure label="Operational" value={cameraAvailable ? formatCount(cameras.operational) : "—"} />
+                <Measure label="Online" value={cameraAvailable ? formatCount(cameras.online) : "—"} />
+                <Measure label="Offline" value={cameraAvailable ? formatCount(cameras.offline) : "—"} />
+                <Measure label="Degraded" value={cameraAvailable ? formatCount(cameras.degraded) : "—"} />
+                <Measure label="Maintenance" value={cameraAvailable ? formatCount(cameras.underMaintenance) : "—"} />
+              </dl></div>
+              <div><h3>Recording continuity</h3><dl>
+                <Measure label="Normal" value={formatCount(recordingAvailable ? recording.recordingNormally : null)} />
+                <Measure label="With gaps" value={formatCount(recordingAvailable ? recording.recordingWithGaps : null)} />
+                <Measure label="Stopped" value={formatCount(recordingAvailable ? recording.recordingStopped : null)} />
+                <Measure label="Verification pending" value={formatCount(recordingAvailable ? recording.verificationPending : null)} />
+                <Measure label="Availability" value={recordingAvailable ? formatPercent(recording.availabilityPercentage) : "—"} />
+              </dl></div>
+              <div><h3>Storage capacity</h3><dl>
+                <Measure label="Total" value={storageAvailable ? formatBytes(storage.totalCapacityBytes) : "—"} />
+                <Measure label="Used" value={storageAvailable ? formatBytes(storage.usedCapacityBytes) : "—"} />
+                <Measure label="Available" value={storageAvailable ? formatBytes(storage.availableCapacityBytes) : "—"} />
+                <Measure label="Utilization" value={storageAvailable ? formatPercent(storage.utilizationPercentage, 0) : "—"} />
+                <Measure label="Forecast full" value={storageAvailable && storage.forecastFullDays != null ? `${storage.forecastFullDays} days` : "—"} />
+                <Measure label="Critical nodes" value={storageAvailable ? formatCount(storage.criticalNodes) : "—"} />
+              </dl></div>
+              <div><h3>Scale evidence</h3><dl>
+                <Measure label="Status" value={capacity?.status || "—"} />
+                <Measure label="Verified completion" value={capacityAvailable ? formatPercent(capacity.verifiedCompletion, 0) : "—"} />
+                <Measure label="Branches" value={formatCount(capacity?.metrics?.branches)} />
+                <Measure label="Cameras" value={formatCount(capacity?.metrics?.cameras)} />
+                <Measure label="Load test" value={formatEvidence(capacity?.evidence?.loadTestCompleted)} />
+                <Measure label="Production benchmark" value={formatEvidence(capacity?.evidence?.productionBenchmarkCompleted)} />
+                <Measure label="Endurance benchmark" value={formatEvidence(capacity?.evidence?.enduranceBenchmarkCompleted)} />
+                <Measure label="Failover validation" value={formatEvidence(capacity?.evidence?.failoverValidated)} />
+              </dl></div>
+            </div>
+          </details>
+
+          <footer className="decision-board-footer">
+            <div><FileText size={20} /><span><strong>Ready to explain the outcome?</strong><small>Turn the live readout into a report with a selected scope and delivery method.</small></span></div>
+            <Link href="/reports">Go to Report Studio <ArrowUpRight size={16} /></Link>
+          </footer>
         </div>
-      </div>
+      </main>
     </AppLayout>
   );
 }
 
-// Helper Components
-function MetricCard({ label, value, detail, trend, status }: any) {
-  const statusColors = {
-    good: { bg: '#ecfdf5', border: '#10b981', text: '#047857' },
-    warning: { bg: '#fef3c7', border: '#f59e0b', text: '#b45309' },
-    critical: { bg: '#fee2e2', border: '#ef4444', text: '#dc2626' }
-  };
-
-  const colors = status ? statusColors[status as keyof typeof statusColors] : statusColors.good;
-
-  return (
-    <div className={`executive-metric-card ${status ?? "good"}`} style={{ 
-      padding: 20, 
-      borderRadius: 16, 
-      background: colors.bg,
-      border: `2px solid ${colors.border}`,
-      minHeight: 120
-    }}>
-      <p style={{ margin: 0, color: '#6b7280', fontSize: 13, fontWeight: 600 }}>{label}</p>
-      <p style={{ margin: '12px 0 0', fontSize: 36, fontWeight: 700, color: colors.text }}>
-        {value}
-      </p>
-      {detail && <p style={{ margin: '8px 0 0', color: '#6b7280', fontSize: 13 }}>{detail}</p>}
-    </div>
-  );
+function Pulse({ href, label, value, note, tone }: { href: string; label: string; value: string; note: string; tone: "critical" | "warning" | "neutral" }) {
+  return <a href={href} className={`decision-board-pulse-card is-${tone}`}><span>{label}</span><strong>{value}</strong><small>{note}</small><ArrowUpRight size={15} /></a>;
 }
 
-function DashboardPanel({ title, icon, children, style }: any) {
-  return (
-    <div className="executive-panel" style={{ 
-      padding: 24, 
-      borderRadius: 16, 
-      background: '#fff', 
-      border: '2px solid #e5e7eb',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-      ...style
-    }}>
-      <h2 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span>{icon}</span> {title}
-      </h2>
-      {children}
-    </div>
-  );
+function EvidenceCard({ id, icon, label, title, value, description, href, action, progress, reverse = false }: {
+  id: string; icon: ReactNode; label: string; title: string; value: string; description: string;
+  href: string; action: string; progress: number | null | undefined; reverse?: boolean;
+}) {
+  const safeProgress = typeof progress === "number" ? Math.max(0, Math.min(progress, 100)) : null;
+  return <article id={id} className="decision-board-evidence-card">
+    <div className="decision-board-evidence-top"><span>{icon}</span><small>{label}</small></div>
+    <h3>{title}</h3><strong>{value}</strong><p>{description}</p>
+    <div className="decision-board-meter" aria-hidden="true"><span style={{ width: `${safeProgress ?? 0}%` }} className={reverse ? "is-reverse" : undefined} /></div>
+    <Link href={href}>{action}<ArrowUpRight size={15} /></Link>
+  </article>;
 }
 
-function StatBox({ label, value, color }: any) {
-  return (
-    <div className="executive-stat-box" style={{ 
-      padding: 16, 
-      background: '#f9fafb',
-      borderRadius: 8,
-      border: '1px solid #e5e7eb'
-    }}>
-      <p style={{ margin: 0, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>{label}</p>
-      <p style={{ margin: '8px 0 0', fontSize: 24, fontWeight: 700, color: color || '#111827' }}>
-        {value}
-      </p>
-    </div>
-  );
+function Fact({ label, value }: { label: string; value: number | null }) {
+  return <div><span>{label}</span><strong>{formatCount(value)}</strong></div>;
 }
 
-// Helper Functions
-function getHealthStatus(score?: number | null): 'good' | 'warning' | 'critical' {
-  if (score == null) return 'warning';
-  if (score >= 85) return 'good';
-  if (score >= 70) return 'warning';
-  return 'critical';
+function Measure({ label, value }: { label: string; value: string }) {
+  return <div><dt>{label}</dt><dd>{value}</dd></div>;
 }
 
-function getAvailabilityStatus(percentage?: number | null): 'good' | 'warning' | 'critical' {
-  if (percentage == null) return 'warning';
-  if (percentage >= 98) return 'good';
-  if (percentage >= 95) return 'warning';
-  return 'critical';
-}
-
-function getStorageStatus(percentage?: number | null): 'good' | 'warning' | 'critical' {
-  if (percentage == null) return 'good';
-  if (percentage < 80) return 'good';
-  if (percentage < 90) return 'warning';
-  return 'critical';
-}
-
-function getVerificationStatus(percentage?: number | null): 'good' | 'warning' | 'critical' {
-  if (percentage == null) return 'warning';
-  if (percentage >= 80) return 'good';
-  if (percentage >= 45) return 'warning';
-  return 'critical';
-}
-
-function getSeverityColor(severity: string): string {
-  const colors: Record<string, string> = {
-    critical: '#dc2626',
-    high: '#f59e0b',
-    medium: '#3b82f6',
-    low: '#10b981'
-  };
-  return colors[severity?.toLowerCase()] || '#6b7280';
-}
-
-function formatBytes(bytes: string | number | null | undefined): string {
-  if (bytes === null || bytes === undefined || bytes === '') return '—';
-  const num = typeof bytes === 'string' ? parseFloat(bytes) : Number(bytes);
-  if (isNaN(num) || !isFinite(num)) return '—';
-  if (num === 0) return '0 B';
-  
-  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-  let value = num;
-  let unitIndex = 0;
-  
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex++;
-  }
-  
-  return `${value.toFixed(1)} ${units[unitIndex]}`;
+function formatEvidence(value: boolean | undefined) {
+  return value === undefined ? "—" : value ? "Verified" : "Not verified";
 }

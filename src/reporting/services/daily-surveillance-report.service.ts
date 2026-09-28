@@ -34,6 +34,7 @@ export interface ReportScheduleConfig {
 export interface StoredReportRecord {
   reportId: string;
   tenantId: string;
+  scopeBranchIds?: string[];
   reportType: DailyReportType;
   periodStart: Date;
   periodEnd: Date;
@@ -79,6 +80,7 @@ export class DailySurveillanceReportService {
     timezone?: string | undefined;
     formats?: Array<"PDF" | "XLSX" | "CSV"> | undefined;
     filters?: ReportFilterCriteria | undefined;
+    scopeBranchIds?: string[] | undefined;
     generatedBy?: "SCHEDULED" | "MANUAL" | "API" | undefined;
   }): Promise<StoredReportRecord> {
     const formats = options.formats || ["PDF", "XLSX", "CSV"];
@@ -92,6 +94,7 @@ export class DailySurveillanceReportService {
       generatedBy: options.generatedBy,
       reportType,
       filters: options.filters,
+      scopeBranchIds: options.scopeBranchIds,
     });
 
     const artifacts: StoredReportRecord["artifacts"] = {};
@@ -117,6 +120,7 @@ export class DailySurveillanceReportService {
     const record: StoredReportRecord = {
       reportId: data.metadata.reportId,
       tenantId: options.tenantId,
+      scopeBranchIds: options.scopeBranchIds,
       reportType,
       periodStart: data.metadata.periodStart,
       periodEnd: data.metadata.periodEnd,

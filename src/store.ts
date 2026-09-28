@@ -3760,6 +3760,7 @@ export class MemoryStore {
     for (const alert of this.analyticsAlerts) {
       if (alert.tenantId !== inputTenantId) continue;
       if (filters.cameraId && alert.cameraId !== filters.cameraId) continue;
+      if (filters.cameraIds && !filters.cameraIds.includes(alert.cameraId)) continue;
       if (filters.branchId && this.cameras.get(alert.cameraId)?.branchId !== filters.branchId) continue;
       if (filters.from && alert.lastDetectedAt < filters.from) continue;
       if (filters.to && alert.firstDetectedAt > filters.to) continue;
@@ -3771,7 +3772,7 @@ export class MemoryStore {
 
   async getAnalyticsAlertsSummary(
     inputTenantId: string,
-    filters?: { branchId?: string; cameraId?: string },
+    filters?: { branchId?: string; cameraId?: string; cameraIds?: string[] },
   ) {
     let total = 0;
     let active = 0;
@@ -3782,6 +3783,7 @@ export class MemoryStore {
     for (const alert of this.analyticsAlerts) {
       if (alert.tenantId !== inputTenantId) continue;
       if (filters?.cameraId && alert.cameraId !== filters.cameraId) continue;
+      if (filters?.cameraIds && !filters.cameraIds.includes(alert.cameraId)) continue;
       if (filters?.branchId && this.cameras.get(alert.cameraId)?.branchId !== filters.branchId) continue;
       total += 1;
       const isActive = !["resolved", "false_alarm", "suppressed"].includes(alert.status);

@@ -2,7 +2,7 @@ import { randomUUID, timingSafeEqual } from "node:crypto";
 import { Readable } from "node:stream";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import type { AnalyticsRule, AlertNotification } from "../domain/models.js";
+import type { AnalyticsRule, AlertNotification, User } from "../domain/models.js";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { AlertNotificationDispatcher } from "../alerts/notification-dispatcher.js";
 import { NOTIFICATION_MATRIX } from "../alerts/notification-dispatcher.js";
@@ -87,8 +87,11 @@ export async function registerAlertCommandCenterRoutes(
       status: z.enum(["new", "acknowledged", "investigating", "escalated", "resolved", "false_alarm", "suppressed"]).optional(),
       limit: z.coerce.number().int().min(1).max(200).default(100),
     }).parse(request.query);
+    const accessibleCameraIds = await listAccessibleAlertCameraIds(store, request.currentUser);
+    if (accessibleCameraIds.length === 0) return { counts: emptyAlertCounts(), data: [], serverTime: new Date().toISOString() };
     const candidates = await store.listAnalyticsAlerts(request.currentUser.tenantId, {
       limit: query.limit!,
+      cameraIds: accessibleCameraIds,
       ...(query.severity ? { severity: query.severity } : {}),
       ...(query.status ? { status: query.status } : {}),
     });
@@ -139,7 +142,7 @@ export async function registerAlertCommandCenterRoutes(
       });
     }
 
-    const counts = await store.countAnalyticsAlerts(request.currentUser.tenantId, { limit: 0 });
+    const counts = await store.countAnalyticsAlerts(request.currentUser.tenantId, { limit: 0, cameraIds: accessibleCameraIds });
     return { counts, data, serverTime: new Date().toISOString() };
   });
 
@@ -150,8 +153,11 @@ export async function registerAlertCommandCenterRoutes(
 
     const camera = await store.getCamera(alert.cameraId);
     if (!camera) return reply.code(404).send({ error: "camera_not_found" });
-    const decision = await store.checkAccess(request.currentUser, "analytics:view", camera.nodeId);
-    if (!decision?.allowed) return reply.code(403).send({ error: "forbidden" });
+    const [decision, branchDecision] = await Promise.all([
+      store.checkAccess(request.currentUser, "analytics:view", camera.nodeId),
+      store.checkAccess(request.currentUser, "analytics:view", camera.branchId),
+    ]);
+    if (!decision?.allowed || !branchDecision?.allowed) return reply.code(403).send({ error: "forbidden" });
 
     const branch = (await store.listNodesByIds([camera.branchId]))[0];
     const rules = await store.listAnalyticsRulesByCameraIds([camera.id]);
@@ -170,7 +176,10 @@ export async function registerAlertCommandCenterRoutes(
       deliveries,
     };
 
-    const counts = await store.countAnalyticsAlerts(request.currentUser.tenantId, { limit: 0 });
+    const accessibleCameraIds = await listAccessibleAlertCameraIds(store, request.currentUser);
+    const counts = accessibleCameraIds.length
+      ? await store.countAnalyticsAlerts(request.currentUser.tenantId, { limit: 0, cameraIds: accessibleCameraIds })
+      : emptyAlertCounts();
     return { counts, data: [enriched], serverTime: new Date().toISOString() };
   });
 
@@ -331,8 +340,22 @@ export async function registerAlertCommandCenterRoutes(
     reply.raw.writeHead(200, headers);
     reply.raw.flushHeaders?.();
     reply.raw.write(`event: ready\ndata: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`);
-    const unsubscribe = alertEvents.subscribe(request.currentUser.tenantId, (event) => {
-      if (!reply.raw.destroyed) reply.raw.write(`id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+    const unsubscribe = alertEvents.subscribe(request.currentUser.tenantId, async (event) => {
+      try {
+        const alert = event.alert ?? await store.getAnalyticsAlert(event.alertId, request.currentUser.tenantId);
+        if (!alert) return;
+        const camera = await store.getCamera(alert.cameraId);
+        if (!camera) return;
+        const [cameraAccess, branchAccess] = await Promise.all([
+          store.checkAccess(request.currentUser, "analytics:view", camera.nodeId),
+          store.checkAccess(request.currentUser, "analytics:view", camera.branchId),
+        ]);
+        if (cameraAccess?.allowed && branchAccess?.allowed && !reply.raw.destroyed) {
+          reply.raw.write(`id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+        }
+      } catch (error) {
+        app.log.error({ error }, "Unable to authorize alert stream event");
+      }
     });
     const heartbeat = setInterval(() => {
       if (!reply.raw.destroyed) reply.raw.write(`: heartbeat ${Date.now()}\n\n`);
@@ -590,8 +613,23 @@ async function authorizedAlert(store: ControlPlaneStore, user: any, alertId: str
   if (!alert) return undefined;
   const camera = await store.getCamera(alert.cameraId);
   if (!camera) return undefined;
-  const decision = await store.checkAccess(user, action, camera.nodeId);
-  return decision?.allowed ? alert : undefined;
+  const [decision, branchDecision] = await Promise.all([
+    store.checkAccess(user, action, camera.nodeId),
+    store.checkAccess(user, "analytics:view", camera.branchId),
+  ]);
+  return decision?.allowed && branchDecision?.allowed ? alert : undefined;
+}
+
+async function listAccessibleAlertCameraIds(store: ControlPlaneStore, user: User): Promise<string[]> {
+  const branches = await store.listAccessibleNodes(user, "analytics:view", "branch");
+  const cameras = await Promise.all(branches.map((branch) =>
+    store.listCamerasByBranch(user, branch.id, "analytics:view")
+  ));
+  return [...new Set(cameras.flat().map((camera) => camera.id))];
+}
+
+function emptyAlertCounts() {
+  return { P1: 0, P2: 0, P3: 0, P4: 0, P5: 0 };
 }
 
 async function canConfigure(store: ControlPlaneStore, user: any) {

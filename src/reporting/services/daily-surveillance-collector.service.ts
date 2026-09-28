@@ -44,6 +44,7 @@ export class DailySurveillanceCollectorService {
     generatedBy?: "SCHEDULED" | "MANUAL" | "API" | undefined;
     reportType?: DailyReportType | undefined;
     filters?: ReportFilterCriteria | undefined;
+    scopeBranchIds?: string[] | undefined;
   }): Promise<DailySurveillanceHealthReportData> {
     const end = options.periodEnd || new Date();
     const start = options.periodStart || new Date(end.getTime() - 86_400_000);
@@ -80,6 +81,10 @@ export class DailySurveillanceCollectorService {
       if (options.tenantId) {
         branchNodes = branchNodes.filter((b: any) => b.tenantId === options.tenantId);
       }
+      if (options.scopeBranchIds) {
+        const allowed = new Set(options.scopeBranchIds);
+        branchNodes = branchNodes.filter((branch) => allowed.has(branch.id));
+      }
 
       // Filter branches by region, state, branchId if specified
       if (options.filters?.branchId) {
@@ -91,6 +96,7 @@ export class DailySurveillanceCollectorService {
           return regionName.includes(options.filters?.region?.toLowerCase() || "");
         });
       }
+      const selectedBranchIds = new Set(branchNodes.map((branch) => branch.id));
 
       for (const node of branchNodes) {
         try {
@@ -308,14 +314,17 @@ export class DailySurveillanceCollectorService {
       // Ingest Alerts from authoritative store
       try {
         let alertList: any[] = [];
-        if (typeof (activeStore as any).listAnalyticsAlerts === "function") {
-          alertList = await (activeStore as any).listAnalyticsAlerts(options.tenantId, { limit: 1000 });
+        if (selectedBranchIds.size > 0 && typeof activeStore.listAnalyticsAlerts === "function") {
+          alertList = await activeStore.listAnalyticsAlerts(options.tenantId, { limit: 1000, branchIds: [...selectedBranchIds] });
         } else if (Array.isArray((activeStore as any).analyticsAlerts)) {
           alertList = (activeStore as any).analyticsAlerts.filter((a: any) => a.tenantId === options.tenantId);
         }
+        const alertCameras = await activeStore.listCamerasByIds([...new Set(alertList.map((alert) => alert.cameraId).filter(Boolean))]);
+        const branchByCamera = new Map(alertCameras.map((camera) => [camera.id, camera.branchId]));
 
         for (const a of alertList) {
-          const bId = a.branchId || (a.cameraId && (activeStore as any).cameras?.get?.(a.cameraId)?.branchId) || "unknown";
+          const bId = branchByCamera.get(a.cameraId);
+          if (!bId || !selectedBranchIds.has(bId)) continue;
           const bName = (bId && (activeStore as any).nodes?.get?.(bId)?.name) || "Branch";
           const alertRow: AlertReportRow = {
             alertId: a.id,

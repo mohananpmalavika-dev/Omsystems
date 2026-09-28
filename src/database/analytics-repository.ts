@@ -551,8 +551,9 @@ export class AnalyticsRepository {
          AND ($2::uuid IS NULL OR alert.camera_id=$2)
          AND (${branchCondition})
          AND ($4::timestamptz IS NULL OR alert.last_detected_at >= $4)
-         AND ($5::timestamptz IS NULL OR alert.first_detected_at <= $5)`,
-      [...params, filters.from ?? null, filters.to ?? null],
+         AND ($5::timestamptz IS NULL OR alert.first_detected_at <= $5)
+         AND ($6::uuid[] IS NULL OR alert.camera_id = ANY($6::uuid[]))`,
+      [...params, filters.from ?? null, filters.to ?? null, filters.cameraIds ?? null],
     );
     const row = result.rows[0] ?? {};
     return {
@@ -566,7 +567,7 @@ export class AnalyticsRepository {
 
   async getAlertsSummary(
     tenantId: string,
-    filters?: { branchId?: string; branchIds?: string[]; cameraId?: string },
+    filters?: { branchId?: string; branchIds?: string[]; cameraId?: string; cameraIds?: string[] },
   ): Promise<AnalyticsAlertsAggregateSummary> {
     const resolvedTenantId = await this.resolveTenantUuid(tenantId);
     
@@ -591,8 +592,9 @@ export class AnalyticsRepository {
        JOIN cameras camera ON camera.id=alert.camera_id
        WHERE alert.tenant_id=$1
          AND ($2::uuid IS NULL OR alert.camera_id=$2)
-         AND (${branchCondition})`,
-      params,
+         AND (${branchCondition})
+         AND ($4::uuid[] IS NULL OR alert.camera_id = ANY($4::uuid[]))`,
+      [...params, filters?.cameraIds ?? null],
     );
     const row = result.rows[0] ?? {};
     return {

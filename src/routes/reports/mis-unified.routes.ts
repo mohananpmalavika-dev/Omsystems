@@ -21,6 +21,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Pool } from 'pg';
+import type { ControlPlaneStore } from '../../control-plane-store.js';
 
 // ============================================================================
 // REQUEST VALIDATION SCHEMAS
@@ -236,10 +237,12 @@ async function generateMISReport(
   pool: Pool,
   tenantId: string,
   query: MISReportQuery,
-  store?: any
+  store: any,
+  allowedBranchIds: ReadonlySet<string>,
 ): Promise<any> {
   const { startDate, endDate } = getDateRange(query);
-  const allBranchesInEstate = await resolveBranchHierarchy(pool, tenantId, store);
+  const allBranchesInEstate = (await resolveBranchHierarchy(pool, tenantId, store))
+    .filter((branch) => allowedBranchIds.has(branch.branch_id));
 
   // Apply hierarchical filters
   let filteredBranches = allBranchesInEstate;
@@ -858,13 +861,19 @@ function buildFilterOptions(branches: BranchHierarchy[]) {
 // ROUTE REGISTRATION
 // ============================================================================
 
-export function createMISUnifiedRoutes(instance: FastifyInstance, pool: Pool, store?: any) {
+export function createMISUnifiedRoutes(instance: FastifyInstance, pool: Pool, store: ControlPlaneStore) {
   instance.get('/mis', async (request, reply) => {
     try {
       const query = misReportQuerySchema.parse(request.query);
       const tenantId = request.currentUser.tenantId;
+      const branches = await store.listAccessibleNodes(request.currentUser, 'analytics:view', 'branch');
+      if (branches.length === 0) return reply.code(403).send({ error: 'forbidden' });
+      const allowedBranchIds = new Set(branches.map((branch) => branch.id));
+      if (query.branchId && !allowedBranchIds.has(query.branchId)) {
+        return reply.code(403).send({ error: 'branch_forbidden' });
+      }
 
-      const report = await generateMISReport(pool, tenantId, query, store);
+      const report = await generateMISReport(pool, tenantId, query, store, allowedBranchIds);
       return reply.code(200).send(report);
     } catch (error) {
       request.log.error({ error }, 'Failed to generate MIS unified report');

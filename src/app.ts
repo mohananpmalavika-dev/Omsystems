@@ -734,8 +734,6 @@ export async function buildApp(options?: {
       request.url.startsWith("/internal/alerts/")
       || request.url.startsWith("/internal/federation/")
       || request.url.startsWith("/internal/reports/")
-      || request.url.startsWith("/api/v1/reports/daily-surveillance-health")
-      || request.url.startsWith("/v1/reports/daily-surveillance-health")
       || request.url.startsWith("/v1/edge-updates/artifacts/")
       || request.url.startsWith("/v1/security/mtls/")
       || request.url === "/v1/auth/csrf-token"
@@ -2849,7 +2847,7 @@ export async function buildApp(options?: {
         try { (createBranchBenchmarkingRoutes as any)(instance, pool); } catch {}
         try { (createComplianceScorecardRoutes as any)(instance, pool); } catch {}
         try { (createMISUnifiedRoutes as any)(instance, pool, store); } catch {}
-        try { (createHistoricalTrendsRoutes as any)(instance, pool); } catch {}
+        try { (createHistoricalTrendsRoutes as any)(instance, pool, store); } catch {}
       };
 
       await app.register(registerReportRoutes, { prefix: '/v1/reports' });

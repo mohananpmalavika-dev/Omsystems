@@ -84,6 +84,12 @@ export function AlertNotificationTray() {
     ];
     const keys = current.map(notificationKey);
     if (!initialized.current) { remember(keys); initialized.current = true; return; }
+    const activeKeys = new Set(keys);
+    setNotifications((existing) => existing.filter((alert) =>
+      (alert.source === "AI" && aiResult.status !== "fulfilled") ||
+      (alert.source === "Operational" && operationalResult.status !== "fulfilled") ||
+      activeKeys.has(notificationKey(alert))
+    ));
     const fresh = current.filter((alert) => !seen.current.has(notificationKey(alert)));
     remember(keys);
     if (fresh.length) setNotifications((existing) => [...fresh, ...existing].slice(0, MAX_VISIBLE_NOTIFICATIONS));

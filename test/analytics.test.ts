@@ -17,6 +17,34 @@ describe("video analytics and alert workflow", () => {
 
   afterEach(async () => app.close());
 
+  it("limits alert rows and summary counts to the user's permitted branch", async () => {
+    const rule = await store.createAnalyticsRule("omsystems", "cam-001", "user-global-admin", {
+      name: "Branch scope", detectionType: "person", enabled: true,
+      objectClasses: [], minConfidence: 0.5, minDurationSeconds: 0,
+      direction: "any", severity: "P1", cooldownSeconds: 0,
+      recipients: [], recordingPolicy: "none", preRollSeconds: 30, postRollSeconds: 120,
+    });
+    const detected = await store.processAnalyticsEvent({
+      tenantId: "omsystems", cameraId: "cam-001", sourceEventId: "scope-a005",
+      detectionType: "person", occurredAt: "2026-07-21T11:00:00.000Z",
+      confidence: 0.9, durationSeconds: 1, modelVersion: "v1", objects: [],
+    });
+    expect(detected.rules[0]?.id).toBe(rule.id);
+    const allowedAlert = detected.alerts[0]!;
+    store.analyticsAlerts.push({ ...allowedAlert, id: "22222222-2222-4222-8222-222222222222", cameraId: "cam-a008-01", branchId: "A008" });
+
+    const branchHeaders = { "x-user-id": "user-branch-manager" };
+    const list = await app.inject({ method: "GET", url: "/v1/analytics/alerts", headers: branchHeaders });
+    expect(list.statusCode).toBe(200);
+    expect(list.json().data.map((alert: { id: string }) => alert.id)).toEqual([allowedAlert.id]);
+    expect(list.json().summary.total).toBe(1);
+    const summary = await app.inject({ method: "GET", url: "/v1/analytics/alerts/summary", headers: branchHeaders });
+    expect(summary.json().total).toBe(1);
+    const commandCenter = await app.inject({ method: "GET", url: "/v1/alerts/command-center", headers: branchHeaders });
+    expect(commandCenter.json().data.map((alert: { id: string }) => alert.id)).toEqual([allowedAlert.id]);
+    expect(commandCenter.json().counts.P1).toBe(1);
+  });
+
   it("enables the complete camera-ready AI bundle across a branch idempotently", async () => {
     const first = await app.inject({
       method: "POST",

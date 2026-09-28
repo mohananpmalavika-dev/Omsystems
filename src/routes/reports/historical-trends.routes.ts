@@ -7,6 +7,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Pool } from 'pg';
+import type { ControlPlaneStore } from '../../control-plane-store.js';
 
 // ============================================================================
 // REQUEST VALIDATION
@@ -32,7 +33,8 @@ const trendsQuerySchema = z.object({
 async function getExecutiveKPITrends(
   pool: Pool,
   tenantId: string,
-  months: number
+  months: number,
+  branchIds: string[],
 ): Promise<any[]> {
   const query = `
     WITH monthly_data AS (
@@ -50,6 +52,7 @@ async function getExecutiveKPITrends(
         ) AS avg_response_time_min
       FROM incidents
       WHERE tenant_id = $1
+        AND branch_id::text = ANY($3::text[])
         AND detected_at >= NOW() - INTERVAL '1 month' * $2
         AND deleted_at IS NULL
       GROUP BY DATE_TRUNC('month', detected_at)
@@ -61,6 +64,7 @@ async function getExecutiveKPITrends(
         COUNT(*) FILTER (WHERE status = 'online') AS online_cameras
       FROM cameras
       WHERE tenant_id = $1
+        AND branch_node_id::text = ANY($3::text[])
       GROUP BY DATE_TRUNC('month', COALESCE(last_seen_at, created_at))
     )
     SELECT 
@@ -89,7 +93,7 @@ async function getExecutiveKPITrends(
     LIMIT $2
   `;
   
-  const result = await pool.query(query, [tenantId, months]);
+  const result = await pool.query(query, [tenantId, months, branchIds]);
   return result.rows.reverse(); // Oldest first
 }
 
@@ -99,7 +103,8 @@ async function getExecutiveKPITrends(
 async function getFinancialTrends(
   pool: Pool,
   tenantId: string,
-  months: number
+  months: number,
+  branchIds: string[],
 ): Promise<any[]> {
   const query = `
     WITH monthly_maintenance AS (
@@ -109,6 +114,7 @@ async function getFinancialTrends(
         COUNT(*) AS maintenance_count
       FROM maintenance_records
       WHERE tenant_id = $1
+        AND branch_id::text = ANY($3::text[])
         AND created_at >= NOW() - INTERVAL '1 month' * $2
       GROUP BY DATE_TRUNC('month', created_at)
     ),
@@ -118,6 +124,7 @@ async function getFinancialTrends(
         COUNT(*) AS incident_count
       FROM incidents
       WHERE tenant_id = $1
+        AND branch_id::text = ANY($3::text[])
         AND detected_at >= NOW() - INTERVAL '1 month' * $2
         AND deleted_at IS NULL
       GROUP BY DATE_TRUNC('month', detected_at)
@@ -138,7 +145,7 @@ async function getFinancialTrends(
     LIMIT $2
   `;
   
-  const result = await pool.query(query, [tenantId, months]);
+  const result = await pool.query(query, [tenantId, months, branchIds]);
   return result.rows.reverse();
 }
 
@@ -148,7 +155,8 @@ async function getFinancialTrends(
 async function getBenchmarkingTrends(
   pool: Pool,
   tenantId: string,
-  months: number
+  months: number,
+  branchIds: string[],
 ): Promise<any[]> {
   const query = `
     WITH monthly_branch_scores AS (
@@ -167,6 +175,7 @@ async function getBenchmarkingTrends(
         AND i.deleted_at IS NULL
       WHERE n.tenant_id = $1
         AND n.type = 'branch'
+        AND n.id::text = ANY($3::text[])
       GROUP BY n.id, n.name, DATE_TRUNC('month', i.detected_at)
     ),
     scored_branches AS (
@@ -193,7 +202,7 @@ async function getBenchmarkingTrends(
     LIMIT $2 * 5 -- Top 5 branches per month
   `;
   
-  const result = await pool.query(query, [tenantId, months]);
+  const result = await pool.query(query, [tenantId, months, branchIds]);
   return result.rows.reverse();
 }
 
@@ -203,7 +212,8 @@ async function getBenchmarkingTrends(
 async function getComplianceTrends(
   pool: Pool,
   tenantId: string,
-  months: number
+  months: number,
+  branchIds: string[],
 ): Promise<any[]> {
   const query = `
     WITH monthly_compliance AS (
@@ -214,12 +224,11 @@ async function getComplianceTrends(
         COUNT(DISTINCT rj.camera_id) FILTER (WHERE rj.retention_days >= 90) AS compliant_cameras,
         COUNT(DISTINCT rj.camera_id) AS total_cameras,
         -- Audit activity
-        COUNT(DISTINCT al.id) AS audit_events
+        0::int AS audit_events
       FROM cameras c
       LEFT JOIN recording_jobs rj ON rj.camera_id = c.id
-      LEFT JOIN audit_log al ON al.tenant_id = c.tenant_id 
-        AND DATE_TRUNC('month', al.timestamp) = DATE_TRUNC('month', c.created_at)
       WHERE c.tenant_id = $1
+        AND c.branch_node_id::text = ANY($3::text[])
         AND c.created_at >= NOW() - INTERVAL '1 month' * $2
       GROUP BY DATE_TRUNC('month', c.created_at)
     )
@@ -245,7 +254,7 @@ async function getComplianceTrends(
     LIMIT $2
   `;
   
-  const result = await pool.query(query, [tenantId, months]);
+  const result = await pool.query(query, [tenantId, months, branchIds]);
   return result.rows.reverse();
 }
 
@@ -253,7 +262,7 @@ async function getComplianceTrends(
 // ROUTE REGISTRATION
 // ============================================================================
 
-export function createHistoricalTrendsRoutes(instance: FastifyInstance, pool: Pool) {
+export function createHistoricalTrendsRoutes(instance: FastifyInstance, pool: Pool, store: ControlPlaneStore) {
   /**
    * GET /api/control/v1/reports/trends
    * 
@@ -263,21 +272,24 @@ export function createHistoricalTrendsRoutes(instance: FastifyInstance, pool: Po
     try {
       const query = trendsQuerySchema.parse(request.query);
       const tenantId = request.currentUser.tenantId;
+      const branches = await store.listAccessibleNodes(request.currentUser, 'analytics:view', 'branch');
+      if (branches.length === 0) return reply.code(403).send({ error: 'forbidden' });
+      const branchIds = branches.map((branch) => branch.id);
       
       let trends: any[];
       
       switch (query.reportType) {
         case 'executive-kpi':
-          trends = await getExecutiveKPITrends(pool, tenantId, query.months);
+          trends = await getExecutiveKPITrends(pool, tenantId, query.months, branchIds);
           break;
         case 'financial':
-          trends = await getFinancialTrends(pool, tenantId, query.months);
+          trends = await getFinancialTrends(pool, tenantId, query.months, branchIds);
           break;
         case 'benchmarking':
-          trends = await getBenchmarkingTrends(pool, tenantId, query.months);
+          trends = await getBenchmarkingTrends(pool, tenantId, query.months, branchIds);
           break;
         case 'compliance':
-          trends = await getComplianceTrends(pool, tenantId, query.months);
+          trends = await getComplianceTrends(pool, tenantId, query.months, branchIds);
           break;
         default:
           return reply.code(400).send({

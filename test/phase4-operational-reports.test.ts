@@ -81,6 +81,30 @@ describe("Phase 4 persistent daily reports",()=>{
     for(const artifact of detail.json().artifacts){const url=artifact.downloadUrl.replace("/api/control","");const download=await app.inject({method:"GET",url,headers:admin});expect(download.statusCode).toBe(200);if(artifact.format==="pdf")expect(download.rawPayload.subarray(0,4).toString()).toBe("%PDF");if(artifact.format==="xlsx")expect(download.rawPayload.subarray(0,2).toString()).toBe("PK");if(artifact.format==="csv")expect(download.body).toContain("recordType");expect((await readFile(artifact.storagePath)).length).toBe(artifact.sizeBytes);}
   });
 
+  it("checks current branch permission for report history and signed downloads",async()=>{
+    const requested=await app.inject({method:"POST",url:"/v1/reports/operational/runs",headers:admin,payload:{formats:["csv"],filters:{branchId:"branch-blr-001"}}});
+    expect(requested.statusCode).toBe(202);
+    const runId=requested.json().id;
+    await waitFor(async()=> (await store.getOperationalReportRun(runId,"omsystems"))?.status==="completed",10_000);
+    const adminDetail=await app.inject({method:"GET",url:`/v1/reports/operational/runs/${runId}`,headers:admin});
+    expect(adminDetail.statusCode).toBe(200);
+    const branchHeaders={"x-user-id":"user-branch-manager"};
+    const history=await app.inject({method:"GET",url:"/v1/reports/operational/runs",headers:branchHeaders});
+    expect(history.json().data.some((run:{id:string})=>run.id===runId)).toBe(false);
+    const detail=await app.inject({method:"GET",url:`/v1/reports/operational/runs/${runId}`,headers:branchHeaders});
+    expect(detail.statusCode).toBe(404);
+    const downloadUrl=adminDetail.json().artifacts[0].downloadUrl.replace("/api/control","");
+    const download=await app.inject({method:"GET",url:downloadUrl,headers:branchHeaders});
+    expect(download.statusCode).toBe(404);
+  });
+
+  it("requires authentication and branch access for legacy daily report generation",async()=>{
+    const anonymous=await app.inject({method:"GET",url:"/v1/reports/daily-surveillance-health/latest"});
+    expect(anonymous.statusCode).toBe(401);
+    const denied=await app.inject({method:"POST",url:"/v1/reports/daily-surveillance-health/generate",headers:{"x-user-id":"user-branch-manager"},payload:{tenantId:"another-tenant",filters:{branchId:"A008"}}});
+    expect(denied.statusCode).toBe(403);
+  });
+
   it("handles a 5,000-camera CSV run asynchronously without a fixed application limit",async()=>{
     const template=store.cameras.get("cam-001")!;for(const id of ["cam-001","cam-002"]){store.cameras.get(id)!.branchId="branch-blr-001";}for(let index=3;index<=5000;index++){const id=`scale-camera-${index}`;const nodeId=`scale-node-${index}`;const node:ResourceNode={id:nodeId,parentId:"group-public-blr-001",tenantId:"omsystems",type:"camera",name:`Scale Camera ${index}`,path:["company-1","division-retail","region-south","branch-blr-001","group-public-blr-001",nodeId]};const camera:Camera={...structuredClone(template),id,nodeId,branchId:"branch-blr-001",name:`Scale Camera ${index}`,channel:index,status:index%10===0?"offline":"online"};store.nodes.set(nodeId,node);store.cameras.set(id,camera);}
     const response=await app.inject({method:"POST",url:"/v1/reports/operational/runs",headers:admin,payload:{formats:["csv"],filters:{branchId:"branch-blr-001"}}});const id=response.json().id;await waitFor(async()=> (await store.getOperationalReportRun(id,"omsystems"))?.status==="completed",20_000);const run=await store.getOperationalReportRun(id,"omsystems");expect(run?.summary?.totalCameras).toBe(5000);expect(run?.rowCount).toBeGreaterThanOrEqual(5001);expect((await store.listOperationalReportArtifacts("omsystems",id))[0]?.sizeBytes).toBeGreaterThan(100_000);
