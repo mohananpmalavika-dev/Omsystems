@@ -370,6 +370,48 @@ class CommunicationAPIClient {
     );
     return response.data;
   }
+
+  /**
+   * Password-less calls made by an enrolled device.  The backend derives the
+   * device and tenant from its signed device credential; actorEmployeeId is
+   * accepted only when it is an active, call-enabled device link.
+   */
+  async callDeviceBranch(branchId: string, actorEmployeeId?: string, context?: string): Promise<StartedCall> {
+    const response = await this.request<{ data: StartedCall }>(
+      `/v1/communications/device-calls/branch/${encodeURIComponent(branchId)}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ actorEmployeeId, context }),
+      }
+    );
+    return response.data;
+  }
+
+  async callDeviceEmployee(employeeId: string, actorEmployeeId?: string, context?: string): Promise<StartedCall> {
+    const response = await this.request<{ data: StartedCall }>(
+      `/v1/communications/device-calls/employee/${encodeURIComponent(employeeId)}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ actorEmployeeId, context }),
+      }
+    );
+    return response.data;
+  }
+
+  async getDeviceDirectory(): Promise<{
+    branches: BranchContact[];
+    employees: EmployeeContact[];
+    linkedEmployees: CommunicationEmployee[];
+  }> {
+    const response = await this.request<{
+      data: {
+        branches: BranchContact[];
+        employees: EmployeeContact[];
+        linkedEmployees: CommunicationEmployee[];
+      };
+    }>('/v1/communications/device-directory');
+    return response.data;
+  }
   
   async acceptCall(callId: string): Promise<{ call: CallSession; credentials: WebRTCCredentials }> {
     const isDevice = typeof window !== 'undefined' && Boolean(localStorage.getItem('commDeviceToken'));
@@ -555,14 +597,26 @@ class CommunicationAPIClient {
     expiresInHours: number;
     note?: string;
   }): Promise<CommunicationEnrollmentCode> {
-    const response = await this.request<{ data: CommunicationEnrollmentCode }>(
+    const response = await this.request<{ id: string; code: string; branchId: string; expiresAt: string }>(
       '/v1/communications/enrollment-codes',
       {
         method: 'POST',
-        body: JSON.stringify(params),
+        body: JSON.stringify({
+          branchId: params.branchId,
+          expiresInMinutes: Math.max(1, Math.min(10080, Math.round(params.expiresInHours * 60))),
+        }),
       }
     );
-    return response.data;
+    return {
+      codeId: response.id,
+      tenantId: '',
+      branchId: response.branchId,
+      code: response.code,
+      status: 'active',
+      expiresAt: response.expiresAt,
+      createdAt: new Date().toISOString(),
+      note: params.note,
+    };
   }
   
   async listEnrollmentCodes(): Promise<{ data: CommunicationEnrollmentCode[] }> {
@@ -600,18 +654,27 @@ class CommunicationAPIClient {
   
   async revokeDevice(deviceId: string): Promise<void> {
     await this.request(
-      `/v1/communications/devices/${encodeURIComponent(deviceId)}`,
+      `/v1/communications/devices/${encodeURIComponent(deviceId)}/revoke`,
       {
-        method: 'DELETE',
+        method: 'POST',
+        body: JSON.stringify({ reason: 'Administrative action' }),
       }
+    );
+  }
+
+  async approveDevice(deviceId: string): Promise<void> {
+    await this.request(
+      `/v1/communications/devices/${encodeURIComponent(deviceId)}/approve`,
+      { method: 'POST' }
     );
   }
   
   async linkEmployeeToDevice(deviceId: string, employeeId: string): Promise<void> {
     await this.request(
-      `/v1/communications/devices/${encodeURIComponent(deviceId)}/employees/${encodeURIComponent(employeeId)}`,
+      `/v1/communications/devices/${encodeURIComponent(deviceId)}/employees`,
       {
         method: 'POST',
+        body: JSON.stringify({ employeeId }),
       }
     );
   }

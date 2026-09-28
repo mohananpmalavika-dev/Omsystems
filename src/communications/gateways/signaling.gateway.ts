@@ -264,7 +264,17 @@ export class CommunicationSignalingGateway {
     for (const deviceId of targetDeviceIds) {
       this.io.to(WEBSOCKET_ROOMS.DEVICE(tenantId, deviceId)).emit(
         'comm:call:invite',
-        { ...event, direction: 'INBOUND' }
+        {
+          ...event,
+          direction: 'INBOUND',
+          sourceBranchId: call.sourceBranchId,
+          sourceEmployeeId: call.sourceEmployeeId,
+          sourceOperatorId: call.sourceOperatorId,
+          targetBranchId: call.targetBranchId,
+          targetEmployeeId: call.targetEmployeeId,
+          caller: (call as any).caller,
+          context: (call as any).context,
+        }
       );
     }
 
@@ -272,7 +282,17 @@ export class CommunicationSignalingGateway {
     for (const operatorId of targetOperatorIds) {
       this.io.to(WEBSOCKET_ROOMS.OPERATOR(tenantId, operatorId)).emit(
         'comm:call:invite',
-        { ...event, direction: 'INBOUND' }
+        {
+          ...event,
+          direction: 'INBOUND',
+          sourceBranchId: call.sourceBranchId,
+          sourceEmployeeId: call.sourceEmployeeId,
+          sourceOperatorId: call.sourceOperatorId,
+          targetBranchId: call.targetBranchId,
+          targetEmployeeId: call.targetEmployeeId,
+          caller: (call as any).caller,
+          context: (call as any).context,
+        }
       );
     }
   }

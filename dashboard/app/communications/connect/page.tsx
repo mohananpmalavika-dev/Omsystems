@@ -11,7 +11,7 @@ import {
 import { communicationAPI } from '@/services/communication-api';
 import { useCommunicationSignaling } from '@/hooks/use-communication-signaling';
 import { useWebRTCCall, type CallModality } from '@/hooks/use-webrtc-call';
-import type { CallSession, WebRTCCredentials } from '@/services/communication-api';
+import type { BranchContact, CallSession, CommunicationEmployee, WebRTCCredentials } from '@/services/communication-api';
 import type { CallInviteEvent } from '@/hooks/use-communication-signaling';
 
 interface BranchOption {
@@ -26,7 +26,13 @@ interface ActiveCall {
   startTime: Date;
   modality: CallModality;
   credentials: WebRTCCredentials;
+  peerLabel: string;
 }
+
+type DeviceCallTarget =
+  | { type: 'VMS'; label: string }
+  | { type: 'BRANCH'; id: string; label: string }
+  | { type: 'EMPLOYEE'; id: string; label: string };
 
 function formatCallDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -47,6 +53,10 @@ export default function KryptoVisionConnectPage() {
   const [branchName, setBranchName] = useState('');
   const [deviceMode, setDeviceMode] = useState<'BRANCH_COMMON' | 'EMPLOYEE_SPECIFIC'>('BRANCH_COMMON');
   const [linkedEmployee, setLinkedEmployee] = useState<{ id: string; name: string; role?: string } | null>(null);
+  const [linkedEmployees, setLinkedEmployees] = useState<CommunicationEmployee[]>([]);
+  const [deviceDirectory, setDeviceDirectory] = useState<BranchContact[]>([]);
+  const [loadingCallDirectory, setLoadingCallDirectory] = useState(false);
+  const [callTarget, setCallTarget] = useState<DeviceCallTarget>({ type: 'VMS', label: 'VMS Command Center' });
   
   // Registration setup state (when not enrolled)
   const [branches, setBranches] = useState<BranchOption[]>([]);
@@ -136,6 +146,35 @@ export default function KryptoVisionConnectPage() {
     const timer = window.setInterval(sendHeartbeat, 20_000);
     return () => window.clearInterval(timer);
   }, [deviceEnrolled, deviceStatus]);
+
+  // An enrolled terminal receives a tenant-scoped directory using only its
+  // signed device credential. No user session or password is involved.
+  useEffect(() => {
+    if (!deviceEnrolled || deviceStatus !== 'ACTIVE') {
+      if (!deviceEnrolled) {
+        setDeviceDirectory([]);
+        setLinkedEmployees([]);
+      }
+      return;
+    }
+    setLoadingCallDirectory(true);
+    void communicationAPI.getDeviceDirectory()
+      .then(({ branches: callBranches, linkedEmployees: deviceEmployees }) => {
+        setDeviceDirectory(callBranches);
+        setLinkedEmployees(deviceEmployees);
+        if (deviceEmployees.length && !deviceEmployees.some((employee) => employee.employeeId === linkedEmployee?.id)) {
+          const employee = deviceEmployees[0];
+          const next = { id: employee.employeeId, name: employee.employeeName, role: employee.employeeRole };
+          setLinkedEmployee(next);
+          localStorage.setItem('commLinkedEmployee', JSON.stringify(next));
+        }
+      })
+      .catch((directoryError) => {
+        console.warn('[Connect Device] Failed to load callable directory', directoryError);
+        setError('Unable to load the call directory. Check the device connection and try again.');
+      })
+      .finally(() => setLoadingCallDirectory(false));
+  }, [deviceEnrolled, deviceStatus, linkedEmployee?.id]);
 
   // 2. Load directory for enrollment screen if not enrolled
   useEffect(() => {
@@ -438,8 +477,8 @@ export default function KryptoVisionConnectPage() {
     };
   }, [webrtc.isPttMode, activeCall, webrtc]);
 
-  // 7. Make call to VMS
-  const handleStartCall = async (modality: CallModality) => {
+  // 7. Make a password-less call as the registered device or current shift user.
+  const handleStartCall = async (modality: CallModality, target: DeviceCallTarget = callTarget) => {
     try {
       setError(null);
       const stream = await webrtc.initializeMedia({
@@ -448,9 +487,13 @@ export default function KryptoVisionConnectPage() {
       });
       if (!stream) return;
 
-      const started = await communicationAPI.callVMS(linkedEmployee?.id);
+      const started = target.type === 'VMS'
+        ? await communicationAPI.callVMS(linkedEmployee?.id)
+        : target.type === 'BRANCH'
+          ? await communicationAPI.callDeviceBranch(target.id, linkedEmployee?.id)
+          : await communicationAPI.callDeviceEmployee(target.id, linkedEmployee?.id);
       await signaling.joinCall(started.call.id);
-      const nextCall = { session: started.call, credentials: started.credentials, startTime: new Date(), modality };
+      const nextCall = { session: started.call, credentials: started.credentials, startTime: new Date(), modality, peerLabel: target.label };
       activeCallRef.current = nextCall;
       setActiveCall(nextCall);
 
@@ -461,7 +504,7 @@ export default function KryptoVisionConnectPage() {
       }
     } catch (err: any) {
       console.error('[Connect Device] Call initiation failed:', err);
-      setError(err.message || 'Failed to call VMS Command Center');
+      setError(err.message || `Failed to call ${target.label}`);
     }
   };
 
@@ -489,6 +532,7 @@ export default function KryptoVisionConnectPage() {
         credentials,
         startTime: new Date(),
         modality,
+        peerLabel: incomingCall.caller?.name || incomingCall.sourceEmployeeName || incomingCall.sourceBranchName || 'Incoming caller',
       };
       activeCallRef.current = nextCall;
       setActiveCall(nextCall);
@@ -818,7 +862,7 @@ export default function KryptoVisionConnectPage() {
                     )}
                   </h2>
                   <p className="text-xs text-slate-400 font-mono">
-                    Connected with VMS Command Center • {formatCallDuration(callDuration)}
+                    Connected with {activeCall.peerLabel} • {formatCallDuration(callDuration)}
                   </p>
                 </div>
               </div>
@@ -1151,17 +1195,76 @@ export default function KryptoVisionConnectPage() {
           /* IDLE / READY FOR CALL STAGE */
           <div className="space-y-8 text-center">
             <div className="space-y-2">
-              <h2 className="text-3xl font-extrabold text-white">Call VMS Command Center</h2>
+              <h2 className="text-3xl font-extrabold text-white">Call {callTarget.label}</h2>
               <p className="text-sm text-slate-400 max-w-md mx-auto">
-                Select your preferred calling mode to instantly connect with the central security operations room.
+                Choose a VMS user, employee, or branch—then select your calling mode.
               </p>
+            </div>
+
+            <div className="max-w-3xl mx-auto rounded-2xl border border-slate-700 bg-slate-900/70 p-4 text-left">
+              <label htmlFor="device-call-target" className="mb-2 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Call destination
+              </label>
+              <select
+                id="device-call-target"
+                value={callTarget.type === 'VMS' ? 'VMS' : `${callTarget.type}:${callTarget.id}`}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (value === 'VMS') return setCallTarget({ type: 'VMS', label: 'VMS Command Center' });
+                  const [type, id] = value.split(':') as ['BRANCH' | 'EMPLOYEE', string];
+                  if (type === 'BRANCH') {
+                    const branch = deviceDirectory.find((entry) => entry.branchId === id);
+                    if (branch) setCallTarget({ type, id, label: branch.branchName });
+                  } else {
+                    const employee = deviceDirectory.flatMap((branch) => branch.employees).find((entry) => entry.employeeId === id);
+                    if (employee) setCallTarget({ type, id, label: employee.employeeName });
+                  }
+                }}
+                disabled={loadingCallDirectory}
+                className="w-full rounded-xl border border-slate-600 bg-slate-950 px-3 py-3 text-sm text-white outline-none focus:border-blue-500 disabled:opacity-60"
+              >
+                <option value="VMS">VMS Command Center</option>
+                {deviceDirectory.length > 0 && <optgroup label="Branches">
+                  {deviceDirectory.map((branch) => (
+                    <option key={`branch-${branch.branchId}`} value={`BRANCH:${branch.branchId}`} disabled={branch.onlineDeviceCount === 0}>
+                      {branch.branchName}{branch.onlineDeviceCount === 0 ? ' — offline' : ` — ${branch.onlineDeviceCount} device${branch.onlineDeviceCount === 1 ? '' : 's'} online`}
+                    </option>
+                  ))}
+                </optgroup>}
+                {deviceDirectory.length > 0 && <optgroup label="Employees">
+                  {deviceDirectory.flatMap((branch) => branch.employees).map((employee) => (
+                    <option key={`employee-${employee.employeeId}`} value={`EMPLOYEE:${employee.employeeId}`} disabled={employee.onlineDeviceCount === 0}>
+                      {employee.employeeName} · {employee.branchName}{employee.onlineDeviceCount === 0 ? ' — offline' : ''}
+                    </option>
+                  ))}
+                </optgroup>}
+              </select>
+              {linkedEmployees.length > 1 && (
+                <div className="mt-3 flex items-center gap-3">
+                  <label htmlFor="shift-user" className="shrink-0 text-xs text-slate-400">Currently using</label>
+                  <select
+                    id="shift-user"
+                    value={linkedEmployee?.id || ''}
+                    onChange={(event) => {
+                      const employee = linkedEmployees.find((entry) => entry.employeeId === event.target.value);
+                      if (!employee) return;
+                      const next = { id: employee.employeeId, name: employee.employeeName, role: employee.employeeRole };
+                      setLinkedEmployee(next);
+                      localStorage.setItem('commLinkedEmployee', JSON.stringify(next));
+                    }}
+                    className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-blue-500"
+                  >
+                    {linkedEmployees.map((employee) => <option key={employee.employeeId} value={employee.employeeId}>{employee.employeeName}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
 
             {/* 3 Main Calling Options Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
               {/* Option 1: Video Call */}
               <button
-                onClick={() => void handleStartCall('video')}
+                onClick={() => void handleStartCall('video', callTarget)}
                 className="group p-6 rounded-3xl bg-gradient-to-b from-blue-600/10 to-blue-600/5 hover:from-blue-600/20 hover:to-blue-600/10 border border-blue-500/30 hover:border-blue-500/60 transition-all text-center space-y-3 flex flex-col items-center justify-center shadow-xl hover:scale-[1.02] active:scale-[0.98]"
               >
                 <div className="w-16 h-16 rounded-2xl bg-blue-600/20 text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-all flex items-center justify-center shadow-lg shadow-blue-600/20">
@@ -1178,7 +1281,7 @@ export default function KryptoVisionConnectPage() {
 
               {/* Option 2: Audio Voice Call */}
               <button
-                onClick={() => void handleStartCall('audio')}
+                onClick={() => void handleStartCall('audio', callTarget)}
                 className="group p-6 rounded-3xl bg-gradient-to-b from-emerald-600/10 to-emerald-600/5 hover:from-emerald-600/20 hover:to-emerald-600/10 border border-emerald-500/30 hover:border-emerald-500/60 transition-all text-center space-y-3 flex flex-col items-center justify-center shadow-xl hover:scale-[1.02] active:scale-[0.98]"
               >
                 <div className="w-16 h-16 rounded-2xl bg-emerald-600/20 text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white transition-all flex items-center justify-center shadow-lg shadow-emerald-600/20">
@@ -1195,7 +1298,7 @@ export default function KryptoVisionConnectPage() {
 
               {/* Option 3: Screen Sharing */}
               <button
-                onClick={() => void handleStartCall('screenshare')}
+                onClick={() => void handleStartCall('screenshare', callTarget)}
                 className="group p-6 rounded-3xl bg-gradient-to-b from-purple-600/10 to-purple-600/5 hover:from-purple-600/20 hover:to-purple-600/10 border border-purple-500/30 hover:border-purple-500/60 transition-all text-center space-y-3 flex flex-col items-center justify-center shadow-xl hover:scale-[1.02] active:scale-[0.98]"
               >
                 <div className="w-16 h-16 rounded-2xl bg-purple-600/20 text-purple-400 group-hover:bg-purple-600 group-hover:text-white transition-all flex items-center justify-center shadow-lg shadow-purple-600/20">
@@ -1239,9 +1342,9 @@ export default function KryptoVisionConnectPage() {
               <span className="text-xs font-mono uppercase tracking-widest text-emerald-400">
                 Incoming Call
               </span>
-              <h3 className="text-2xl font-bold text-white">VMS Command Center</h3>
+              <h3 className="text-2xl font-bold text-white">{incomingCall.caller?.name || incomingCall.sourceEmployeeName || incomingCall.sourceBranchName || 'VMS Command Center'}</h3>
               <p className="text-xs text-slate-400">
-                Central operator is calling {deviceMode === 'EMPLOYEE_SPECIFIC' ? linkedEmployee?.name : branchName}
+                Incoming call for {deviceMode === 'EMPLOYEE_SPECIFIC' ? linkedEmployee?.name : branchName}
               </p>
             </div>
 

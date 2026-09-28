@@ -22,9 +22,16 @@ export interface CallInviteEvent {
   sourceBranchName?: string;
   sourceEmployeeId?: string;
   sourceEmployeeName?: string;
+  sourceOperatorId?: string;
   targetBranchId?: string;
   targetEmployeeId?: string;
   context?: string;
+  caller?: {
+    type?: 'OPERATOR' | 'EMPLOYEE' | 'BRANCH_DEVICE';
+    id?: string;
+    name?: string;
+    branchId?: string;
+  };
 }
 
 export interface CallStatusEvent {

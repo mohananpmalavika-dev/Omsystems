@@ -131,6 +131,15 @@ export default function DeviceManagementPage() {
     }
   };
 
+  const handleApproveDevice = async (deviceId: string) => {
+    try {
+      await communicationAPI.approveDevice(deviceId);
+      await loadData();
+    } catch (err: any) {
+      alert('Failed to approve device: ' + err.message);
+    }
+  };
+
   // Link employee to device
   const handleLinkEmployee = async () => {
     if (!selectedDevice || !selectedEmployeeId) return;
@@ -509,6 +518,15 @@ export default function DeviceManagementPage() {
 
                             {/* Actions */}
                             <div className="flex items-center gap-2 ml-4">
+                              {device.status === 'PENDING' && (
+                                <button
+                                  onClick={() => handleApproveDevice(device.deviceId)}
+                                  className="flex items-center gap-1 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  Approve
+                                </button>
+                              )}
                               <button
                                 onClick={() => {
                                   setSelectedDevice(device);

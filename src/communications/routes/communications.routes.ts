@@ -53,7 +53,7 @@ import { COMMUNICATION_PERMISSIONS } from '../domain/constants.js';
 const enrollmentCodeSchema = z.object({
   branchId: z.string().uuid(),
   allowedDeviceType: z.enum(['BRANCH_SHARED', 'BRANCH_MOBILE', 'EMPLOYEE_MOBILE', 'EMPLOYEE_DESKTOP', 'EMERGENCY_DEVICE']).optional(),
-  expiresInMinutes: z.number().int().min(1).max(1440).default(30),
+  expiresInMinutes: z.number().int().min(1).max(10080).default(30),
   maxUses: z.number().int().min(0).max(100).default(1),
   preAssignedEmployeeIds: z.array(z.string().uuid()).optional(),
 });
@@ -437,6 +437,7 @@ export async function registerCommunicationsRoutes(
       ? (request.params as { branchId: string }).branchId
       : (request.params as { employeeId: string }).employeeId;
     const device = request.deviceContext!;
+    let callerName = 'Branch device';
 
     if (body.actorEmployeeId) {
       const actor = await ctx.pool.query(
@@ -453,6 +454,13 @@ export async function registerCommunicationsRoutes(
         await reply.code(403).send({ error: 'employee_device_link_required' });
         return null;
       }
+      callerName = actor.rows[0].name;
+    } else {
+      const deviceName = await ctx.pool.query(
+        'SELECT device_name FROM communication_devices WHERE id = $1 AND tenant_id = $2 LIMIT 1',
+        [device.deviceId, device.tenantId]
+      );
+      callerName = deviceName.rows[0]?.device_name || callerName;
     }
 
     if (targetType === 'BRANCH') {
@@ -514,6 +522,7 @@ export async function registerCommunicationsRoutes(
         type: body.actorEmployeeId ? 'EMPLOYEE' : 'BRANCH_DEVICE',
         id: body.actorEmployeeId || device.deviceId,
         branchId: device.branchId,
+        name: callerName,
       },
       context: body.context,
     });
@@ -586,6 +595,68 @@ export async function registerCommunicationsRoutes(
       }
       ctx.logger.error({ error }, 'Failed to generate enrollment code');
       return reply.code(500).send({ error: 'internal_error' });
+    }
+  });
+
+  /** List enrollment codes for the current tenant; code values are never exposed cross-tenant. */
+  app.get('/v1/communications/enrollment-codes', async (request: AuthenticatedRequest, reply) => {
+    try {
+      const result = await ctx.pool.query(
+        `SELECT id::text, tenant_id::text, branch_id::text, code, expires_at, created_at,
+                consumed_at, revoked_at, uses_count, max_uses
+         FROM communication_enrollment_codes
+         WHERE tenant_id = $1
+         ORDER BY created_at DESC
+         LIMIT 100`,
+        [request.currentUser.tenantId]
+      );
+      return reply.send({
+        data: result.rows.map((code: any) => ({
+          codeId: code.id,
+          tenantId: code.tenant_id,
+          branchId: code.branch_id,
+          code: code.code,
+          status: code.revoked_at ? 'revoked'
+            : new Date(code.expires_at).getTime() <= Date.now() ? 'expired'
+            : code.max_uses > 0 && code.uses_count >= code.max_uses ? 'used'
+            : 'active',
+          expiresAt: code.expires_at,
+          createdAt: code.created_at,
+          usedAt: code.consumed_at || undefined,
+          revokedAt: code.revoked_at || undefined,
+        })),
+      });
+    } catch (error) {
+      ctx.logger.error({ error }, 'Failed to list enrollment codes');
+      return reply.code(500).send({ error: 'enrollment_codes_unavailable' });
+    }
+  });
+
+  /** Revoke an unused enrollment credential immediately. */
+  app.delete('/v1/communications/enrollment-codes/:codeId', async (request: AuthenticatedRequest, reply) => {
+    try {
+      const { codeId } = request.params as { codeId: string };
+      const result = await ctx.pool.query(
+        `UPDATE communication_enrollment_codes
+         SET revoked_at = NOW()
+         WHERE id = $1 AND tenant_id = $2 AND revoked_at IS NULL
+         RETURNING branch_id::text AS branch_id`,
+        [codeId, request.currentUser.tenantId]
+      );
+      if (!result.rowCount) return reply.code(404).send({ error: 'enrollment_code_not_found_or_revoked' });
+      await store.writeAudit({
+        tenantId: request.currentUser.tenantId,
+        actorUserId: request.currentUser.id,
+        action: 'COMM_ENROLLMENT_CODE_REVOKED',
+        resourceNodeId: result.rows[0].branch_id,
+        outcome: 'success',
+        sourceIp: request.ip,
+        details: { codeId },
+      });
+      return reply.code(204).send();
+    } catch (error) {
+      ctx.logger.error({ error }, 'Failed to revoke enrollment code');
+      return reply.code(500).send({ error: 'enrollment_code_revoke_failed' });
     }
   });
   
@@ -671,11 +742,12 @@ export async function registerCommunicationsRoutes(
       const { branchId, status } = request.query as { branchId?: string; status?: string };
       
       let query = `
-        SELECT 
-          id, tenant_id, branch_id, device_name, device_uuid, device_type, platform,
-          status, app_version, last_seen_at, registered_at, approved_at
-        FROM communication_devices
-        WHERE tenant_id = $1 AND status != 'REVOKED'
+        SELECT d.id, d.tenant_id, d.branch_id, d.device_name, d.device_uuid, d.device_type, d.platform,
+          d.status, d.app_version, d.last_seen_at, d.registered_at, d.approved_at,
+          ARRAY(SELECT employee_id::text FROM communication_device_employees e
+                WHERE e.device_id = d.id AND e.unlinked_at IS NULL) AS linked_employee_ids
+        FROM communication_devices d
+        WHERE d.tenant_id = $1 AND d.status != 'REVOKED'
       `;
       const params: any[] = [request.currentUser.tenantId];
       
@@ -695,7 +767,8 @@ export async function registerCommunicationsRoutes(
       
       return {
         data: result.rows.map(row => ({
-          id: row.id,
+          deviceId: row.id,
+          tenantId: row.tenant_id,
           deviceName: row.device_name,
           deviceUuid: row.device_uuid,
           deviceType: row.device_type,
@@ -704,7 +777,8 @@ export async function registerCommunicationsRoutes(
           status: row.status,
           appVersion: row.app_version,
           lastSeenAt: row.last_seen_at,
-          registeredAt: row.registered_at,
+          linkedEmployeeIds: row.linked_employee_ids || [],
+          enrolledAt: row.registered_at,
           approvedAt: row.approved_at,
         })),
       };
@@ -790,8 +864,12 @@ export async function registerCommunicationsRoutes(
   app.post('/v1/communications/devices/:id/approve', async (request: AuthenticatedRequest, reply) => {
     try {
       const { id } = request.params as { id: string };
+      const existing = await ctx.enrollmentService.getDevice(id);
+      if (!existing || existing.tenantId !== request.currentUser.tenantId) return reply.code(404).send({ error: 'device_not_found' });
+      if (!(await requirePermission(request, reply, ctx, COMMUNICATION_PERMISSIONS.DEVICE_APPROVE))) return;
       
       const device = await ctx.enrollmentService.approveDevice(id, request.currentUser.id);
+      if (!device) return reply.code(409).send({ error: 'device_not_pending' });
       
       await store.writeAudit({
         tenantId: request.currentUser.tenantId,
@@ -822,6 +900,9 @@ export async function registerCommunicationsRoutes(
     try {
       const { id } = request.params as { id: string };
       const { reason } = request.body as { reason?: string };
+      const existing = await ctx.enrollmentService.getDevice(id);
+      if (!existing || existing.tenantId !== request.currentUser.tenantId) return reply.code(404).send({ error: 'device_not_found' });
+      if (!(await requirePermission(request, reply, ctx, COMMUNICATION_PERMISSIONS.DEVICE_REVOKE))) return;
       
       await ctx.enrollmentService.revokeDevice(id, request.currentUser.id, reason || 'Administrative action');
       
@@ -853,6 +934,14 @@ export async function registerCommunicationsRoutes(
     try {
       const { deviceId } = request.params as { deviceId: string };
       const body = linkEmployeeSchema.parse(request.body);
+      const device = await ctx.enrollmentService.getDevice(deviceId);
+      if (!device || device.tenantId !== request.currentUser.tenantId) return reply.code(404).send({ error: 'device_not_found' });
+      if (!(await requirePermission(request, reply, ctx, COMMUNICATION_PERMISSIONS.DEVICE_LINK_EMPLOYEE))) return;
+      const employee = await ctx.pool.query(
+        `SELECT 1 FROM users WHERE id = $1 AND tenant_id = $2 AND branch_id = $3 AND is_active = true LIMIT 1`,
+        [body.employeeId, request.currentUser.tenantId, device.branchId]
+      );
+      if (!employee.rowCount) return reply.code(400).send({ error: 'employee_must_belong_to_device_branch' });
       
       // Link employee
       await ctx.pool.query(
@@ -901,12 +990,15 @@ export async function registerCommunicationsRoutes(
   app.delete('/v1/communications/devices/:deviceId/employees/:employeeId', async (request: AuthenticatedRequest, reply) => {
     try {
       const { deviceId, employeeId } = request.params as { deviceId: string; employeeId: string };
+      const device = await ctx.enrollmentService.getDevice(deviceId);
+      if (!device || device.tenantId !== request.currentUser.tenantId) return reply.code(404).send({ error: 'device_not_found' });
+      if (!(await requirePermission(request, reply, ctx, COMMUNICATION_PERMISSIONS.DEVICE_LINK_EMPLOYEE))) return;
       
       await ctx.pool.query(
         `UPDATE communication_device_employees
         SET unlinked_at = NOW(), unlinked_by = $1
-        WHERE device_id = $2 AND employee_id = $3 AND unlinked_at IS NULL`,
-        [request.currentUser.id, deviceId, employeeId]
+        WHERE device_id = $2 AND employee_id = $3 AND tenant_id = $4 AND unlinked_at IS NULL`,
+        [request.currentUser.id, deviceId, employeeId, request.currentUser.tenantId]
       );
       
       await store.writeAudit({

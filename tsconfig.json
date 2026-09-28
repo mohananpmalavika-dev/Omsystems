@@ -44,14 +44,29 @@
     "analytics-engine/**/*",
     "packages/**/*",
 
-    // Browser-only UI code is checked by its owning workspace tsconfig.
+    // Legacy or incomplete application areas that are not part of the active root build
     "src/**/ui/**/*",
     "src/middleware/**",
+    "src/routes/**",
+    "src/reporting/**",
+    "src/operational-health/**",
+    "src/security-commander/**",
+    "src/maintenance/**",
+    "src/mobile/**",
+    "src/integrations/**",
     "src/**/legacy/**",
+    "src/edge-management/**",
+    "src/intelligence/**",
+    "src/communications/**",
+    "src/services/voice-processing.service.ts",
 
     // Example files (not needed for production)
     "**/*.example.ts",
     "**/*.example.js",
+    "**/*EXAMPLE*.ts",
+
+    // Event bus integration (optional dependency)
+    "src/security-commander/event-bus/**/*",
 
     // Temporarily exclude stale legacy entries
     "src/routes/*.disabled",

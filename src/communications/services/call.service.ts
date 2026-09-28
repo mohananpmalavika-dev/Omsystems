@@ -164,6 +164,20 @@ export class CommunicationCallService {
       initiatedBy,
     } = options;
 
+    // Resolve recipients before creating a session.  A call with no eligible
+    // endpoint is not a real ringing call: it can never be answered and used
+    // to leave a misleading active-call record behind.
+    const sourceParticipantId = sourceDeviceId || sourceOperatorId;
+    const participantIds = (await this.resolveTargetParticipants(
+      tenantId,
+      targetType,
+      targetBranchId,
+      targetEmployeeId
+    )).filter((participantId) => participantId !== sourceParticipantId);
+    if (!participantIds.length) {
+      throw new Error('TARGET_UNAVAILABLE');
+    }
+
     // Create call session in database
     const result = await this.pool.query<CallSession>(
       `INSERT INTO communication_call_sessions (
@@ -219,20 +233,16 @@ export class CommunicationCallService {
 
     // The caller is also a call participant. This is required both for the
     // media state machine and for authenticated WebRTC signaling.
-    const sourceParticipantId = sourceDeviceId || sourceOperatorId;
     if (sourceParticipantId) {
       await this.addParticipant(call.id, tenantId, sourceParticipantId, 'CONNECTING');
     }
 
     // Add participants (all eligible endpoints for ringing)
-    const participantIds = await this.resolveTargetParticipants(
-      tenantId,
-      targetType,
-      targetBranchId,
-      targetEmployeeId
-    );
-
     for (const participantId of participantIds) {
+      // A branch device must not receive its own outbound branch call.  Apart
+      // from causing an incorrect local ring, that would create duplicate
+      // participant state for the same endpoint.
+      if (participantId === sourceParticipantId) continue;
       await this.addParticipant(call.id, tenantId, participantId, 'RINGING');
     }
 

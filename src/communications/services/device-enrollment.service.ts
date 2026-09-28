@@ -256,7 +256,7 @@ export class DeviceEnrollmentService {
         `SELECT id, tenant_id as "tenantId", branch_id as "branchId",
                 allowed_device_type as "allowedDeviceType", max_uses as "maxUses",
                 uses_count as "usesCount", pre_assigned_employee_ids as "preAssignedEmployeeIds",
-                expires_at as "expiresAt", consumed_at as "consumedAt"
+                expires_at as "expiresAt", consumed_at as "consumedAt", revoked_at as "revokedAt"
          FROM communication_enrollment_codes
          WHERE code_hash = $1 AND lower(code) = lower($2)
          FOR UPDATE`,
@@ -265,6 +265,7 @@ export class DeviceEnrollmentService {
       const enrollment = codeResult.rows[0];
       if (!enrollment) throw new Error('ENROLLMENT_CODE_NOT_FOUND');
       if (input.branchId && input.branchId !== enrollment.branchId) throw new Error('ENROLLMENT_BRANCH_MISMATCH');
+      if (enrollment.revokedAt) throw new Error('ENROLLMENT_CODE_REVOKED');
       if (new Date(enrollment.expiresAt).getTime() <= Date.now()) throw new Error('ENROLLMENT_CODE_EXPIRED');
       if (enrollment.maxUses > 0 && enrollment.usesCount >= enrollment.maxUses) throw new Error('ENROLLMENT_CODE_ALREADY_USED');
 
