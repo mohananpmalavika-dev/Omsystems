@@ -7,7 +7,9 @@ import {
   authApi,
   cameraInventoryApi,
   alertSuppressionApi,
+  alertCommandCenterApi,
   type SuppressionConfig,
+  type AnalyticsAlertItem,
 } from "@/lib/api-client";
 import type { Branch } from "@/lib/types";
 import {
@@ -26,6 +28,10 @@ import {
   CheckCircle,
   Clock,
   Layers,
+  Activity,
+  Filter,
+  XCircle,
+  Eye,
 } from "lucide-react";
 
 // Canonical detection types supported across the vision analytics pipeline
@@ -223,12 +229,55 @@ function resolveEffectiveState(
 // ─────────────────────────────────────────────────────────────
 // Main Page Component
 // ─────────────────────────────────────────────────────────────
+// ── Severity & status helpers ────────────────────────────────────────────────
+function severityBadge(s: string) {
+  const map: Record<string, string> = {
+    P1: "bg-red-950 border-red-700 text-red-300",
+    P2: "bg-orange-950 border-orange-700 text-orange-300",
+    P3: "bg-amber-950 border-amber-700 text-amber-300",
+    P4: "bg-yellow-950 border-yellow-700 text-yellow-300",
+    P5: "bg-slate-800 border-slate-600 text-slate-300",
+    critical: "bg-red-950 border-red-700 text-red-300",
+    high: "bg-orange-950 border-orange-700 text-orange-300",
+    medium: "bg-amber-950 border-amber-700 text-amber-300",
+    low: "bg-slate-800 border-slate-600 text-slate-300",
+  };
+  return map[s] ?? "bg-slate-800 border-slate-600 text-slate-300";
+}
+
+function statusBadgeClass(s: string) {
+  const map: Record<string, string> = {
+    new: "bg-red-950 border-red-800 text-red-300",
+    acknowledged: "bg-blue-950 border-blue-700 text-blue-300",
+    investigating: "bg-violet-950 border-violet-700 text-violet-300",
+    escalated: "bg-orange-950 border-orange-700 text-orange-300",
+    resolved: "bg-emerald-950 border-emerald-700 text-emerald-300",
+    false_alarm: "bg-slate-800 border-slate-600 text-slate-400",
+    suppressed: "bg-slate-900 border-slate-700 text-slate-500",
+  };
+  return map[s] ?? "bg-slate-800 border-slate-600 text-slate-400";
+}
+
+function relativeTime(iso?: string) {
+  if (!iso) return "—";
+  const diff = Date.now() - new Date(iso).getTime();
+  const secs = Math.floor(diff / 1000);
+  if (secs < 60) return `${secs}s ago`;
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
 export default function AlertSuppressionPage() {
   const [user, setUser] = useState<MenuAccessUser | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchCameras, setBranchCameras] = useState<Record<string, CameraItem[]>>({});
   const [loadingCameras, setLoadingCameras] = useState<Record<string, boolean>>({});
   const [configs, setConfigs] = useState<SuppressionConfig[]>([]);
+  const [allAlerts, setAllAlerts] = useState<AnalyticsAlertItem[]>([]);
+  const [loadingAlerts, setLoadingAlerts] = useState(true);
   const [loadingPage, setLoadingPage] = useState(true);
   const [loadingToggles, setLoadingToggles] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
@@ -240,6 +289,8 @@ export default function AlertSuppressionPage() {
   const [showBranchCameras, setShowBranchCameras] = useState<Record<string, boolean>>({});
   const [filterText, setFilterText] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [alertStatusFilter, setAlertStatusFilter] = useState<string>("all");
+  const [alertSeverityFilter, setAlertSeverityFilter] = useState<string>("all");
 
   function showToast(message: string, type: "success" | "error" = "success") {
     setToast({ message, type });
@@ -265,9 +316,20 @@ export default function AlertSuppressionPage() {
     }
   }, []);
 
+  const loadAlerts = useCallback(async (isRefresh = false) => {
+    if (!isRefresh) setLoadingAlerts(true);
+    try {
+      const res = await alertCommandCenterApi.list({ limit: 200 }).catch(() => ({ data: [] as AnalyticsAlertItem[], counts: {}, serverTime: "" }));
+      setAllAlerts((res as any).data ?? []);
+    } finally {
+      setLoadingAlerts(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadData();
-  }, [loadData]);
+    loadAlerts();
+  }, [loadData, loadAlerts]);
 
   // Load cameras for a specific branch on demand
   const loadBranchCameras = useCallback(async (branchId: string) => {
@@ -385,6 +447,31 @@ export default function AlertSuppressionPage() {
     [branches, filterText, branchCameras]
   );
 
+  const filteredAlerts = useMemo(() => {
+    let list = allAlerts;
+    if (alertStatusFilter !== "all") list = list.filter((a) => a.status === alertStatusFilter);
+    if (alertSeverityFilter !== "all") list = list.filter((a) => a.severity === alertSeverityFilter);
+    if (filterText) {
+      const lower = filterText.toLowerCase();
+      list = list.filter(
+        (a) =>
+          a.title?.toLowerCase().includes(lower) ||
+          a.cameraName?.toLowerCase().includes(lower) ||
+          a.branchName?.toLowerCase().includes(lower) ||
+          a.detectionType?.toLowerCase().includes(lower)
+      );
+    }
+    return list;
+  }, [allAlerts, alertStatusFilter, alertSeverityFilter, filterText]);
+
+  const alertCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const a of allAlerts) {
+      counts[a.status] = (counts[a.status] ?? 0) + 1;
+    }
+    return counts;
+  }, [allAlerts]);
+
   if (loadingPage) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
@@ -450,7 +537,7 @@ export default function AlertSuppressionPage() {
             </div>
             <button
               id="refresh-suppression-btn"
-              onClick={() => loadData(true)}
+              onClick={() => { loadData(true); loadAlerts(true); }}
               disabled={refreshing}
               className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 hover:bg-slate-800 text-slate-300 text-sm transition-colors disabled:opacity-50 self-start sm:self-auto"
             >
@@ -470,6 +557,147 @@ export default function AlertSuppressionPage() {
               className="w-full px-4 py-2.5 bg-slate-900/90 border border-slate-700 rounded-xl text-slate-200 text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
             />
           </div>
+
+          {/* ═════════════════════════════════════════════════════════ */}
+          {/* ALL ALERTS SECTION                                       */}
+          {/* ═════════════════════════════════════════════════════════ */}
+          <section className="rounded-2xl border border-slate-800 bg-slate-900/40 backdrop-blur-sm overflow-hidden">
+            {/* Section Header */}
+            <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 bg-slate-900/60">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20">
+                  <Activity className="h-5 w-5 text-rose-400" />
+                </div>
+                <div>
+                  <h2 className="text-white font-semibold">All Alerts</h2>
+                  <p className="text-slate-400 text-xs">
+                    {loadingAlerts ? "Loading…" : `${allAlerts.length} total · ${filteredAlerts.length} shown`}
+                  </p>
+                </div>
+              </div>
+              {/* Quick summary chips */}
+              <div className="flex flex-wrap gap-2">
+                {["new", "acknowledged", "escalated", "resolved", "suppressed"].map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setAlertStatusFilter((p) => p === s ? "all" : s)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                      alertStatusFilter === s
+                        ? statusBadgeClass(s) + " ring-2 ring-white/20"
+                        : "bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-500"
+                    }`}
+                  >
+                    {s.replace("_", " ")} {alertCounts[s] ? `(${alertCounts[s]})` : ""}
+                  </button>
+                ))}
+                {alertStatusFilter !== "all" && (
+                  <button
+                    onClick={() => setAlertStatusFilter("all")}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs text-slate-400 border border-slate-700 hover:text-white"
+                  >
+                    <XCircle className="h-3 w-3" /> Clear
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Severity filter row */}
+            <div className="px-5 py-2.5 flex items-center gap-2 border-b border-slate-800/60 bg-slate-900/30 flex-wrap">
+              <Filter className="h-3.5 w-3.5 text-slate-500 flex-shrink-0" />
+              <span className="text-xs text-slate-500 mr-1">Severity:</span>
+              {["all", "P1", "P2", "P3", "P4", "P5", "critical", "high", "medium", "low"].map((sv) => (
+                <button
+                  key={sv}
+                  onClick={() => setAlertSeverityFilter((p) => p === sv ? "all" : sv)}
+                  className={`px-2 py-0.5 rounded text-xs border transition-all ${
+                    alertSeverityFilter === sv
+                      ? (sv === "all" ? "bg-slate-700 border-slate-500 text-slate-200" : severityBadge(sv) + " ring-1 ring-white/20")
+                      : "bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-600"
+                  }`}
+                >
+                  {sv === "all" ? "All" : sv}
+                </button>
+              ))}
+            </div>
+
+            {/* Alerts table */}
+            {loadingAlerts ? (
+              <div className="flex items-center gap-3 px-5 py-8 text-slate-400">
+                <Loader2 className="h-5 w-5 animate-spin text-emerald-400" />
+                <span className="text-sm">Loading alerts…</span>
+              </div>
+            ) : filteredAlerts.length === 0 ? (
+              <div className="px-5 py-10 text-center">
+                <Eye className="h-8 w-8 text-slate-700 mx-auto mb-2" />
+                <p className="text-slate-400 text-sm">
+                  {allAlerts.length === 0 ? "No alerts have been fired yet." : "No alerts match the current filters."}
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="border-b border-slate-800 bg-slate-950/40">
+                      <th className="px-4 py-2.5 text-slate-400 font-medium w-32">Severity</th>
+                      <th className="px-4 py-2.5 text-slate-400 font-medium">Alert</th>
+                      <th className="px-4 py-2.5 text-slate-400 font-medium">Detection Type</th>
+                      <th className="px-4 py-2.5 text-slate-400 font-medium">Camera</th>
+                      <th className="px-4 py-2.5 text-slate-400 font-medium">Branch</th>
+                      <th className="px-4 py-2.5 text-slate-400 font-medium">Status</th>
+                      <th className="px-4 py-2.5 text-slate-400 font-medium text-right">Count</th>
+                      <th className="px-4 py-2.5 text-slate-400 font-medium text-right">Last Seen</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/40">
+                    {filteredAlerts.map((alert) => {
+                      const dtInfo = DETECTION_TYPES.find((d) => d.id === alert.detectionType);
+                      return (
+                        <tr key={alert.id} className="hover:bg-slate-800/20 transition-colors group">
+                          <td className="px-4 py-2.5">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wide ${severityBadge(alert.severity)}`}>
+                              {alert.severity}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 max-w-[200px]">
+                            <span className="text-slate-200 font-medium truncate block" title={alert.title}>
+                              {alert.title}
+                            </span>
+                            {alert.description && (
+                              <span className="text-slate-500 truncate block text-[10px]" title={alert.description}>
+                                {alert.description}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <span className="text-slate-300">
+                              {dtInfo ? `${dtInfo.icon} ${dtInfo.label}` : alert.detectionType}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-slate-300 truncate max-w-[120px]" title={alert.cameraName}>
+                            {alert.cameraName}
+                          </td>
+                          <td className="px-4 py-2.5 text-slate-400 truncate max-w-[120px]" title={alert.branchName}>
+                            {alert.branchName}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${statusBadgeClass(alert.status)}`}>
+                              {alert.status.replace("_", " ")}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-right text-slate-400">
+                            {alert.occurrenceCount ?? 1}×
+                          </td>
+                          <td className="px-4 py-2.5 text-right text-slate-500 whitespace-nowrap">
+                            {relativeTime(alert.lastDetectedAt ?? alert.firstDetectedAt)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
 
           {/* ═════════════════════════════════════════════════════════ */}
           {/* GLOBAL SECTION: Master & Per-Detection-Type Controls    */}

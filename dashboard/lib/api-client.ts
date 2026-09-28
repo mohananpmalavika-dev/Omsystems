@@ -7069,6 +7069,43 @@ export interface ToggleSuppressionInput {
   reason?: string;
 }
 
+export interface AnalyticsAlertItem {
+  id: string;
+  tenantId: string;
+  cameraId: string;
+  cameraName: string;
+  cameraStatus?: string;
+  branchId: string;
+  branchName: string;
+  ruleId?: string;
+  detectionType: string;
+  title: string;
+  description?: string;
+  severity: string;
+  status: string;
+  confidence?: number;
+  occurrenceCount?: number;
+  firstDetectedAt?: string;
+  lastDetectedAt?: string;
+  resolvedAt?: string;
+  snapshotReference?: string;
+  modelVersion?: string;
+}
+
+export const alertCommandCenterApi = {
+  /** List all analytics_alerts for the tenant (real fired alerts) */
+  list: (params?: { severity?: string; status?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.severity) qs.set('severity', params.severity);
+    if (params?.status) qs.set('status', params.status);
+    if (params?.limit) qs.set('limit', String(params.limit));
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return fetchApi<{ counts: Record<string, number>; data: AnalyticsAlertItem[]; serverTime: string }>(
+      `/v1/alerts/command-center${query}`
+    );
+  },
+};
+
 export const alertSuppressionApi = {
   /** List all suppression configs for the current tenant */
   list: (params?: { branchId?: string; cameraId?: string }) => {
