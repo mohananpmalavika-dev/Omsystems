@@ -8,8 +8,8 @@
  * adapter, which performs the SOAP calls and evidence mapping.
  */
 
-import { BaseSecurityDeviceAdapter } from './base-adapter';
-import { WsDiscovery } from '../../onvif/discovery/ws-discovery';
+import { BaseSecurityDeviceAdapter } from './base-adapter.js';
+import { WsDiscovery } from '../../onvif/discovery/ws-discovery.js';
 import {
   SecurityDevice,
   SecurityDeviceHealthSnapshot,
@@ -23,7 +23,7 @@ import {
   ConnectionResult,
   DeviceProtocol,
   SecurityDeviceType,
-} from '../domain/security-device.types';
+} from '../domain/security-device.types.js';
 
 export class OnvifAdapter extends BaseSecurityDeviceAdapter {
   readonly adapterName = 'ONVIF';

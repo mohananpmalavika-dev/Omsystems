@@ -7,7 +7,7 @@
  * are supplied instead of claiming subscriptions or device health.
  */
 
-import { BaseSecurityDeviceAdapter } from './base-adapter';
+import { BaseSecurityDeviceAdapter } from './base-adapter.js';
 import {
   SecurityDevice,
   SecurityDeviceHealthSnapshot,
@@ -21,7 +21,7 @@ import {
   ConnectionResult,
   DeviceProtocol,
   SecurityDeviceType,
-} from '../domain/security-device.types';
+} from '../domain/security-device.types.js';
 
 interface MqttConfig {
   brokerUrl?: string;

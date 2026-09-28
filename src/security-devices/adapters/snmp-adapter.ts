@@ -15,7 +15,7 @@
  */
 
 import * as snmp from 'net-snmp';
-import { BaseSecurityDeviceAdapter } from './base-adapter';
+import { BaseSecurityDeviceAdapter } from './base-adapter.js';
 import {
   SecurityDevice,
   SecurityDeviceHealthSnapshot,
@@ -30,7 +30,7 @@ import {
   DeviceProtocol,
   SecurityDeviceType,
   DeviceStatus,
-} from '../domain/security-device.types';
+} from '../domain/security-device.types.js';
 
 // Common SNMP OIDs
 const SNMP_OIDS = {

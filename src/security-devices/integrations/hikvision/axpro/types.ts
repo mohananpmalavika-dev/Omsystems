@@ -3,7 +3,7 @@ import {
   DeviceProtocol,
   SecurityDeviceEventType,
   SecurityDeviceHealthSnapshot,
-} from '../../../domain/security-device.types';
+} from '../../../domain/security-device.types.js';
 
 export type AxProTransport = 'HTTP' | 'HTTPS';
 

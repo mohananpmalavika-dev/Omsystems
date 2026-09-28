@@ -9,9 +9,9 @@ import {
   SecurityDeviceEventType,
   SecurityDeviceHealthSnapshot,
   SecurityDeviceType,
-} from '../../../domain/security-device.types';
-import { AxProConnectionConfig, AxProEventContext, AxProEventMappingResult, AxProNormalizedHealth, AxProRawPayload, AxProSystemInfo } from './types';
-import { isRecord } from './client';
+} from '../../../domain/security-device.types.js';
+import { AxProConnectionConfig, AxProEventContext, AxProEventMappingResult, AxProNormalizedHealth, AxProRawPayload, AxProSystemInfo } from './types.js';
+import { isRecord } from './client.js';
 
 const READ_ONLY_CAPABILITIES: DeviceCapability[] = ['HEALTH_READ', 'EVENT_READ', 'STATUS_READ', 'METRICS_READ', 'LOG_READ'];
 
@@ -324,11 +324,12 @@ function extractRecords(value: unknown, keys: string[]): AxProRawPayload[] {
 
 function findValue(value: unknown, keys: string[]): unknown {
   if (!isRecord(value)) return undefined;
+  const record: Record<string, unknown> = value;
   const wanted = new Set(keys.map(normalize));
-  for (const [key, child] of Object.entries(value)) {
+  for (const [key, child] of Object.entries(record)) {
     if (wanted.has(normalize(key))) return child;
   }
-  for (const child of Object.values(value)) {
+  for (const child of Object.values(record)) {
     const found = findValue(child, keys);
     if (found !== undefined) return found;
   }
