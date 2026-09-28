@@ -855,75 +855,98 @@ export async function registerCommunicationsRoutes(
   /**
    * Get branch directory with employees and devices
    * GET /v1/communications/directory/branches
+   *
+   * Branches are sourced the same way as the VMS module (GET /v1/branches):
+   * store.listAccessibleNodes(currentUser, action, 'branch').
    */
   app.get('/v1/communications/directory/branches', async (request: AuthenticatedRequest, reply) => {
     try {
       const user = request.currentUser?.id ? await store.getUser(request.currentUser.id) : undefined;
       if (!user || user.tenantId !== request.currentUser.tenantId) return reply.code(401).send({ error: 'unauthenticated' });
-      
-      // Match canonical VMS branch accessibility
-      let accessible = await store.listAccessibleNodes(user, 'device:view', 'branch');
-      if (!accessible || !accessible.length) {
-        accessible = await store.listAccessibleNodes(user, undefined, 'branch');
-      }
-      let branchIds = (accessible || [])
-        .filter((node) => node.type === 'branch' && node.tenantId === user.tenantId)
-        .map((node) => node.id);
 
-      if (!branchIds.length) {
-        const tenantBranches = await ctx.pool.query(
-          `SELECT id::text FROM resource_nodes WHERE tenant_id = $1 AND lower(node_type) = 'branch'
-           UNION
-           SELECT id::text FROM branches WHERE tenant_id = $1`,
-          [user.tenantId]
-        );
-        branchIds = tenantBranches.rows.map((r: any) => r.id);
-      }
+      // Same pattern as VMS GET /v1/branches — listAccessibleNodes is the
+      // authoritative in-memory source; no raw SQL branch queries needed.
+      const accessible = await store.listAccessibleNodes(request.currentUser, 'device:view', 'branch');
+      const branches = accessible.filter((node) => node.tenantId === user.tenantId);
+
+      const branchIds = branches.map((node) => node.id);
 
       if (!branchIds.length) return { data: [] };
 
-      const [branchRes, userRes] = await Promise.all([
+      // Run both queries in parallel:
+      //   enrolledRes  — users with an active/approved communication device (comm directory)
+      //   vmsUsersRes  — internal VMS platform users assigned to the branch (separate list)
+      const [enrolledRes, vmsUsersRes] = await Promise.all([
         ctx.pool.query(
-          `SELECT DISTINCT COALESCE(rn.id::text, b.id::text) as id,
-                  COALESCE(rn.name, b.name) as name,
-                  COALESCE(rn.code, b.code) as code
-           FROM resource_nodes rn
-           FULL OUTER JOIN branches b ON b.id = rn.id AND b.tenant_id = rn.tenant_id
-           WHERE (rn.id = ANY($1::uuid[]) OR b.id = ANY($1::uuid[]))
-             AND (lower(COALESCE(rn.node_type, 'branch')) = 'branch' OR b.id IS NOT NULL)
-           ORDER BY name`,
-          [branchIds]
+          `SELECT DISTINCT
+             u.id::text        AS employee_id,
+             COALESCE(u.full_name, u.display_name, u.username) AS employee_name,
+             u.username,
+             u.role,
+             d.branch_id::text AS branch_id
+           FROM communication_devices d
+           JOIN communication_device_employees e ON e.device_id = d.id AND e.unlinked_at IS NULL
+           JOIN users u ON u.id = e.employee_id
+           WHERE d.tenant_id = $1
+             AND d.branch_id = ANY($2::uuid[])
+             AND d.status IN ('ACTIVE', 'APPROVED')
+           ORDER BY employee_name`,
+          [user.tenantId, branchIds]
         ),
         ctx.pool.query(
-          `SELECT id::text, full_name AS name, username, role, branch_id::text 
-           FROM users 
-           WHERE tenant_id = $1 AND (branch_id = ANY($2::uuid[]) OR branch_id IS NULL) AND is_active = true 
-           ORDER BY full_name`,
+          `SELECT id::text, COALESCE(full_name, display_name, username) AS name,
+                  username, role, branch_id::text
+           FROM users
+           WHERE tenant_id = $1
+             AND branch_id = ANY($2::uuid[])
+             AND is_active = true
+           ORDER BY name`,
           [user.tenantId, branchIds]
         ),
       ]);
-      const directory = await Promise.all(branchRes.rows.map(async (branch: any) => {
+
+      const directory = await Promise.all(branches.map(async (branch) => {
         const presence = await ctx.presenceService.getBranchPresence(user.tenantId, branch.id);
-        const employees = await Promise.all(userRes.rows.filter((employee: any) => employee.branch_id === branch.id).map(async (employee: any) => {
-          const employeePresence = await ctx.presenceService.getEmployeePresence(user.tenantId, employee.id);
-          return {
-            employeeId: employee.id,
-            employeeName: employee.name || employee.username,
-            role: employee.role || 'Staff',
+
+        // Device-registered employees (comm directory)
+        const employees = await Promise.all(
+          enrolledRes.rows
+            .filter((emp: any) => emp.branch_id === branch.id)
+            .map(async (emp: any) => {
+              const employeePresence = await ctx.presenceService.getEmployeePresence(user.tenantId, emp.employee_id);
+              return {
+                employeeId: emp.employee_id,
+                employeeName: emp.employee_name || emp.username,
+                role: emp.role || 'Staff',
+                branchId: branch.id,
+                branchName: branch.name,
+                presence: employeePresence.status,
+                onlineDeviceCount: employeePresence.onlineDeviceIds.length,
+              };
+            })
+        );
+
+        // VMS internal users assigned to this branch
+        const vmsUsers = vmsUsersRes.rows
+          .filter((u: any) => u.branch_id === branch.id)
+          .map((u: any) => ({
+            userId: u.id,
+            name: u.name || u.username,
+            username: u.username,
+            role: u.role || 'Operator',
             branchId: branch.id,
             branchName: branch.name,
-            presence: employeePresence.status,
-            onlineDeviceCount: employeePresence.onlineDeviceIds.length,
-          };
-        }));
+          }));
+
         return {
           branchId: branch.id,
           branchName: branch.name,
-          branchCode: branch.code,
+          branchCode: (branch as any).code ?? null,
           presence: presence.status,
           onlineDeviceCount: presence.onlineDeviceIds.length,
           totalDeviceCount: presence.deviceCount,
-          employees,
+          employees,    // comm-device-registered users
+          vmsUsers,     // VMS internal platform users
         };
       }));
       return { data: directory };
