@@ -254,12 +254,14 @@ export class AnalyticsRepository {
         [`${input.tenantId}:${input.sourceEventId}`],
       );
       const camera = await client.query(
-        `SELECT camera.id FROM cameras camera
+        `SELECT camera.id, COALESCE(camera.branch_id, node.id::text) AS branch_id
+         FROM cameras camera
          JOIN resource_nodes node ON node.id=camera.resource_node_id
          WHERE camera.id=$1 AND node.tenant_id=$2`,
         [input.cameraId, input.tenantId],
       );
       if (!camera.rows[0]) throw new Error("camera_not_found");
+      const cameraBranchId: string = camera.rows[0].branch_id ?? "";
       const duplicate = await client.query(
         "SELECT * FROM analytics_events WHERE tenant_id=$1 AND source_event_id=$2",
         [input.tenantId, input.sourceEventId],
@@ -334,6 +336,7 @@ export class AnalyticsRepository {
 
       const alerts: AnalyticsAlert[] = [];
       let created = 0;
+      let suppressedByPolicy = 0;
       for (const rule of rules) {
         const effectiveSeverity = resolveAlertSeverity({
           configuredSeverity: rule.severity,
@@ -376,6 +379,32 @@ export class AnalyticsRepository {
         if (recentlyResolved.rows[0]) {
           continue;
         }
+        // ── Suppression gate ─────────────────────────────────────────────────
+        // Check alert_suppression_config using the same precedence as
+        // AlertSuppressionService.isSuppressed(): camera > branch > global.
+        // A match with suppressed=true blocks alert creation; suppressed=false
+        // at a more-specific scope re-enables alerts within a broader suppression.
+        const suppressionCheck = await client.query<Record<string, any>>(
+          `SELECT suppressed
+           FROM alert_suppression_config
+           WHERE tenant_id = $1
+             AND (branch_id = $2 OR branch_id IS NULL)
+             AND (camera_id = $3 OR camera_id IS NULL)
+             AND (detection_type = $4 OR detection_type IS NULL)
+           ORDER BY
+             CASE WHEN camera_id IS NOT NULL THEN 0
+                  WHEN branch_id IS NOT NULL THEN 1
+                  ELSE 2 END,
+             CASE WHEN detection_type IS NOT NULL THEN 0 ELSE 1 END
+           LIMIT 1`,
+          [input.tenantId, cameraBranchId || null, input.cameraId, input.detectionType],
+        );
+        if (suppressionCheck.rows[0]?.suppressed === true) {
+          suppressedByPolicy += 1;
+          continue; // skip alert creation for this rule
+        }
+        // ── End suppression gate ─────────────────────────────────────────────
+
         const alertId = randomUUID();
         const inserted = await client.query(
           `INSERT INTO analytics_alerts (
@@ -411,6 +440,7 @@ export class AnalyticsRepository {
         }
       }
       if (rules.length > 0 && created === 0) {
+        // Mark event suppressed whether by cooldown/dedup OR by the suppression policy.
         await client.query(
           "UPDATE analytics_events SET status='suppressed' WHERE id=$1",
           [eventId],
