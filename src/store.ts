@@ -2547,7 +2547,7 @@ export class MemoryStore {
     return camera;
   }
 
-  async createLiveSession(cameraId: string, userId: string, purpose: "view" | "talk" | "playback" = "view"): Promise<LiveSession> {
+  async createLiveSession(cameraId: string, userId: string, purpose: "view" | "talk" | "playback" = "view", profile: "main" | "sub" = "sub"): Promise<LiveSession> {
     const camera = this.cameras.get(cameraId);
     const mediaGatewayUrl = camera?.edgeAgentId
       ? this.edgeAgents.get(camera.edgeAgentId)?.publicMediaUrl
@@ -2560,6 +2560,7 @@ export class MemoryStore {
       token: randomBytes(32).toString("base64url"),
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
       purpose,
+      profile,
       ...(mediaGatewayUrl ? { mediaGatewayUrl } : {}),
       ...(localMediaGatewayUrl ? { localMediaGatewayUrl } : {}),
     };
@@ -2593,6 +2594,7 @@ export class MemoryStore {
       connectionSecretRef: camera.connectionSecretRef,
       profiles: camera.profiles,
       purpose: session.purpose ?? "view",
+      profile: session.profile,
       vendor: camera.vendor,
       model: camera.model,
       protocol: camera.protocol,

@@ -1898,7 +1898,8 @@ export async function buildApp(options?: {
       return;
     }
     try {
-      const session = await store.createLiveSession(camera.id, request.currentUser.id);
+      const { profile } = z.object({ profile: z.enum(["main", "sub"]).default("sub") }).parse(request.body ?? {});
+      const session = await store.createLiveSession(camera.id, request.currentUser.id, "view", profile);
       await audit(request, store, "live_session.created", camera.nodeId, "success", {
         sessionId: session.id,
       });

@@ -954,11 +954,10 @@ export class SecurityRiskPredictionEngine {
       tenantId, branchId, bounds, targetTime
     );
     
-    // Calculate patrol coverage (placeholder - would integrate with patrol tracking)
-    const patrolCoverage = 0.5; // TODO: Integrate with patrol system
-    
-    // Check if camera blind spot (placeholder - would integrate with camera coverage)
-    const cameraBlindSpot = false; // TODO: Integrate with camera system
+    const [patrolCoverage, cameraBlindSpot] = await Promise.all([
+      this.getPatrolCoverage(tenantId, branchId, bounds, targetTime),
+      this.hasCameraCoverageGap(branchId),
+    ]);
     
     // Calculate neighboring risk
     const neighbors = geohash.neighbors(cellId);
@@ -985,6 +984,53 @@ export class SecurityRiskPredictionEngine {
       cameraBlindSpot,
       neighboringRisk,
     };
+  }
+
+  /** Fraction of scheduled patrol checkpoints in this cell that were reached. */
+  private async getPatrolCoverage(
+    tenantId: string,
+    branchId: string,
+    bounds: [number, number, number, number],
+    targetTime: Date,
+  ): Promise<number> {
+    try {
+      const lookback = new Date(targetTime.getTime() - 60 * 60 * 1000);
+      const result = await this.db.query<{ total: string; completed: string }>(
+        `SELECT COUNT(*)::text AS total,
+                COUNT(*) FILTER (WHERE checkpoint.actual_arrival_time IS NOT NULL
+                  AND checkpoint.status = 'COMPLETED')::text AS completed
+         FROM patrol_checkpoint checkpoint
+         JOIN patrol_plan plan ON plan.id = checkpoint.patrol_plan_id
+         WHERE checkpoint.tenant_id = $1::uuid
+           AND plan.branch_id = $2::uuid
+           AND checkpoint.planned_arrival_time BETWEEN $3 AND $4
+           AND ST_Contains(ST_MakeEnvelope($5, $6, $7, $8, 4326), checkpoint.location::geometry)`,
+        [tenantId, branchId, lookback, targetTime, bounds[1], bounds[0], bounds[3], bounds[2]],
+      );
+      const total = Number(result.rows[0]?.total ?? 0);
+      const completed = Number(result.rows[0]?.completed ?? 0);
+      return total > 0 ? Math.max(0, Math.min(1, completed / total)) : 0;
+    } catch (error) {
+      console.error('[RiskPrediction] Failed to calculate patrol coverage:', error);
+      return 0;
+    }
+  }
+
+  /** Branch coverage requirements are the authoritative source for known blind spots. */
+  private async hasCameraCoverageGap(branchId: string): Promise<boolean> {
+    try {
+      const result = await this.db.query<{ has_gap: boolean }>(
+        `SELECT EXISTS (
+           SELECT 1 FROM branch_camera_coverage_gaps
+           WHERE branch_node_id = $1::uuid AND gap_count > 0
+         ) AS has_gap`,
+        [branchId],
+      );
+      return result.rows[0]?.has_gap === true;
+    } catch (error) {
+      console.error('[RiskPrediction] Failed to query camera coverage gaps:', error);
+      return false;
+    }
   }
   
   private async getIncidentsInBounds(

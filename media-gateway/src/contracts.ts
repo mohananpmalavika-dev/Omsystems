@@ -11,11 +11,13 @@ export interface ConsumedSession {
   channel?: number;
   recorderChannel?: number;
   purpose?: "view" | "talk" | "playback";
+  profile?: "main" | "sub";
   profiles: Array<{
     name: string;
     codec: string;
     width: number;
     height: number;
+    role?: "main" | "sub";
   }>;
 }
 

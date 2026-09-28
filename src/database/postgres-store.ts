@@ -62,12 +62,9 @@ function mapBranchConnectivityProfile(row: any): BranchConnectivityProfile {
   };
 }
 
-// TODO: PostgresStore is a partial implementation of ControlPlaneStore
-// Some methods from the interface are not yet implemented but are not used in production
-// This needs to be properly fixed by either implementing missing methods or restructuring the interface
 export class PostgresStore
   extends InfrastructureRepository
-  implements Partial<ControlPlaneStore>
+  implements ControlPlaneStore
 {
   private readonly users: UserRepository;
   private readonly resources: ResourceRepository;
@@ -482,8 +479,8 @@ export class PostgresStore
   async updateCameraStatus(id: string, status: CameraStatus) {
     return this.cameras.updateStatus(id, status);
   }
-  async createLiveSession(cameraId: string, userId: string, purpose: "view" | "talk" | "playback" = "view") {
-    return this.cameras.createLiveSession(cameraId, userId, purpose);
+  async createLiveSession(cameraId: string, userId: string, purpose: "view" | "talk" | "playback" = "view", profile?: "main" | "sub") {
+    return this.cameras.createLiveSession(cameraId, userId, purpose, profile);
   }
   async consumeLiveSession(token: string) {
     return this.cameras.consumeLiveSession(token);

@@ -39,6 +39,7 @@ import {
   ConfigurationError,
 } from '../domain/auth-errors.js';
 import { createHash, randomBytes, createPublicKey, verify } from 'crypto';
+import { ConfiguredSecretReferenceResolver, type SecretReferenceResolver } from '../../security/secret-reference-resolver.js';
 
 /**
  * Azure AD token claims (id_token)
@@ -83,6 +84,8 @@ interface AzureADTokenClaims {
  */
 export class AzureADIdentityAdapter implements EnterpriseIdentityAdapter {
   readonly type = 'AZURE_AD' as const;
+
+  constructor(private readonly secrets: SecretReferenceResolver = new ConfiguredSecretReferenceResolver()) {}
 
   /**
    * Authenticate via Azure AD OIDC callback
@@ -516,9 +519,7 @@ export class AzureADIdentityAdapter implements EnterpriseIdentityAdapter {
    * Get client secret from secret store
    */
   private async getClientSecret(secretRef: string): Promise<string> {
-    // TODO: Integrate with secret management service
-    // For now, assume secretRef is the actual secret (INSECURE - for development only)
-    return secretRef;
+    return this.secrets.resolve(secretRef);
   }
 
   /**

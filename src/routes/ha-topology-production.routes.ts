@@ -20,8 +20,10 @@ let postgresProbe: PostgreSQLProbe;
 let redisProbe: RedisProbe;
 let cameraLeaseManager: CameraLeaseManager;
 let mediaGatewayMonitor: MediaGatewayMonitor;
-let failoverOrchestrator: FailoverOrchestrator;
-let chaosExperimentService: ChaosExperimentService;
+const tenantHaServices = new Map<string, {
+  failoverOrchestrator: FailoverOrchestrator;
+  chaosExperimentService: ChaosExperimentService;
+}>();
 let haHealthScoreService: HAHealthScoreService;
 
 export function initializeHAServices(redisClient: Redis): void {
@@ -80,37 +82,6 @@ export function initializeHAServices(redisClient: Redis): void {
   // Initialize media gateway monitor
   mediaGatewayMonitor = new MediaGatewayMonitor(cameraLeaseManager, 10000);
 
-  // Initialize failover orchestrator
-  failoverOrchestrator = new FailoverOrchestrator(
-    "default-tenant", // TODO: Get from context
-    cameraLeaseManager,
-    mediaGatewayMonitor,
-    {
-      detectionIntervalMs: parseInt(process.env.FAILOVER_DETECTION_INTERVAL_MS || "5000", 10),
-      enableAutoFailover: process.env.FAILOVER_ENABLE_AUTO === "true",
-      maxCamerasPerGateway: parseInt(process.env.FAILOVER_MAX_CAMERAS_PER_GATEWAY || "250", 10),
-    },
-  );
-
-  // Initialize chaos experiment service
-  chaosExperimentService = new ChaosExperimentService(
-    "default-tenant",
-    failoverOrchestrator,
-    mediaGatewayMonitor,
-    {
-      requireApproval: process.env.CHAOS_REQUIRE_APPROVAL !== "false",
-      // Non-production environments may execute an explicitly approved lab
-      // experiment. Production remains fail-closed unless the operator opts
-      // in through the deployment configuration.
-      allowProductionChaos: process.env.NODE_ENV !== "production" || process.env.CHAOS_ALLOW_PRODUCTION === "true",
-      minHealthyGateways: parseInt(process.env.CHAOS_MIN_HEALTHY_GATEWAYS || "2", 10),
-      minAvailableCapacityPercent: parseInt(process.env.CHAOS_MIN_AVAILABLE_CAPACITY_PERCENT || "30", 10),
-      rtoTargetMs: parseInt(process.env.RTO_TARGET_MS || "60000", 10),
-      rpoTargetBytes: parseInt(process.env.RPO_TARGET_BYTES || "0", 10),
-      recordingGapTargetMs: parseInt(process.env.RECORDING_GAP_TARGET_MS || "2000", 10),
-    },
-  );
-
   // Initialize HA health score service
   haHealthScoreService = new HAHealthScoreService();
 
@@ -118,11 +89,13 @@ export function initializeHAServices(redisClient: Redis): void {
   if (process.env.FAILOVER_ENABLE_AUTO === "true") {
     setInterval(async () => {
       try {
-        const results = await failoverOrchestrator.detectAndHandleFailures();
-        for (const result of results) {
-          console.log(
-            `[HA Failover] Gateway ${result.failedGatewayId}: ${result.transferredCameras}/${result.affectedCameras} cameras transferred in ${result.totalRtoMs}ms`,
-          );
+        for (const { failoverOrchestrator } of tenantHaServices.values()) {
+          const results = await failoverOrchestrator.detectAndHandleFailures();
+          for (const result of results) {
+            console.log(
+              `[HA Failover] Gateway ${result.failedGatewayId}: ${result.transferredCameras}/${result.affectedCameras} cameras transferred in ${result.totalRtoMs}ms`,
+            );
+          }
         }
       } catch (error) {
         console.error("[HA Failover] Detection loop error:", error);
@@ -132,6 +105,34 @@ export function initializeHAServices(redisClient: Redis): void {
 }
 
 export function registerHATopologyRoutes(app: FastifyInstance): void {
+  const servicesFor = (request: any) => {
+    const tenantId = request.currentUser?.tenantId;
+    if (typeof tenantId !== "string" || tenantId.length === 0) {
+      throw new Error("tenant_context_required");
+    }
+    let services = tenantHaServices.get(tenantId);
+    if (!services) {
+      const failoverOrchestrator = new FailoverOrchestrator(tenantId, cameraLeaseManager, mediaGatewayMonitor, {
+        detectionIntervalMs: parseInt(process.env.FAILOVER_DETECTION_INTERVAL_MS || "5000", 10),
+        enableAutoFailover: process.env.FAILOVER_ENABLE_AUTO === "true",
+        maxCamerasPerGateway: parseInt(process.env.FAILOVER_MAX_CAMERAS_PER_GATEWAY || "250", 10),
+      });
+      services = {
+        failoverOrchestrator,
+        chaosExperimentService: new ChaosExperimentService(tenantId, failoverOrchestrator, mediaGatewayMonitor, {
+          requireApproval: process.env.CHAOS_REQUIRE_APPROVAL !== "false",
+          allowProductionChaos: process.env.NODE_ENV !== "production" || process.env.CHAOS_ALLOW_PRODUCTION === "true",
+          minHealthyGateways: parseInt(process.env.CHAOS_MIN_HEALTHY_GATEWAYS || "2", 10),
+          minAvailableCapacityPercent: parseInt(process.env.CHAOS_MIN_AVAILABLE_CAPACITY_PERCENT || "30", 10),
+          rtoTargetMs: parseInt(process.env.RTO_TARGET_MS || "60000", 10),
+          rpoTargetBytes: parseInt(process.env.RPO_TARGET_BYTES || "0", 10),
+          recordingGapTargetMs: parseInt(process.env.RECORDING_GAP_TARGET_MS || "2000", 10),
+        }),
+      };
+      tenantHaServices.set(tenantId, services);
+    }
+    return services;
+  };
   /**
    * Get complete HA topology with real infrastructure telemetry
    * 
@@ -384,7 +385,7 @@ export function registerHATopologyRoutes(app: FastifyInstance): void {
     const experimentRequest = request.body as any;
 
     try {
-      const experiment = await chaosExperimentService.requestExperiment(experimentRequest);
+      const experiment = await servicesFor(request).chaosExperimentService.requestExperiment(experimentRequest);
       return experiment;
     } catch (error) {
       console.error("[HA] Failed to request experiment:", error);
@@ -403,7 +404,7 @@ export function registerHATopologyRoutes(app: FastifyInstance): void {
     const { approvedBy, approvalNotes } = request.body as any;
 
     try {
-      const experiment = await chaosExperimentService.approveExperiment(
+      const experiment = await servicesFor(request).chaosExperimentService.approveExperiment(
         experimentId,
         approvedBy,
         approvalNotes,
@@ -426,6 +427,7 @@ export function registerHATopologyRoutes(app: FastifyInstance): void {
 
     try {
       // Run pre-checks first
+      const chaosExperimentService = servicesFor(request).chaosExperimentService;
       const preChecks = await chaosExperimentService.executePreChecks(experimentId);
       
       if (!preChecks.allPassed) {
@@ -454,7 +456,7 @@ export function registerHATopologyRoutes(app: FastifyInstance): void {
     const { experimentId } = request.params as { experimentId: string };
 
     try {
-      const report = chaosExperimentService.generateReport(experimentId);
+      const report = servicesFor(request).chaosExperimentService.generateReport(experimentId);
       return report;
     } catch (error) {
       console.error("[HA] Failed to generate report:", error);
@@ -472,7 +474,7 @@ export function registerHATopologyRoutes(app: FastifyInstance): void {
     const { status } = request.query as { status?: string };
 
     try {
-      const experiments = chaosExperimentService.listExperiments(status);
+      const experiments = servicesFor(request).chaosExperimentService.listExperiments(status);
       return { experiments };
     } catch (error) {
       console.error("[HA] Failed to list experiments:", error);
@@ -556,7 +558,7 @@ export function registerHATopologyRoutes(app: FastifyInstance): void {
     const { gatewayId } = request.params as { gatewayId: string };
 
     try {
-      const result = await failoverOrchestrator.manualFailover(gatewayId);
+      const result = await servicesFor(request).failoverOrchestrator.manualFailover(gatewayId);
       return result;
     } catch (error) {
       console.error("[HA] Failed to execute failover:", error);
@@ -572,7 +574,7 @@ export function registerHATopologyRoutes(app: FastifyInstance): void {
    */
   app.post("/v1/ha/rebalance", async (request, reply) => {
     try {
-      const result = await failoverOrchestrator.rebalanceCameras();
+      const result = await servicesFor(request).failoverOrchestrator.rebalanceCameras();
       return result;
     } catch (error) {
       console.error("[HA] Failed to rebalance cameras:", error);

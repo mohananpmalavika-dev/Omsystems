@@ -263,6 +263,26 @@
       return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
     }
 
+    function createStatusBadge(isValid, text) {
+      const badge = document.createElement('span');
+      badge.className = `status-badge ${isValid ? 'valid' : 'invalid'}`;
+      badge.textContent = text;
+      return badge;
+    }
+
+    function setResultHeader(isMatch) {
+      const header = document.getElementById('result-header');
+      const icon = document.createElement('span');
+      icon.style.color = isMatch ? 'var(--accent-green)' : 'var(--accent-red)';
+      icon.textContent = isMatch ? '✓' : '✗';
+      header.replaceChildren(
+        icon,
+        document.createTextNode(isMatch
+          ? ' ADMISSIBLE FORENSIC EVIDENCE — INTEGRITY VERIFIED'
+          : ' TAMPER DETECTED — HASH MISMATCH'),
+      );
+    }
+
     btnVerify.addEventListener('click', async () => {
       btnVerify.disabled = true;
       btnVerify.textContent = 'Calculating byte SHA-256 digest & checking signature...';
@@ -279,21 +299,19 @@
         const resultBox = document.getElementById('result-box');
         resultBox.className = 'result-box ' + (hashMatch ? 'success' : 'failure');
 
-        document.getElementById('result-header').innerHTML = hashMatch
-          ? '<span style="color: var(--accent-green)">✓</span> ADMISSIBLE FORENSIC EVIDENCE — INTEGRITY VERIFIED'
-          : '<span style="color: var(--accent-red)">✗</span> TAMPER DETECTED — HASH MISMATCH';
+        setResultHeader(hashMatch);
 
         document.getElementById('res-evidence-id').textContent = manifestData.evidence_id || 'N/A';
         document.getElementById('res-camera-id').textContent = manifestData.camera_id || 'N/A';
         document.getElementById('res-calc-hash').textContent = calculatedHash;
         document.getElementById('res-manifest-hash').textContent = expectedHash || 'Missing';
-        document.getElementById('res-hash-match').innerHTML = hashMatch
-          ? '<span class="status-badge valid">MATCH (100% Bit-level Integrity)</span>'
-          : '<span class="status-badge invalid">MISMATCH</span>';
+        document.getElementById('res-hash-match').replaceChildren(
+          createStatusBadge(hashMatch, hashMatch ? 'MATCH (100% Bit-level Integrity)' : 'MISMATCH'),
+        );
 
-        document.getElementById('res-sig-match').innerHTML = hasSig
-          ? '<span class="status-badge valid">SIGNED BY ' + (sigObj.key_id || 'VAULT_KEY') + '</span>'
-          : '<span class="status-badge invalid">NO SIGNATURE PRESENT</span>';
+        document.getElementById('res-sig-match').replaceChildren(
+          createStatusBadge(hasSig, hasSig ? `SIGNED BY ${sigObj?.key_id || 'VAULT_KEY'}` : 'NO SIGNATURE PRESENT'),
+        );
 
       } catch (err) {
         alert('Verification error: ' + err.message);

@@ -4,14 +4,58 @@ const API_BASE_URL = window.location.origin;
 let currentPage = 1;
 const itemsPerPage = 50;
 
-function escapeHtml(str) {
-    if (str === null || str === undefined) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
+function displayValue(value, fallback = '') {
+    return value === null || value === undefined ? fallback : String(value);
+}
+
+function createElement(tagName, { className, text } = {}) {
+    const element = document.createElement(tagName);
+    if (className) element.className = className;
+    if (text !== undefined) element.textContent = displayValue(text);
+    return element;
+}
+
+function addResultRow(container, label, value) {
+    const row = createElement('div', { className: 'result-row' });
+    row.append(createElement('span', { text: label }), createElement('strong', { text: value }));
+    container.appendChild(row);
+}
+
+function renderResultSummary(container, { success, heading, rows, message }) {
+    const summary = createElement('div', { className: `result-summary ${success ? 'success' : 'error'}` });
+    summary.appendChild(createElement('h3', { text: heading }));
+    rows.forEach(([label, value]) => addResultRow(summary, label, value));
+    if (message) summary.appendChild(createElement('p', { text: message }));
+    container.replaceChildren(summary);
+}
+
+function appendErrorDetails(container, errors) {
+    if (!Array.isArray(errors) || errors.length === 0) return;
+
+    const details = createElement('details');
+    details.style.marginTop = '15px';
+    const summary = createElement('summary', { text: `View ${errors.length} error(s)` });
+    summary.style.cssText = 'cursor: pointer; padding: 10px; background: #fed7d7; border-radius: 6px;';
+    const list = createElement('ul');
+    list.style.cssText = 'margin-top: 10px; padding-left: 20px;';
+
+    errors.forEach(error => {
+        const index = Number(error?.index);
+        list.appendChild(createElement('li', {
+            text: `Line ${Number.isFinite(index) ? index + 2 : 'unknown'}: ${displayValue(error?.error, 'Unknown error')}`,
+        }));
+    });
+
+    details.append(summary, list);
+    container.appendChild(details);
+}
+
+function setCredentialsTableMessage(tableBody, message) {
+    const row = createElement('tr');
+    const cell = createElement('td', { className: 'loading', text: message });
+    cell.colSpan = 7;
+    row.appendChild(cell);
+    tableBody.replaceChildren(row);
 }
 
 // Initialize on page load
@@ -138,7 +182,7 @@ async function submitBulkUpload(form) {
     const resultsDiv = document.getElementById('bulkResults');
 
     progressContainer.style.display = 'block';
-    resultsDiv.innerHTML = '';
+    resultsDiv.replaceChildren();
 
     try {
         // Parse CSV
@@ -172,37 +216,16 @@ async function submitBulkUpload(form) {
         progressFill.style.width = '100%';
         progressText.textContent = 'Complete!';
 
-        // Show results
-        resultsDiv.innerHTML = `
-            <div class="result-summary ${result.success ? 'success' : 'error'}">
-                <h3>${result.success ? '✅ Import Successful' : '⚠️ Import Completed with Errors'}</h3>
-                <div class="result-row">
-                    <span>Total Records:</span>
-                    <strong>${result.total}</strong>
-                </div>
-                <div class="result-row">
-                    <span>✅ Imported:</span>
-                    <strong>${result.imported}</strong>
-                </div>
-                <div class="result-row">
-                    <span>❌ Failed:</span>
-                    <strong>${result.failed}</strong>
-                </div>
-            </div>
-        `;
-
-        if (result.errors && result.errors.length > 0) {
-            resultsDiv.innerHTML += `
-                <details style="margin-top: 15px;">
-                    <summary style="cursor: pointer; padding: 10px; background: #fed7d7; border-radius: 6px;">
-                        View ${result.errors.length} error(s)
-                    </summary>
-                    <ul style="margin-top: 10px; padding-left: 20px;">
-                        ${result.errors.map(e => `<li>Line ${Number(e.index) + 2}: ${escapeHtml(e.error)}</li>`).join('')}
-                    </ul>
-                </details>
-            `;
-        }
+        renderResultSummary(resultsDiv, {
+            success: Boolean(result.success),
+            heading: result.success ? '✅ Import Successful' : '⚠️ Import Completed with Errors',
+            rows: [
+                ['Total Records:', result.total],
+                ['✅ Imported:', result.imported],
+                ['❌ Failed:', result.failed],
+            ],
+        });
+        appendErrorDetails(resultsDiv, result.errors);
 
         form.reset();
         document.querySelector('.file-text').textContent = 'Choose CSV file or drag here';
@@ -215,12 +238,12 @@ async function submitBulkUpload(form) {
 
     } catch (error) {
         progressContainer.style.display = 'none';
-        resultsDiv.innerHTML = `
-            <div class="result-summary error">
-                <h3>❌ Upload Failed</h3>
-                <p>${escapeHtml(error.message)}</p>
-            </div>
-        `;
+        renderResultSummary(resultsDiv, {
+            success: false,
+            heading: '❌ Upload Failed',
+            rows: [],
+            message: displayValue(error?.message, 'Unknown error'),
+        });
     }
 }
 
@@ -231,7 +254,7 @@ async function loadCredentials(page = 1) {
     const branchFilter = document.getElementById('branchFilter').value;
 
     const tableBody = document.getElementById('credentialsTableBody');
-    tableBody.innerHTML = '<tr><td colspan="7" class="loading">Loading...</td></tr>';
+    setCredentialsTableMessage(tableBody, 'Loading...');
 
     try {
         let url = `${API_BASE_URL}/api/credentials?page=${page}&limit=${itemsPerPage}`;
@@ -241,65 +264,73 @@ async function loadCredentials(page = 1) {
         const data = await response.json();
 
         // Filter by search term (client-side)
-        let credentials = data.credentials;
+        let credentials = Array.isArray(data.credentials) ? data.credentials : [];
         if (searchTerm) {
             credentials = credentials.filter(c =>
-                c.ip_address?.includes(searchTerm) ||
-                c.username?.includes(searchTerm)
+                c?.ip_address?.includes(searchTerm) ||
+                c?.username?.includes(searchTerm)
             );
         }
 
         if (credentials.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="7" class="loading">No credentials found</td></tr>';
+            setCredentialsTableMessage(tableBody, 'No credentials found');
             return;
         }
 
-        tableBody.innerHTML = credentials.map(cred => `
-            <tr>
-                <td><code>${escapeHtml(cred.branch_id ? cred.branch_id.substring(0, 8) : '')}...</code></td>
-                <td>${cred.ip_address ? escapeHtml(cred.ip_address) : '<em>Default</em>'}</td>
-                <td>${escapeHtml(cred.username)}</td>
-                <td class="password-mask">••••••••</td>
-                <td><span class="scope-badge ${escapeHtml(cred.scope)}">${escapeHtml(cred.scope)}</span></td>
-                <td>${escapeHtml(new Date(cred.created_at).toLocaleDateString())}</td>
-                <td>
-                    <button class="btn btn-primary btn-small" onclick="openEditModal('${escapeHtml(cred.id)}', '${escapeHtml(cred.ip_address || '')}', '${escapeHtml(cred.username)}')">
-                        ✏️ Edit
-                    </button>
-                    <button class="btn btn-danger btn-small" onclick="deleteCredential('${escapeHtml(cred.id)}')">
-                        🗑️ Delete
-                    </button>
-                </td>
-            </tr>
-        `).join('');
+        const rows = document.createDocumentFragment();
+        credentials.forEach(credential => {
+            const cred = credential || {};
+            const row = createElement('tr');
+            const branchCell = createElement('td');
+            branchCell.appendChild(createElement('code', { text: `${displayValue(cred.branch_id).slice(0, 8)}...` }));
+            const ipCell = createElement('td');
+            ipCell.appendChild(cred.ip_address
+                ? createElement('span', { text: cred.ip_address })
+                : createElement('em', { text: 'Default' }));
+            const usernameCell = createElement('td', { text: cred.username });
+            const passwordCell = createElement('td', { className: 'password-mask', text: '••••••••' });
+            const scopeCell = createElement('td');
+            const scopeClass = ['default', 'host-specific'].includes(cred.scope) ? `scope-badge ${cred.scope}` : 'scope-badge';
+            scopeCell.appendChild(createElement('span', { className: scopeClass, text: cred.scope }));
+            const date = new Date(cred.created_at);
+            const dateCell = createElement('td', { text: Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString() });
+            const actionsCell = createElement('td');
+            const editButton = createElement('button', { className: 'btn btn-primary btn-small', text: '✏️ Edit' });
+            editButton.type = 'button';
+            editButton.addEventListener('click', () => openEditModal(cred.id, cred.ip_address || '', cred.username));
+            const deleteButton = createElement('button', { className: 'btn btn-danger btn-small', text: '🗑️ Delete' });
+            deleteButton.type = 'button';
+            deleteButton.addEventListener('click', () => deleteCredential(cred.id));
+            actionsCell.append(editButton, deleteButton);
+            row.append(branchCell, ipCell, usernameCell, passwordCell, scopeCell, dateCell, actionsCell);
+            rows.appendChild(row);
+        });
+        tableBody.replaceChildren(rows);
 
         renderPagination(data.pagination);
 
     } catch (error) {
-        tableBody.innerHTML = `<tr><td colspan="7" class="loading">Error: ${escapeHtml(error.message)}</td></tr>`;
+        setCredentialsTableMessage(tableBody, `Error: ${displayValue(error?.message, 'Unknown error')}`);
     }
 }
 
 // Render pagination
-function renderPagination(pagination) {
+function renderPagination(pagination = {}) {
     const paginationDiv = document.getElementById('pagination');
-    const { page, totalPages } = pagination;
+    const page = Math.max(1, Number(pagination.page) || 1);
+    const totalPages = Math.max(1, Number(pagination.totalPages) || 1);
+    const buttons = document.createDocumentFragment();
+    const addPageButton = (label, targetPage, active = false) => {
+        const button = createElement('button', { className: active ? 'active' : '', text: label });
+        button.type = 'button';
+        button.addEventListener('click', () => loadCredentials(targetPage));
+        buttons.appendChild(button);
+    };
 
-    let html = '';
-
-    if (page > 1) {
-        html += `<button onclick="loadCredentials(${page - 1})">← Previous</button>`;
-    }
-
-    for (let i = Math.max(1, page - 2); i <= Math.min(totalPages, page + 2); i++) {
-        html += `<button class="${i === page ? 'active' : ''}" onclick="loadCredentials(${i})">${i}</button>`;
-    }
-
-    if (page < totalPages) {
-        html += `<button onclick="loadCredentials(${page + 1})">Next →</button>`;
-    }
-
-    paginationDiv.innerHTML = html;
+    if (page > 1) addPageButton('← Previous', page - 1);
+    for (let i = Math.max(1, page - 2); i <= Math.min(totalPages, page + 2); i++) addPageButton(i, i, i === page);
+    if (page < totalPages) addPageButton('Next →', page + 1);
+    paginationDiv.replaceChildren(buttons);
 }
 
 // Open edit modal

@@ -11,7 +11,7 @@
 import { EventEmitter } from 'events';
 import { Logger } from '../core/logger.js';
 import { ObservationRepository } from './observation.repository.js';
-import { TransitionCorrelator } from './transition-correlator.js';
+import { PersonTransitionCorrelator } from './transition-correlator.js';
 import { GlobalIdentityResolver } from './global-identity-resolver.js';
 import { EmbeddingService } from './embedding.service.js';
 import { TopologyService } from './topology.service.js';
@@ -45,7 +45,7 @@ export class JourneyService extends EventEmitter {
 
   constructor(
     private observationRepo: ObservationRepository,
-    private transitionCorrelator: TransitionCorrelator,
+    private transitionCorrelator: PersonTransitionCorrelator,
     private identityResolver: GlobalIdentityResolver,
     private embeddingService: EmbeddingService,
     private topologyService: TopologyService,
@@ -249,6 +249,10 @@ export class JourneyService extends EventEmitter {
       confidence,
       unresolvedGaps: gaps.filter(g => g.confidence < 0.5)
     };
+  }
+
+  async getTransition(tenantId: string, transitionId: string): Promise<PersonTransition | null> {
+    return this.transitionCorrelator.findById(tenantId, transitionId);
   }
 
   /**

@@ -960,6 +960,8 @@ export interface LiveSession {
   mediaGatewayUrl?: string;
   localMediaGatewayUrl?: string;
   purpose?: "view" | "talk" | "playback";
+  /** Requested camera encoder role; bound to the one-time session token. */
+  profile?: "main" | "sub";
 }
 
 export interface ConsumedLiveSession {
@@ -971,6 +973,7 @@ export interface ConsumedLiveSession {
   connectionSecretRef: string;
   profiles: CameraProfile[];
   purpose?: "view" | "talk" | "playback";
+  profile?: "main" | "sub";
   vendor?: CameraVendor;
   model?: string;
   protocol?: Camera["protocol"];

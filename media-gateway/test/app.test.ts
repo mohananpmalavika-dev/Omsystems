@@ -107,6 +107,29 @@ describe("authorized media startup", () => {
     expect(denied.statusCode).toBe(401);
   });
 
+  it("uses the profile-specific secret selected by the control-plane grant", async () => {
+    const router: MediaRouter = { ensurePath: vi.fn(async () => undefined), removePath: vi.fn(async () => undefined) };
+    const secrets: StreamSecretProvider = {
+      resolve: vi.fn(async (reference) => reference.endsWith("#sub") ? "rtsp://camera/sub" : undefined),
+    };
+    app = await buildMediaGateway({
+      controlPlane: { consumeLiveSession: vi.fn(async () => ({
+        id: "profile-grant", cameraId: "cam-001", cameraNodeId: "node-001", userId: "user-001", tenantId: "tenant-001",
+        connectionSecretRef: "vault://camera", profile: "sub",
+        profiles: [
+          { name: "main", role: "main", codec: "H264", width: 1920, height: 1080 },
+          { name: "sub", role: "sub", codec: "H264", width: 640, height: 360 },
+        ],
+      })) },
+      router, secrets, publicHlsBaseUrl: "https://media.example/hls", publicWebRtcBaseUrl: "https://media.example/webrtc", accessTtlMs: 60_000,
+    });
+
+    const response = await app.inject({ method: "POST", url: "/v1/live/start", payload: { controlPlaneToken: "a".repeat(43), profile: "sub" } });
+    expect(response.statusCode).toBe(201);
+    expect(secrets.resolve).toHaveBeenCalledWith("vault://camera#sub");
+    expect(router.ensurePath).toHaveBeenCalledWith("camera-cam-001", "rtsp://camera/sub");
+  });
+
   it("protects live startup with the edge bridge identity", async () => {
     const bridgeKey = "b".repeat(43);
     app = await buildMediaGateway({

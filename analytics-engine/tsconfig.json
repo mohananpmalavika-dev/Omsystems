@@ -18,13 +18,8 @@
     "src/**/*.test.ts",
     "test/**/*.ts",
     "../backend/**/*",
-    "../src/services/**/*",
-    "../src/routes/**/*",
-    "../src/middleware/**/*",
     "src/analytics-integration-example.ts",
     "src/detectors/enhanced-security-analytics.ts",
-    "src/journey/**/*.ts",
-    "src/routes/journey-api.ts",
     "src/assistant/test-chatgpt.example.ts"
   ]
 }

@@ -21,7 +21,8 @@
 
 import type { Pool } from 'pg';
 import { createHash, randomBytes } from 'crypto';
-import { sign, verify } from 'jsonwebtoken';
+import jsonwebtoken from 'jsonwebtoken';
+const { sign, verify } = jsonwebtoken;
 import type {
   CommunicationDevice,
   DeviceCredential,

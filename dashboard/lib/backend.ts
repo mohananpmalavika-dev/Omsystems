@@ -68,6 +68,7 @@ export async function startLive(
   cameraId: string,
   employeeSession?: string,
   routePreference: LiveRoutePreference = "auto",
+  profile: "main" | "sub" = "sub",
 ): Promise<LiveSessionResponse | DirectLiveStart> {
   try {
     // Keep live authorization aligned with the dashboard control proxy. When
@@ -85,7 +86,7 @@ export async function startLive(
     }> => {
       const permission = await controlFetch(
         `/v1/cameras/${encodeURIComponent(cameraId)}/live-sessions`,
-        { method: "POST", body: "{}", signal: AbortSignal.timeout(LIVE_START_TIMEOUT_MS) },
+        { method: "POST", body: JSON.stringify({ profile }), signal: AbortSignal.timeout(LIVE_START_TIMEOUT_MS) },
         employeeSession,
         dashboardUserId,
       );
@@ -177,7 +178,7 @@ export async function startLive(
           {
             method: "POST",
             headers: bridgeHeaders(),
-            body: JSON.stringify({ controlPlaneToken: controlSession.token }),
+            body: JSON.stringify({ controlPlaneToken: controlSession.token, profile }),
             cache: "no-store",
             signal: AbortSignal.timeout(LIVE_START_TIMEOUT_MS),
           },

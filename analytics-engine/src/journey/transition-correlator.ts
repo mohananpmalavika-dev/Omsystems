@@ -109,6 +109,14 @@ export class PersonTransitionCorrelator {
     }
   }
 
+  async findById(tenantId: string, transitionId: string): Promise<PersonTransition | null> {
+    const result = await this.pool.query(
+      'SELECT * FROM person_transition WHERE id = $1::uuid AND tenant_id = $2::uuid',
+      [transitionId, tenantId],
+    );
+    return result.rows[0] ? this.mapRowToTransition(result.rows[0]) : null;
+  }
+
   /**
    * Correlate a new observation with previous observations
    */

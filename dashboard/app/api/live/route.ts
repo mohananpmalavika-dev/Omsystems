@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
         body.cameraId,
         token ?? undefined,
         body.routePreference,
+        body.profile,
       );
     };
 

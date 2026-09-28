@@ -59,6 +59,7 @@ import type { IndustrialConfig, IndustrialViolation } from '../industrial/rules/
 import type { TrackedEquipment } from '../tracking/equipment-tracker.js';
 import type { Zone } from '../tracking/scene-state.js';
 import type { IndustrialEquipmentType } from '../inference/model-manifest.js';
+import { FfmpegFrameExtractor } from '../frame-extractor.js';
 
 
 /**
@@ -430,8 +431,17 @@ export class IndustrialAnalytics extends BaseDetector {
   }
   
   async processStream(streamUrl: string): Promise<void> {
-    // Implementation for stream processing
-    throw new Error('processStream not yet implemented for new architecture');
+    // Use the same bounded FFmpeg extraction path as the production analytics
+    // pipeline.  This intentionally processes one current frame per call;
+    // callers schedule it at their desired stream cadence.
+    const parsed = new URL(streamUrl);
+    if (!['rtsp:', 'rtsps:', 'http:', 'https:'].includes(parsed.protocol)) {
+      throw new Error(`Unsupported industrial stream protocol: ${parsed.protocol}`);
+    }
+    const cameraId = parsed.searchParams.get('cameraId') || parsed.hostname;
+    const tenantId = parsed.searchParams.get('tenantId') || 'unknown';
+    const frame = await new FfmpegFrameExtractor().extract({ cameraId, tenantId, streamUrl });
+    await this.detect(frame);
   }
 }
 

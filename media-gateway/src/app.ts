@@ -205,16 +205,20 @@ export async function buildMediaGateway(options: {
   app.post("/v1/live/start", async (request, reply) => {
     const body = z.object({
       controlPlaneToken: z.string().min(32).max(200),
+      profile: z.enum(["main", "sub"]).optional(),
     }).parse(request.body);
     const consumed = await options.controlPlane.consumeLiveSession(
       body.controlPlaneToken,
     );
     if (consumed.purpose && consumed.purpose !== "view") throw new GatewayError(403, "invalid_live_session");
+    if (body.profile && consumed.profile && body.profile !== consumed.profile) {
+      throw new GatewayError(403, "live_session_profile_mismatch");
+    }
     const path = `camera-${safeIdentifier(consumed.cameraId)}`;
     const portableSource = isPortableSource(consumed.sourceType);
     const session = portableSource
       ? access.issue(path, "read")
-      : await startCameraSource(path, consumed.connectionSecretRef);
+      : await startCameraSource(path, consumed.connectionSecretRef, consumed.profile ?? "sub");
     reply.header("cache-control", "no-store");
     return reply.code(201).send({
       sessionId: session.id,
@@ -231,8 +235,22 @@ export async function buildMediaGateway(options: {
       },
     });
 
-    async function startCameraSource(cameraPath: string, connectionSecretRef: string) {
-      const sourceUri = await options.secrets.resolve(connectionSecretRef);
+    async function startCameraSource(cameraPath: string, connectionSecretRef: string, profile: "main" | "sub") {
+      const selected = consumed.profiles.find((candidate) => candidate.name === profile || candidate.role === profile)
+        ?? (consumed.profiles.length === 1 ? consumed.profiles[0] : undefined);
+      // Older camera records did not persist stream profiles. Keep their
+      // existing single-source behavior, but never use it as a fallback when
+      // a camera declares multiple profile choices.
+      if (!selected && consumed.profiles.length > 0) throw new GatewayError(409, "stream_profile_unavailable");
+      // A profile is part of the server-issued grant, never client-controlled.
+      // Profile-specific references prevent main and sub selections from silently
+      // resolving to the same encoder source.
+      let sourceUri = selected
+        ? await options.secrets.resolve(`${connectionSecretRef}#${selected.name}`)
+        : await options.secrets.resolve(connectionSecretRef);
+      if (!sourceUri && consumed.profiles.length <= 1) {
+        sourceUri = await options.secrets.resolve(connectionSecretRef);
+      }
       if (!sourceUri) throw new GatewayError(503, "stream_secret_unavailable");
       return access.start(cameraPath, sourceUri);
     }

@@ -41,6 +41,7 @@ import {
 // Using ldapts (TypeScript LDAP client)
 // Install: npm install ldapts
 import { Client, Attribute, Change, SearchEntry } from 'ldapts';
+import { ConfiguredSecretReferenceResolver, type SecretReferenceResolver } from '../../security/secret-reference-resolver.js';
 
 /**
  * LDAP search result entry
@@ -57,6 +58,8 @@ interface LDAPUser {
  */
 export class LDAPIdentityAdapter implements EnterpriseIdentityAdapter {
   readonly type = 'LDAP' as const;
+
+  constructor(private readonly secrets: SecretReferenceResolver = new ConfiguredSecretReferenceResolver()) {}
 
   /**
    * Authenticate via LDAP
@@ -478,9 +481,7 @@ export class LDAPIdentityAdapter implements EnterpriseIdentityAdapter {
    * Get bind password from secret store
    */
   private async getBindPassword(secretRef: string): Promise<string> {
-    // TODO: Integrate with secret management service
-    // For now, assume secretRef is the actual secret (INSECURE - for development only)
-    return secretRef;
+    return this.secrets.resolve(secretRef);
   }
 
   /**

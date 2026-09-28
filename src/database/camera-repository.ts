@@ -675,7 +675,7 @@ export class CameraRepository {
     return result.rowCount ? this.findById(cleanId) : undefined;
   }
 
-  async createLiveSession(cameraId: string, userId: string, purpose: "view" | "talk" | "playback" = "view"): Promise<LiveSession> {
+  async createLiveSession(cameraId: string, userId: string, purpose: "view" | "talk" | "playback" = "view", profile: "main" | "sub" = "sub"): Promise<LiveSession> {
     const cleanCameraId = normalizeCameraUuid(cameraId);
     const camera = await this.findById(cleanCameraId);
     const targetCameraId = camera?.id ?? cleanCameraId;
@@ -759,9 +759,9 @@ export class CameraRepository {
     const expiresAt = new Date(Date.now() + 60_000);
     await this.pool.query(
       `INSERT INTO live_sessions
-         (id, camera_id, user_id, token_hash, expires_at, purpose)
-       VALUES ($1, $2::uuid, $3, $4, $5, $6)`,
-      [id, targetCameraId, userId, tokenHash, expiresAt, purpose],
+         (id, camera_id, user_id, token_hash, expires_at, purpose, profile)
+       VALUES ($1, $2::uuid, $3, $4, $5, $6, $7)`,
+      [id, targetCameraId, userId, tokenHash, expiresAt, purpose, profile],
     );
     const isAgentRecent = activeAgent?.last_seen_at && (Date.now() - new Date(activeAgent.last_seen_at).getTime() < 60 * 60 * 1000);
     const mediaGatewayUrl = (activeAgent?.public_media_url && (activeAgent.agent_status === "online" || isAgentRecent))
@@ -775,6 +775,7 @@ export class CameraRepository {
       token,
       expiresAt: expiresAt.toISOString(),
       purpose,
+      profile,
       ...(mediaGatewayUrl ? { mediaGatewayUrl } : {}),
       ...(localMediaGatewayUrl ? { localMediaGatewayUrl } : {}),
     };
@@ -791,6 +792,7 @@ export class CameraRepository {
       connection_secret_ref: string;
       profiles: CameraProfile[];
       purpose: "view" | "talk" | "playback";
+      profile: "main" | "sub" | null;
       vendor: Camera["vendor"];
       model: string;
       protocol: Camera["protocol"];
@@ -805,12 +807,12 @@ export class CameraRepository {
          WHERE token_hash = $1
            AND consumed_at IS NULL
            AND expires_at > now()
-         RETURNING id, camera_id, user_id, purpose
+         RETURNING id, camera_id, user_id, purpose, profile
        )
        SELECT consumed.id::text, camera.id::text AS camera_id,
               camera.resource_node_id::text, app_user.id::text AS user_id,
               app_user.tenant_id::text, camera.connection_secret_ref,
-              camera.profiles, consumed.purpose, camera.vendor, camera.model,
+              camera.profiles, consumed.purpose, consumed.profile, camera.vendor, camera.model,
               camera.protocol, camera.source_type, camera.channel,
               camera.recorder_channel, camera.capabilities
        FROM consumed
@@ -829,6 +831,7 @@ export class CameraRepository {
           connectionSecretRef: row.connection_secret_ref,
           profiles: row.profiles,
           purpose: row.purpose,
+          ...(row.profile ? { profile: row.profile } : {}),
           vendor: row.vendor,
           model: row.model,
           protocol: row.protocol,

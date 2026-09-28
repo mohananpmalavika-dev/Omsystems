@@ -484,8 +484,10 @@ router.get(
       const tenantId = (req as any).user.tenantId;
       const { transitionId } = req.params;
 
-      // Would implement findTransitionById in repository
-      res.status(501).json({ error: 'Not yet implemented' });
+      const journeyService: JourneyService = (req as any).services.journeyService;
+      const transition = await journeyService.getTransition(tenantId, transitionId);
+      if (!transition) return res.status(404).json({ error: 'Transition not found' });
+      res.json(transition);
     } catch (error) {
       logger.error('Failed to get transition', { error });
       res.status(500).json({ error: 'Failed to retrieve transition' });

@@ -361,6 +361,28 @@ function ControlRoomContent() {
   const [audioTargetCamera, setAudioTargetCamera] = useState("CAM-01 Entrance IP Horn");
   const [pttActive, setPttActive] = useState(false);
   const [voiceStrobePlaying, setVoiceStrobePlaying] = useState<string | null>(null);
+  const voiceStrobeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const playVoiceStrobe = useCallback((message: string) => {
+    if (voiceStrobeTimer.current) clearTimeout(voiceStrobeTimer.current);
+    setVoiceStrobePlaying(message);
+    voiceStrobeTimer.current = setTimeout(() => {
+      voiceStrobeTimer.current = null;
+      setVoiceStrobePlaying(null);
+    }, 5000);
+  }, []);
+
+  const stopVoiceStrobe = useCallback(() => {
+    if (voiceStrobeTimer.current) {
+      clearTimeout(voiceStrobeTimer.current);
+      voiceStrobeTimer.current = null;
+    }
+    setVoiceStrobePlaying(null);
+  }, []);
+
+  useEffect(() => () => {
+    if (voiceStrobeTimer.current) clearTimeout(voiceStrobeTimer.current);
+  }, []);
   
   // Hierarchy & Filter States
   const [selectedZone, setSelectedZone] = useState<string>("ALL");
@@ -1464,7 +1486,7 @@ function ControlRoomContent() {
                 type="button"
                 onClick={() => {
                   setAudioDeterrenceOpen(false);
-                  setVoiceStrobePlaying(null);
+                  stopVoiceStrobe();
                   setPttActive(false);
                 }}
                 style={{ background: "transparent", border: 0, color: "#94a3b8", cursor: "pointer" }}
@@ -1500,8 +1522,7 @@ function ControlRoomContent() {
                   <button
                     type="button"
                     onClick={() => {
-                      setVoiceStrobePlaying("HELMET_MASK");
-                      setTimeout(() => setVoiceStrobePlaying(null), 5000);
+                      playVoiceStrobe("HELMET_MASK");
                     }}
                     style={{ padding: "10px", borderRadius: "8px", background: voiceStrobePlaying === "HELMET_MASK" ? "rgba(14, 165, 233, 0.25)" : "#0f172a", border: "1px solid #1e293b", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}
                   >
@@ -1521,8 +1542,7 @@ function ControlRoomContent() {
                   <button
                     type="button"
                     onClick={() => {
-                      setVoiceStrobePlaying("PERIMETER_BREACH");
-                      setTimeout(() => setVoiceStrobePlaying(null), 5000);
+                      playVoiceStrobe("PERIMETER_BREACH");
                     }}
                     style={{ padding: "10px", borderRadius: "8px", background: voiceStrobePlaying === "PERIMETER_BREACH" ? "rgba(245, 158, 11, 0.25)" : "#0f172a", border: "1px solid #1e293b", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}
                   >
@@ -1542,8 +1562,7 @@ function ControlRoomContent() {
                   <button
                     type="button"
                     onClick={() => {
-                      setVoiceStrobePlaying("POLICE_ALERT");
-                      setTimeout(() => setVoiceStrobePlaying(null), 5000);
+                      playVoiceStrobe("POLICE_ALERT");
                     }}
                     style={{ padding: "10px", borderRadius: "8px", background: voiceStrobePlaying === "POLICE_ALERT" ? "rgba(239, 68, 68, 0.25)" : "#0f172a", border: "1px solid #1e293b", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}
                   >

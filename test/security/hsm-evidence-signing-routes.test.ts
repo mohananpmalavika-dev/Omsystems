@@ -12,6 +12,12 @@ describe('Fastify HSM Evidence Signing Routes Integration', () => {
   let repository: HsmEvidenceRepository;
   let signerService: HsmEvidenceSignerService;
   let tempKeyDir: string;
+  const authenticatedAdmin = {
+    id: 'hsm-route-admin',
+    username: 'hsm-admin',
+    tenantId: 'tenant-hsm-route',
+    role: 'super_admin',
+  };
 
   beforeAll(async () => {
     tempKeyDir = mkdtempSync(join(tmpdir(), 'hsm-routes-keys-'));
@@ -31,6 +37,12 @@ describe('Fastify HSM Evidence Signing Routes Integration', () => {
       checkAccess: async () => ({ allowed: true }),
     };
 
+    // The production authentication hook establishes currentUser before the
+    // route pre-handler. Mirror that trusted server-side state in this route
+    // test instead of passing caller-controlled identity headers.
+    app.addHook('onRequest', async (request) => {
+      (request as any).currentUser = authenticatedAdmin;
+    });
     await registerHsmSigningRoutes(app, mockStore);
     await app.ready();
   });
@@ -45,6 +57,50 @@ describe('Fastify HSM Evidence Signing Routes Integration', () => {
   });
 
   describe('Status & Health Endpoints', () => {
+    it('rejects missing authentication even when identity headers are supplied', async () => {
+      const anonymousApp = Fastify();
+      await registerHsmSigningRoutes(anonymousApp, {
+        checkAccess: async () => ({ allowed: true }),
+      } as any);
+      await anonymousApp.ready();
+
+      try {
+        const res = await anonymousApp.inject({
+          method: 'GET',
+          url: '/v1/security/hsm/status',
+          headers: {
+            'x-api-key': 'attacker-controlled-key',
+            'x-tenant-id': 'attacker-tenant',
+            'x-user-id': 'attacker-user',
+          },
+        });
+
+        expect(res.statusCode).toBe(401);
+        expect(res.json()).toMatchObject({ success: false, error: 'unauthenticated' });
+      } finally {
+        await anonymousApp.close();
+      }
+    });
+
+    it('rejects authenticated users without evidence export permission', async () => {
+      const deniedApp = Fastify();
+      deniedApp.addHook('onRequest', async (request) => {
+        (request as any).currentUser = authenticatedAdmin;
+      });
+      await registerHsmSigningRoutes(deniedApp, {
+        checkAccess: async () => ({ allowed: false }),
+      } as any);
+      await deniedApp.ready();
+
+      try {
+        const res = await deniedApp.inject({ method: 'GET', url: '/v1/security/hsm/status' });
+        expect(res.statusCode).toBe(403);
+        expect(res.json()).toMatchObject({ success: false, error: 'access_denied' });
+      } finally {
+        await deniedApp.close();
+      }
+    });
+
     it('GET /v1/security/hsm/status returns hardware module diagnostics', async () => {
       const res = await app.inject({
         method: 'GET',
@@ -176,7 +232,8 @@ describe('Fastify HSM Evidence Signing Routes Integration', () => {
         url: '/v1/security/hsm/sign-evidence',
         payload: {
           evidenceId: 'EV-ROUTE-TEST-001',
-          tenantId: 'omsystems',
+          // This must be ignored; tenant scope is owned by currentUser.
+          tenantId: 'attacker-tenant',
           branchId: 'chennai-vault-01',
           manifest,
         },
@@ -189,6 +246,7 @@ describe('Fastify HSM Evidence Signing Routes Integration', () => {
       expect(json.data.manifestSha256).toBeDefined();
       expect(json.data.signatureBase64).toBeDefined();
       expect(json.data.algorithm).toBe('ECDSA_P256');
+      expect(json.data.tenantId).toBe(authenticatedAdmin.tenantId);
 
       sealedEvidenceId = json.data.evidenceId;
       sealedManifestSha256 = json.data.manifestSha256;

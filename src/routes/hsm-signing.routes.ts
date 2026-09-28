@@ -37,40 +37,29 @@ export async function registerHsmSigningRoutes(
   const signerService = getHsmSignerService(store);
   const repository = signerService.getRepository();
 
-  // Helper for tenant identification
-  const getTenantId = (req: FastifyRequest): string => {
-    const user = (req as any).user || (req as any).currentUser;
-    return user?.tenantId || (req.headers['x-tenant-id'] as string) || 'omsystems';
-  };
-
-  const getActorId = (req: FastifyRequest): string => {
-    const user = (req as any).user || (req as any).currentUser;
-    return user?.id || user?.username || (req.headers['x-user-id'] as string) || 'system-evidence-admin';
-  };
-
-  // Optional permission guard helper
-  const requireSecurityAdmin = async (req: FastifyRequest, reply: FastifyReply): Promise<boolean> => {
-    const user = (req as any).currentUser || (req as any).user;
-    if (!user) {
-      // In internal/service API contexts, verify API key or allow if configured
-      const apiKey = req.headers['x-api-key'] || req.headers['authorization'];
-      if (apiKey) return true;
-      // Allow service calls if user not required in current environment
-      return true;
+  // HSM operations must always run as an authenticated operator. Request
+  // headers are caller-controlled, so they must never supply identity,
+  // tenant scope, or an authorization bypass for evidence signing.
+  const requireSecurityAdmin = async (req: FastifyRequest, reply: FastifyReply): Promise<void> => {
+    const user = req.currentUser;
+    if (!user || !user.id || !user.tenantId) {
+      await reply.code(401).send({ success: false, error: 'unauthenticated' });
+      return;
     }
     const decision = await store.checkAccess(user, 'evidence:export', 'global');
     if (!decision || !decision.allowed) {
       await reply.code(403).send({ success: false, error: 'access_denied', message: 'Insufficient security privileges for HSM evidence signing' });
-      return false;
+      return;
     }
-    return true;
   };
+
+  const hsmRoute = { preHandler: requireSecurityAdmin };
 
   // ============================================================================
   // 1. HSM Status & Token Management
   // ============================================================================
 
-  app.get('/v1/security/hsm/status', async (_request, reply) => {
+  app.get('/v1/security/hsm/status', hsmRoute, async (_request, reply) => {
     try {
       const health = await signerService.getHealth();
       return reply.code(200).send({
@@ -86,7 +75,7 @@ export async function registerHsmSigningRoutes(
     }
   });
 
-  app.get('/v1/security/hsm/tokens', async (_request, reply) => {
+  app.get('/v1/security/hsm/tokens', hsmRoute, async (_request, reply) => {
     try {
       const tokens = await repository.listTokens();
       return reply.code(200).send({
@@ -118,15 +107,14 @@ export async function registerHsmSigningRoutes(
     metadata: z.record(z.unknown()).optional(),
   });
 
-  app.post('/v1/security/hsm/tokens/register', async (request, reply) => {
-    if (!(await requireSecurityAdmin(request, reply))) return;
+  app.post('/v1/security/hsm/tokens/register', hsmRoute, async (request, reply) => {
     try {
       const body = registerTokenSchema.parse(request.body);
       const token = await repository.registerToken(body);
       await repository.recordAudit({
         operation: 'TOKEN_REGISTER',
         tokenSerial: token.tokenSerial,
-        actorId: getActorId(request),
+        actorId: request.currentUser.id,
         status: 'SUCCESS',
         details: { slotId: token.slotId, model: token.model },
       });
@@ -147,7 +135,7 @@ export async function registerHsmSigningRoutes(
   // 2. HSM Key Registry
   // ============================================================================
 
-  app.get('/v1/security/hsm/keys', async (_request, reply) => {
+  app.get('/v1/security/hsm/keys', hsmRoute, async (_request, reply) => {
     try {
       const keys = await repository.listKeys();
       return reply.code(200).send({
@@ -176,8 +164,7 @@ export async function registerHsmSigningRoutes(
     isActive: z.boolean().default(true),
   });
 
-  app.post('/v1/security/hsm/keys/register', async (request, reply) => {
-    if (!(await requireSecurityAdmin(request, reply))) return;
+  app.post('/v1/security/hsm/keys/register', hsmRoute, async (request, reply) => {
     try {
       const body = registerKeySchema.parse(request.body);
       const { createHash } = await import('node:crypto');
@@ -192,7 +179,7 @@ export async function registerHsmSigningRoutes(
         operation: 'KEY_REGISTER',
         keyLabel: key.keyLabel,
         tokenSerial: key.tokenSerial,
-        actorId: getActorId(request),
+        actorId: request.currentUser.id,
         status: 'SUCCESS',
         details: { algorithm: key.algorithm, keySize: key.keySize },
       });
@@ -210,7 +197,7 @@ export async function registerHsmSigningRoutes(
     }
   });
 
-  app.get('/v1/security/hsm/keys/:keyLabel/certificate', async (request, reply) => {
+  app.get('/v1/security/hsm/keys/:keyLabel/certificate', hsmRoute, async (request, reply) => {
     try {
       const { keyLabel } = request.params as { keyLabel: string };
       const key = await repository.getKeyByLabel(keyLabel);
@@ -251,7 +238,6 @@ export async function registerHsmSigningRoutes(
 
   const signEvidenceSchema = z.object({
     evidenceId: z.string().optional(),
-    tenantId: z.string().optional(),
     branchId: z.string().optional(),
     cameraId: z.string().optional(),
     manifest: z.record(z.unknown()),
@@ -260,11 +246,11 @@ export async function registerHsmSigningRoutes(
     reason: z.string().optional(),
   });
 
-  app.post('/v1/security/hsm/sign-evidence', async (request, reply) => {
+  app.post('/v1/security/hsm/sign-evidence', hsmRoute, async (request, reply) => {
     try {
       const body = signEvidenceSchema.parse(request.body);
-      const tenantId = body.tenantId || getTenantId(request);
-      const actorId = getActorId(request);
+      const tenantId = request.currentUser.tenantId;
+      const actorId = request.currentUser.id;
 
       const sealedPackage = await signerService.signEvidencePackage(body.manifest, tenantId, {
         evidenceId: body.evidenceId,
@@ -297,10 +283,10 @@ export async function registerHsmSigningRoutes(
     evidenceId: z.string().optional(),
   });
 
-  app.post('/v1/security/hsm/verify-evidence', async (request, reply) => {
+  app.post('/v1/security/hsm/verify-evidence', hsmRoute, async (request, reply) => {
     try {
       const body = verifyEvidenceSchema.parse(request.body);
-      const actorId = getActorId(request);
+      const actorId = request.currentUser.id;
 
       let digestBuffer: Buffer;
       if (body.manifest) {
@@ -344,7 +330,7 @@ export async function registerHsmSigningRoutes(
     }
   });
 
-  app.get('/v1/security/hsm/packages/:evidenceId', async (request, reply) => {
+  app.get('/v1/security/hsm/packages/:evidenceId', hsmRoute, async (request, reply) => {
     try {
       const { evidenceId } = request.params as { evidenceId: string };
       const pkg = await repository.getSignedPackage(evidenceId);
@@ -373,7 +359,7 @@ export async function registerHsmSigningRoutes(
   // 4. Audit Log & Diagnostics
   // ============================================================================
 
-  app.get('/v1/security/hsm/audit-log', async (request, reply) => {
+  app.get('/v1/security/hsm/audit-log', hsmRoute, async (request, reply) => {
     try {
       const query = request.query as { keyLabel?: string; evidenceId?: string; limit?: string };
       const logs = await repository.getAuditLogs({
@@ -394,7 +380,7 @@ export async function registerHsmSigningRoutes(
     }
   });
 
-  app.get('/v1/security/hsm/health', async (_request, reply) => {
+  app.get('/v1/security/hsm/health', hsmRoute, async (_request, reply) => {
     try {
       const health = await signerService.getHealth();
       const code = health.status === 'ONLINE' ? 200 : 503;

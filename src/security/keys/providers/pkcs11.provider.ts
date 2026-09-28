@@ -57,6 +57,7 @@ import {
   DeviceError,
   InvalidInputError
 } from '../errors.js';
+import { ConfiguredSecretReferenceResolver } from '../../secret-reference-resolver.js';
 
 /**
  * PKCS#11 mechanism constants
@@ -595,8 +596,7 @@ export class PKCS11Provider implements KeyProvider {
       const pin = await fs.readFile(pinSource.path, 'utf-8');
       return pin.trim();
     } else if (pinSource.type === 'secret') {
-      // Retrieve from secret manager
-      throw new Error('Secret manager PIN retrieval not yet implemented');
+      return new ConfiguredSecretReferenceResolver().resolve(pinSource.reference);
     }
     
     const _exhaustiveCheck: never = pinSource;

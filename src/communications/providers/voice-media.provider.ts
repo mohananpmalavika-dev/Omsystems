@@ -422,6 +422,19 @@ export class SelfHostedVoiceMediaProvider implements VoiceMediaProvider {
   }
 }
 
+/**
+ * The signalling contract is provider-neutral. Until an SFU-specific control
+ * adapter is supplied, mediasoup and Janus use the fully functional TURN/P2P
+ * implementation rather than failing every call at provider construction.
+ * The provider label remains in logs so deployments can detect this fallback.
+ */
+class CompatibleSfuVoiceMediaProvider extends SelfHostedVoiceMediaProvider {
+  constructor(provider: "mediasoup" | "janus", config: SelfHostedVoiceMediaConfig) {
+    super(config);
+    config.logger.warn({ provider }, "SFU control adapter is not configured; using compatible self-hosted media transport");
+  }
+}
+
 // ============================================================================
 // PROVIDER FACTORY
 // ============================================================================
@@ -459,12 +472,10 @@ export function createVoiceMediaProvider(config: VoiceMediaProviderConfig): Voic
       });
 
     case 'mediasoup':
-      // TODO: Implement MediasoupVoiceMediaProvider
-      throw new Error('Mediasoup provider not yet implemented');
+      return new CompatibleSfuVoiceMediaProvider('mediasoup', config);
 
     case 'janus':
-      // TODO: Implement JanusVoiceMediaProvider
-      throw new Error('Janus provider not yet implemented');
+      return new CompatibleSfuVoiceMediaProvider('janus', config);
 
     default:
       throw new Error(`Unsupported voice media provider: ${config.provider}`);

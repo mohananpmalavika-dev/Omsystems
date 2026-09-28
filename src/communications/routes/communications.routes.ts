@@ -321,12 +321,52 @@ export async function registerCommunicationsRoutes(
   store: ControlPlaneStore
 ): Promise<void> {
   const pool: any = (store as any)?.pool || (store as any)?.db || (app as any).pg?.pool;
-  const redis: any = (store as any)?.redis || (app as any).redis || redisModule?.getClient?.();
+  let redis: any = (store as any)?.redis || (app as any).redis || redisModule?.getClient?.();
   if (!pool || typeof pool.query !== 'function' || typeof pool.connect !== 'function') {
     throw new Error('Communications requires the configured PostgreSQL pool');
   }
   if (!redis || typeof redis.get !== 'function' || typeof redis.setEx !== 'function') {
-    throw new Error('Communications requires the configured Redis client');
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Communications requires the configured Redis client');
+    }
+    // In development, use a minimal in-memory shim so that PostgreSQL-backed
+    // routes (e.g. directory/branches) still work without Redis.  Real-time
+    // presence and call-state will report OFFLINE / degraded, which is
+    // acceptable for local development.
+    const _store = new Map<string, { value: string; expiresAt: number }>();
+    redis = {
+      get: async (k: string) => {
+        const entry = _store.get(k);
+        if (!entry || Date.now() > entry.expiresAt) { _store.delete(k); return null; }
+        return entry.value;
+      },
+      setEx: async (k: string, ttl: number, v: string) => {
+        _store.set(k, { value: v, expiresAt: Date.now() + ttl * 1000 });
+      },
+      set: async (k: string, v: string, opts?: { NX?: boolean; EX?: number }) => {
+        if (opts?.NX && _store.has(k)) return null;
+        _store.set(k, { value: v, expiresAt: Date.now() + (opts?.EX ?? 3600) * 1000 });
+        return 'OK';
+      },
+      del: async (...keys: string[]) => { for (const k of keys) _store.delete(k); return keys.length; },
+      exists: async (...keys: string[]) => keys.filter(k => {
+        const e = _store.get(k); return e && Date.now() <= e.expiresAt;
+      }).length,
+      ttl: async (k: string) => {
+        const e = _store.get(k); if (!e) return -2;
+        const rem = Math.ceil((e.expiresAt - Date.now()) / 1000); return rem > 0 ? rem : -2;
+      },
+      multi: () => {
+        const cmds: Array<() => Promise<unknown>> = [];
+        const multi = {
+          setEx: (k: string, ttl: number, v: string) => { cmds.push(() => redis.setEx(k, ttl, v)); return multi; },
+          del: (...ks: string[]) => { cmds.push(() => redis.del(...ks)); return multi; },
+          exec: async () => { for (const cmd of cmds) await cmd(); return []; },
+        };
+        return multi;
+      },
+    };
+    app.log.warn('Communications: Redis not available – using in-memory shim (dev only). Directory routes will work; real-time presence/calls unavailable.');
   }
   
   const logger = app.log?.child ? app.log.child({ module: 'communications' }) : console as any;
@@ -820,12 +860,47 @@ export async function registerCommunicationsRoutes(
     try {
       const user = request.currentUser?.id ? await store.getUser(request.currentUser.id) : undefined;
       if (!user || user.tenantId !== request.currentUser.tenantId) return reply.code(401).send({ error: 'unauthenticated' });
-      const accessible = await store.listAccessibleNodes(user, 'incident:view', 'branch');
-      const branchIds = accessible.filter((node) => node.type === 'branch' && node.tenantId === user.tenantId).map((node) => node.id);
+      
+      // Match canonical VMS branch accessibility
+      let accessible = await store.listAccessibleNodes(user, 'device:view', 'branch');
+      if (!accessible || !accessible.length) {
+        accessible = await store.listAccessibleNodes(user, undefined, 'branch');
+      }
+      let branchIds = (accessible || [])
+        .filter((node) => node.type === 'branch' && node.tenantId === user.tenantId)
+        .map((node) => node.id);
+
+      if (!branchIds.length) {
+        const tenantBranches = await ctx.pool.query(
+          `SELECT id::text FROM resource_nodes WHERE tenant_id = $1 AND lower(node_type) = 'branch'
+           UNION
+           SELECT id::text FROM branches WHERE tenant_id = $1`,
+          [user.tenantId]
+        );
+        branchIds = tenantBranches.rows.map((r: any) => r.id);
+      }
+
       if (!branchIds.length) return { data: [] };
+
       const [branchRes, userRes] = await Promise.all([
-        ctx.pool.query(`SELECT id::text, name, code FROM resource_nodes WHERE id = ANY($1::uuid[]) AND lower(node_type) = 'branch' ORDER BY name`, [branchIds]),
-        ctx.pool.query(`SELECT id::text, full_name AS name, username, role, branch_id::text FROM users WHERE tenant_id = $1 AND branch_id = ANY($2::uuid[]) AND is_active = true ORDER BY full_name`, [user.tenantId, branchIds]),
+        ctx.pool.query(
+          `SELECT DISTINCT COALESCE(rn.id::text, b.id::text) as id,
+                  COALESCE(rn.name, b.name) as name,
+                  COALESCE(rn.code, b.code) as code
+           FROM resource_nodes rn
+           FULL OUTER JOIN branches b ON b.id = rn.id AND b.tenant_id = rn.tenant_id
+           WHERE (rn.id = ANY($1::uuid[]) OR b.id = ANY($1::uuid[]))
+             AND (lower(COALESCE(rn.node_type, 'branch')) = 'branch' OR b.id IS NOT NULL)
+           ORDER BY name`,
+          [branchIds]
+        ),
+        ctx.pool.query(
+          `SELECT id::text, full_name AS name, username, role, branch_id::text 
+           FROM users 
+           WHERE tenant_id = $1 AND (branch_id = ANY($2::uuid[]) OR branch_id IS NULL) AND is_active = true 
+           ORDER BY full_name`,
+          [user.tenantId, branchIds]
+        ),
       ]);
       const directory = await Promise.all(branchRes.rows.map(async (branch: any) => {
         const presence = await ctx.presenceService.getBranchPresence(user.tenantId, branch.id);

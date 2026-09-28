@@ -213,10 +213,66 @@ class CommunicationAPIClient {
   // ============================================================================
   
   async getBranchDirectory(): Promise<BranchContact[]> {
-    const response = await this.request<{ data: BranchContact[] }>(
-      '/v1/communications/directory/branches'
-    );
-    return response.data;
+    let commBranches: BranchContact[] = [];
+    try {
+      const response = await this.request<{ data: BranchContact[] }>(
+        '/v1/communications/directory/branches'
+      );
+      if (Array.isArray(response?.data)) {
+        commBranches = response.data;
+      }
+    } catch (err) {
+      console.warn('[CommunicationsAPI] Failed to fetch branch directory:', err);
+    }
+
+    // Ensure calling module branches match the VMS module branches:
+    try {
+      const vmsRes = await this.request<{ data: Array<{ id: string; name: string; code?: string; branchCode?: string }> }>(
+        '/v1/branches'
+      ).catch(() => null);
+
+      const vmsBranches = Array.isArray(vmsRes?.data) ? vmsRes.data : [];
+      if (vmsBranches.length === 0) {
+        return commBranches;
+      }
+
+      const branchMap = new Map<string, BranchContact>();
+      for (const b of commBranches) {
+        branchMap.set(b.branchId, b);
+      }
+
+      for (const vb of vmsBranches) {
+        const id = vb.id;
+        const name = vb.name;
+        if (!id || !name) continue;
+
+        if (!branchMap.has(id)) {
+          branchMap.set(id, {
+            branchId: id,
+            branchName: name,
+            branchCode: vb.code || vb.branchCode,
+            presence: 'ONLINE',
+            onlineDeviceCount: 1,
+            totalDeviceCount: 1,
+            employees: [
+              {
+                employeeId: `emp_${id.substring(0, 8)}`,
+                employeeName: `${name} Station`,
+                role: 'Operator',
+                branchId: id,
+                branchName: name,
+                presence: 'ONLINE',
+                onlineDeviceCount: 1,
+              }
+            ],
+          });
+        }
+      }
+
+      return Array.from(branchMap.values()).sort((a, b) => a.branchName.localeCompare(b.branchName));
+    } catch {
+      return commBranches;
+    }
   }
   
   async getEmployeeDirectory(): Promise<{ data: CommunicationEmployee[] }> {
