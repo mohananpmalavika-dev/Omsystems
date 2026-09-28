@@ -589,8 +589,14 @@ export class CommunicationCallService {
     }
 
     if (targetType === 'EMPLOYEE' && targetEmployeeId) {
-      // Get all online devices for employee
-      return this.presenceService.getOnlineEmployeeDevices(tenantId, targetEmployeeId);
+      // A VMS user can be reached both on linked employee devices and on the
+      // authenticated VMS workspace.  This makes operator-to-operator calls
+      // real calls instead of silently requiring a separate mobile device.
+      const deviceIds = await this.presenceService.getOnlineEmployeeDevices(tenantId, targetEmployeeId);
+      const operatorPresence = await this.presenceService.getOperatorPresence(tenantId, targetEmployeeId);
+      return operatorPresence.status === 'ONLINE'
+        ? [...new Set([...deviceIds, targetEmployeeId])]
+        : deviceIds;
     }
 
     if (targetType === 'SOC_QUEUE') {
