@@ -196,6 +196,10 @@ services:
       MEDIAMTX_HLS_URL: http://127.0.0.1:8888
       MEDIAMTX_WEBRTC_URL: http://127.0.0.1:8889
       STREAM_SECRETS_JSON: "{}"
+      # Wire the media-gateway to the control plane for RTSP credential resolution.
+      # Without this, every live stream request returns 503 stream_secret_unavailable.
+      STREAM_SECRET_PROVIDER_URL: http://control-plane:8080
+      STREAM_SECRET_PROVIDER_KEY: ${MEDIA_GATEWAY_SHARED_KEY:-cbe91a924912683e42b03365a68f37d0ef307e52caee53dd305af9f550909bb2}
       PUBLIC_HLS_BASE_URL: ${PUBLIC_HLS_BASE_URL:-https://34-14-220-41.sslip.io/hls}
       PUBLIC_WEBRTC_BASE_URL: ${PUBLIC_WEBRTC_BASE_URL:-https://34-14-220-41.sslip.io/webrtc}
     ports:
