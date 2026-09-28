@@ -97,6 +97,14 @@ const heartbeatSchema = z.object({
 
 const deviceRefreshSchema = z.object({ refreshToken: z.string().min(32) });
 
+// A device never supplies a device ID or tenant ID here.  Both are taken from
+// the verified device token.  On a shared terminal an optional employee ID is
+// merely the current shift selection and must be an active device link.
+const deviceTargetCallSchema = z.object({
+  actorEmployeeId: z.string().uuid().optional(),
+  context: z.record(z.unknown()).optional(),
+});
+
 const initiateCallSchema = z.object({
   targetType: z.enum(['BRANCH', 'EMPLOYEE', 'SOC_QUEUE']),
   targetId: z.string().min(1),
@@ -415,6 +423,121 @@ export async function registerCommunicationsRoutes(
     messagingService,
     signalingGateway,
     mediaProvider,
+  };
+
+  const startDeviceTargetCall = async (
+    request: AuthenticatedRequest,
+    reply: FastifyReply,
+    targetType: 'BRANCH' | 'EMPLOYEE'
+  ) => {
+    if (!(await authenticateDevice(request, reply, ctx))) return null;
+
+    const body = deviceTargetCallSchema.parse(request.body);
+    const targetId = targetType === 'BRANCH'
+      ? (request.params as { branchId: string }).branchId
+      : (request.params as { employeeId: string }).employeeId;
+    const device = request.deviceContext!;
+
+    if (body.actorEmployeeId) {
+      const actor = await ctx.pool.query(
+        `SELECT u.id, COALESCE(u.full_name, u.display_name, u.username) AS name
+         FROM communication_device_employees link
+         JOIN users u ON u.id = link.employee_id
+         WHERE link.device_id = $1 AND link.tenant_id = $2
+           AND link.employee_id = $3 AND link.unlinked_at IS NULL
+           AND link.can_make_calls = true AND u.tenant_id = $2 AND u.is_active = true
+         LIMIT 1`,
+        [device.deviceId, device.tenantId, body.actorEmployeeId]
+      );
+      if (!actor.rowCount) {
+        await reply.code(403).send({ error: 'employee_device_link_required' });
+        return null;
+      }
+    }
+
+    if (targetType === 'BRANCH') {
+      const branch = await ctx.pool.query(
+        `SELECT 1 FROM resource_nodes
+         WHERE id = $1 AND tenant_id = $2 AND lower(node_type) = 'branch' LIMIT 1`,
+        [targetId, device.tenantId]
+      );
+      if (!branch.rowCount) {
+        await reply.code(404).send({ error: 'branch_not_found' });
+        return null;
+      }
+    } else {
+      const employee = await ctx.pool.query(
+        `SELECT 1 FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true LIMIT 1`,
+        [targetId, device.tenantId]
+      );
+      if (!employee.rowCount) {
+        await reply.code(404).send({ error: 'employee_not_found' });
+        return null;
+      }
+    }
+
+    const callSession = await ctx.callService.initiateCall({
+      direction: 'OUTBOUND',
+      sourceType: 'DEVICE',
+      sourceBranchId: device.branchId,
+      sourceDeviceId: device.deviceId,
+      sourceEmployeeId: body.actorEmployeeId,
+      targetType,
+      targetBranchId: targetType === 'BRANCH' ? targetId : undefined,
+      targetEmployeeId: targetType === 'EMPLOYEE' ? targetId : undefined,
+      tenantId: device.tenantId,
+      initiatedBy: body.actorEmployeeId || device.deviceId,
+    });
+
+    const mediaSession = await ctx.mediaProvider.createSession({
+      callId: callSession.id,
+      tenantId: device.tenantId,
+      maxParticipants: 2,
+    });
+    await ctx.pool.query(
+      `UPDATE communication_call_sessions
+       SET media_session_id = $1, media_provider = $2 WHERE id = $3 AND tenant_id = $4`,
+      [mediaSession.sessionId, 'self-hosted', callSession.id, device.tenantId]
+    );
+    callSession.mediaSessionId = mediaSession.sessionId;
+    const participant = await ctx.mediaProvider.createParticipantToken({
+      sessionId: mediaSession.sessionId,
+      participantId: device.deviceId,
+      participantType: 'device',
+      canPublish: true,
+      canSubscribe: true,
+    });
+
+    await ctx.signalingGateway.broadcastCallInvite(device.tenantId, callSession.id, {
+      callId: callSession.id,
+      caller: {
+        type: body.actorEmployeeId ? 'EMPLOYEE' : 'BRANCH_DEVICE',
+        id: body.actorEmployeeId || device.deviceId,
+        branchId: device.branchId,
+      },
+      context: body.context,
+    });
+    await store.writeAudit({
+      tenantId: device.tenantId,
+      actorUserId: body.actorEmployeeId || null,
+      action: 'COMM_CALL_STARTED',
+      resourceNodeId: device.branchId,
+      outcome: 'success',
+      sourceIp: request.ip,
+      details: {
+        callId: callSession.id,
+        deviceId: device.deviceId,
+        targetType,
+        targetId,
+        actorEmployeeId: body.actorEmployeeId || null,
+      },
+    });
+
+    return { call: callSession, credentials: {
+      participantToken: participant.token,
+      turnServers: mediaSession.turnServers,
+      iceServers: mediaSession.turnServers,
+    } };
   };
   
   // ===========================================================================
@@ -1044,6 +1167,90 @@ export async function registerCommunicationsRoutes(
     }
   });
 
+  /**
+   * Callable directory for an already enrolled terminal.  This is deliberately
+   * separate from the operator directory: it authenticates only the device
+   * bearer token and scopes every result to that device's tenant.
+   */
+  app.get('/v1/communications/device-directory', { config: { noAuth: true } }, async (request: AuthenticatedRequest, reply) => {
+    try {
+      if (!(await authenticateDevice(request, reply, ctx))) return;
+      const device = request.deviceContext!;
+      const [branchResult, employeeResult, linkedResult] = await Promise.all([
+        ctx.pool.query(
+          `SELECT id::text, name, code
+           FROM resource_nodes
+           WHERE tenant_id = $1 AND lower(node_type) = 'branch'
+           ORDER BY name ASC`,
+          [device.tenantId]
+        ),
+        ctx.pool.query(
+          `SELECT id::text, COALESCE(full_name, display_name, username) AS name,
+                  role, branch_id::text AS branch_id
+           FROM users
+           WHERE tenant_id = $1 AND is_active = true AND branch_id IS NOT NULL
+           ORDER BY name ASC`,
+          [device.tenantId]
+        ),
+        ctx.pool.query(
+          `SELECT u.id::text, COALESCE(u.full_name, u.display_name, u.username) AS name,
+                  u.role, u.branch_id::text AS branch_id
+           FROM communication_device_employees link
+           JOIN users u ON u.id = link.employee_id
+           WHERE link.device_id = $1 AND link.tenant_id = $2
+             AND link.unlinked_at IS NULL AND link.can_make_calls = true
+             AND u.tenant_id = $2 AND u.is_active = true
+           ORDER BY name ASC`,
+          [device.deviceId, device.tenantId]
+        ),
+      ]);
+
+      const branchNames = new Map(branchResult.rows.map((branch: any) => [branch.id, branch.name]));
+      const employeePresence = await Promise.all(employeeResult.rows.map(async (employee: any) => {
+        const presence = await ctx.presenceService.getEmployeePresence(device.tenantId, employee.id);
+        return {
+          employeeId: employee.id,
+          employeeName: employee.name,
+          role: employee.role || 'Staff',
+          branchId: employee.branch_id,
+          branchName: branchNames.get(employee.branch_id) || 'Unassigned branch',
+          presence: presence.status,
+          onlineDeviceCount: presence.onlineDeviceIds.length,
+        };
+      }));
+      const branches = await Promise.all(branchResult.rows.map(async (branch: any) => {
+        const presence = await ctx.presenceService.getBranchPresence(device.tenantId, branch.id);
+        return {
+          branchId: branch.id,
+          branchName: branch.name,
+          branchCode: branch.code || undefined,
+          presence: presence.status,
+          onlineDeviceCount: presence.onlineDeviceIds.length,
+          totalDeviceCount: presence.deviceCount,
+          employees: employeePresence.filter((employee) => employee.branchId === branch.id),
+        };
+      }));
+
+      return reply.send({
+        data: {
+          branches,
+          employees: employeePresence,
+          linkedEmployees: linkedResult.rows.map((employee: any) => ({
+            employeeId: employee.id,
+            employeeName: employee.name,
+            employeeRole: employee.role || 'Staff',
+            branchId: employee.branch_id,
+            branchName: branchNames.get(employee.branch_id) || 'Unassigned branch',
+            presence: 'ONLINE',
+          })),
+        },
+      });
+    } catch (error) {
+      ctx.logger.error({ error }, 'Failed to load device call directory');
+      return reply.code(500).send({ error: 'device_directory_unavailable' });
+    }
+  });
+
   // ===========================================================================
   // 2. PRESENCE ROUTES
   // ===========================================================================
@@ -1212,6 +1419,38 @@ export async function registerCommunicationsRoutes(
    * Call VMS (Branch/Employee → SOC Queue)
    * POST /v1/communications/calls/soc
    */
+  /**
+   * Password-less device → branch. The signed device credential determines
+   * the calling device; every online device at the target branch rings and
+   * the existing atomic first-answer-wins flow chooses the recipient.
+   */
+  app.post('/v1/communications/device-calls/branch/:branchId', { config: { noAuth: true } }, async (request: AuthenticatedRequest, reply) => {
+    try {
+      const started = await startDeviceTargetCall(request, reply, 'BRANCH');
+      if (!started) return;
+      return reply.code(201).send({ data: started });
+    } catch (error: any) {
+      ctx.logger.error({ error }, 'Failed to initiate device branch call');
+      return reply.code(error instanceof z.ZodError ? 400 : 409).send({
+        error: error instanceof z.ZodError ? 'invalid_request' : error.message || 'call_initiation_failed',
+      });
+    }
+  });
+
+  /** Password-less device → employee. Only active linked employee devices ring. */
+  app.post('/v1/communications/device-calls/employee/:employeeId', { config: { noAuth: true } }, async (request: AuthenticatedRequest, reply) => {
+    try {
+      const started = await startDeviceTargetCall(request, reply, 'EMPLOYEE');
+      if (!started) return;
+      return reply.code(201).send({ data: started });
+    } catch (error: any) {
+      ctx.logger.error({ error }, 'Failed to initiate device employee call');
+      return reply.code(error instanceof z.ZodError ? 400 : 409).send({
+        error: error instanceof z.ZodError ? 'invalid_request' : error.message || 'call_initiation_failed',
+      });
+    }
+  });
+
   app.post('/v1/communications/calls/soc', { config: { noAuth: true } }, async (request: AuthenticatedRequest, reply) => {
     try {
       // Authenticate device
