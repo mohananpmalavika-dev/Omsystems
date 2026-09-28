@@ -93,6 +93,11 @@ export class SnapshotService {
       this.priorities.delete(cameraId);
       console.log(`[SnapshotService] Stopped snapshots for ${cameraId}`);
     }
+    const oldSnapshot = this.snapshots.get(cameraId);
+    if (oldSnapshot?.url) {
+      URL.revokeObjectURL(oldSnapshot.url);
+      this.snapshots.delete(cameraId);
+    }
   }
 
   /**
@@ -124,10 +129,15 @@ export class SnapshotService {
   stopAll(): void {
     console.log(`[SnapshotService] Stopping all ${this.intervals.size} snapshot streams`);
     
-    for (const cameraId of this.intervals.keys()) {
+    for (const cameraId of Array.from(this.intervals.keys())) {
       this.stopSnapshot(cameraId);
     }
-    
+
+    for (const snapshot of this.snapshots.values()) {
+      if (snapshot?.url) {
+        URL.revokeObjectURL(snapshot.url);
+      }
+    }
     this.snapshots.clear();
   }
 

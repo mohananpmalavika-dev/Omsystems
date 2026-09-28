@@ -945,6 +945,14 @@ export function EnhancedCameraGrid({
     }
   }, [markPlaybackActive, markPlaybackDeferred, updateStreamState]);
 
+  const sessionsRef = useRef<Map<string, LiveSessionResponse>>(new Map());
+  const loadingRef = useRef<Set<string>>(new Set());
+  const recoveryTimersRef = useRef<Map<string, number>>(new Map());
+
+  // Stable ref so recovery timers always call the latest handleStartLive without
+  // a circular dep chain (handleTilePlaybackError → handleStartLive → handleTilePlaybackError).
+  const handleStartLiveRef = useRef<typeof handleStartLive | null>(null);
+
   const handleTilePlaybackError = useCallback((cameraId: string, reason?: string) => {
     const errorMsg = reason ?? "HLS playback failed";
     setLiveErrors((current) => {
@@ -969,14 +977,11 @@ export function EnhancedCameraGrid({
         return next;
       });
       const stream = activeStreamTypesRef.current.get(cameraId) ?? "sub";
-      void handleStartLive(cameraId, stream, true);
+      // Use ref to avoid stale closure — always invokes the latest session starter.
+      void handleStartLiveRef.current?.(cameraId, stream, true);
     }, 12_000);
     recoveryTimersRef.current.set(cameraId, timer);
   }, [reportPlaybackFailure]);
-
-  const sessionsRef = useRef<Map<string, LiveSessionResponse>>(new Map());
-  const loadingRef = useRef<Set<string>>(new Set());
-  const recoveryTimersRef = useRef<Map<string, number>>(new Map());
 
   const releaseSession = useCallback((cameraId: string) => {
     const session = sessionsRef.current.get(cameraId);
@@ -1072,6 +1077,13 @@ export function EnhancedCameraGrid({
     updateStreamState,
   ]);
 
+  // Keep the stable ref in sync with the latest handleStartLive identity.
+  // This allows recovery timers and session-refresh timers to always call the
+  // current version without creating circular deps in their own useCallback arrays.
+  useEffect(() => {
+    handleStartLiveRef.current = handleStartLive;
+  }, [handleStartLive]);
+
   useEffect(() => () => {
     for (const controller of liveStartControllersRef.current.values()) {
       controller.abort();
@@ -1081,7 +1093,7 @@ export function EnhancedCameraGrid({
     }
     recoveryTimersRef.current.clear();
     pendingLiveStartsRef.current.clear();
-    for (const cameraId of sessionsRef.current.keys()) {
+    for (const cameraId of Array.from(sessionsRef.current.keys())) {
       releaseSession(cameraId);
     }
   }, [releaseSession]);
@@ -1100,13 +1112,14 @@ export function EnhancedCameraGrid({
       return [window.setTimeout(() => {
         if (sessionsRef.current.get(cameraId) !== session) return;
         const stream = activeStreamTypesRef.current.get(cameraId) ?? "sub";
-        // Refresh authorization smoothly with forceRefresh = true
-        void handleStartLive(cameraId, stream, true);
+        // Refresh authorization smoothly with forceRefresh = true.
+        // Use ref so this timer is not recreated every time handleStartLive changes identity.
+        void handleStartLiveRef.current?.(cameraId, stream, true);
       }, delay)];
     });
 
     return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [handleStartLive, sessions]);
+  }, [sessions]);
 
   const handleRequestLive = useCallback((cameraId: string) => {
     setOperatorSelectedCameraId(cameraId);

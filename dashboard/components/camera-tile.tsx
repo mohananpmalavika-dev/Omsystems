@@ -108,6 +108,180 @@ function shouldOfferCredentialUpdate(reason?: string) {
     normalized.includes("unauthorized camera");
 }
 
+const CameraTileAudioBadge = memo(function CameraTileAudioBadge({
+  videoElement,
+  effectiveMuted,
+  hasLiveFrame,
+  onLoudNoiseAlert,
+  hasLoudNoiseAlert,
+}: {
+  videoElement: HTMLVideoElement | null;
+  effectiveMuted: boolean;
+  hasLiveFrame: boolean;
+  onLoudNoiseAlert: (level: number) => void;
+  hasLoudNoiseAlert?: boolean;
+}) {
+  const [audioLevel, setAudioLevel] = useState(0);
+  const [audioWaveform, setAudioWaveform] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
+  const loudNoiseThresholdRef = useRef<{ consecutiveHighFrames: number; lastAlertTime: number }>({
+    consecutiveHighFrames: 0,
+    lastAlertTime: 0,
+  });
+
+  // Initialize or reuse the audio context for this video element.
+  // createMediaElementSource() may only be called ONCE per HTMLVideoElement
+  // (subsequent calls throw InvalidStateError). We therefore persist the
+  // AudioContext and AnalyserNode on the element itself via hidden properties
+  // and only tear them down when the element is truly unmounted (videoElement → null).
+  useEffect(() => {
+    if (!videoElement) {
+      setAudioLevel(0);
+      setAudioWaveform([0, 0, 0, 0, 0, 0, 0]);
+      return;
+    }
+
+    // One-time setup: create AudioContext + graph on the video element.
+    let analyser = (videoElement as unknown as { __audioAnalyser?: AnalyserNode }).__audioAnalyser;
+    if (!analyser) {
+      try {
+        const AudioCtxClass =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (!AudioCtxClass) return;
+        const ctx = new AudioCtxClass();
+        (videoElement as unknown as { __audioCtx: AudioContext }).__audioCtx = ctx;
+        analyser = ctx.createAnalyser();
+        analyser.fftSize = 64;
+        analyser.smoothingTimeConstant = 0.4;
+        (videoElement as unknown as { __audioAnalyser: AnalyserNode }).__audioAnalyser = analyser;
+        const source = ctx.createMediaElementSource(videoElement);
+        source.connect(analyser);
+        analyser.connect(ctx.destination);
+      } catch {
+        // CORS or autoplay-policy restriction — audio metering unavailable.
+        return;
+      }
+    }
+
+    // True cleanup: called only when videoElement itself is removed.
+    return () => {
+      try {
+        const ctx = (videoElement as unknown as { __audioCtx?: AudioContext }).__audioCtx;
+        if (ctx && ctx.state !== "closed") void ctx.close().catch(() => {});
+        delete (videoElement as unknown as { __audioCtx?: AudioContext }).__audioCtx;
+        delete (videoElement as unknown as { __audioAnalyser?: AnalyserNode }).__audioAnalyser;
+      } catch {}
+      setAudioLevel(0);
+      setAudioWaveform([0, 0, 0, 0, 0, 0, 0]);
+    };
+  }, [videoElement]);
+
+  // Suspend/resume the AudioContext when the tile is muted or has no live frame.
+  // This avoids closing/reopening the context (which would invalidate the media source node).
+  useEffect(() => {
+    const ctx = (videoElement as unknown as { __audioCtx?: AudioContext } | null)?.__audioCtx;
+    if (!ctx) return;
+    if (!effectiveMuted && hasLiveFrame && videoElement) {
+      if (ctx.state === "suspended") void ctx.resume();
+    } else {
+      if (ctx.state === "running") void ctx.suspend();
+      setAudioLevel(0);
+      setAudioWaveform([0, 0, 0, 0, 0, 0, 0]);
+    }
+  }, [effectiveMuted, hasLiveFrame, videoElement]);
+
+  // Poll the analyser at 10 Hz (100ms interval) — no rAF needed since we are
+  // already throttling updates and rAF runs at 60 Hz adding unnecessary GPU pressure.
+  useEffect(() => {
+    if (!videoElement || effectiveMuted || !hasLiveFrame) return;
+    const analyser = (videoElement as unknown as { __audioAnalyser?: AnalyserNode }).__audioAnalyser;
+    if (!analyser) return;
+
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    const timer = window.setInterval(() => {
+      const ctx = (videoElement as unknown as { __audioCtx?: AudioContext }).__audioCtx;
+      if (!ctx || ctx.state !== "running") return;
+
+      analyser.getByteFrequencyData(dataArray);
+      let sum = 0;
+      for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+      const avg = sum / (dataArray.length || 1);
+      const currentLevel = Math.min(100, Math.round((avg / 128) * 100));
+
+      setAudioLevel(currentLevel);
+      setAudioWaveform([
+        Math.min(100, Math.round((dataArray[1] / 240) * 100)),
+        Math.min(100, Math.round((dataArray[3] / 240) * 100)),
+        Math.min(100, Math.round((dataArray[5] / 240) * 100)),
+        Math.min(100, Math.round((dataArray[8] / 240) * 100)),
+        Math.min(100, Math.round((dataArray[12] / 240) * 100)),
+        Math.min(100, Math.round((dataArray[18] / 240) * 100)),
+        Math.min(100, Math.round((dataArray[25] / 240) * 100)),
+      ]);
+
+      // Loud noise detection
+      if (currentLevel > 76) {
+        loudNoiseThresholdRef.current.consecutiveHighFrames += 1;
+        if (loudNoiseThresholdRef.current.consecutiveHighFrames >= 10 || currentLevel > 90) {
+          const alertNow = Date.now();
+          if (alertNow - loudNoiseThresholdRef.current.lastAlertTime > 6000) {
+            loudNoiseThresholdRef.current.lastAlertTime = alertNow;
+            onLoudNoiseAlert(currentLevel);
+          }
+        }
+      } else {
+        loudNoiseThresholdRef.current.consecutiveHighFrames = Math.max(
+          0,
+          loudNoiseThresholdRef.current.consecutiveHighFrames - 1,
+        );
+      }
+    }, 100);
+
+    return () => {
+      window.clearInterval(timer);
+      setAudioLevel(0);
+      setAudioWaveform([0, 0, 0, 0, 0, 0, 0]);
+    };
+  }, [videoElement, effectiveMuted, hasLiveFrame, onLoudNoiseAlert]);
+
+  if (effectiveMuted || !hasLiveFrame || !videoElement) return null;
+
+  return (
+    <span
+      className={`status-pill flex items-center gap-1.5 transition-all duration-200 ${
+        hasLoudNoiseAlert
+          ? "text-rose-300 border-rose-500/80 bg-rose-950/90 shadow-[0_0_12px_rgba(244,63,94,0.5)] animate-pulse font-bold"
+          : "text-emerald-400 border-emerald-500/40 bg-emerald-950/70"
+      }`}
+      title={`Relative audio signal: ${audioLevel}% (not calibrated dB)`}
+    >
+      <Volume2
+        size={12}
+        className={hasLoudNoiseAlert ? "text-rose-400 animate-bounce" : audioLevel > 5 ? "animate-pulse text-emerald-400" : "text-emerald-400/70"}
+      />
+      <span className="text-[10px] font-mono font-bold tracking-tight">
+        {hasLoudNoiseAlert ? "LOUD NOISE!" : "AUDIO"}
+      </span>
+
+      {/* Live 7-Band Equalizer Waveform */}
+      <span className="inline-flex items-end gap-[1.5px] h-3 px-1 py-[1px] bg-slate-950/80 rounded border border-emerald-500/30 overflow-hidden">
+        {audioWaveform.map((band, idx) => (
+          <span
+            key={idx}
+            className={`w-[2.5px] rounded-[0.5px] transition-all duration-75 ${
+              band > 75 ? "bg-rose-500" : band > 35 ? "bg-amber-400" : "bg-emerald-400"
+            }`}
+            style={{ height: `${Math.max(15, band)}%` }}
+          />
+        ))}
+      </span>
+      <span className="text-[9px] font-mono opacity-85">
+        {audioLevel}%
+      </span>
+    </span>
+  );
+});
+
 function CameraTileComponent({
   camera,
   session,
@@ -187,11 +361,11 @@ function CameraTileComponent({
     setPan({ x: 0, y: 0 });
   }, []);
   const [isMuted, setIsMuted] = useState(true); // Start video without browser-blocked audio autoplay.
-  const [audioLevel, setAudioLevel] = useState<number>(0);
-  const [audioWaveform, setAudioWaveform] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
   const [loudNoiseAlert, setLoudNoiseAlert] = useState<{ active: boolean; level: number; timestamp: number } | null>(null);
+  const handleLoudNoiseAlert = useCallback((level: number) => {
+    setLoudNoiseAlert({ active: true, level, timestamp: Date.now() });
+  }, []);
   const [failedSnapshotUrl, setFailedSnapshotUrl] = useState<string>();
-  const loudNoiseThresholdRef = useRef<{ consecutiveHighFrames: number; lastAlertTime: number }>({ consecutiveHighFrames: 0, lastAlertTime: 0 });
   const [isTalking, setIsTalking] = useState(false);
   const [hasLiveFrame, setHasLiveFrame] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -316,99 +490,7 @@ function CameraTileComponent({
 
   const effectiveMuted = isSoloAudio === true ? false : isSoloAudio === false ? true : isMuted;
 
-  // Real-time Web Audio API VU decibel meter
-  useEffect(() => {
-    if (!internalVideoElement || effectiveMuted || !hasLiveFrame) {
-      setAudioLevel(0);
-      return;
-    }
-
-    let animId: number;
-    let isCancelled = false;
-
-    const setupAudioMeter = () => {
-      try {
-        const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        if (!AudioCtxClass) return;
-
-        let ctx = (internalVideoElement as unknown as { __audioCtx?: AudioContext }).__audioCtx;
-        let analyser = (internalVideoElement as unknown as { __audioAnalyser?: AnalyserNode }).__audioAnalyser;
-
-        if (!ctx) {
-          ctx = new AudioCtxClass();
-          (internalVideoElement as unknown as { __audioCtx: AudioContext }).__audioCtx = ctx;
-          analyser = ctx.createAnalyser();
-          analyser.fftSize = 64;
-          analyser.smoothingTimeConstant = 0.4;
-          (internalVideoElement as unknown as { __audioAnalyser: AnalyserNode }).__audioAnalyser = analyser;
-
-          const source = ctx.createMediaElementSource(internalVideoElement);
-          source.connect(analyser);
-          analyser.connect(ctx.destination);
-        }
-
-        if (ctx.state === "suspended") {
-          void ctx.resume();
-        }
-
-        const dataArray = new Uint8Array(analyser!.frequencyBinCount);
-        let frameCount = 0;
-        const updateMeter = () => {
-          if (isCancelled) return;
-          analyser!.getByteFrequencyData(dataArray);
-          let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) {
-            sum += dataArray[i];
-          }
-          const avg = sum / (dataArray.length || 1);
-          const currentLevel = Math.min(100, Math.round((avg / 128) * 100));
-          setAudioLevel(currentLevel);
-
-          // Update multi-band equalizer waveform
-          frameCount++;
-          if (frameCount % 2 === 0) {
-            setAudioWaveform([
-              Math.min(100, Math.round((dataArray[1] / 240) * 100)),
-              Math.min(100, Math.round((dataArray[3] / 240) * 100)),
-              Math.min(100, Math.round((dataArray[5] / 240) * 100)),
-              Math.min(100, Math.round((dataArray[8] / 240) * 100)),
-              Math.min(100, Math.round((dataArray[12] / 240) * 100)),
-              Math.min(100, Math.round((dataArray[18] / 240) * 100)),
-              Math.min(100, Math.round((dataArray[25] / 240) * 100)),
-            ]);
-          }
-
-          // This is a relative browser signal level, not calibrated sound pressure.
-          if (currentLevel > 76) {
-            loudNoiseThresholdRef.current.consecutiveHighFrames += 1;
-            if (loudNoiseThresholdRef.current.consecutiveHighFrames >= 10 || currentLevel > 90) {
-              const now = Date.now();
-              if (now - loudNoiseThresholdRef.current.lastAlertTime > 6000) {
-                loudNoiseThresholdRef.current.lastAlertTime = now;
-                setLoudNoiseAlert({ active: true, level: currentLevel, timestamp: now });
-              }
-            }
-          } else {
-            loudNoiseThresholdRef.current.consecutiveHighFrames = Math.max(0, loudNoiseThresholdRef.current.consecutiveHighFrames - 1);
-          }
-
-          animId = requestAnimationFrame(updateMeter);
-        };
-        updateMeter();
-      } catch {
-        // Fallback for CORS or browser autoplay policy without errors
-      }
-    };
-
-    setupAudioMeter();
-
-    return () => {
-      isCancelled = true;
-      cancelAnimationFrame(animId);
-      setAudioLevel(0);
-      setAudioWaveform([0, 0, 0, 0, 0, 0, 0]);
-    };
-  }, [internalVideoElement, effectiveMuted, hasLiveFrame]);
+  // Real-time audio metering is handled by isolated CameraTileAudioBadge to avoid 60 FPS re-renders of CameraTile
 
   // Auto-dismiss Loud Noise alert after 6 seconds of silence
   useEffect(() => {
@@ -444,20 +526,23 @@ function CameraTileComponent({
   const latestAiAlert = activeAiAlerts[0];
 
   // Synchronized Event Flashback: Capture keyframe when alert triggers
+  const lastAlertIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!latestAiAlert) return;
     if (flashbackDismissedAlertId === latestAiAlert.id) return;
+    if (lastAlertIdRef.current === latestAiAlert.id) return;
+    lastAlertIdRef.current = latestAiAlert.id;
 
     const video = internalVideoElement || tileRef.current?.querySelector("video");
     if (video && video.videoWidth > 0 && video.videoHeight > 0) {
       try {
         const offCanvas = document.createElement("canvas");
-        offCanvas.width = video.videoWidth;
-        offCanvas.height = video.videoHeight;
+        offCanvas.width = Math.min(640, video.videoWidth);
+        offCanvas.height = Math.min(360, video.videoHeight);
         const ctx = offCanvas.getContext("2d");
         if (ctx) {
           ctx.drawImage(video, 0, 0, offCanvas.width, offCanvas.height);
-          setFlashbackFrameUrl(offCanvas.toDataURL("image/jpeg", 0.8));
+          setFlashbackFrameUrl(offCanvas.toDataURL("image/jpeg", 0.7));
         }
       } catch (err) {
         if (snapshotUrl) setFlashbackFrameUrl(snapshotUrl);
@@ -764,40 +849,13 @@ function CameraTileComponent({
             <i />
             {hasLiveFrame ? "Live HLS" : (liveError && isFatalLiveError(liveError)) ? (snapshotUrl && snapshotUrl !== failedSnapshotUrl ? "Snapshot fallback" : "Stream unavailable") : session?.hls ? "Connecting" : camera.status === "online" ? "Device online" : camera.status}
           </span>
-          {!effectiveMuted && hasLiveFrame && internalVideoElement && (
-            <span
-              className={`status-pill flex items-center gap-1.5 transition-all duration-200 ${
-                loudNoiseAlert?.active
-                  ? "text-rose-300 border-rose-500/80 bg-rose-950/90 shadow-[0_0_12px_rgba(244,63,94,0.5)] animate-pulse font-bold"
-                  : "text-emerald-400 border-emerald-500/40 bg-emerald-950/70"
-              }`}
-              title={`Relative audio signal: ${audioLevel}% (not calibrated dB)`}
-            >
-              <Volume2
-                size={12}
-                className={loudNoiseAlert?.active ? "text-rose-400 animate-bounce" : audioLevel > 5 ? "animate-pulse text-emerald-400" : "text-emerald-400/70"}
-              />
-              <span className="text-[10px] font-mono font-bold tracking-tight">
-                {loudNoiseAlert?.active ? "LOUD NOISE!" : "AUDIO"}
-              </span>
-
-              {/* Live 7-Band Equalizer Waveform */}
-              <span className="inline-flex items-end gap-[1.5px] h-3 px-1 py-[1px] bg-slate-950/80 rounded border border-emerald-500/30 overflow-hidden">
-                {audioWaveform.map((band, idx) => (
-                  <span
-                    key={idx}
-                    className={`w-[2.5px] rounded-[0.5px] transition-all duration-75 ${
-                      band > 75 ? "bg-rose-500" : band > 35 ? "bg-amber-400" : "bg-emerald-400"
-                    }`}
-                    style={{ height: `${Math.max(15, band)}%` }}
-                  />
-                ))}
-              </span>
-              <span className="text-[9px] font-mono opacity-85">
-                {audioLevel}%
-              </span>
-            </span>
-          )}
+          <CameraTileAudioBadge
+            videoElement={internalVideoElement}
+            effectiveMuted={effectiveMuted}
+            hasLiveFrame={hasLiveFrame}
+            onLoudNoiseAlert={handleLoudNoiseAlert}
+            hasLoudNoiseAlert={loudNoiseAlert?.active}
+          />
           {isSoloAudio && (
             <span className="status-pill text-amber-300 border-amber-500/60 bg-amber-950/80 font-bold" title="Solo Audio is isolated to this camera">
               SOLO AUDIO

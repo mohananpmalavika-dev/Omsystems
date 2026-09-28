@@ -153,11 +153,25 @@ export function HlsPlayer({
       if (peerConnection) {
         peerConnection.ontrack = null;
         peerConnection.oniceconnectionstatechange = null;
-        peerConnection.close();
+        try {
+          peerConnection.getReceivers().forEach((r) => {
+            try { r.track?.stop(); } catch {}
+          });
+          peerConnection.getTransceivers().forEach((t) => {
+            try { t.receiver?.track?.stop(); } catch {}
+            try { t.stop?.(); } catch {}
+          });
+          peerConnection.close();
+        } catch {}
         peerConnection = null;
       }
       if (hls) {
-        hls.destroy();
+        try {
+          hls.detachMedia();
+        } catch {}
+        try {
+          hls.destroy();
+        } catch {}
         hls = null;
       }
       if (video) {
@@ -175,12 +189,14 @@ export function HlsPlayer({
       if (disposed || failed || video.paused || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
       if (playbackStarted && video.currentTime === lastMediaTime) return;
       lastMediaTime = video.currentTime;
-      playbackStarted = true;
       lastProgressAt = Date.now();
-      recoveryAttempts = 0;
-      setError(null);
-      setStatus("live");
-      reportPlaying(true);
+      if (!playbackStarted) {
+        playbackStarted = true;
+        recoveryAttempts = 0;
+        setError(null);
+        setStatus("live");
+        reportPlaying(true);
+      }
       if (whepTimeoutTimer) {
         clearTimeout(whepTimeoutTimer);
         whepTimeoutTimer = undefined;
@@ -388,14 +404,19 @@ export function HlsPlayer({
           if (pc.iceGatheringState === "complete") {
             resolve();
           } else {
+            let timeoutId: ReturnType<typeof setTimeout>;
             const onGatherChange = () => {
               if (pc.iceGatheringState === "complete") {
                 pc.removeEventListener("icegatheringstatechange", onGatherChange);
+                clearTimeout(timeoutId);
                 resolve();
               }
             };
             pc.addEventListener("icegatheringstatechange", onGatherChange);
-            setTimeout(resolve, 600);
+            timeoutId = setTimeout(() => {
+              pc.removeEventListener("icegatheringstatechange", onGatherChange);
+              resolve();
+            }, 600);
           }
         });
 
@@ -531,10 +552,10 @@ export function HlsPlayer({
         return;
       }
 
-      // Automatically snap to live edge if HLS playback drifted behind (> 2s)
+      // Automatically snap to live edge if HLS playback severely drifted behind (> 6s)
       if (hls && typeof hls.liveSyncPosition === "number" && !isNaN(hls.liveSyncPosition)) {
         const drift = hls.liveSyncPosition - video.currentTime;
-        if (drift > 2) {
+        if (drift > 6) {
           try {
             video.currentTime = hls.liveSyncPosition;
           } catch {

@@ -254,7 +254,13 @@ function semanticEventType(value: string): SecurityDeviceEventType | undefined {
   if (value.includes('motion') || value.includes('pir')) return 'MOTION_DETECTED';
   if (value.includes('glassbreak')) return 'GLASS_BREAK_DETECTED';
   if (value.includes('shock') || value.includes('vibration')) return 'VIBRATION_DETECTED';
-  if (value.includes('smoke') || value.includes('fire')) return 'SMOKE_DETECTED';
+  // Pure color-based object detections (e.g. orange object) must NOT trigger a fire alarm.
+  // Only genuine smoke/fire sensor events should map to fire/smoke event types.
+  // Color detection events contain 'color', 'orange', 'objectcolor', etc. — suppress them.
+  if (isColorObjectDetection(value)) return undefined;
+  if (value.includes('firealarm') || value === 'fire') return 'FIRE_ALARM_TRIGGERED';
+  if (value.includes('fire')) return 'FIRE_ALARM_TRIGGERED';
+  if (value.includes('smoke')) return 'SMOKE_DETECTED';
   if (value.includes('water') || value.includes('flood')) return 'WATER_LEAK_DETECTED';
   if (value.includes('dooropen') || value.includes('zonealarm')) return 'DOOR_OPENED';
   if (value.includes('doorclose')) return 'DOOR_CLOSED';
@@ -262,6 +268,19 @@ function semanticEventType(value: string): SecurityDeviceEventType | undefined {
   if (value.includes('armed')) return 'ALARM_ARMED';
   if (value.includes('disarmed')) return 'ALARM_DISARMED';
   return undefined;
+}
+
+/**
+ * Returns true when the normalized event value looks like a color-based object
+ * detection (e.g. "orange object", "objectcolor", "colordetect", "orangeobject").
+ * These are video-analytics colour classifications and must NOT trigger fire/smoke
+ * alarms — only genuine sensor events (smoke detector, heat detector, fire panel)
+ * should produce fire-category alerts.
+ * Alert only on real movement/shake events (shock, vibration, motion) from such sensors.
+ */
+function isColorObjectDetection(value: string): boolean {
+  const colorKeywords = ['orange', 'red', 'yellow', 'colorobject', 'objectcolor', 'colordetect', 'colourdetect', 'colourobject'];
+  return colorKeywords.some((kw) => value.includes(kw));
 }
 
 function eventCategory(eventType: SecurityDeviceEventType): SecurityDeviceEvent['category'] {
@@ -274,7 +293,7 @@ function eventCategory(eventType: SecurityDeviceEventType): SecurityDeviceEvent[
 }
 
 function eventSeverity(eventType: SecurityDeviceEventType): EventSeverity {
-  if (eventType === 'PANIC_BUTTON_PRESSED' || eventType === 'SMOKE_DETECTED' || eventType === 'WATER_LEAK_DETECTED') return 'P1';
+  if (eventType === 'PANIC_BUTTON_PRESSED' || eventType === 'SMOKE_DETECTED' || eventType === 'FIRE_ALARM_TRIGGERED' || eventType === 'WATER_LEAK_DETECTED') return 'P1';
   if (eventType === 'DEVICE_TAMPER' || eventType === 'GLASS_BREAK_DETECTED' || eventType === 'ALARM_TRIGGERED') return 'P2';
   if (eventType === 'AX_PRO_EVENT_UNMAPPED') return 'INFO';
   return 'P3';

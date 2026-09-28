@@ -359,10 +359,17 @@ export function useVideoWallScheduler(
 
   const runSchedulerRef = useRef(runScheduler);
   useEffect(() => {
+    // Keep the ref in sync so the stable interval below always calls the
+    // latest scheduler version (which captures the current camera list, grid
+    // positions, and alert IDs) without recreating the interval itself.
     runSchedulerRef.current = runScheduler;
   }, [runScheduler]);
 
   useEffect(() => {
+    // Run once on initialization and then on a fixed 8-second cadence.
+    // The effect intentionally depends only on `isInitialized` (set once, never
+    // unset) so the interval is never torn down and recreated due to upstream
+    // prop changes — the ref above ensures we always call the latest scheduler.
     if (!isInitialized) return;
     let cancelled = false;
     const run = async () => {
@@ -378,7 +385,8 @@ export function useVideoWallScheduler(
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [isInitialized]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isInitialized]); // stable — runSchedulerRef.current provides latest logic
 
   useEffect(() => () => {
     snapshotServiceRef.current?.stopAll();
