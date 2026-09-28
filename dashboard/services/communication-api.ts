@@ -425,10 +425,10 @@ class CommunicationAPIClient {
     if (params?.limit) queryParams.set('limit', params.limit.toString());
     if (params?.offset) queryParams.set('offset', params.offset.toString());
     
-    const response = await this.request<{ data: { calls: CallSession[]; total: number } }>(
+    const response = await this.request<{ data: CallSession[]; pagination: { total: number } }>(
       `/v1/communications/calls/history?${queryParams.toString()}`
     );
-    return response.data;
+    return { calls: response.data, total: response.pagination.total };
   }
   
   // ============================================================================

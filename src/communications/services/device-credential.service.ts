@@ -391,8 +391,35 @@ export class DeviceCredentialService {
       return null;
     }
 
-    // Generate new tokens (with rotation)
-    return this.createDeviceTokens(device);
+    // Rotate atomically. Parallel refreshes using the same old token cannot
+    // both succeed, so a stolen or replayed refresh token is not usable after
+    // the first accepted rotation.
+    const nextRefreshToken = this.generateRefreshToken();
+    const nextRefreshTokenHash = this.hashToken(nextRefreshToken);
+    const now = new Date();
+    const accessTokenExpiresAt = new Date(now.getTime() + this.ACCESS_TOKEN_LIFETIME * 1000);
+    const refreshTokenExpiresAt = new Date(now.getTime() + this.REFRESH_TOKEN_LIFETIME * 1000);
+    const rotated = await this.pool.query(
+      `UPDATE communication_device_credentials
+       SET refresh_token_hash = $1, expires_at = $2, created_at = NOW()
+       WHERE device_id = $3 AND tenant_id = $4 AND refresh_token_hash = $5
+       RETURNING device_id`,
+      [nextRefreshTokenHash, refreshTokenExpiresAt, credential.deviceId, credential.tenantId, tokenHash]
+    );
+    if (!rotated.rowCount) return null;
+
+    await this.pool.query(
+      `UPDATE communication_devices SET last_seen_at = NOW(), updated_at = NOW()
+       WHERE id = $1 AND tenant_id = $2`,
+      [device.id, device.tenantId]
+    );
+    return {
+      deviceId: device.id,
+      accessToken: this.generateAccessToken(device.id, device.deviceUuid),
+      refreshToken: nextRefreshToken,
+      accessTokenExpiresAt,
+      refreshTokenExpiresAt,
+    };
   }
 
   /**

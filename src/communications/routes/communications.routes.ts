@@ -483,6 +483,7 @@ export async function registerCommunicationsRoutes(
         : (request.params as { employeeId: string }).employeeId;
     const device = request.deviceContext!;
     let callerName = 'Branch device';
+    let callerType: 'EMPLOYEE' | 'BRANCH_DEVICE' = 'BRANCH_DEVICE';
 
     if (body.actorEmployeeId) {
       const actor = await ctx.pool.query(
@@ -500,12 +501,16 @@ export async function registerCommunicationsRoutes(
         return null;
       }
       callerName = actor.rows[0].name;
+      callerType = 'EMPLOYEE';
     } else {
       const deviceName = await ctx.pool.query(
-        'SELECT COALESCE(assigned_employee_name, device_name) AS device_name FROM communication_devices WHERE id = $1 AND tenant_id = $2 LIMIT 1',
+        `SELECT COALESCE(assigned_employee_name, device_name) AS device_name,
+                assigned_employee_code IS NOT NULL AS represents_employee
+         FROM communication_devices WHERE id = $1 AND tenant_id = $2 LIMIT 1`,
         [device.deviceId, device.tenantId]
       );
       callerName = deviceName.rows[0]?.device_name || callerName;
+      if (deviceName.rows[0]?.represents_employee) callerType = 'EMPLOYEE';
     }
 
     if (targetType === 'BRANCH') {
@@ -575,7 +580,7 @@ export async function registerCommunicationsRoutes(
     await ctx.signalingGateway.broadcastCallInvite(device.tenantId, callSession.id, {
       callId: callSession.id,
       caller: {
-        type: body.actorEmployeeId ? 'EMPLOYEE' : 'BRANCH_DEVICE',
+        type: callerType,
         id: body.actorEmployeeId || device.deviceId,
         branchId: device.branchId,
         name: callerName,
@@ -900,6 +905,7 @@ export async function registerCommunicationsRoutes(
       }
       
       const device = result.rows[0];
+      if (!(await requirePermission(request, reply, ctx, COMMUNICATION_PERMISSIONS.DEVICE_VIEW))) return;
       
       // Get linked employees
       const employeesResult = await ctx.pool.query(
@@ -1732,6 +1738,12 @@ export async function registerCommunicationsRoutes(
         actorEmployeeId?: string;
         context?: any;
       };
+      const callerIdentity = await ctx.pool.query<{ caller_name: string; represents_employee: boolean }>(
+        `SELECT COALESCE(assigned_employee_name, device_name) AS caller_name,
+                assigned_employee_code IS NOT NULL AS represents_employee
+         FROM communication_devices WHERE id = $1 AND tenant_id = $2 LIMIT 1`,
+        [request.deviceContext!.deviceId, request.deviceContext!.tenantId]
+      );
       
       if (body.actorType === 'EMPLOYEE' && !body.actorEmployeeId) {
         return reply.code(400).send({ error: 'employee_identity_required' });
@@ -1769,10 +1781,10 @@ export async function registerCommunicationsRoutes(
         {
           callId: callSession.id,
           caller: {
-            type: body.actorType,
+            type: body.actorType === 'EMPLOYEE' || callerIdentity.rows[0]?.represents_employee ? 'EMPLOYEE' : 'BRANCH_DEVICE',
             id: request.deviceContext!.deviceId,
             branchId: request.deviceContext!.branchId,
-            name: 'Branch Device', // TODO: Get from device/employee profile
+            name: callerIdentity.rows[0]?.caller_name || 'Branch device',
           },
           context: body.context,
         }
@@ -2062,6 +2074,7 @@ export async function registerCommunicationsRoutes(
     try {
       const query = request.query as {
         branchId?: string;
+        employeeId?: string;
         status?: string;
         direction?: string;
         limit?: string;
@@ -2070,6 +2083,17 @@ export async function registerCommunicationsRoutes(
       
       const limit = Math.min(parseInt(query.limit || '50', 10), 100);
       const offset = parseInt(query.offset || '0', 10);
+      const user = await store.getUser(request.currentUser.id);
+      if (!user || user.tenantId !== request.currentUser.tenantId) {
+        return reply.code(401).send({ error: 'unauthenticated' });
+      }
+      const accessible = await store.listAccessibleNodes(user, 'incident:view', 'branch');
+      const allowedBranchIds = accessible
+        .filter((node) => node.tenantId === user.tenantId)
+        .map((node) => node.id);
+      if (!allowedBranchIds.length) {
+        return { data: [], pagination: { limit, offset, total: 0, hasMore: false } };
+      }
       
       let sql = `
         SELECT 
@@ -2079,8 +2103,9 @@ export async function registerCommunicationsRoutes(
           duration_seconds, end_reason
         FROM communication_call_sessions
         WHERE tenant_id = $1
+          AND (source_branch_id = ANY($2::uuid[]) OR target_branch_id = ANY($2::uuid[]))
       `;
-      const params: any[] = [request.currentUser.tenantId];
+      const params: any[] = [request.currentUser.tenantId, allowedBranchIds];
       
       if (query.branchId) {
         params.push(query.branchId);
@@ -2090,6 +2115,10 @@ export async function registerCommunicationsRoutes(
       if (query.status) {
         params.push(query.status);
         sql += ` AND status = $${params.length}`;
+      }
+      if (query.employeeId) {
+        params.push(query.employeeId);
+        sql += ` AND (source_employee_id = $${params.length} OR target_employee_id = $${params.length} OR source_operator_id = $${params.length})`;
       }
       
       if (query.direction) {
@@ -2103,12 +2132,26 @@ export async function registerCommunicationsRoutes(
       const result = await ctx.pool.query(sql, params);
       
       // Get total count
-      let countSql = `SELECT COUNT(*) FROM communication_call_sessions WHERE tenant_id = $1`;
-      const countParams: any[] = [request.currentUser.tenantId];
+      let countSql = `SELECT COUNT(*) FROM communication_call_sessions
+        WHERE tenant_id = $1
+          AND (source_branch_id = ANY($2::uuid[]) OR target_branch_id = ANY($2::uuid[]))`;
+      const countParams: any[] = [request.currentUser.tenantId, allowedBranchIds];
       
       if (query.branchId) {
         countParams.push(query.branchId);
         countSql += ` AND (source_branch_id = $${countParams.length} OR target_branch_id = $${countParams.length})`;
+      }
+      if (query.status) {
+        countParams.push(query.status);
+        countSql += ` AND status = $${countParams.length}`;
+      }
+      if (query.direction) {
+        countParams.push(query.direction);
+        countSql += ` AND direction = $${countParams.length}`;
+      }
+      if (query.employeeId) {
+        countParams.push(query.employeeId);
+        countSql += ` AND (source_employee_id = $${countParams.length} OR target_employee_id = $${countParams.length} OR source_operator_id = $${countParams.length})`;
       }
       
       const countResult = await ctx.pool.query(countSql, countParams);
