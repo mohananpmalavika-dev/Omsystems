@@ -19,7 +19,7 @@ html[data-theme] .app-shell .experience-surface :is(.field-hero, .workspace-head
 .field-visual svg { width: 100%; height: 170px; overflow: visible; }
 .field-visual-coordinate, .field-visual-caption { color: #7c98c4; font: 7px/1.5 ui-monospace, monospace; letter-spacing: .13em; }
 .field-visual-coordinate { align-self: flex-end; }.field-visual-caption { margin-top: -8px; }
-.field-visual :is(.field-art-spectrum, .field-art-proof, .field-art-pulse) { display: none; }
+.field-visual :is(.field-art-spectrum, .field-art-proof, .field-art-pulse, .field-art-neural) { display: none; }
 .experience-surface:is([data-area="analytics"], [data-area="video-search"], [data-area="reports"]) .field-art-orbit { display: none; }
 .experience-surface:is([data-area="analytics"], [data-area="video-search"], [data-area="reports"]) .field-art-spectrum { display: block; }
 .experience-surface:is([data-area="compliance"], [data-area="audit"], [data-area="evidence"], [data-area="account"], [data-area="incidents"]) .field-art-orbit { display: none; }

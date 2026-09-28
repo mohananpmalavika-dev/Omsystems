@@ -30,6 +30,28 @@ export function FieldVisual() {
         <circle cx="161" cy="66" r="5" fill="currentColor" stroke="none" />
         <path d="M 55 44 H 103 M 218 180 H 275" opacity=".3" />
       </g>
+      <g className="field-art-neural" stroke="currentColor">
+        <circle className="field-neural-ring" cx="160" cy="110" r="68" strokeDasharray="2 8" />
+        <circle className="field-neural-ring" cx="160" cy="110" r="94" strokeDasharray="1 11" />
+        <g className="field-neural-links" strokeWidth="1.2">
+          <path d="M 44 116 Q 105 75 160 110 M 76 47 Q 121 51 160 110 M 96 177 Q 124 149 160 110 M 160 110 Q 210 53 254 58 M 160 110 Q 224 103 282 116 M 160 110 Q 207 170 250 173" />
+          <path d="M 44 116 Q 52 71 76 47 M 44 116 Q 63 169 96 177 M 76 47 Q 171 15 254 58 M 254 58 Q 283 78 282 116 M 282 116 Q 279 156 250 173 M 96 177 Q 174 208 250 173" />
+        </g>
+        <g className="field-neural-flow" strokeWidth="2" strokeLinecap="round">
+          <path d="M 44 116 Q 105 75 160 110 Q 210 53 254 58" />
+          <path d="M 96 177 Q 124 149 160 110 Q 224 103 282 116" />
+          <path d="M 76 47 Q 121 51 160 110 Q 207 170 250 173" />
+        </g>
+        <g className="field-neural-nodes">
+          {[[44, 116], [76, 47], [96, 177], [254, 58], [282, 116], [250, 173]].map(([cx, cy], index) => <g key={index} className="field-neural-node"><circle cx={cx} cy={cy} r="8" fill="currentColor" fillOpacity=".13" /><circle cx={cx} cy={cy} r="3" fill="currentColor" stroke="none" /></g>)}
+        </g>
+        <g className="field-neural-core">
+          <path d="M 160 77 L 188 94 V 126 L 160 143 L 132 126 V 94 Z" fill="currentColor" fillOpacity=".12" strokeWidth="1.5" />
+          <circle cx="160" cy="110" r="17" fill="currentColor" fillOpacity=".08" />
+          <path d="M 149 110 H 171 M 160 99 V 121" strokeWidth="1.4" />
+          <circle cx="160" cy="110" r="4" fill="currentColor" stroke="none" />
+        </g>
+      </g>
     </svg>
     <span className="field-visual-caption">A WIDER PERSPECTIVE</span>
   </div>;

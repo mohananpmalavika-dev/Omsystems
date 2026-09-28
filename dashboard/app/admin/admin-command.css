@@ -94,23 +94,36 @@ html[data-theme] .app-shell .experience-surface[data-area="admin"] .admin-comman
   animation: admin-radar-turn 12s linear infinite;
 }
 .admin-command-scope .field-visual svg { position: relative; z-index: 1; }
-.admin-command-scope .field-art-orbit ellipse:first-child {
+.admin-command-scope .field-visual .field-art-orbit { display: none; }
+.admin-command-scope .field-visual .field-art-neural { display: block; }
+.admin-command-scope .field-neural-ring {
+  opacity: .35;
   transform-origin: 160px 110px;
-  animation: admin-orbit-turn 30s linear infinite;
+  animation: admin-neural-ring 32s linear infinite;
 }
-.admin-command-scope .field-art-orbit ellipse:nth-child(2) {
-  transform-origin: 160px 110px;
-  animation: admin-orbit-return 35s linear infinite;
+.admin-command-scope .field-neural-ring:nth-child(2) {
+  opacity: .2;
+  animation-direction: reverse;
 }
-.admin-command-scope .field-art-orbit circle:nth-of-type(2) {
-  animation: admin-core-glow 3.5s ease-in-out infinite alternate;
+.admin-command-scope .field-neural-links { opacity: .32; }
+.admin-command-scope .field-neural-flow { opacity: .85; stroke-dasharray: 3 15; }
+.admin-command-scope .field-neural-flow path { animation: admin-neural-flow 7s linear infinite; }
+.admin-command-scope .field-neural-flow path:nth-child(2) { animation-delay: -2.3s; }
+.admin-command-scope .field-neural-flow path:nth-child(3) { animation-delay: -4.6s; }
+.admin-command-scope .field-neural-node { animation: admin-node-breathe 3.8s ease-in-out infinite; }
+.admin-command-scope .field-neural-node:nth-child(2n) { animation-delay: -1.4s; }
+.admin-command-scope .field-neural-node:nth-child(3n) { animation-delay: -2.7s; }
+.admin-command-scope .field-neural-core { filter: drop-shadow(0 0 9px rgba(110, 243, 220, .65)); animation: admin-core-glow 4s ease-in-out infinite alternate; }
+.admin-command-scope .field-neural-core circle:last-child {
+  fill: #e3fff8;
 }
 .admin-command-scope :is(.field-visual-coordinate, .field-visual-caption) { color: #94d9d1; }
 
 @keyframes admin-radar-turn { to { transform: rotate(360deg); } }
-@keyframes admin-orbit-turn { from { transform: rotate(-24deg); } to { transform: rotate(336deg); } }
-@keyframes admin-orbit-return { from { transform: rotate(34deg); } to { transform: rotate(-326deg); } }
-@keyframes admin-core-glow { to { opacity: .45; } }
+@keyframes admin-neural-ring { to { transform: rotate(360deg); } }
+@keyframes admin-neural-flow { to { stroke-dashoffset: -108; } }
+@keyframes admin-node-breathe { 50% { opacity: .38; } }
+@keyframes admin-core-glow { to { opacity: .58; } }
 
 .admin-command-scope :is(.admin-panel, .ztp-panel) {
   border-color: color-mix(in srgb, var(--admin-signal) 12%, var(--line)) !important;
@@ -134,7 +147,7 @@ html[data-theme] .app-shell .experience-surface[data-area="admin"] .admin-comman
 @media (prefers-reduced-motion: reduce) {
   .admin-command-scope :is(.workspace-heading, .admin-header)::after,
   .admin-command-scope .field-visual::before,
-  .admin-command-scope .field-art-orbit :is(ellipse, circle) { animation: none !important; }
+  .admin-command-scope .field-art-neural :is(circle, path, g) { animation: none !important; }
 }
 
 @media print {
