@@ -62,6 +62,14 @@ if [ -f /opt/sentinel-grid/scratch/patch_analytics.cjs ]; then
   docker restart sentinel-gcp-analytics-engine || true
 fi
 
+echo "--> Reclaiming unused memory and cleaning up docker/system caches..."
+docker image prune -f || true
+docker builder prune -f --keep-storage 5GB || true
+apt-get clean 2>/dev/null || true
+journalctl --vacuum-time=3d 2>/dev/null || true
+sync && sysctl -w vm.drop_caches=3 || true
+
 echo "========================================================"
 echo "✅ Update complete! Sentinel Grid is running latest code."
 echo "========================================================"
+
