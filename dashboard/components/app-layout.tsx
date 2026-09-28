@@ -641,6 +641,10 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
 
   const isExemptRoute =
     pathname === "/" ||
+    // These hubs were reachable before they became sidebar entries. Keep
+    // existing direct-link access while menu visibility remains role-scoped.
+    pathname === "/dashboards" ||
+    pathname === "/reports" ||
     pathname === "/login" ||
     pathname === "/account/security" ||
     pathname === "/modules" ||
@@ -649,7 +653,11 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
 
   const isKnownNavRoute = useMemo(() => {
     return navigation.some((group) =>
-      group.items.some((item) => routeMatches(item.href, pathname, searchParams))
+      group.items.some((item) =>
+        // Report studio is a hub, not an access rule for every /reports/* page.
+        !(item.href === "/reports" && pathname !== "/reports") &&
+        routeMatches(item.href, pathname, searchParams)
+      )
     );
   }, [pathname, searchParams]);
 
