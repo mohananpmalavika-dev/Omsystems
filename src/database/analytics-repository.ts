@@ -254,7 +254,7 @@ export class AnalyticsRepository {
         [`${input.tenantId}:${input.sourceEventId}`],
       );
       const camera = await client.query(
-        `SELECT camera.id, COALESCE(camera.branch_id, node.id::text) AS branch_id
+        `SELECT camera.id, COALESCE(camera.branch_node_id::text, node.id::text) AS branch_id
          FROM cameras camera
          JOIN resource_nodes node ON node.id=camera.resource_node_id
          WHERE camera.id=$1 AND node.tenant_id=$2`,
