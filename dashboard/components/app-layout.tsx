@@ -94,6 +94,7 @@ import { AlertNotificationTray } from "@/components/alerts/alert-notification-tr
 import { defaultRoleWorkspace } from "@/lib/role-workspaces";
 import { hasUnrestrictedMenuAccess } from "@/lib/navigation-access";
 import { markInAppNavigation } from "@/lib/session-guard";
+import { sectionHubs, sectionHubHref } from "@/lib/section-hubs";
 import { CommandWorkspaceNav } from "@/components/command-workspace-nav";
 
 interface AppLayoutProps {
@@ -133,7 +134,7 @@ function sectionLabel(label: string) {
     "DEVICE HEALTH & MAINTENANCE": "Branch uptime",
     "INTELLIGENCE & AI": "Risk intelligence",
     "AUDIT, MIS & COMPLIANCE": "Evidence & assurance",
-    "ADMINISTRATION": "Admin",
+    "ADMINISTRATION": "Administration",
     "OTHERS": "Others",
   };
   return labels[label] || label.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -225,7 +226,7 @@ export const navigation: NavGroup[] = [
     label: "ADMINISTRATION",
     icon: Settings,
     items: [
-      { label: "Admin", href: "/admin", icon: Settings },
+      { label: "Administration", href: "/admin", icon: Settings },
     ],
   },
   {
@@ -495,6 +496,7 @@ const pageMeta = [
     section: group.label,
     title: item.label,
   }))),
+  ...sectionHubs.map((hub) => ({ path: `/workspaces/${hub.slug}`, section: hub.group, title: sectionLabel(hub.group) })),
   { path: "/communications", section: "Communications", title: "Communications" },
   { path: "/communications/calls", section: "Communications", title: "Voice Calling & Intercom" },
   { path: "/communications/connect", section: "Communications", title: "KryptoVision Connect" },
@@ -689,7 +691,8 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     .filter((href) => routeMatches(href, pathname, searchParams))
     .sort((left, right) => routeSpecificity(right) - routeSpecificity(left))[0];
   const isActive = (href: string) => href === activeRoute;
-  const activeGroup = visibleNavigation.find((group) => group.items.some((item) => isActive(item.href)));
+  const activeGroup = visibleNavigation.find((group) =>
+    sectionHubHref(group.label) === pathname || group.items.some((item) => isActive(item.href)));
   const moduleCount = visibleNavigation.reduce((total, group) => total + group.items.length, 0);
   const allGroupsOpen = visibleNavigation.every((group) => openGroups.has(group.label));
 
@@ -1070,11 +1073,12 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
                 className={`nav-admin-link ${isActive(adminItem.href) ? "active" : ""}`}
                 onClick={handleNavClick(adminItem.href)}
                 aria-current={isActive(adminItem.href) ? "page" : undefined}
-              ><GroupIcon size={17} /><span>{adminItem.label}</span></Link> : null;
+              ><GroupIcon size={17} /><span>{sectionLabel(group.label)}</span></Link> : null;
             }
+            const hubHref = sectionHubHref(group.label);
             return (
             <details
-              className="nav-group"
+              className={`nav-group ${pathname === hubHref ? "hub-active" : ""}`}
               key={group.label}
               open={openGroups.has(group.label)}
               suppressHydrationWarning
@@ -1085,7 +1089,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
                   toggleGroup(group.label);
                 }}
               >
-                <span className="nav-group-label">{GroupIcon ? <GroupIcon size={14} /> : null}<span>{sectionLabel(group.label)}</span></span>
+                <span className="nav-group-label">{GroupIcon ? <GroupIcon size={14} /> : null}{hubHref ? <Link href={hubHref} className="nav-group-home" prefetch={false} onClick={(event) => { event.stopPropagation(); handleNavClick(hubHref)(event); }} aria-current={pathname === hubHref ? "page" : undefined}>{sectionLabel(group.label)}</Link> : <span>{sectionLabel(group.label)}</span>}</span>
                 <span className="nav-group-meta"><small>{items.length}</small><ChevronRight size={13} /></span>
               </summary>
               <div className="nav-items">
