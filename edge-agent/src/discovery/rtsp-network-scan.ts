@@ -6,6 +6,7 @@ import {
   type VendorStreamFamily,
 } from "../devices/vendor-stream-adapter.js";
 import { probeRtsp } from "../streaming/rtsp-probe.js";
+import type { RecorderConfig } from "../monitoring/recorder-probe.js";
 import { logger } from "../utils/logger.js";
 import { createDeviceFingerprint } from "./device-fingerprint.js";
 import { resolveNeighborMac, detectDefaultGatewayIps } from "./network-neighbor.js";
@@ -34,6 +35,7 @@ export interface RtspScanOptions {
   /** Targeted verification must never expand into a subnet scan. */
   restrictToHosts?: boolean;
   recorderMaxChannels?: number;
+  onRecorderDetected?: (recorder: RecorderConfig) => Promise<void>;
 }
 
 export interface RtspRecorderChannel {
@@ -410,6 +412,7 @@ export async function discoverRtspDevices(
     try {
       let unverifiedEndpoint: UnverifiedRtspEndpoint | undefined;
       let recorderFingerprint: HttpRecorderFingerprint | undefined;
+      let recorderHttpPort = 80;
       const storedCredentials = await options.credentialsForHost?.(ip);
       const hostCreds = storedCredentials ? [storedCredentials, ...zeroTouchCreds] : zeroTouchCreds;
 
@@ -425,6 +428,7 @@ export async function discoverRtspDevices(
 
         recorderFingerprint = await fingerprintHttpRecorder(ip, timeoutMs, globalThis.fetch, port);
         if (recorderFingerprint) {
+          recorderHttpPort = port;
           for (const cred of hostCreds) {
             const recorder = await discoverRtspRecorderChannels({
               host: ip,
@@ -436,7 +440,7 @@ export async function discoverRtspDevices(
               probe: (uri) => probeRtsp(uri, ffprobePath, timeoutMs),
             });
             if (recorder.channels.length > 0) {
-              await submitRecorderChannels(ip, recorderFingerprint, recorder.channels);
+              await submitRecorderChannels(ip, recorderFingerprint, recorder.channels, cred, port);
               return;
             }
           }
@@ -496,7 +500,7 @@ export async function discoverRtspDevices(
                     probe: (candidateUri) => probeRtsp(candidateUri, ffprobePath, timeoutMs),
                   });
                   if (recorder.channels.length > 0) {
-                    await submitRecorderChannels(ip, pathRecorder, recorder.channels, macAddress);
+                    await submitRecorderChannels(ip, pathRecorder, recorder.channels, cred, recorderHttpPort, macAddress);
                     return;
                   }
                 }
@@ -566,6 +570,8 @@ export async function discoverRtspDevices(
     ip: string,
     recorder: HttpRecorderFingerprint,
     channels: RtspRecorderChannel[],
+    credentials: { username: string; password: string },
+    httpPort: number,
     resolvedMacAddress?: string,
   ) {
     const macAddress = resolvedMacAddress ?? await resolveNeighborMac(ip);
@@ -637,6 +643,29 @@ export async function discoverRtspDevices(
       manufacturer: recorder.manufacturer,
       recorderId,
     });
+    // RTSP fallback must also register the recorder for ongoing HDD probes.
+    // ONVIF discovery does this already; channel discovery alone only creates
+    // camera inventory and leaves storage invisible.
+    try {
+      await options.onRecorderDetected?.({
+        id: recorderId,
+        name: `${recorder.manufacturer} ${recorder.model}`,
+        deviceType: recorder.sourceType === "analog-dvr-channel" ? "dvr" : "nvr",
+        vendor: recorder.vendor === "hikvision" || recorder.vendor === "dahua" || recorder.vendor === "cp-plus"
+          ? recorder.vendor : "generic",
+        model: recorder.model,
+        host: ip,
+        port: httpPort,
+        rtspPort,
+        username: credentials.username,
+        password: credentials.password,
+      });
+    } catch (error) {
+      logger.warn("RTSP recorder storage registration failed", {
+        recorderId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   await runWithConcurrency(reachableHosts, concurrency, scanHost);

@@ -3,6 +3,7 @@
 import { FieldVisual } from "@/components/field-visual";
 import { AlertTriangle, ArrowLeft, Building2, Camera, Shield, ShieldCheck, Users, Server } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AppLayout } from "@/components/app-layout";
 import { CameraPermissionManager } from "@/components/camera-permission-manager";
 import { DeviceManager } from "@/components/device-manager";
@@ -25,6 +26,11 @@ type SelectedRecord = {
 };
 
 export default function AdminPage() {
+  const searchParams = useSearchParams();
+  return searchParams?.has("tab") ? <AdminWorkspace /> : null;
+}
+
+function AdminWorkspace() {
   const [tab, setTab] = useState<"organization" | "users" | "devices">("organization");
   const [revision, setRevision] = useState(0);
   const [parentNode, setParentNode] = useState<SelectedRecord | undefined>();

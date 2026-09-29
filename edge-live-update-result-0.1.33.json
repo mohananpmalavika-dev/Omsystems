@@ -1,0 +1,9 @@
+﻿{
+    "updated":  true,
+    "healthy":  true,
+    "rolledBack":  false,
+    "reason":  "",
+    "executableHash":  "4C89E8BF09C72A130D7D963FFA352C36FEF4A29862CA628CF71D9817B92A0EA2",
+    "startupTaskState":  "Ready",
+    "backupExe":  "C:\\Program Files\\Sentinel Grid\\Edge Agent\\edge-agent.exe.before-0.1.33-direct.20260929T060915Z.bak"
+}

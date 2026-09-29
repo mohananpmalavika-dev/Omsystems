@@ -28,7 +28,7 @@ describe("custom role navigation & menu permissions", () => {
     expect(visibleHrefs).toContain("/analytics/alerts");
 
     // Must not contain unassigned modules
-    expect(visibleHrefs).not.toContain("/admin/system");
+    expect(visibleHrefs).not.toContain("/admin");
     expect(visibleHrefs).not.toContain("/maintenance/device-configuration");
   });
 
@@ -44,7 +44,7 @@ describe("custom role navigation & menu permissions", () => {
     const visibleHrefs = visibleNav.flatMap((group) => group.items.map((item) => item.href));
 
     expect(visibleHrefs).toContain("/control-room");
-    expect(visibleHrefs).not.toContain("/admin/system");
+    expect(visibleHrefs).not.toContain("/admin");
     expect(visibleHrefs).not.toContain("/maintenance/device-configuration");
   });
 
@@ -57,8 +57,11 @@ describe("custom role navigation & menu permissions", () => {
     const visibleNav = getVisibleNavigation(superAdmin);
     const visibleHrefs = visibleNav.flatMap((group) => group.items.map((item) => item.href));
 
-    expect(visibleHrefs).toContain("/admin/system");
-    expect(visibleHrefs).toContain("/admin/zero-touch");
+    expect(visibleHrefs).toContain("/admin");
+    expect(visibleHrefs).not.toContain("/admin/system");
+    expect(visibleHrefs).not.toContain("/admin/zero-touch");
+    expect(visibleNav.find((group) => group.label === "OTHERS")?.items.map((item) => item.href))
+      .toEqual(["/admin/features", "/settings/alerts", "/account/security"]);
     expect(visibleHrefs).toContain("/maintenance/device-configuration");
     expect(visibleHrefs).toContain("/operations/cameras");
   });

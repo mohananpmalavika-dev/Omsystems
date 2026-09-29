@@ -133,7 +133,8 @@ function sectionLabel(label: string) {
     "DEVICE HEALTH & MAINTENANCE": "Branch uptime",
     "INTELLIGENCE & AI": "Risk intelligence",
     "AUDIT, MIS & COMPLIANCE": "Evidence & assurance",
-    "ADMINISTRATION": "Administration",
+    "ADMINISTRATION": "Admin",
+    "OTHERS": "Others",
   };
   return labels[label] || label.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -224,13 +225,15 @@ export const navigation: NavGroup[] = [
     label: "ADMINISTRATION",
     icon: Settings,
     items: [
-      { label: "Organization & RBAC", href: "/admin/organization", icon: Building2 },
-      { label: "Branch onboarding wizard", href: "/admin/branch-onboarding", icon: Building2 },
-      { label: "Gateway enrollment & activation", href: "/admin/zero-touch", icon: Cpu },
-      { label: "Camera import & export", href: "/admin/camera-import-export", icon: FileSpreadsheet },
+      { label: "Admin", href: "/admin", icon: Settings },
+    ],
+  },
+  {
+    label: "OTHERS",
+    icon: Grid2X2,
+    items: [
       { label: "Feature Management", href: "/admin/features", icon: ToggleLeft },
       { label: "Alert Controls & Toggles", href: "/settings/alerts", icon: Bell },
-      { label: "Platform & update management", href: "/admin/system", icon: Settings },
       { label: "Account & Security Settings", href: "/account/security", icon: LockKeyhole },
     ],
   },
@@ -367,6 +370,7 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/operations/cameras",
     "/operations/recording",
     "/recordings",
+    "/admin",
     "/admin/organization",
     "/admin/organization?tab=hierarchy",
     "/admin/organization?tab=employees",
@@ -1054,8 +1058,18 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
           {(Array.isArray(visibleNavigation) ? visibleNavigation : navigation).map((group) => {
             if (!group) return null;
             const items = Array.isArray(group.items) ? group.items : [];
-            const groupIsActive = items.some((item) => item && isActive(item.href));
             const GroupIcon = group.icon;
+            if (group.label === "ADMINISTRATION") {
+              const adminItem = items[0];
+              return adminItem ? <Link
+                key={group.label}
+                href={adminItem.href}
+                prefetch={false}
+                className={`nav-admin-link ${isActive(adminItem.href) ? "active" : ""}`}
+                onClick={handleNavClick(adminItem.href)}
+                aria-current={isActive(adminItem.href) ? "page" : undefined}
+              ><GroupIcon size={17} /><span>{adminItem.label}</span></Link> : null;
+            }
             return (
             <details
               className="nav-group"

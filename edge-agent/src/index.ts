@@ -87,7 +87,7 @@ if (installEnvironmentFile && (
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.32\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.33\n");
   process.exit(0);
 }
 
@@ -1123,6 +1123,34 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
         discoveryConcurrency: config.RTSP_DISCOVERY_CONCURRENCY,
         connectTimeoutMs: config.RTSP_DISCOVERY_CONNECT_TIMEOUT_MS,
         recorderMaxChannels: config.RECORDER_DISCOVERY_MAX_CHANNELS,
+        onRecorderDetected: async (recorder: RecorderConfig) => {
+          activeRecorders.set(recorder.id, recorder);
+          const observedAt = new Date().toISOString();
+          const source = recorder.vendor === "cp-plus" ? "cp-plus-adapter" as const : "system" as const;
+          const probe = await probeRecorder(recorder, config.RECORDER_PROBE_TIMEOUT_MS);
+          const hasDiskEvidence = probe.hddStatus.length > 0;
+          await control.submitRecorderHdd(agentId, {
+            branchId,
+            recorderId: recorder.id,
+            observedAt,
+            source,
+            quality: hasDiskEvidence ? "verified" : "unavailable",
+            idempotencyKey: `${agentId}:rtsp-recorder-hdd:${recorder.id}:${observedAt}`,
+            hddStatus: hasDiskEvidence ? probe.hddStatus : [{
+              id: "storage-telemetry",
+              devicePath: "Recorder storage telemetry",
+              model: recorder.name,
+              state: "unknown",
+              storageKind: "recorder-hdd",
+              telemetryCapability: "unavailable",
+            }],
+          });
+          logger.info("RTSP recorder storage observation submitted", {
+            recorderId: recorder.id,
+            diskCount: probe.hddStatus.length,
+            quality: hasDiskEvidence ? "verified" : "unavailable",
+          });
+        },
         username: "",
         password: "",
         // Use the same resolver as ONVIF so credentials delivered through an
