@@ -149,14 +149,10 @@ export async function startLive(
 
     const isEdgeRelay = (url?: string) => Boolean(url && url.includes("/v1/edge-media/"));
 
-    const gatewayCandidates = [
+    const gatewayCandidates = Array.from(new Set([
       primaryGateway,
-      ...(isEdgeRelay(primaryGateway)
-        ? [primaryGateway]
-        : primaryGateway !== internalMediaGateway
-          ? [internalMediaGateway]
-          : []),
-    ];
+      internalMediaGateway,
+    ])).filter((url): url is string => Boolean(url));
 
     let mediaResponse: Response | undefined;
     let chosenGatewayUrl = primaryGateway;

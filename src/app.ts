@@ -739,6 +739,7 @@ export async function buildApp(options?: {
       || request.url.startsWith("/v1/edge-updates/artifacts/")
       || request.url.startsWith("/v1/security/mtls/")
       || request.url === "/v1/auth/csrf-token"
+      || request.url.startsWith("/v1/secrets/resolve")
     ) return;
 
     const edgeAgentIngressRoute = isEdgeAgentIngressRoute(request.method, request.url);
@@ -2499,6 +2500,22 @@ export async function buildApp(options?: {
       return reply.code(404).send({ error: "edge_agent_not_found" });
     }
     return { localMediaUrl: agent.localMediaUrl };
+  });
+
+  app.get("/v1/secrets/resolve", async (request, reply) => {
+    const suppliedKey = (request.headers["x-edge-media-key"] ?? request.headers["x-media-gateway-key"]) as string | undefined;
+    if (
+      typeof suppliedKey !== "string" ||
+      !secureEqual(suppliedKey, mediaGatewaySharedKey)
+    ) {
+      return reply.code(401).send({ error: "invalid_gateway_identity" });
+    }
+    const query = request.query as Record<string, string> | undefined;
+    const ref = query?.ref;
+    if (!ref) {
+      return reply.code(400).send({ error: "missing_reference" });
+    }
+    return reply.code(404).send({ error: "stream_secret_unavailable" });
   });
 
   app.post("/v1/access/check", async (request, reply) => {
