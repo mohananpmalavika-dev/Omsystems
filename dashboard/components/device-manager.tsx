@@ -89,9 +89,6 @@ type CameraForm = {
   retentionDays: string;
   recordingMode: "continuous" | "motion" | "events" | "disabled";
   storageLocationName: string;
-  memoryCardCapacity: string;
-  hardDiskCapacity: string;
-  enableBothStorage: boolean;
 };
 
 const scanStages = ["Local network", "VPN routes", "Secure tunnel"] as const;
@@ -126,10 +123,48 @@ const emptyCameraForm: CameraForm = {
   retentionDays: "90",
   recordingMode: "continuous",
   storageLocationName: "",
-  memoryCardCapacity: "128",
-  hardDiskCapacity: "4",
-  enableBothStorage: true,
 };
+
+type BranchStorageDisk = {
+  id: string;
+  branchId: string;
+  devicePath?: string;
+  model?: string;
+  capacityBytes?: number;
+  usedBytes?: number;
+  smartStatus?: string;
+  operationalStatus?: string;
+  lastCheck?: string;
+};
+
+function storageForCamera(disk: BranchStorageDisk, camera: CameraRecord): boolean {
+  const id = disk.id.toLowerCase();
+  return id === `${camera.id}:sdcard`.toLowerCase()
+    || id.startsWith(`camera:${camera.id}:sdcard`.toLowerCase())
+    || Boolean(camera.storageDiscoveryId && id.startsWith(`camera:${camera.storageDiscoveryId}:sdcard`.toLowerCase()))
+    || Boolean(camera.recorderId && id.startsWith(`${camera.recorderId}:disk:`.toLowerCase()));
+}
+
+function diskStatus(disk: BranchStorageDisk): { label: string; tone: string } {
+  const lastCheck = disk.lastCheck ? Date.parse(disk.lastCheck) : 0;
+  if (!lastCheck || Date.now() - lastCheck > 24 * 60 * 60 * 1000) return { label: "Telemetry stale", tone: "degraded" };
+  const status = (disk.operationalStatus || disk.smartStatus || "unknown").toLowerCase();
+  if (["healthy", "online", "ok"].includes(status)) return { label: "Healthy", tone: "online" };
+  if (["failed", "critical", "missing", "offline"].includes(status)) return { label: status, tone: "offline" };
+  return { label: status, tone: "degraded" };
+}
+
+function diskCapacity(bytes?: number): string {
+  if (!bytes || bytes <= 0) return "Capacity unavailable";
+  return bytes >= 1e12 ? `${(bytes / 1e12).toFixed(1)} TB` : `${(bytes / 1e9).toFixed(1)} GB`;
+}
+
+function storageForCameraLabel(camera: CameraRecord, disks: BranchStorageDisk[]): string {
+  const linked = disks.filter((disk) => storageForCamera(disk, camera));
+  return linked.length
+    ? `Storage: ${linked.length} reported device${linked.length === 1 ? "" : "s"}`
+    : "Storage: waiting for hardware telemetry";
+}
 
 type DeviceInventoryForm = {
   deviceId: string;
@@ -239,6 +274,8 @@ export function DeviceManager() {
   const [selectedBranch, setSelectedBranch] = useState("");
   const [gateways, setGateways] = useState<EdgeAgent[]>([]);
   const [cameras, setCameras] = useState<CameraRecord[]>([]);
+  const [storageDisks, setStorageDisks] = useState<BranchStorageDisk[]>([]);
+  const [storageLoadError, setStorageLoadError] = useState<string>();
   const [inventoryRecords, setInventoryRecords] = useState<DeviceInventoryRecord[]>([]);
   const [discoveredCameras, setDiscoveredCameras] = useState<any[]>([]);
   const [discoveryReviewState, setDiscoveryReviewState] = useState<Record<string, { reviewStatus: "pending" | "duplicate" | "review-required" | "approved" }>>({});
@@ -841,6 +878,8 @@ export function DeviceManager() {
     setQrExpiresAt("");
     setGateways([]);
     setCameras([]);
+    setStorageDisks([]);
+    setStorageLoadError(undefined);
     setInventoryRecords([]);
     setDiscoveredCameras([]);
     setAutoProvisionResults([]);
@@ -923,16 +962,35 @@ export function DeviceManager() {
     setLoading(true);
     setError(undefined);
     try {
-      const [gatewayResult, cameraResult, discoveredResult, inventoryResult] = await Promise.allSettled([
+      const [gatewayResult, cameraResult, discoveredResult, inventoryResult, storageResult] = await Promise.allSettled([
         cameraInventoryApi.listGateways(branchId),
         cameraInventoryApi.listByBranch(branchId, "device:configure"),
         cameraInventoryApi.listDiscovered(branchId),
         deviceInventoryApi.list(branchId),
+        fetch(`/api/control/v1/operations/health/disks?branchId=${encodeURIComponent(branchId)}`, {
+          credentials: "include",
+          headers: getPortableAuthHeaders(),
+          cache: "no-store",
+        }).then(async (response) => {
+          if (!response.ok) throw new Error(`Storage inventory request failed (${response.status})`);
+          const payload = await response.json() as { success?: boolean; data?: BranchStorageDisk[] };
+          if (payload.success === false || !Array.isArray(payload.data)) {
+            throw new Error("Storage inventory response is incomplete");
+          }
+          return payload;
+        }),
       ]);
       if (selectedBranchRef.current !== branchId || requestId !== refreshRequestRef.current) return [];
       if (gatewayResult.status === "fulfilled") setGateways(gatewayResult.value.data);
       if (cameraResult.status === "fulfilled") setCameras(cameraResult.value.data);
       if (inventoryResult.status === "fulfilled") setInventoryRecords(inventoryResult.value.data);
+      if (storageResult.status === "fulfilled") {
+        setStorageDisks((storageResult.value.data ?? []).filter((disk) => disk.branchId === branchId && disk.id));
+        setStorageLoadError(undefined);
+      } else {
+        setStorageDisks([]);
+        setStorageLoadError(messageOf(storageResult.reason, "Storage inventory could not be loaded."));
+      }
       if (discoveredResult.status === "fulfilled") {
         setDiscoveredCameras(discoveredResult.value.data);
         updateDiscoveryReviewState(discoveredResult.value.data);
@@ -1833,6 +1891,9 @@ export function DeviceManager() {
     }
   }
 
+  const registeredStorage = inventoryRecords.filter((record) => record.deviceType === "storage-device"
+    && !storageDisks.some((disk) => disk.id.toLowerCase() === record.deviceId.toLowerCase()));
+
   return (
     <div className="device-manager">
       <div className="device-toolbar">
@@ -2010,13 +2071,14 @@ export function DeviceManager() {
           </section>
 
           <section className="device-card">
-            <div className="device-card-heading"><Camera size={18} /><div><h3>Camera inventory</h3><p>{cameras.length} devices</p></div></div>
-            {cameras.length === 0 ? (
-              <div className="device-empty"><Camera size={25} /><strong>No cameras added</strong><span>Configure a connection method, then add an IP camera or a DVR/NVR channel.</span></div>
+            <div className="device-card-heading"><Database size={18} /><div><h3>Inventory</h3><p>{cameras.length} cameras · {storageDisks.length + registeredStorage.length} storage devices</p></div></div>
+            {storageLoadError ? <p className="device-message" role="alert">{storageLoadError}</p> : null}
+            {cameras.length === 0 && storageDisks.length === 0 && registeredStorage.length === 0 ? (
+              <div className="device-empty"><Database size={25} /><strong>No cameras or storage yet</strong><span>Add a camera or storage device. Disk health appears when a gateway reports hardware telemetry.</span></div>
             ) : cameras.map((camera) => (
               <article className="camera-inventory-row" key={camera.id}>
                 <span className="camera-device-icon"><Camera size={15} /></span>
-                <div><strong>{camera.name}</strong><small>{[
+                <div><strong>{camera.name}</strong><small>{storageLoadError ? "Storage status unavailable" : storageForCameraLabel(camera, storageDisks)}</small><small>{[
                   camera.sourceType === "analog-dvr-channel" ? `Analog via DVR ${camera.recorderId ?? ""}`.trim()
                     : camera.sourceType === "nvr-channel" ? `NVR ${camera.recorderId ?? ""}`.trim()
                     : [camera.vendor, camera.model].filter(Boolean).join(" · "),
@@ -2025,6 +2087,7 @@ export function DeviceManager() {
                 ].filter(Boolean).join(" · ") || "IP camera"}</small></div>
                 <span className={`inventory-status ${camera.status}`}>{camera.status}</span>
                 <div className="camera-inventory-actions" style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                  <a className="secondary-button" href={`/recordings?branchId=${encodeURIComponent(selectedBranch)}&cameraId=${encodeURIComponent(camera.id)}`} title={`Open recordings and device storage for ${camera.name}`}>Storage access</a>
                   <button
                     type="button"
                     className="secondary-button"
@@ -2045,6 +2108,23 @@ export function DeviceManager() {
                     <Trash2 size={13} /> Remove
                   </button>
                 </div>
+              </article>
+            ))}
+            {storageDisks.map((disk) => {
+              const status = diskStatus(disk);
+              const owner = cameras.find((camera) => storageForCamera(disk, camera));
+              return <article className="camera-inventory-row" key={`disk:${disk.id}`}>
+                <span className="camera-device-icon"><HardDrive size={15} /></span>
+                <div><strong>{disk.model && disk.model !== "Unknown disk" ? disk.model : disk.devicePath || disk.id}</strong><small>{owner ? `Storage for ${owner.name}` : "Branch storage"} · {diskCapacity(disk.capacityBytes)}</small></div>
+                <span className={`inventory-status ${status.tone}`}>{status.label}</span>
+                <div className="camera-inventory-actions"><a className="secondary-button" href="/operations/storage">View storage</a></div>
+              </article>;
+            })}
+            {registeredStorage.map((record) => (
+              <article className="camera-inventory-row" key={`registered-storage:${record.id}`}>
+                <span className="camera-device-icon"><HardDrive size={15} /></span>
+                <div><strong>{record.manufacturer} {record.model}</strong><small>Registered storage · {record.deviceId} · hardware telemetry pending</small></div>
+                <span className="inventory-status degraded">Unverified</span>
               </article>
             ))}
           </section>
@@ -2850,12 +2930,12 @@ export function DeviceManager() {
 
               <div className="form-section">
                 <h3>Storage and recording allocation</h3>
-                <p className="field-help">Assign storage tier, memory card capacity, DVR/NVR hard disk size, recording schedule, and RBI/regulatory retention duration for this device.</p>
+                <p className="field-help">Choose a recording preference and retention period. Physical SD cards and recorder disks appear in Inventory after the gateway reports hardware telemetry.</p>
                 <div className="form-row form-row-three">
                   <div className="form-group">
                     <label htmlFor="cameraStorageTier">Storage tier / medium</label>
                     <select id="cameraStorageTier" value={cameraForm.storageTier} onChange={(event) => setCameraForm((form) => ({ ...form, storageTier: event.target.value as CameraForm["storageTier"] }))}>
-                      <option value="auto">Auto-Detect (Both Memory Card &amp; Hard Disk)</option>
+                      <option value="auto">Auto-detect available storage</option>
                       <option value="sd_card">Tier 1: Camera SD Card (Memory Card)</option>
                       <option value="dvr_hdd">Tier 2: DVR / NVR Hard Disk</option>
                       <option value="online_cloud">Tier 3: Online Cloud Recording Pool</option>
@@ -2882,45 +2962,10 @@ export function DeviceManager() {
                   </div>
                 </div>
 
-                <div className="form-row">
-                  <div className="form-group">
-                    <label htmlFor="memoryCardCapacity">Memory card (MicroSD capacity)</label>
-                    <select id="memoryCardCapacity" value={cameraForm.memoryCardCapacity} onChange={(event) => setCameraForm((form) => ({ ...form, memoryCardCapacity: event.target.value }))}>
-                      <option value="64">64 GB MicroSD</option>
-                      <option value="128">128 GB MicroSD (Recommended)</option>
-                      <option value="256">256 GB MicroSD (Extended)</option>
-                      <option value="512">512 GB MicroSD (Ultra)</option>
-                    </select>
-                    <small className="field-help">On-camera local flash buffer for edge recording and WAN outage resilience.</small>
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="hardDiskCapacity">Hard disk (DVR/NVR HDD capacity)</label>
-                    <select id="hardDiskCapacity" value={cameraForm.hardDiskCapacity} onChange={(event) => setCameraForm((form) => ({ ...form, hardDiskCapacity: event.target.value }))}>
-                      <option value="1">1 TB Surveillance SATA HDD</option>
-                      <option value="2">2 TB Surveillance SATA HDD</option>
-                      <option value="4">4 TB Surveillance SATA HDD (Recommended)</option>
-                      <option value="8">8 TB Surveillance SATA HDD</option>
-                      <option value="10">10 TB Surveillance SATA HDD</option>
-                    </select>
-                    <small className="field-help">Local recorder multi-terabyte SATA storage for continuous branch retention.</small>
-                  </div>
-                </div>
-
-                <div className="form-group mt-2">
-                  <label className="flex items-center gap-2 cursor-pointer font-medium text-xs text-slate-300">
-                    <input
-                      type="checkbox"
-                      checked={cameraForm.enableBothStorage}
-                      onChange={(event) => setCameraForm((form) => ({ ...form, enableBothStorage: event.target.checked }))}
-                    />
-                    <span>Auto-provision both Memory Card (MicroSD) &amp; Hard Disk (SATA HDD) storage volumes on add</span>
-                  </label>
-                </div>
-
                 <div className="form-group">
-                  <label htmlFor="storageLocationName">Storage pool / disk label <span className="optional">(optional)</span></label>
+                  <label htmlFor="storageLocationName">Storage label for onboarding audit <span className="optional">(optional)</span></label>
                   <input id="storageLocationName" value={cameraForm.storageLocationName} onChange={(event) => setCameraForm((form) => ({ ...form, storageLocationName: event.target.value }))} placeholder="e.g. Branch-NVR-SATA-01 or Vault-Cold-Archive" />
-                  <small className="field-help">Optional identifier for branch physical HDD tag, local pool, or cloud bucket.</small>
+                  <small className="field-help">This note does not create a disk. Reported hardware appears in Inventory after gateway discovery.</small>
                 </div>
               </div>
 

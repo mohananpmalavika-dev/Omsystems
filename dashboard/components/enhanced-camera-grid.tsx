@@ -83,6 +83,8 @@ interface VisibleRange {
 
 const MAX_PARALLEL_LIVE_STARTS = 2;
 const LIVE_START_TIMEOUT_MS = 30_000;
+const LIVE_START_RETRY_BASE_MS = 15_000;
+const LIVE_START_RETRY_MAX_MS = 120_000;
 const SAVED_LAYOUTS_STORAGE_KEY = "sentinel.video-wall.layouts.v1";
 
 interface GridTileProps {
@@ -225,6 +227,7 @@ export function EnhancedCameraGrid({
   const [playingCameraIds, setPlayingCameraIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState<Set<string>>(new Set());
   const [liveErrors, setLiveErrors] = useState<Map<string, string>>(new Map());
+  const [liveRetryTick, setLiveRetryTick] = useState(0);
   const [showLayoutMenu, setShowLayoutMenu] = useState(false);
   const [layoutName, setLayoutName] = useState(initialLayout?.name || "");
   const [savedLayouts, setSavedLayouts] = useState<GridLayout[]>([]);
@@ -796,6 +799,16 @@ export function EnhancedCameraGrid({
   const pendingLiveStartsRef = useRef(new Map<string, "main" | "sub">());
   const liveStartControllersRef = useRef(new Map<string, AbortController>());
   const activeLiveStartsRef = useRef(0);
+  const liveStartRetryRef = useRef(new Map<string, { failures: number; retryAt: number }>());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible" && liveStartRetryRef.current.size > 0) {
+        setLiveRetryTick((tick) => tick + 1);
+      }
+    }, 10_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const toggleWallFullscreen = useCallback(() => {
     const wall = wallRef.current;
@@ -986,6 +999,7 @@ export function EnhancedCameraGrid({
   const releaseSession = useCallback((cameraId: string) => {
     const session = sessionsRef.current.get(cameraId);
     sessionsRef.current.delete(cameraId);
+    liveStartRetryRef.current.delete(cameraId);
     activeStreamTypesRef.current.delete(cameraId);
     const recoveryTimer = recoveryTimersRef.current.get(cameraId);
     if (recoveryTimer) window.clearTimeout(recoveryTimer);
@@ -1032,6 +1046,7 @@ export function EnhancedCameraGrid({
     try {
       updateStreamState(cameraId, "CONNECTING");
       const session = await startLiveFromBrowser(cameraId, stream, controller.signal);
+      liveStartRetryRef.current.delete(cameraId);
       const previousSession = sessionsRef.current.get(cameraId);
       sessionsRef.current.set(cameraId, session);
       setSessions(new Map(sessionsRef.current));
@@ -1048,6 +1063,11 @@ export function EnhancedCameraGrid({
       if (previousSession && previousSession !== session) void releaseLiveSession(previousSession);
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Unknown error";
+      if (!controller.signal.aborted) {
+        const failures = (liveStartRetryRef.current.get(cameraId)?.failures ?? 0) + 1;
+        const delay = Math.min(LIVE_START_RETRY_MAX_MS, LIVE_START_RETRY_BASE_MS * 2 ** Math.min(failures - 1, 3));
+        liveStartRetryRef.current.set(cameraId, { failures, retryAt: Date.now() + delay });
+      }
       setLiveErrors((current) => {
         if (current.get(cameraId) === reason) return current;
         const next = new Map(current);
@@ -1500,6 +1520,10 @@ export function EnhancedCameraGrid({
       }
     }
 
+    for (const cameraId of liveStartRetryRef.current.keys()) {
+      if (!desiredLive.has(cameraId)) liveStartRetryRef.current.delete(cameraId);
+    }
+
     for (const [cameraId] of sessions) {
       const desiredStream = desiredLive.get(cameraId);
       if (desiredStream && activeStreamTypesRef.current.get(cameraId) === desiredStream) continue;
@@ -1514,7 +1538,8 @@ export function EnhancedCameraGrid({
     }
 
     for (const [cameraId, stream] of desiredLive) {
-      if (!sessions.has(cameraId) && !loading.has(cameraId)) {
+      const retryAt = liveStartRetryRef.current.get(cameraId)?.retryAt ?? 0;
+      if (!sessions.has(cameraId) && !loading.has(cameraId) && Date.now() >= retryAt) {
         void handleStartLive(cameraId, stream);
       }
     }
@@ -1524,6 +1549,7 @@ export function EnhancedCameraGrid({
     cameras,
     decoderLimit,
     loading,
+    liveRetryTick,
     markPlaybackDeferred,
     releaseSession,
     schedule,

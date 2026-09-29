@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
+import { activeCamera } from "./active-resource.js";
 import type {
   CameraPrivacyControlInput,
   CameraPrivacyPurposeAssignmentInput,
@@ -43,16 +44,17 @@ export class PrivacyRepository {
          COUNT(*) FILTER (WHERE active) AS active_purposes,
          COUNT(*) AS total_purposes,
          (SELECT COUNT(*) FROM camera_privacy_purpose_assignments WHERE camera_id IN (
-            SELECT id FROM cameras WHERE branch_node_id IN (
-              SELECT id FROM resource_nodes WHERE tenant_id = $1)
+            SELECT camera.id FROM cameras camera
+            WHERE camera.tenant_id = $1 AND ${activeCamera("camera")}
           )) AS assigned_purposes,
          (SELECT COUNT(*) FROM camera_privacy_controls WHERE camera_id IN (
-              SELECT id FROM cameras WHERE branch_node_id IN (
-                SELECT id FROM resource_nodes WHERE tenant_id = $1)
+              SELECT camera.id FROM cameras camera
+              WHERE camera.tenant_id = $1 AND ${activeCamera("camera")}
             )) AS total_controls,
-         COUNT(*) FILTER (WHERE status <> 'closed') AS open_breaches
+         (SELECT COUNT(*) FROM privacy_breaches breach
+          WHERE breach.tenant_id = $1 AND breach.status <> 'closed') AS open_breaches
        FROM privacy_purposes
-       WHERE tenant_id = $1`,
+       WHERE tenant_id = $1 AND active = true`,
       [tenantId],
     );
     return camelRow<PrivacySummary>(result.rows[0] ?? {
@@ -66,7 +68,7 @@ export class PrivacyRepository {
 
   async listPrivacyPurposes(tenantId: string) {
     const result = await this.pool.query(
-      `SELECT * FROM privacy_purposes WHERE tenant_id = $1 ORDER BY created_at DESC`,
+      `SELECT * FROM privacy_purposes WHERE tenant_id = $1 AND active = true ORDER BY created_at DESC`,
       [tenantId],
     );
     return camelRows(result.rows);

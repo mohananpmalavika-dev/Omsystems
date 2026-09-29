@@ -5,6 +5,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
+import { activeCamera } from "./active-resource.js";
 import type { PtzPreset, PtzPatrol, PtzLock } from "../domain/ptz.js";
 
 export class PtzRepository {
@@ -140,7 +141,7 @@ export class PtzRepository {
        SELECT $1, $2, $3, $4, $5, $6, $7, $8
        FROM cameras camera
        JOIN resource_nodes node ON node.id=camera.resource_node_id
-       WHERE camera.id=$2 AND node.tenant_id=$3
+       WHERE camera.id=$2 AND node.tenant_id=$3 AND ${activeCamera("camera")}
        RETURNING *`,
       [
         randomUUID(),
@@ -235,7 +236,7 @@ export class PtzRepository {
        SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9
        FROM cameras camera
        JOIN resource_nodes node ON node.id=camera.resource_node_id
-       WHERE camera.id=$2 AND node.tenant_id=$3
+       WHERE camera.id=$2 AND node.tenant_id=$3 AND ${activeCamera("camera")}
        RETURNING *`,
       [
         randomUUID(),

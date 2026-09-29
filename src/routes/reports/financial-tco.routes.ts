@@ -12,6 +12,7 @@
 
 import { Router, Request, Response } from 'express';
 import { Pool } from 'pg';
+import { activeCamera } from '../../database/active-resource.js';
 import { authenticateToken } from '../../middleware/auth.middleware.js';
 import { requirePermission } from '../../middleware/require-permission.middleware.js';
 
@@ -67,7 +68,7 @@ export function createFinancialTcoRoutes(pool: Pool): Router {
 
       // Cost per Camera
       const cameras = await pool.query(
-        'SELECT COUNT(*) as count FROM cameras WHERE tenant_id = $1',
+        `SELECT COUNT(*) as count FROM cameras c WHERE c.tenant_id = $1 AND ${activeCamera('c')}`,
         [tenantId]
       );
       const cameraCount = parseInt(cameras.rows[0]?.count || '0', 10);
@@ -239,7 +240,7 @@ async function calculateCapex(
   // For now, estimate based on camera count and typical costs
   
   const cameras = await pool.query(
-    'SELECT COUNT(*) as count FROM cameras WHERE tenant_id = $1 AND created_at >= $2 AND created_at < $3',
+    `SELECT COUNT(*) as count FROM cameras c WHERE c.tenant_id = $1 AND c.created_at >= $2 AND c.created_at < $3 AND ${activeCamera('c')}`,
     [tenantId, start, end]
   );
   
@@ -275,7 +276,7 @@ async function calculateOpex(
 
   // Estimate other OpEx (electricity, bandwidth, labor)
   const cameras = await pool.query(
-    'SELECT COUNT(*) as count FROM cameras WHERE tenant_id = $1',
+    `SELECT COUNT(*) as count FROM cameras c WHERE c.tenant_id = $1 AND ${activeCamera('c')}`,
     [tenantId]
   );
   const cameraCount = parseInt(cameras.rows[0]?.count || '0', 10);

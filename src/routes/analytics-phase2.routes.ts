@@ -8,6 +8,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { Action, User } from "../domain/models.js";
+import { activeCamera } from "../database/active-resource.js";
 import {
   localIdentityState,
   activeFaceRegistryMatches,
@@ -974,7 +975,7 @@ export async function registerAnalyticsPhase2Routes(
          LEFT JOIN face_watchlists w ON w.id = fe.watchlist_id
          LEFT JOIN cameras c ON c.id = fe.camera_id
          LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
-         WHERE ${conditions.join(" AND ")}
+         WHERE ${activeCamera("c")} AND ${conditions.join(" AND ")}
          ORDER BY fe.occurred_at DESC
          LIMIT $${paramIndex}`,
         [...params, query.limit],
@@ -1521,7 +1522,7 @@ export async function registerAnalyticsPhase2Routes(
          LEFT JOIN anpr_watchlists w ON w.id = ae.watchlist_id
          LEFT JOIN cameras c ON c.id = ae.camera_id
          LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
-         WHERE ${conditions.join(" AND ")}
+         WHERE ${activeCamera("c")} AND ${conditions.join(" AND ")}
          ORDER BY ae.occurred_at DESC
          LIMIT $${paramIndex}`,
         [...params, query.limit],
@@ -1774,7 +1775,7 @@ export async function registerAnalyticsPhase2Routes(
        FROM behavior_events be
        LEFT JOIN cameras c ON c.id = be.camera_id
        LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
-       WHERE ${conditions.join(" AND ")}
+       WHERE ${activeCamera("c")} AND ${conditions.join(" AND ")}
        ORDER BY be.occurred_at DESC
        LIMIT $${paramIndex}`,
       [...params, query.limit],

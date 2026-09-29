@@ -11,6 +11,7 @@
 
 import { z } from "zod";
 import type { Pool } from "pg";
+import { activeCamera } from "../database/active-resource.js";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -1643,8 +1644,8 @@ Personality:
     let cameras: any[] = [];
     try {
       const { rows } = await this.pool.query(
-        `SELECT id, name, status FROM cameras 
-         WHERE id = ANY($1) AND tenant_id = $2`,
+        `SELECT c.id, c.name, c.status FROM cameras c
+         WHERE c.id = ANY($1) AND c.tenant_id = $2 AND ${activeCamera('c')}`,
         [cameraIds, context.tenantId]
       );
       cameras = rows;
@@ -1652,13 +1653,14 @@ Personality:
       cameras = [];
     }
 
-    const cameraList = (cameraIds || []).map((id: string, idx: number) => {
+    const cameraList = (cameraIds || []).flatMap((id: string) => {
       const found = cameras.find((c: any) => c.id === id);
-      return {
+      if (!found) return [];
+      return [{
         id,
-        name: found?.name || `Camera ${idx + 1} (${id.slice(0, 8)})`,
-        status: found?.status || "online",
-      };
+        name: found.name,
+        status: found.status,
+      }];
     });
 
     return {
@@ -1811,10 +1813,11 @@ Personality:
              FROM cameras c
              LEFT JOIN resource_nodes rn ON c.resource_node_id = rn.id
              LEFT JOIN branches b ON (b.id = c.branch_id OR b.id = rn.parent_id)
-             WHERE ${likeConditions}
+             WHERE (${likeConditions}) AND c.tenant_id = $${likeParams.length + 1}
+               AND ${activeCamera('c')}
              ORDER BY c.name
              LIMIT 16`,
-            likeParams
+            [...likeParams, context.tenantId]
           ).catch(() => ({ rows: [] }));
 
           const locationCamIds = locationRes.rows.map((r: any) => r.id);
@@ -1832,7 +1835,10 @@ Personality:
         // Fallback: If no cameras matched specific criteria, fetch online/registered cameras
         if (matchedCameraIds.length === 0) {
           const fallbackRes = await this.pool.query(
-            `SELECT id, name FROM cameras ORDER BY (status = 'online') DESC, name ASC LIMIT 9`
+            `SELECT c.id, c.name FROM cameras c
+             WHERE c.tenant_id = $1 AND ${activeCamera('c')}
+             ORDER BY (c.status = 'online') DESC, c.name ASC LIMIT 9`,
+            [context.tenantId]
           ).catch(() => ({ rows: [] }));
           matchedCameraIds = fallbackRes.rows.map((r: any) => r.id);
           summary = `Active system cameras`;
@@ -2049,7 +2055,7 @@ Personality:
       SELECT c.id, rn.name, c.status
       FROM cameras c
       JOIN resource_nodes rn ON c.resource_node_id = rn.id
-      WHERE rn.tenant_id = $1
+      WHERE rn.tenant_id = $1 AND ${activeCamera('c')}
     `;
 
     const params: any[] = [context.tenantId];
@@ -2311,7 +2317,7 @@ Personality:
           `SELECT c.status, COUNT(*) as count 
            FROM cameras c
            JOIN resource_nodes rn ON c.resource_node_id = rn.id
-           WHERE rn.tenant_id = $1
+           WHERE rn.tenant_id = $1 AND ${activeCamera('c')}
            GROUP BY c.status`,
           [context.tenantId]
         ).catch(() => ({ rows: [] }));
@@ -3426,7 +3432,8 @@ Personality:
         const offlineCamerasRes = await this.pool.query(
           `SELECT COUNT(*) as count FROM cameras c
            JOIN resource_nodes rn ON c.resource_node_id = rn.id
-           WHERE rn.tenant_id = $1 AND c.status = 'offline'`,
+           WHERE rn.tenant_id = $1 AND c.status = 'offline'
+             AND ${activeCamera('c')}`,
           [context.tenantId]
         ).catch(() => ({ rows: [] }));
 

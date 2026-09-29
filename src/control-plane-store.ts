@@ -595,7 +595,7 @@ export interface ControlPlaneStore {
     name: string,
   ): Promise<ResourceNode>;
   createDeviceInventoryRecord(input: DeviceInventoryInput): Promise<DeviceInventoryRecord>;
-  listDeviceInventory(tenantId: string, branch?: string): Promise<DeviceInventoryRecord[]>;
+  listDeviceInventory(tenantId: string, branch?: string, includeInactive?: boolean): Promise<DeviceInventoryRecord[]>;
   getDeviceInventory(id: string): Promise<DeviceInventoryRecord | undefined>;
   updateDeviceInventory(id: string, input: Partial<DeviceInventoryInput>): Promise<DeviceInventoryRecord | undefined>;
   registerEdgeAgent(
@@ -2050,7 +2050,7 @@ export interface CameraPermissionStore {
   getCameraAccessSummary(cameraId: string): Promise<any>;
 
   // Device Inventory Management
-  listDeviceInventory(tenantId: string, branchNodeId?: string): Promise<any[]>;
+  listDeviceInventory(tenantId: string, branchNodeId?: string, includeInactive?: boolean): Promise<any[]>;
   getDeviceInventory(id: string): Promise<any | null>;
   createDeviceInventoryRecord(input: any): Promise<any>;
   updateDeviceInventory(id: string, input: any): Promise<any | null>;

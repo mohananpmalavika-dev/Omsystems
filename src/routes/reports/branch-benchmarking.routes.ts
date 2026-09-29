@@ -12,6 +12,7 @@
 
 import { Router, Request, Response } from 'express';
 import { Pool } from 'pg';
+import { activeCamera } from '../../database/active-resource.js';
 import { authenticateToken } from '../../middleware/auth.middleware.js';
 import { requirePermission } from '../../middleware/require-permission.middleware.js';
 
@@ -291,8 +292,8 @@ async function calculateBranchMetrics(
       COALESCE(location, 'Unknown') as branch,
       COUNT(*) as camera_count,
       COUNT(*) FILTER (WHERE status = 'active') as active_cameras
-     FROM cameras 
-     WHERE tenant_id = $1
+     FROM cameras c
+     WHERE c.tenant_id = $1 AND ${activeCamera('c')}
      GROUP BY COALESCE(location, 'Unknown')`,
     [tenantId]
   );

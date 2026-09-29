@@ -6,6 +6,7 @@ import {
   type VendorStreamFamily,
 } from "../devices/vendor-stream-adapter.js";
 import { probeRtsp } from "../streaming/rtsp-probe.js";
+import { inferRecorderChannelCount } from "../recorders/dvr-adapter.js";
 import type { RecorderConfig } from "../monitoring/recorder-probe.js";
 import { logger } from "../utils/logger.js";
 import { createDeviceFingerprint } from "./device-fingerprint.js";
@@ -189,8 +190,9 @@ export async function discoverRtspRecorderChannels(input: {
   const channels: RtspRecorderChannel[] = [];
   let credentialsRequired = false;
   let emptyBatchesAfterSuccess = 0;
+  let preferredCandidateIndex: number | undefined;
 
-  const probeChannel = async (sourceChannel: number): Promise<RtspRecorderChannel | undefined> => {
+  const probeChannel = async (sourceChannel: number): Promise<{ channel: RtspRecorderChannel; candidateIndex: number } | undefined> => {
     const candidates = vendorRtspCandidates({
       host: input.host,
       vendor: input.vendor,
@@ -198,11 +200,23 @@ export async function discoverRtspRecorderChannels(input: {
       channel: sourceChannel,
       ports: input.ports,
     }).sort((left, right) => Number(right.role === "sub") - Number(left.role === "sub"));
-    for (const candidate of candidates) {
-      const probe = await input.probe(candidate.uri);
+    const indices = candidates.map((_, index) => index);
+    if (preferredCandidateIndex !== undefined && preferredCandidateIndex < indices.length) {
+      indices.splice(preferredCandidateIndex, 1);
+      indices.unshift(preferredCandidateIndex);
+    }
+    for (const index of indices) {
+      const candidate = candidates[index]!;
+      let probe: Awaited<ReturnType<typeof probeRtsp>>;
+      try {
+        probe = await input.probe(candidate.uri);
+      } catch (error) {
+        probe = { reachable: false, codec: null, width: null, height: null,
+          error: error instanceof Error ? error.message : String(error) };
+      }
       if (isCredentialRejected(probe.error)) credentialsRequired = true;
       if (probe.reachable) {
-        return { sourceChannel, uri: candidate.uri, role: candidate.role, probe };
+        return { channel: { sourceChannel, uri: candidate.uri, role: candidate.role, probe }, candidateIndex: index };
       }
     }
     return undefined;
@@ -214,8 +228,13 @@ export async function discoverRtspRecorderChannels(input: {
       (_, index) => first + index,
     );
     const discovered = (await Promise.all(batch.map(probeChannel)))
-      .filter((channel): channel is RtspRecorderChannel => Boolean(channel));
-    channels.push(...discovered);
+      .filter((result): result is { channel: RtspRecorderChannel; candidateIndex: number } => Boolean(result));
+    // The same recorder usually exposes every input through one URI pattern.
+    // Try the working pattern first in the next batch, while retaining the
+    // remaining candidates for devices with mixed stream layouts.
+    preferredCandidateIndex = (discovered.find((result) => result.channel.sourceChannel > 1) ?? discovered[0])?.candidateIndex
+      ?? preferredCandidateIndex;
+    channels.push(...discovered.map((result) => result.channel));
 
     if (channels.length > 0) {
       emptyBatchesAfterSuccess = discovered.length === 0 ? emptyBatchesAfterSuccess + 1 : 0;
@@ -415,6 +434,8 @@ export async function discoverRtspDevices(
       let recorderHttpPort = 80;
       const storedCredentials = await options.credentialsForHost?.(ip);
       const hostCreds = storedCredentials ? [storedCredentials, ...zeroTouchCreds] : zeroTouchCreds;
+      const rejectedRecorderCredentials = new Set<(typeof hostCreds)[number]>();
+      const openRtspPorts = rtspStreamingPorts.filter((port) => reachablePorts.has(port));
 
       // 1. Check HTTP recorder fingerprint on web ports (with router protection)
       for (const port of httpFingerprintPorts) {
@@ -430,18 +451,29 @@ export async function discoverRtspDevices(
         if (recorderFingerprint) {
           recorderHttpPort = port;
           for (const cred of hostCreds) {
+            if (rejectedRecorderCredentials.has(cred)) continue;
             const recorder = await discoverRtspRecorderChannels({
               host: ip,
-              ports: rtspStreamingPorts,
+              ports: openRtspPorts.length ? openRtspPorts : rtspStreamingPorts,
               vendor: recorderFingerprint.vendor,
               username: cred.username,
               password: cred.password,
-              ...(options.recorderMaxChannels ? { maxChannels: options.recorderMaxChannels } : {}),
+              maxChannels: Math.min(options.recorderMaxChannels ?? 64,
+                inferRecorderChannelCount(recorderFingerprint.model) ?? 256),
               probe: (uri) => probeRtsp(uri, ffprobePath, timeoutMs),
             });
             if (recorder.channels.length > 0) {
               await submitRecorderChannels(ip, recorderFingerprint, recorder.channels, cred, port);
               return;
+            }
+            if (recorder.credentialsRequired) {
+              rejectedRecorderCredentials.add(cred);
+              unverifiedEndpoint = {
+                port: rtspStreamingPorts.find((rtspPort) => reachablePorts.has(rtspPort)) ?? 554,
+                credentialsRequired: true,
+                credentialsRejected: true,
+                recorder: recorderFingerprint,
+              };
             }
           }
         }
@@ -461,6 +493,7 @@ export async function discoverRtspDevices(
 
         // Try multi-channel DVR / IP Camera candidate paths with zero-touch credentials
         for (const cred of hostCreds) {
+          if (rejectedRecorderCredentials.has(cred)) continue;
           let foundWorkingCred = false;
           for (const path of paths) {
             let uri = `rtsp://${ip}:${port}${path}`;
@@ -492,11 +525,12 @@ export async function discoverRtspDevices(
                 if (pathRecorder) {
                   const recorder = await discoverRtspRecorderChannels({
                     host: ip,
-                    ports: rtspStreamingPorts,
+                    ports: [port],
                     vendor: pathRecorder.vendor,
                     username: cred.username,
                     password: cred.password,
-                    ...(options.recorderMaxChannels ? { maxChannels: options.recorderMaxChannels } : {}),
+                    maxChannels: Math.min(options.recorderMaxChannels ?? 64,
+                      inferRecorderChannelCount(pathRecorder.model) ?? 256),
                     probe: (candidateUri) => probeRtsp(candidateUri, ffprobePath, timeoutMs),
                   });
                   if (recorder.channels.length > 0) {

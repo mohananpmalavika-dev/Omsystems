@@ -1,5 +1,6 @@
 import { randomUUID, createHash } from "node:crypto";
 import type { Pool } from "pg";
+import { activeCamera } from "./active-resource.js";
 import type {
   ChainOfCustodyEvent,
   CustodyAction,
@@ -218,7 +219,8 @@ export class EvidenceRepository {
         const camCheck = await this.pool.query(
           `SELECT c.id FROM cameras c
            LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
-           WHERE c.id = $1 AND (c.tenant_id = $2 OR rn.tenant_id = $2)`,
+           WHERE c.id = $1 AND (c.tenant_id = $2 OR rn.tenant_id = $2)
+             AND ${activeCamera("c")}`,
           [input.cameraId, tenantId],
         );
         if (camCheck.rows.length === 0) {

@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { activeResourceNode } from "../database/active-resource.js";
 
 export interface BranchComplianceRouteOptions {
   pool: any;
@@ -63,9 +64,11 @@ export function registerBranchComplianceRoutes(
             b.type,
             b.status
           FROM branches b
+          JOIN resource_nodes branch_node ON branch_node.id = b.id
           WHERE b.tenant_id = $1
             ${query.branchId ? "AND b.id = $2" : ""}
-            AND b.status = 'active'
+            AND LOWER(COALESCE(b.status, 'active')) = 'active'
+            AND ${activeResourceNode('branch_node')}
         ),
         camera_coverage AS (
           SELECT 
@@ -79,7 +82,10 @@ export function registerBranchComplianceRoutes(
             COUNT(*) FILTER (WHERE cnode.name ~* 'locker|vault|cash|counter' AND c.status = 'online') as critical_zone_online
           FROM cameras c
           JOIN resource_nodes cnode ON cnode.id = c.resource_node_id
+          JOIN resource_nodes branch_node ON branch_node.id = c.branch_node_id
           WHERE cnode.tenant_id = $1::uuid
+            AND ${activeResourceNode('cnode')}
+            AND ${activeResourceNode('branch_node')}
             ${query.branchId ? "AND c.branch_node_id = $2::uuid" : ""}
           GROUP BY c.branch_node_id
         ),
@@ -92,6 +98,7 @@ export function registerBranchComplianceRoutes(
             SUM(r.storage_total_gb) as total_storage_capacity_gb
           FROM recorders r
           WHERE r.tenant_id = $1
+            AND r.status = 'active'
             ${query.branchId ? "AND r.branch_id = $2" : ""}
           GROUP BY r.branch_id
         ),

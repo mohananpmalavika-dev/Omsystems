@@ -129,4 +129,38 @@ describe("universal DVR channel adapter", () => {
 
     expect(channels.map((channel) => channel.sourceChannel)).toEqual([2, 3, 4]);
   });
+
+  it("keeps a failed channel visible and continues probing the other ONVIF channels", async () => {
+    const channels = await discoverRecorderChannels({
+      manufacturer: "CP PLUS", model: "XVR 4 Channel",
+      credentials: { username: "admin", password: "secret" },
+      profiles: [1, 2, 3].map((number) => ({
+        token: `ch${number}`, name: `Channel ${number}`, codec: "H264" as const,
+        width: 640, height: 360,
+      })),
+      getStreamUri: async (token) => `rtsp://192.0.2.20/cam/realmonitor?channel=${token.slice(2)}&subtype=1`,
+      probeStream: async (uri) => {
+        if (uri.includes("channel=2")) throw new Error("probe process exited");
+        return { reachable: true, codec: "h264", width: 640, height: 360 };
+      },
+    });
+    expect(channels.map((channel) => channel.sourceChannel)).toEqual([1, 2, 3]);
+    expect(channels.map((channel) => channel.streamVerified)).toEqual([true, false, true]);
+    expect(channels[1]?.probe?.error).toBe("probe process exited");
+  });
+
+  it("does not merge an unnamed profile into an explicitly numbered channel", async () => {
+    const channels = await discoverRecorderChannels({
+      manufacturer: "CP PLUS", model: "XVR 4 Channel",
+      credentials: { username: "admin", password: "secret" },
+      profiles: [
+        { token: "unknown", name: "Entrance", codec: "H264", width: 640, height: 360 },
+        { token: "ch1", name: "Channel 1", codec: "H264", width: 640, height: 360 },
+      ],
+      getStreamUri: async () => "rtsp://192.0.2.20/live",
+      probeStream: async () => ({ reachable: true, codec: "h264", width: 640, height: 360 }),
+    });
+    expect(channels.map((channel) => channel.sourceChannel)).toEqual([1, 2]);
+    expect(channels[0]?.profiles).toHaveLength(1);
+  });
 });

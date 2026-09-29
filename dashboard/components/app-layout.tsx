@@ -232,6 +232,7 @@ export const navigation: NavGroup[] = [
     label: "OTHERS",
     icon: Grid2X2,
     items: [
+      { label: "Fleet diagnostics", href: "/admin/zero-touch/diagnostics", icon: Activity },
       { label: "Feature Management", href: "/admin/features", icon: ToggleLeft },
       { label: "Alert Controls & Toggles", href: "/settings/alerts", icon: Bell },
       { label: "Account & Security Settings", href: "/account/security", icon: LockKeyhole },
@@ -377,6 +378,7 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/admin/organization?tab=roles",
     "/admin/branch-onboarding",
     "/admin/zero-touch",
+    "/admin/zero-touch/diagnostics",
     "/admin/camera-import-export",
     "/maintenance/device-configuration",
     "/maintenance/device-management",

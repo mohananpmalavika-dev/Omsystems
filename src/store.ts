@@ -1388,8 +1388,22 @@ export class MemoryStore {
       }));
   }
 
+  private isActiveNode(id: string): boolean {
+    const node = this.nodes.get(id);
+    if (!node) return false;
+    const seen = new Set<string>();
+    let current: ResourceNode | undefined = node;
+    while (current && !seen.has(current.id)) {
+      seen.add(current.id);
+      if ((current as any).isActive === false ||
+          ((current as any).lifecycleStatus && (current as any).lifecycleStatus !== "ACTIVE")) return false;
+      current = current.parentId ? this.nodes.get(current.parentId) : undefined;
+    }
+    return true;
+  }
+
   async getNode(id: string) {
-    return this.nodes.get(id);
+    return this.isActiveNode(id) ? this.nodes.get(id) : undefined;
   }
 
   async checkAccess(user: User, action: Action, resourceNodeId: string) {
@@ -1400,7 +1414,7 @@ export class MemoryStore {
 
   async listAccessibleNodes(user: User, action: Action, type?: ResourceNode["type"]) {
     return [...this.nodes.values()].filter(
-      (node) => (!type || node.type === type) &&
+      (node) => this.isActiveNode(node.id) && (!type || node.type === type) &&
         authorize(user, action, node, this.nodes, this.grants).allowed,
     );
   }
@@ -1408,7 +1422,7 @@ export class MemoryStore {
   async getCamera(id: string) {
     const cam = this.cameras.get(id) ??
       (id.startsWith("camera-") ? this.cameras.get(id.slice(7)) : this.cameras.get(`camera-${id}`));
-    if (!cam) return undefined;
+    if (!cam || !this.isActiveNode(cam.branchId) || !this.isActiveNode(cam.nodeId)) return undefined;
     const branch = this.nodes.get(cam.branchId) || this.nodes.get(cam.nodeId);
     return {
       ...cam,
@@ -1419,18 +1433,20 @@ export class MemoryStore {
   async listCameras(tenantId: string) {
     return [...this.cameras.values()].filter((camera) => {
       const branch = this.nodes.get(camera.branchId);
-      return branch?.tenantId === tenantId;
+      return branch?.tenantId === tenantId && this.isActiveNode(camera.branchId)
+        && this.isActiveNode(camera.nodeId);
     });
   }
 
   async listCamerasByIds(cameraIds: string[]) {
     const ids = new Set(cameraIds);
-    return [...this.cameras.values()].filter((camera) => ids.has(camera.id));
+    return [...this.cameras.values()].filter((camera) => ids.has(camera.id)
+      && this.isActiveNode(camera.branchId) && this.isActiveNode(camera.nodeId));
   }
 
   async listNodesByIds(ids: string[]) {
     const keys = new Set(ids);
-    return [...this.nodes.values()].filter((node) => keys.has(node.id));
+    return [...this.nodes.values()].filter((node) => keys.has(node.id) && this.isActiveNode(node.id));
   }
 
   async getDeviceIdentityByCamera(cameraId: string) {
@@ -1440,15 +1456,18 @@ export class MemoryStore {
 
   async listCamerasByBranch(user: User, branchId: string, action: Action) {
     return [...this.cameras.values()].filter((camera) => {
-      if (camera.branchId !== branchId) return false;
+      if (camera.branchId !== branchId || !this.isActiveNode(branchId)) return false;
       const node = this.nodes.get(camera.nodeId);
-      return Boolean(node && authorize(user, action, node, this.nodes, this.grants).allowed);
+      return Boolean(node && this.isActiveNode(node.id)
+        && authorize(user, action, node, this.nodes, this.grants).allowed);
     });
   }
 
   async listCamerasByBranchId(branchId: string) {
+    if (!this.isActiveNode(branchId)) return [];
     const list: any[] = [...this.cameras.values()].filter(
-      (camera) => camera.branchId === branchId || camera.nodeId === branchId
+      (camera) => (camera.branchId === branchId || camera.nodeId === branchId)
+        && this.isActiveNode(camera.nodeId)
     );
     // Also include discovered cameras for this branch or scanner fallback
     const discovered = [...this.discoveries.values()].filter(
@@ -1477,8 +1496,10 @@ export class MemoryStore {
   }
 
   async listAllCameras() {
-    const list: any[] = [...this.cameras.values()];
+    const list: any[] = [...this.cameras.values()].filter((camera) =>
+      this.isActiveNode(camera.branchId) && this.isActiveNode(camera.nodeId));
     for (const disc of this.discoveries.values()) {
+      if (!this.isActiveNode(disc.branchId || "A005")) continue;
       if (!list.some((c) => c.id === disc.id || c.ipAddress === disc.ipAddress)) {
         list.push({
           id: disc.id,
@@ -1506,7 +1527,7 @@ export class MemoryStore {
       if (node.tenantId !== tenantId) return false;
       if (type && node.type !== type) return false;
       if (parentId !== undefined && node.parentId !== parentId) return false;
-      return includeInactive || (node as any).isActive !== false;
+      return includeInactive || this.isActiveNode(node.id);
     });
   }
 
@@ -1537,8 +1558,8 @@ export class MemoryStore {
     return {
       nodes: counts,
       cameras: {
-        total: this.cameras.size + this.discoveries.size,
-        online: this.cameras.size + this.discoveries.size,
+        total: (await this.listCameras(tenantId)).length,
+        online: (await this.listCameras(tenantId)).filter((camera) => camera.status === "online").length,
       },
     };
   }
@@ -1561,7 +1582,8 @@ export class MemoryStore {
   async getDescendantNodes(id: string, includeInactive = false) {
     const node = this.nodes.get(id);
     if (!node) return [];
-    return [...this.nodes.values()].filter((n) => n.path.includes(id) && n.id !== id);
+    return [...this.nodes.values()].filter((n) => n.path.includes(id) && n.id !== id
+      && (includeInactive || this.isActiveNode(n.id)));
   }
 
   async createOrganizationNode(tenant: string, input: any) {
@@ -1589,11 +1611,13 @@ export class MemoryStore {
     if (input.code) (node as any).code = input.code;
     if (input.description) (node as any).description = input.description;
     if (input.logoUrl !== undefined) node.logoUrl = input.logoUrl;
+    if (input.isActive !== undefined) (node as any).isActive = input.isActive;
     return node;
   }
 
   async deactivateOrganizationNode(id: string) {
-    this.nodes.delete(id);
+    const node = this.nodes.get(id);
+    if (node) (node as any).isActive = false;
   }
 
   async validateHierarchyRelationship(parentNodeId: string, childNodeType: string) {
@@ -1601,7 +1625,8 @@ export class MemoryStore {
   }
 
   async listCamerasByEdgeAgent(edgeAgentId: string) {
-    return [...this.cameras.values()].filter((camera) => camera.edgeAgentId === edgeAgentId);
+    return [...this.cameras.values()].filter((camera) => camera.edgeAgentId === edgeAgentId
+      && this.isActiveNode(camera.branchId));
   }
 
   async createBranch(tenant: string, parentNodeId: string, name: string) {
@@ -1626,7 +1651,7 @@ export class MemoryStore {
 
   async listEdgeAgentsByBranch(branchId: string) {
     return [...this.edgeAgents.values()].filter(
-      (agent) => agent.branchId === branchId,
+      (agent) => agent.branchId === branchId && agent.credentialStatus !== "revoked" && this.isActiveNode(branchId),
     ).map((agent) => ({
       ...agent,
       status: agent.credentialStatus === "revoked"
@@ -1662,7 +1687,8 @@ export class MemoryStore {
       .filter(agent => {
         // Get the branch node to find tenantId
         const branch = this.nodes.get(agent.branchId);
-        return branch?.tenantId === tenantId;
+        return branch?.tenantId === tenantId && agent.credentialStatus !== "revoked"
+          && this.isActiveNode(agent.branchId);
       })
       .map(agent => structuredClone(agent));
   }
@@ -5678,10 +5704,11 @@ export class MemoryStore {
   // Device Inventory Management
   private readonly deviceInventory: any[] = [];
 
-  async listDeviceInventory(tenantId: string, branchNodeId?: string): Promise<any[]> {
+  async listDeviceInventory(tenantId: string, branchNodeId?: string, includeInactive = false): Promise<any[]> {
     const fromInventory = this.deviceInventory.filter((device) =>
       (!device.tenantId || device.tenantId === tenantId)
       && (!branchNodeId || device.branch === branchNodeId || device.branchId === branchNodeId)
+      && (includeInactive || !['suspended', 'decommissioned'].includes(device.lifecycleState))
     );
 
     const registeredCameras = Array.from(this.cameras.values())
@@ -5691,7 +5718,8 @@ export class MemoryStore {
         const belongsToBranch = !branchNodeId
           || camera.branchId === branchNodeId
           || camera.nodeId === branchNodeId;
-        return belongsToTenant && belongsToBranch;
+        return belongsToTenant && belongsToBranch && this.isActiveNode(camera.branchId)
+          && this.isActiveNode(camera.nodeId);
       })
       .map((camera) => {
         const node = this.nodes.get(camera.nodeId)!;

@@ -13,6 +13,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Pool } from "pg";
+import { activeCamera } from "../database/active-resource.js";
 import { MindSenseDeEscalationService } from "../services/mindsense-deescalation.service.js";
 
 // Request validation schemas
@@ -117,7 +118,7 @@ export async function registerMindSenseRoutes(app: FastifyInstance, pool: Pool) 
           es.micro_expressions
         FROM mindsense_emotional_states es
         JOIN cameras c ON es.camera_id = c.id
-        WHERE c.tenant_id = $1
+        WHERE c.tenant_id = $1 AND ${activeCamera("c")}
       `;
 
       const params: any[] = [user.tenantId];
@@ -225,7 +226,7 @@ export async function registerMindSenseRoutes(app: FastifyInstance, pool: Pool) 
         JOIN cameras c ON ep.camera_id = c.id
         WHERE ep.person_track_id = $1 
           AND ep.camera_id = $2
-          AND c.tenant_id = $3
+          AND c.tenant_id = $3 AND ${activeCamera("c")}
         ORDER BY ep.last_seen DESC
         LIMIT 1`,
         [trackId, query.cameraId, user.tenantId]
@@ -360,7 +361,7 @@ export async function registerMindSenseRoutes(app: FastifyInstance, pool: Pool) 
           ta.trajectory
         FROM mindsense_threat_assessments ta
         JOIN cameras c ON ta.camera_id = c.id
-        WHERE c.tenant_id = $1
+        WHERE c.tenant_id = $1 AND ${activeCamera("c")}
           AND ta.threat_score >= $2
       `;
 
@@ -444,7 +445,7 @@ export async function registerMindSenseRoutes(app: FastifyInstance, pool: Pool) 
 
       // Verify camera access
       const { rows: cameras } = await pool.query(
-        "SELECT id FROM cameras WHERE id = $1 AND tenant_id = $2",
+        `SELECT c.id FROM cameras c WHERE c.id = $1 AND c.tenant_id = $2 AND ${activeCamera("c")}`,
         [body.cameraId, user.tenantId]
       );
 
@@ -638,7 +639,7 @@ export async function registerMindSenseRoutes(app: FastifyInstance, pool: Pool) 
           AVG(es.valence) as avg_valence
         FROM mindsense_emotional_states es
         JOIN cameras c ON es.camera_id = c.id
-        WHERE c.tenant_id = $1
+        WHERE c.tenant_id = $1 AND ${activeCamera("c")}
           AND es.timestamp >= $2
           AND es.timestamp <= $3
       `;
@@ -744,7 +745,7 @@ export async function registerMindSenseRoutes(app: FastifyInstance, pool: Pool) 
           ARRAY_AGG(DISTINCT es.emotion) as emotions_observed
         FROM mindsense_emotional_states es
         JOIN cameras c ON es.camera_id = c.id
-        WHERE c.tenant_id = $1
+        WHERE c.tenant_id = $1 AND ${activeCamera("c")}
           AND es.stress_score >= $2
           ${query.startTime ? "AND es.timestamp >= $3" : ""}
           ${query.endTime ? `AND es.timestamp <= $${query.startTime ? 4 : 3}` : ""}
@@ -817,7 +818,7 @@ export async function registerMindSenseRoutes(app: FastifyInstance, pool: Pool) 
         FROM mindsense_micro_expressions me
         JOIN mindsense_emotional_profiles ep ON me.person_track_id = ep.person_track_id
         JOIN cameras c ON ep.camera_id = c.id
-        WHERE c.tenant_id = $1
+        WHERE c.tenant_id = $1 AND ${activeCamera("c")}
           AND me.person_track_id = $2
           AND ep.camera_id = $3
           ${query.minDuration ? "AND me.duration >= $4" : ""}

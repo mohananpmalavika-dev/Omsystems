@@ -129,8 +129,19 @@ export function RecordingWorkspace() {
   };
 
   const requestStorageGrant = async (): Promise<StorageGrant> => {
-    const response = await fetch(`/api/control/v1/cameras/${encodeURIComponent(cameraId)}/storage-sessions`, { method: "POST" });
-    if (!response.ok) throw new Error("Recording access or branch gateway is unavailable.");
+    const response = await fetch(`/api/control/v1/cameras/${encodeURIComponent(cameraId)}/storage-sessions`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({})) as { error?: string };
+      if (response.status === 401) throw new Error("Sign in again to access device storage.");
+      if (response.status === 403) throw new Error(body.error === "approval_required"
+        ? "Recording access requires approval for this camera."
+        : "Your account does not have recording access for this camera.");
+      if (response.status === 503) throw new Error("The branch gateway is offline. Reconnect it to access device storage.");
+      throw new Error("Device storage access could not be started. Try again after refreshing the branch gateway.");
+    }
     return response.json() as Promise<StorageGrant>;
   };
 

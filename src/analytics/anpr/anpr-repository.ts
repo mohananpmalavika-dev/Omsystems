@@ -7,6 +7,7 @@
 
 import crypto from 'node:crypto';
 import type { Pool } from 'pg';
+import { activeCamera } from '../../database/active-resource.js';
 import type {
   AnprEventRecord,
   AnprStats,
@@ -219,12 +220,13 @@ export class AnprRepository {
           LEFT JOIN anpr_watchlists w ON w.id = ae.watchlist_id
           LEFT JOIN cameras c ON c.id = ae.camera_id
           LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
-          WHERE ae.tenant_id = $1 AND ae.id = $2;
+          WHERE ae.tenant_id = $1 AND ae.id = $2 AND ${activeCamera('c')};
         `;
         const res = await this.pool.query(query, [tenantId, id]);
         if (res.rows.length > 0) {
           return this.mapEventRow(res.rows[0]);
         }
+        return null;
       } catch (err) {
         console.warn('PostgreSQL getEventById error, falling back to memory store:', err);
       }
@@ -296,7 +298,8 @@ export class AnprRepository {
         const countQuery = `
           SELECT COUNT(*) as total
           FROM anpr_events ae
-          WHERE ${conditions.join(' AND ')};
+          JOIN cameras c ON c.id = ae.camera_id
+          WHERE ${activeCamera('c')} AND ${conditions.join(' AND ')};
         `;
         const countRes = await this.pool.query(countQuery, values);
         const total = parseInt(countRes.rows[0]?.total || '0', 10);
@@ -307,7 +310,7 @@ export class AnprRepository {
           LEFT JOIN anpr_watchlists w ON w.id = ae.watchlist_id
           LEFT JOIN cameras c ON c.id = ae.camera_id
           LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
-          WHERE ${conditions.join(' AND ')}
+          WHERE ${activeCamera('c')} AND ${conditions.join(' AND ')}
           ORDER BY ae.occurred_at DESC
           LIMIT $${idx++} OFFSET $${idx++};
         `;

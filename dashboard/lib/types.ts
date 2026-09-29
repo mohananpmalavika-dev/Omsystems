@@ -318,6 +318,7 @@ export interface Camera {
   connectionTransport?: "vpn" | "cloudflare-tunnel" | "edge-gateway";
   recorderId?: string;
   recorderChannel?: number;
+  storageDiscoveryId?: string;
   // Network identity — returned by the inventory API from approved discoveries
   ipAddress?: string;
   onvifPort?: number;

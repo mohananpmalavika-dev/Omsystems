@@ -6,6 +6,7 @@
  */
 
 import type { Pool } from 'pg';
+import { activeCamera } from '../../database/active-resource.js';
 import type { ViolenceDetectionResult } from './violence-detector.js';
 
 export interface ViolenceEventRecord {
@@ -149,7 +150,8 @@ export class ViolenceRepository {
     const countQuery = `
       SELECT COUNT(*) as total
       FROM violence_detection_events e
-      WHERE ${whereClause};
+      JOIN cameras c ON c.id = e.camera_id
+      WHERE ${activeCamera('c')} AND ${whereClause};
     `;
     const countRes = await this.pool.query(countQuery, values);
     const total = parseInt(countRes.rows[0]?.total ?? '0', 10);
@@ -159,7 +161,7 @@ export class ViolenceRepository {
       FROM violence_detection_events e
       LEFT JOIN cameras c ON e.camera_id = c.id
       LEFT JOIN resource_nodes camera_node ON camera_node.id = c.resource_node_id
-      WHERE ${whereClause}
+      WHERE ${activeCamera('c')} AND ${whereClause}
       ORDER BY e.occurred_at DESC
       LIMIT $${idx++} OFFSET $${idx++};
     `;
@@ -181,7 +183,7 @@ export class ViolenceRepository {
       FROM violence_detection_events e
       LEFT JOIN cameras c ON e.camera_id = c.id
       LEFT JOIN resource_nodes camera_node ON camera_node.id = c.resource_node_id
-      WHERE e.id = $1 AND e.tenant_id = $2;
+      WHERE e.id = $1 AND e.tenant_id = $2 AND ${activeCamera('c')};
     `;
     const res = await this.pool.query(query, [eventId, tenantId]);
     return res.rows[0] || null;

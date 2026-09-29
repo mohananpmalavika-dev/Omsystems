@@ -56,7 +56,12 @@ export function vendorRtspCandidates(input: {
 }) {
   const channel = input.channel ?? 1;
   const ports = input.ports?.length ? input.ports : [554];
-  const paths = vendorPaths(input.vendor, channel);
+  const nextPaths = channel === 1 ? [] : vendorPaths(input.vendor, channel + 1);
+  // A few camera-style fallback paths (for example /live) do not select a
+  // recorder input. Reusing them for channel 2+ creates phantom channels.
+  const paths = vendorPaths(input.vendor, channel).filter((path) =>
+    channel === 1 || !nextPaths.some((next) =>
+      next.path === path.path && next.role === path.role));
   const candidates: VendorStreamCandidate[] = [];
   for (const port of ports) {
     for (const path of paths) {
@@ -86,7 +91,13 @@ export async function probeVendorStream(input: {
     Number(right.role === input.preferredRole) - Number(left.role === input.preferredRole)
   );
   for (const candidate of candidates) {
-    const probe = await input.probe(candidate.uri);
+    let probe: RtspProbeResult;
+    try {
+      probe = await input.probe(candidate.uri);
+    } catch (error) {
+      probe = { reachable: false, codec: null, width: null, height: null,
+        error: error instanceof Error ? error.message : String(error) };
+    }
     lastProbe = probe;
     if (probe.reachable) return { candidate, probe };
   }

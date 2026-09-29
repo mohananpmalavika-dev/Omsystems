@@ -105,6 +105,31 @@ describe("automatic RTSP recorder discovery", () => {
     expect(probe).toHaveBeenCalledTimes(8);
   });
 
+  it("does not repeat a generic /live stream as every recorder channel", async () => {
+    const result = await discoverRtspRecorderChannels({
+      host: "192.0.2.20", ports: [554], vendor: "generic",
+      username: "admin", password: "secret", maxChannels: 8,
+      probe: async (uri) => ({ reachable: new URL(uri).pathname === "/live",
+        codec: "h264", width: 640, height: 360 }),
+    });
+    expect(result.channels.map((channel) => channel.sourceChannel)).toEqual([1]);
+  });
+
+  it("tries a working recorder path first in later channel batches and survives probe errors", async () => {
+    const probe = vi.fn(async (uri: string) => {
+      if (uri.includes("/Streaming/Channels/")) throw new Error("unsupported path");
+      return { reachable: /\/h264\/ch\d+\/sub\/av_stream/.test(uri),
+        codec: "h264", width: 640, height: 360 };
+    });
+    const result = await discoverRtspRecorderChannels({
+      host: "192.0.2.20", ports: [554], vendor: "hikvision",
+      username: "admin", password: "secret", maxChannels: 8,
+      probe,
+    });
+    expect(result.channels.map((channel) => channel.sourceChannel)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(probe.mock.calls.filter(([uri]) => uri.includes("/h264/ch5/")).length).toBe(1);
+  });
+
   it("normalizes ffprobe HEVC names to the control-plane H265 codec", () => {
     expect(normalizeRtspDiscoveryCodec("hevc")).toBe("H265");
     expect(normalizeRtspDiscoveryCodec("h265")).toBe("H265");

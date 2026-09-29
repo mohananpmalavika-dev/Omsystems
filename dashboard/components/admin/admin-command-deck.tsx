@@ -33,7 +33,7 @@ const primaryActions: AdminAction[] = [
 const relatedActions: Record<string, AdminAction[]> = {
   organization: [primaryActions[0], primaryActions[1], primaryActions[2]],
   "branch-onboarding": [primaryActions[5], primaryActions[3], primaryActions[4]],
-  "zero-touch": [primaryActions[1], primaryActions[3], primaryActions[4]],
+  "zero-touch": [primaryActions[1], { label: "Fleet diagnostics", detail: "Gateway & camera telemetry", href: "/admin/zero-touch/diagnostics", icon: Gauge }, primaryActions[4]],
   system: [primaryActions[5], primaryActions[3], { label: "HA topology", detail: "Resilience", href: "/admin/ha-topology", icon: Network }],
   features: [{ label: "Capabilities", detail: "Platform", href: "/admin/platform/capabilities", icon: Settings2 }, { label: "AI quality", detail: "Models", href: "/admin/ai-quality", icon: Sparkles }, primaryActions[4]],
 };

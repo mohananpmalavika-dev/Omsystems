@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { activeResourceNode } from "../database/active-resource.js";
 import { randomUUID } from "node:crypto";
 import { AccessControlCCTVCorrelationService } from "../banking/access-control-cctv-correlation.service.js";
 import { PosCoreBankingCorrelationService } from "../banking/pos-core-banking-correlation.service.js";
@@ -92,8 +93,11 @@ export function registerBankingAnalyticsRoutes(
           FROM cameras c
           JOIN resource_nodes cnode ON cnode.id = c.resource_node_id
           LEFT JOIN branches b ON b.id = c.branch_node_id
-          LEFT JOIN resource_nodes bnode ON bnode.id = c.branch_node_id
+            AND LOWER(COALESCE(b.status, 'active')) = 'active'
+          JOIN resource_nodes bnode ON bnode.id = c.branch_node_id
           WHERE cnode.tenant_id = $1::uuid
+            AND ${activeResourceNode('cnode')}
+            AND ${activeResourceNode('bnode')}
             AND (
               cnode.name ~* 'counter|cash|teller'
               OR EXISTS (
@@ -242,7 +246,10 @@ export function registerBankingAnalyticsRoutes(
             c.status
           FROM cameras c
           JOIN resource_nodes cnode ON cnode.id = c.resource_node_id
+          JOIN resource_nodes branch_node ON branch_node.id = c.branch_node_id
           WHERE cnode.tenant_id = $1::uuid
+            AND ${activeResourceNode('cnode')}
+            AND ${activeResourceNode('branch_node')}
             AND (
               cnode.name ~* 'atm|kiosk'
               OR EXISTS (
@@ -290,7 +297,10 @@ export function registerBankingAnalyticsRoutes(
             COUNT(*) FILTER (WHERE c.status = 'offline') as offline_cameras
           FROM cameras c
           JOIN resource_nodes cnode ON cnode.id = c.resource_node_id
+          JOIN resource_nodes branch_node ON branch_node.id = c.branch_node_id
           WHERE cnode.tenant_id = $1::uuid
+            AND ${activeResourceNode('cnode')}
+            AND ${activeResourceNode('branch_node')}
             ${query.branchId ? "AND c.branch_node_id = $2::uuid" : ""}
           GROUP BY c.branch_node_id
         ),
@@ -460,8 +470,11 @@ export function registerBankingAnalyticsRoutes(
           FROM cameras c
           JOIN resource_nodes cnode ON cnode.id = c.resource_node_id
           LEFT JOIN branches b ON b.id = c.branch_node_id
-          LEFT JOIN resource_nodes bnode ON bnode.id = c.branch_node_id
+            AND LOWER(COALESCE(b.status, 'active')) = 'active'
+          JOIN resource_nodes bnode ON bnode.id = c.branch_node_id
           WHERE cnode.tenant_id = $1::uuid
+            AND ${activeResourceNode('cnode')}
+            AND ${activeResourceNode('bnode')}
             AND (
               cnode.name ~* 'counter|cash|teller'
               OR EXISTS (

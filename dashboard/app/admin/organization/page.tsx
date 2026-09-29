@@ -336,7 +336,7 @@ export default function OrganizationHierarchyPage() {
     }
   }, [showAddEmpModal]);
 
-  async function loadAllData(options: { tree?: boolean; users?: boolean; roles?: boolean; cameras?: boolean } = {}) {
+  async function loadAllData(options: { tree?: boolean; users?: boolean; roles?: boolean; cameras?: boolean; userStatus?: string } = {}) {
     const loadTree = options.tree !== false;
     const loadUsers = options.users !== false;
     const loadRoles = options.roles !== false;
@@ -346,7 +346,11 @@ export default function OrganizationHierarchyPage() {
     try {
       const [treeRes, usersRes, rolesRes, camsRes] = await Promise.all([
         loadTree ? organizationApi.getTree() : Promise.resolve(null),
-        loadUsers ? fetchWithAuth("/api/control/v1/users") : Promise.resolve(null),
+        loadUsers ? fetchWithAuth(options.userStatus === "inactive" || (!options.userStatus && empStatusFilter === "inactive")
+          ? "/api/control/v1/users?status=inactive"
+          : options.userStatus === "all" || (!options.userStatus && empStatusFilter === "all")
+            ? "/api/control/v1/users?includeInactive=true"
+            : "/api/control/v1/users") : Promise.resolve(null),
         loadRoles ? fetchWithAuth("/api/control/v1/roles") : Promise.resolve(null),
         loadCameras ? fetchWithAuth("/api/control/v1/cameras") : Promise.resolve(null),
       ]);
@@ -1853,6 +1857,7 @@ export default function OrganizationHierarchyPage() {
                     onChange={(e) => {
                       setEmpStatusFilter(e.target.value);
                       setEmpCurrentPage(1);
+                      void loadAllData({ tree: false, roles: false, cameras: false, userStatus: e.target.value });
                     }}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 text-xs"
                   >
@@ -1903,6 +1908,7 @@ export default function OrganizationHierarchyPage() {
                         setEmpFaceFilter("all");
                         setEmpStatusFilter("active");
                         setEmpCurrentPage(1);
+                        void loadAllData({ tree: false, roles: false, cameras: false, userStatus: "active" });
                       }}
                       className="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 rounded-lg text-xs transition"
                       title="Reset filters"

@@ -75,6 +75,8 @@ const updateNodeSchema = z.object({
 });
 
 const nodeIdSchema = z.object({ id: z.string().min(1) });
+const includeInactiveQuery = z.enum(["true", "false"]).optional()
+  .transform((value) => value === "true");
 
 export function isSuperAdminOrgCreator(user?: any): boolean {
   if (!user) return false;
@@ -195,7 +197,7 @@ export async function registerOrganizationRoutes(
           ])
           .optional(),
         parentId: z.string().min(1).optional(),
-        includeInactive: z.coerce.boolean().default(false),
+        includeInactive: includeInactiveQuery,
       })
       .parse(request.query);
 
@@ -205,6 +207,11 @@ export async function registerOrganizationRoutes(
       query.parentId,
       query.includeInactive,
     );
+    if (query.includeInactive) {
+      const readable = await Promise.all(nodes.map(async (node) =>
+        (await canReadOrganizationNode(request, store, node.id)) ? node : null));
+      return { data: readable.filter((node) => node !== null) };
+    }
     const visible = await visibleOrganizationNodeIds(request, store);
     return { data: nodes.filter((node) => visible.has(node.id)) };
   });
@@ -214,7 +221,8 @@ export async function registerOrganizationRoutes(
     const { id } = nodeIdSchema.parse(request.params);
     const node = await store.getOrganizationNodeDetails(id);
 
-    if (!node) {
+    const includeInactive = (request.query as { includeInactive?: string })?.includeInactive === "true";
+    if (!node || (!includeInactive && !(await store.getNode(id)))) {
       return reply.code(404).send({ error: "node_not_found" });
     }
 
@@ -231,6 +239,10 @@ export async function registerOrganizationRoutes(
   // Get node hierarchy path (from node to root)
   app.get("/v1/organization/nodes/:id/path", async (request, reply) => {
     const { id } = nodeIdSchema.parse(request.params);
+    const { includeInactive } = z.object({ includeInactive: includeInactiveQuery }).parse(request.query);
+    if (!includeInactive && !(await store.getNode(id))) {
+      return reply.code(404).send({ error: "node_not_found" });
+    }
     if (!(await canReadOrganizationNode(request, store, id))) {
       return reply.code(403).send({ error: "forbidden" });
     }
@@ -246,19 +258,27 @@ export async function registerOrganizationRoutes(
   // Get descendant nodes
   app.get("/v1/organization/nodes/:id/descendants", async (request, reply) => {
     const { id } = nodeIdSchema.parse(request.params);
+    const query = z
+      .object({
+        includeInactive: includeInactiveQuery,
+      })
+      .parse(request.query);
+    if (!query.includeInactive && !(await store.getNode(id))) {
+      return reply.code(404).send({ error: "node_not_found" });
+    }
     if (!(await canReadOrganizationNode(request, store, id))) {
       return reply.code(403).send({ error: "forbidden" });
     }
-    const query = z
-      .object({
-        includeInactive: z.coerce.boolean().default(false),
-      })
-      .parse(request.query);
 
     const descendants = await store.getDescendantNodes(
       id,
       query.includeInactive,
     );
+    if (query.includeInactive) {
+      const readable = await Promise.all(descendants.map(async (node) =>
+        (await canReadOrganizationNode(request, store, node.id)) ? node : null));
+      return { data: readable.filter((node) => node !== null) };
+    }
     const visible = await visibleOrganizationNodeIds(request, store);
     return { data: descendants.filter((node) => visible.has(node.id)) };
   });

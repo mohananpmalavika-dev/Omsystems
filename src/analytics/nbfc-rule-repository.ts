@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
+import { activeCamera, activeResourceNode } from "../database/active-resource.js";
 import type {
   AnalyticsRule,
   AnalyticsZone,
@@ -917,18 +918,24 @@ export class NbfcRuleRepository {
     if (this.pool) {
       try {
         // Query branches
-        const branchRes = await this.pool.query<{ count: string }>(`SELECT count(*)::text as count FROM branches`);
+        const branchRes = await this.pool.query<{ count: string }>(
+          `SELECT count(*)::text as count FROM branches b
+           JOIN resource_nodes node ON node.id = b.id
+           WHERE LOWER(COALESCE(b.status, 'active')) = 'active'
+             AND ${activeResourceNode('node')}`);
         totalBranches = Number(branchRes.rows[0]?.count ?? 0);
         if (totalBranches === 0) {
           const resNodes = await this.pool.query<{ count: string }>(
-            `SELECT count(*)::text as count FROM resource_nodes WHERE node_type = 'branch'`
+            `SELECT count(*)::text as count FROM resource_nodes node
+             WHERE node_type = 'branch' AND ${activeResourceNode('node')}`
           );
           totalBranches = Number(resNodes.rows[0]?.count ?? 0);
         }
       } catch {
         try {
           const resNodes = await this.pool.query<{ count: string }>(
-            `SELECT count(*)::text as count FROM resource_nodes WHERE node_type = 'branch'`
+            `SELECT count(*)::text as count FROM resource_nodes node
+             WHERE node_type = 'branch' AND ${activeResourceNode('node')}`
           );
           totalBranches = Number(resNodes.rows[0]?.count ?? 0);
         } catch (e) {
@@ -939,18 +946,21 @@ export class NbfcRuleRepository {
       try {
         // Query AI cameras
         const resAi = await this.pool.query<{ count: string }>(
-          `SELECT count(DISTINCT camera_id)::text as count FROM analytics_rules WHERE enabled = true`
+          `SELECT count(DISTINCT rule.camera_id)::text as count FROM analytics_rules rule
+           JOIN cameras c ON c.id::text = rule.camera_id::text
+           WHERE rule.enabled = true AND ${activeCamera('c')}`
         );
         totalAiCameras = Number(resAi.rows[0]?.count ?? 0);
         if (totalAiCameras === 0) {
           const resCam = await this.pool.query<{ count: string }>(
-            `SELECT count(*)::text as count FROM cameras WHERE status != 'deleted'`
+            `SELECT count(*)::text as count FROM cameras c WHERE ${activeCamera('c')}`
           );
           totalAiCameras = Number(resCam.rows[0]?.count ?? 0);
         }
       } catch {
         try {
-          const resCam = await this.pool.query<{ count: string }>(`SELECT count(*)::text as count FROM cameras`);
+          const resCam = await this.pool.query<{ count: string }>(
+            `SELECT count(*)::text as count FROM cameras c WHERE ${activeCamera('c')}`);
           totalAiCameras = Number(resCam.rows[0]?.count ?? 0);
         } catch (e) {
           console.warn("NbfcRuleRepository: Error querying totalAiCameras:", e);
@@ -1085,6 +1095,7 @@ export class NbfcRuleRepository {
           FROM cameras c
           LEFT JOIN resource_nodes cnode ON cnode.id = c.resource_node_id
           LEFT JOIN resource_nodes bnode ON bnode.id = c.branch_node_id
+          WHERE ${activeCamera('c')}
           ORDER BY bnode.name ASC, cnode.name ASC
         `;
         const res = await this.pool.query(query);

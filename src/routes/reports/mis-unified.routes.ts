@@ -22,6 +22,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Pool } from 'pg';
 import type { ControlPlaneStore } from '../../control-plane-store.js';
+import { activeCamera, activeResourceNode } from '../../database/active-resource.js';
 
 // ============================================================================
 // REQUEST VALIDATION SCHEMAS
@@ -153,8 +154,8 @@ async function resolveBranchHierarchy(
     const rows = await safeQuery(
       pool,
       `SELECT id::text, parent_id::text, node_type::text, name 
-       FROM resource_nodes 
-       WHERE tenant_id::text = $1`,
+       FROM resource_nodes node
+       WHERE node.tenant_id::text = $1 AND ${activeResourceNode('node')}`,
       [tenantId]
     );
     for (const r of rows) {
@@ -303,6 +304,8 @@ async function generateMISReport(
        FROM cameras c
        JOIN resource_nodes rn ON c.branch_node_id = rn.id
        WHERE rn.tenant_id::text = $1
+         AND ${activeResourceNode('rn')}
+         AND ${activeCamera('c')}
          AND c.branch_node_id::text = ANY($2::text[])
        GROUP BY c.branch_node_id`,
       [tenantId, branchIds]
@@ -414,6 +417,8 @@ async function generateMISReport(
          JOIN cameras c ON c.id::text = e.camera_id::text
          JOIN resource_nodes rn ON c.branch_node_id = rn.id
          WHERE rn.tenant_id::text = $1
+           AND ${activeResourceNode('rn')}
+           AND ${activeCamera('c')}
            AND c.branch_node_id::text = ANY($2::text[])
            AND e.occurred_at BETWEEN $3 AND $4
            AND e.detection_type IN ('line-crossing', 'footfall', 'customer-counting', 'person-counting')
@@ -469,6 +474,7 @@ async function generateMISReport(
          ) AS attendance_percent
        FROM users u
        WHERE u.tenant_id::text = $1
+         AND u.active = true AND u.status = 'active'
          AND u.branch_id::text = ANY($2::text[])
        GROUP BY u.branch_id`,
       [tenantId, branchIds]
@@ -489,6 +495,8 @@ async function generateMISReport(
        JOIN cameras c ON cs.camera_id = c.id
        JOIN resource_nodes rn ON c.branch_node_id = rn.id
        WHERE rn.tenant_id::text = $1
+         AND ${activeResourceNode('rn')}
+         AND ${activeCamera('c')}
          AND c.branch_node_id::text = ANY($2::text[])
        GROUP BY c.branch_node_id`,
       [tenantId, branchIds]

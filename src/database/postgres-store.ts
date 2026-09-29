@@ -173,7 +173,7 @@ export class PostgresStore
   async listAccessibleNodes(user: User, action: Action, type?: NodeType) {
     return this.resources.listAccessible(user, action, type);
   }
-  async listDeviceInventory(tenantId: string, branchNodeId?: string): Promise<DeviceInventoryRecord[]> {
+  async listDeviceInventory(tenantId: string, branchNodeId?: string, includeInactive = false): Promise<DeviceInventoryRecord[]> {
     const result = await this.pool.query(
       `SELECT id::text, tenant_id, device_id, tenant, region, branch, device_type,
               manufacturer, model, serial_number, mac_address, ip_address,
@@ -183,8 +183,9 @@ export class PostgresStore
               lifecycle_state, created_at, updated_at
        FROM device_inventory
        WHERE tenant_id=$1 AND ($2::varchar IS NULL OR branch=$2)
+         AND ($3::boolean OR lifecycle_state NOT IN ('suspended', 'decommissioned'))
        ORDER BY device_id`,
-      [tenantId, branchNodeId ?? null],
+      [tenantId, branchNodeId ?? null, includeInactive],
     );
     return camelRows(result.rows);
   }

@@ -7,6 +7,7 @@ import type {
   CameraSpecificationsInput,
 } from "../control-plane-store.js";
 import type { NodeType } from "../domain/models.js";
+import { activeResourceNode } from "./active-resource.js";
 
 type JsonRecord = Record<string, any>;
 
@@ -30,7 +31,7 @@ export function camelRows<T = JsonRecord>(rows: JsonRecord[]): T[] {
 const organizationSelect = `
   SELECT id::text, tenant_id::text, parent_id::text, node_type AS type,
          name, code, description, address, contact_info, metadata,
-         metadata->>'logoUrl' AS logo_url, is_active,
+         metadata->>'logoUrl' AS logo_url, is_active, lifecycle_status,
          is_sensitive, sensitivity_level, path::text, created_at, updated_at
   FROM resource_nodes`;
 
@@ -380,8 +381,8 @@ export class InfrastructureRepository {
     const resolvedTenantId = await this.resolveTenantUuid(tenantId);
     const result = await this.pool.query(
       `SELECT node_type AS type, count(*)::integer AS count
-       FROM resource_nodes
-       WHERE tenant_id=$1 AND is_active=true AND node_type<>'camera'
+       FROM resource_nodes node
+       WHERE tenant_id=$1 AND ${activeResourceNode("node")} AND node_type<>'camera'
        GROUP BY node_type`,
       [resolvedTenantId],
     );
@@ -390,7 +391,9 @@ export class InfrastructureRepository {
       `SELECT count(*)::integer AS total,
               count(*) FILTER (WHERE status='online')::integer AS online
        FROM cameras c JOIN resource_nodes n ON n.id=c.resource_node_id
-       WHERE n.tenant_id=$1`,
+       JOIN resource_nodes branch ON branch.id=c.branch_node_id
+       WHERE n.tenant_id=$1 AND ${activeResourceNode("n")}
+         AND ${activeResourceNode("branch")}`,
       [resolvedTenantId],
     );
     return { nodes: counts, cameras: cameras.rows[0] };
@@ -411,7 +414,7 @@ export class InfrastructureRepository {
            OR node_type=$2
          )
          AND ($3::uuid IS NULL OR parent_id=$3)
-         AND ($4 OR is_active=true)
+         AND ($4 OR ${activeResourceNode("resource_nodes")})
        ORDER BY path`,
       [resolvedTenantId, type ?? null, parentId ?? null, includeInactive],
     );
@@ -814,6 +817,11 @@ export class InfrastructureRepository {
   async listUsers(tenantId: string, filters: any) {
     const values: unknown[] = [tenantId];
     const clauses = ["u.tenant_id=$1"];
+    // A non-active status filter is an explicit request to inspect those accounts.
+    if (!filters.status && !filters.includeInactive) clauses.push("u.status = 'active'");
+    if (filters.status === "active" || (!filters.status && !filters.includeInactive)) {
+      clauses.push("u.active = true");
+    }
     if (filters.role) {
       values.push(filters.role);
       clauses.push(`u.role=$${values.length}::user_role`);
@@ -836,7 +844,9 @@ export class InfrastructureRepository {
       clauses.push(`EXISTS (SELECT 1 FROM user_organizational_assignments a
         JOIN resource_nodes assigned_scope ON assigned_scope.id=a.scope_node_id
         JOIN resource_nodes requested_scope ON requested_scope.id=$${values.length}
-        WHERE a.user_id=u.id AND assigned_scope.path <@ requested_scope.path)`);
+        WHERE a.user_id=u.id AND assigned_scope.path <@ requested_scope.path
+          AND ${activeResourceNode("assigned_scope")}
+          AND ${activeResourceNode("requested_scope")})`);
     }
     if (filters.managerUserId) {
       values.push(filters.managerUserId);

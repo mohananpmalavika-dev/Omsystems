@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
+import { activeCamera, activeResourceNode } from "./active-resource.js";
 
 const VALID_INCIDENT_TYPES = new Set([
   "theft-robbery",
@@ -120,8 +121,9 @@ export class IncidentRepository {
          clip.storage_path AS clip_storage_path
        FROM incidents inc
        LEFT JOIN resource_nodes node ON node.id = inc.branch_id
+         AND ${activeResourceNode("node")}
        LEFT JOIN incident_cameras icam ON icam.incident_id = inc.id
-       LEFT JOIN cameras cam ON cam.id = icam.camera_id
+       LEFT JOIN cameras cam ON cam.id = icam.camera_id AND ${activeCamera("cam")}
        LEFT JOIN resource_nodes cam_node ON cam_node.id = cam.resource_node_id
        LEFT JOIN LATERAL (
          SELECT name FROM nbfc_analytics_zones 
@@ -196,8 +198,9 @@ export class IncidentRepository {
          clip.storage_path AS clip_storage_path
        FROM incidents inc
        LEFT JOIN resource_nodes node ON node.id = inc.branch_id
+         AND ${activeResourceNode("node")}
        LEFT JOIN incident_cameras icam ON icam.incident_id = inc.id
-       LEFT JOIN cameras cam ON cam.id = icam.camera_id
+       LEFT JOIN cameras cam ON cam.id = icam.camera_id AND ${activeCamera("cam")}
        LEFT JOIN resource_nodes cam_node ON cam_node.id = cam.resource_node_id
        LEFT JOIN LATERAL (
          SELECT name FROM nbfc_analytics_zones 

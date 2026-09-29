@@ -231,6 +231,7 @@ export async function registerUserRoutes(
             "locked",
           ])
           .optional(),
+        includeInactive: z.literal("true").optional(),
         orgNodeId: z.string().min(1).optional(),
         search: z.string().optional(),
         limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -258,6 +259,7 @@ export async function registerUserRoutes(
     // constrained by their explicit user:manage grants in the repository.
     const filters = {
       ...query,
+      includeInactive: query.includeInactive === "true",
       manageableRoles,
       includeUserId: request.currentUser.id,
       ...(!elevated ? { managerUserId: request.currentUser.id } : {}),
@@ -280,7 +282,9 @@ export async function registerUserRoutes(
 
     const user = await store.getUserDetails(id);
 
-    if (!user || user.tenantId !== request.currentUser.tenantId) {
+    const includeInactive = (request.query as { includeInactive?: string })?.includeInactive === "true";
+    if (!user || user.tenantId !== request.currentUser.tenantId ||
+      (!includeInactive && (user.active === false || user.status !== "active"))) {
       return reply.code(404).send({ error: "user_not_found" });
     }
 

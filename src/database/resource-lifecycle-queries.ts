@@ -11,6 +11,7 @@
  */
 
 import type { Pool } from 'pg';
+import { activeResourceNode } from './active-resource.js';
 
 /**
  * Query patterns for lifecycle-aware operations
@@ -37,10 +38,10 @@ export class LifecycleAwareResourceQueries {
         path::text,
         lifecycle_status,
         created_at
-       FROM resource_nodes
+       FROM resource_nodes node
        WHERE tenant_id = $1
          AND node_type = 'branch'
-         AND (lifecycle_status = 'ACTIVE' OR lifecycle_status IS NULL)
+         AND ${activeResourceNode('node')}
        ORDER BY name`,
       [tenantId]
     );
@@ -48,7 +49,7 @@ export class LifecycleAwareResourceQueries {
   }
 
   /**
-   * Get operational branches (ACTIVE or DISABLED, but not ARCHIVED)
+   * Get branches visible in operational views.
    * 
    * Use this for:
    * - Branch management pages
@@ -72,7 +73,7 @@ export class LifecycleAwareResourceQueries {
        FROM resource_nodes
        WHERE tenant_id = $1
          AND node_type = 'branch'
-         AND (lifecycle_status IN ('ACTIVE', 'DISABLED') OR lifecycle_status IS NULL)
+         AND ${activeResourceNode('resource_nodes')}
        ORDER BY 
          CASE 
            WHEN lifecycle_status = 'ACTIVE' OR lifecycle_status IS NULL THEN 0
@@ -160,7 +161,8 @@ export class LifecycleAwareResourceQueries {
        JOIN resource_nodes bn ON bn.id = c.branch_node_id
        WHERE cn.tenant_id = $1
          -- Only include cameras whose branch is operational
-         AND (bn.lifecycle_status IN ('ACTIVE', 'DISABLED') OR bn.lifecycle_status IS NULL)
+         AND ${activeResourceNode('cn')}
+         AND ${activeResourceNode('bn')}
        ORDER BY bn.name, cn.name`,
       [tenantId]
     );
@@ -188,7 +190,8 @@ export class LifecycleAwareResourceQueries {
        JOIN resource_nodes bn ON bn.id = c.branch_node_id
        WHERE cn.tenant_id = $1
          -- Only include cameras whose branch is active
-         AND (bn.lifecycle_status = 'ACTIVE' OR bn.lifecycle_status IS NULL)
+         AND ${activeResourceNode('cn')}
+         AND ${activeResourceNode('bn')}
        ORDER BY bn.name, cn.name`,
       [tenantId]
     );
@@ -212,12 +215,15 @@ export class LifecycleAwareResourceQueries {
         END) as online_cameras,
         COUNT(DISTINCT c.id) as total_cameras
        FROM resource_nodes bn
-       LEFT JOIN cameras cam ON cam.branch_node_id = bn.id
        LEFT JOIN cameras c ON c.branch_node_id = bn.id
+         AND EXISTS (
+           SELECT 1 FROM resource_nodes cn
+           WHERE cn.id = c.resource_node_id AND ${activeResourceNode('cn')}
+         )
        WHERE bn.tenant_id = $1
          AND bn.node_type = 'branch'
          -- Only count active branches in health metrics
-         AND (bn.lifecycle_status = 'ACTIVE' OR bn.lifecycle_status IS NULL)`,
+         AND ${activeResourceNode('bn')}`,
       [tenantId]
     );
     return result.rows[0];
@@ -294,13 +300,9 @@ export class LifecycleAwareResourceQueries {
    */
   async isBranchActiveForMonitoring(branchId: string): Promise<boolean> {
     const result = await this.pool.query(
-      `SELECT 
-        CASE 
-          WHEN lifecycle_status = 'ACTIVE' OR lifecycle_status IS NULL THEN true
-          ELSE false
-        END as is_active
-       FROM resource_nodes
-       WHERE id = $1`,
+      `SELECT ${activeResourceNode('branch')} AS is_active
+       FROM resource_nodes branch
+       WHERE branch.id = $1`,
       [branchId]
     );
     return result.rows[0]?.is_active ?? false;

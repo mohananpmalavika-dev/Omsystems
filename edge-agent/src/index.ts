@@ -668,7 +668,11 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
         const channelsByNumber = new Map(channels.map((channel) => [channel.sourceChannel, channel]));
         for (const vendorChannel of vendorChannels) {
           const current = channelsByNumber.get(vendorChannel.sourceChannel);
-          if (!current?.streamVerified) channelsByNumber.set(vendorChannel.sourceChannel, vendorChannel);
+          // Keep ONVIF-observed offline channels visible, but do not invent
+          // inputs solely because a vendor RTSP guess failed to connect.
+          if (vendorChannel.streamVerified && !current?.streamVerified) {
+            channelsByNumber.set(vendorChannel.sourceChannel, vendorChannel);
+          }
         }
         channels = [...channelsByNumber.values()].sort((left, right) => left.sourceChannel - right.sourceChannel);
         activeRecorders.set(discoveredId, {
@@ -1112,7 +1116,8 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
         });
         return [];
       });
-      const knownHosts = [...new Set([...dbHosts, ...multicastDiscoveredHosts])];
+      const knownHosts = options.target ? [options.target.ipAddress]
+        : [...new Set([...dbHosts, ...multicastDiscoveredHosts])];
       const rtspOptions = {
         ports,
         recorderHttpPorts,

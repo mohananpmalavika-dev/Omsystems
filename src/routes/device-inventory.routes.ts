@@ -64,6 +64,7 @@ const updateDeviceInventorySchema = deviceInventorySchema.partial().omit({
 const listQuerySchema = z.object({
   branch: z.string().trim().min(1).max(200).optional(),
   tenant: z.string().trim().min(1).max(200).optional(),
+  includeInactive: z.enum(["true", "false"]).optional(),
 });
 
 async function ensureBranchAccess(
@@ -103,7 +104,7 @@ export async function registerDeviceInventoryRoutes(
     if (query.branch) {
       if (!(await ensureBranchAccess(request, reply, store, query.branch, "live:view"))) return;
     }
-    return { data: await store.listDeviceInventory(tenantId, query.branch) };
+    return { data: await store.listDeviceInventory(tenantId, query.branch, query.includeInactive === "true") };
   });
 
   app.post("/v1/device-inventory", async (request, reply) => {
@@ -145,7 +146,10 @@ export async function registerDeviceInventoryRoutes(
   app.get("/v1/device-inventory/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
     const record = await store.getDeviceInventory(id);
-    if (!record) return reply.code(404).send({ error: "device_not_found" });
+    const includeInactive = (request.query as { includeInactive?: string })?.includeInactive === "true";
+    if (!record || (!includeInactive && ["suspended", "decommissioned"].includes(record.lifecycleState))) {
+      return reply.code(404).send({ error: "device_not_found" });
+    }
     if (!(await ensureBranchAccess(request, reply, store, record.branch, "live:view"))) return;
     return record;
   });

@@ -56,6 +56,30 @@ describe("organization routes", () => {
     expect(statistics.nodes.company).toBe(1);
   });
 
+  it("hides a deactivated branch and its children from default organization reads", async () => {
+    const store = new MemoryStore();
+    const company = await store.createOrganizationNode("tenant-one", {
+      nodeType: "company", name: "Active Company",
+    });
+    const branch = await store.createOrganizationNode("tenant-one", {
+      parentNodeId: company.id, nodeType: "branch", name: "Retired Branch",
+    });
+    const location = await store.createOrganizationNode("tenant-one", {
+      parentNodeId: branch.id, nodeType: "location", name: "Retired Location",
+    });
+
+    await store.deactivateOrganizationNode(branch.id);
+
+    expect((await store.getOrganizationTree("tenant-one"))[0]?.children).toEqual([]);
+    expect(await store.getNode(branch.id)).toBeUndefined();
+    expect(await store.getNode(location.id)).toBeUndefined();
+    expect(await store.listOrganizationNodes("tenant-one", undefined, undefined, true))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: branch.id, isActive: false }),
+        expect.objectContaining({ id: location.id }),
+      ]));
+  });
+
   async function createApp(user: User, store: Record<string, unknown>) {
     const app = Fastify({ logger: false });
     apps.push(app);

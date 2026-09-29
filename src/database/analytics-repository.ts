@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
+import { activeCamera } from "./active-resource.js";
 import type {
   AnalyticsAlert,
   AnalyticsEvent,
@@ -485,7 +486,8 @@ export class AnalyticsRepository {
     const result = await this.pool.query(
       `SELECT event.*
        FROM analytics_events event
-       WHERE ${conditions.join(" AND ")}
+       JOIN cameras camera ON camera.id = event.camera_id
+       WHERE ${activeCamera("camera")} AND ${conditions.join(" AND ")}
        ORDER BY event.occurred_at DESC
        LIMIT $${parameter}`,
       values,
@@ -542,6 +544,7 @@ export class AnalyticsRepository {
        LEFT JOIN resource_nodes grandparent_node ON grandparent_node.id=parent_node.parent_id
        LEFT JOIN incidents inc ON inc.id=alert.incident_id
        WHERE alert.tenant_id=$1
+         AND ${activeCamera("camera")}
          AND ($2::uuid IS NULL OR alert.camera_id=$2)
          AND (${branchCondition})
          AND ($4::text IS NULL OR alert.status=$4)
@@ -578,6 +581,7 @@ export class AnalyticsRepository {
        FROM analytics_alerts alert
        JOIN cameras camera ON camera.id=alert.camera_id
        WHERE alert.tenant_id=$1
+         AND ${activeCamera("camera")}
          AND ($2::uuid IS NULL OR alert.camera_id=$2)
          AND (${branchCondition})
          AND ($4::timestamptz IS NULL OR alert.last_detected_at >= $4)
@@ -621,6 +625,7 @@ export class AnalyticsRepository {
        FROM analytics_alerts alert
        JOIN cameras camera ON camera.id=alert.camera_id
        WHERE alert.tenant_id=$1
+         AND ${activeCamera("camera")}
          AND ($2::uuid IS NULL OR alert.camera_id=$2)
          AND (${branchCondition})
          AND ($4::uuid[] IS NULL OR alert.camera_id = ANY($4::uuid[]))`,
@@ -699,7 +704,8 @@ export class AnalyticsRepository {
          ORDER BY created_at DESC LIMIT 1
        ) zone ON true
        LEFT JOIN incidents inc ON inc.id=alert.incident_id
-       WHERE alert.id=$1 AND alert.tenant_id=$2`,
+       WHERE alert.id=$1 AND alert.tenant_id=$2
+         AND ${activeCamera("camera")}`,
       [id, resolvedTenantId],
     );
     return result.rows[0] ? mapAlert(result.rows[0]) : undefined;

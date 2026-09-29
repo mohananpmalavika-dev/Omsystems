@@ -7,6 +7,7 @@ import type {
   User,
 } from "../domain/models.js";
 import type { AuthorizationDecision } from "../domain/authorization.js";
+import { activeResourceNode } from "./active-resource.js";
 
 type ResourceRow = {
   id: string;
@@ -107,7 +108,7 @@ export class ResourceRepository {
     const result = await this.pool.query<ResourceRow>(
       `SELECT id::text, parent_id::text, tenant_id::text, node_type, name,
               path::text, is_sensitive, sensitivity_level
-       FROM resource_nodes WHERE id = $1`,
+       FROM resource_nodes node WHERE id = $1 AND ${activeResourceNode("node")}`,
       [id],
     );
     return result.rows[0] ? mapNode(result.rows[0]) : undefined;
@@ -121,7 +122,7 @@ export class ResourceRepository {
     const result = await this.pool.query<ResourceRow>(
       `SELECT id::text, parent_id::text, tenant_id::text, node_type, name,
              path::text, is_sensitive, sensitivity_level
-       FROM resource_nodes WHERE id = ANY($1::uuid[])`,
+       FROM resource_nodes node WHERE id = ANY($1::uuid[]) AND ${activeResourceNode("node")}`,
       [validIds],
     );
     return result.rows.map(mapNode);
@@ -278,12 +279,7 @@ export class ResourceRepository {
          FROM resource_nodes target
          WHERE (target.tenant_id = $1 OR $1 = '00000000-0000-4000-8000-000000000000' OR target.tenant_id IS NOT NULL)
            AND ($2::resource_node_type IS NULL OR target.node_type = $2)
-           AND (
-             target.node_type != 'branch' 
-             OR $3::boolean = true
-             OR target.lifecycle_status IS NULL
-             OR target.lifecycle_status IN ('ACTIVE', 'DISABLED')
-           )
+           AND ($3::boolean = true OR ${activeResourceNode("target")})
          ORDER BY target.name`,
         [resolvedTenantId, type ?? null, includeArchived],
       );
@@ -303,13 +299,7 @@ export class ResourceRepository {
        FROM resource_nodes target
        WHERE target.tenant_id = $1
          AND ($4::resource_node_type IS NULL OR target.node_type = $4)
-         -- Lifecycle filter: exclude archived branches by default for operational queries
-         AND (
-           target.node_type != 'branch' 
-           OR $5::boolean = true
-           OR target.lifecycle_status IS NULL
-           OR target.lifecycle_status IN ('ACTIVE', 'DISABLED')
-         )
+         AND ($5::boolean = true OR ${activeResourceNode("target")})
          AND (
            EXISTS (
              SELECT 1
@@ -409,28 +399,26 @@ export class ResourceRepository {
     const result = await this.pool.query<ResourceRow>(
       `SELECT id::text, parent_id::text, tenant_id::text, node_type, name,
               path::text
-       FROM resource_nodes
+       FROM resource_nodes node
        WHERE tenant_id = $1
          AND node_type = 'branch'
-         AND (lifecycle_status = 'ACTIVE' OR lifecycle_status IS NULL)
+         AND ${activeResourceNode("node")}
        ORDER BY name`,
       [resolvedTenantId],
     );
     return result.rows.map(mapNode);
   }
 
-  /**
-   * List operational branches (active and disabled, but not archived)
-   */
+  /** List branches visible in the default operational inventory. */
   async listOperationalBranches(tenantId: string): Promise<ResourceNode[]> {
     const resolvedTenantId = await this.resolveTenantUuid(tenantId);
     const result = await this.pool.query<ResourceRow>(
       `SELECT id::text, parent_id::text, tenant_id::text, node_type, name,
               path::text
-       FROM resource_nodes
+       FROM resource_nodes node
        WHERE tenant_id = $1
          AND node_type = 'branch'
-         AND (lifecycle_status IS NULL OR lifecycle_status IN ('ACTIVE', 'DISABLED'))
+         AND ${activeResourceNode("node")}
        ORDER BY name`,
       [resolvedTenantId],
     );

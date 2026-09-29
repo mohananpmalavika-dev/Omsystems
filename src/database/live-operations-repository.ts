@@ -6,6 +6,7 @@ import type {
   LiveIncidentStatus,
 } from "../domain/models.js";
 import type { ControlPlaneStore } from "../control-plane-store.js";
+import { activeCamera } from "./active-resource.js";
 
 type BookmarkInput = Parameters<ControlPlaneStore["createLiveBookmark"]>[0];
 type IncidentInput = Parameters<ControlPlaneStore["createLiveIncident"]>[0];
@@ -32,6 +33,7 @@ export class LiveOperationsRepository {
        FROM cameras camera
        JOIN resource_nodes node ON node.id=camera.resource_node_id
        WHERE camera.id=$3 AND node.tenant_id=$2
+         AND ${activeCamera("camera")}
          AND ($9::uuid IS NULL OR EXISTS (
            SELECT 1 FROM recording_segments segment
            WHERE segment.id=$9 AND segment.camera_id=$3
@@ -80,6 +82,7 @@ export class LiveOperationsRepository {
          FROM cameras camera
          JOIN resource_nodes node ON node.id=camera.resource_node_id
          WHERE camera.id=$3 AND node.tenant_id=$2
+           AND ${activeCamera("camera")}
          RETURNING *`,
         [
           incidentId, input.tenantId, input.cameraId, input.createdBy,

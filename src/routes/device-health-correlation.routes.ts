@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Pool } from "pg";
+import { activeResourceNode } from "../database/active-resource.js";
 
 export interface DeviceHealthCorrelationOptions {
   pool: Pool;
@@ -39,11 +40,14 @@ export async function registerDeviceHealthCorrelationRoutes(
       ),
       branch_info AS (
         SELECT 
-          id as branch_id,
-          name as branch_name,
-          code as branch_code
-        FROM branches
-        WHERE tenant_id = $1
+          b.id as branch_id,
+          b.name as branch_name,
+          b.code as branch_code
+        FROM branches b
+        JOIN resource_nodes node ON node.id = b.id
+        WHERE b.tenant_id = $1
+          AND LOWER(COALESCE(b.status, 'active')) = 'active'
+          AND ${activeResourceNode('node')}
       )
       SELECT 
         ls.*,
@@ -77,7 +81,7 @@ export async function registerDeviceHealthCorrelationRoutes(
         ORDER BY ce.detected_at DESC
         ) as correlated_events
       FROM latest_snapshots ls
-      LEFT JOIN branch_info bi ON ls.branch_id = bi.branch_id
+      JOIN branch_info bi ON ls.branch_id = bi.branch_id
     `;
 
     const params: any[] = [tenantId];

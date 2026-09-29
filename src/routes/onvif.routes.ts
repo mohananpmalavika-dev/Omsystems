@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { wsDiscovery, WsDiscovery } from "../onvif/discovery/ws-discovery.js";
 import { OnvifCameraClient } from "../onvif/onvif-camera-client.js";
+import { activeCamera } from "../database/active-resource.js";
 
 const probeSchema = z.object({
   deviceServiceUrl: z.string().url(),
@@ -250,7 +251,9 @@ export async function registerOnvifRoutes(
       const pool = (app as any).pool || (app as any).pg?.pool;
       if (pool) {
         const { rows } = await pool.query(
-          "SELECT id, name, ip_address, onvif_port, rtsp_url, credentials, config FROM cameras WHERE id = $1 OR id::text = $1 LIMIT 1",
+          `SELECT id, name, ip_address, onvif_port, rtsp_url, credentials, config
+           FROM cameras camera WHERE (id = $1 OR id::text = $1)
+             AND ${activeCamera("camera")} LIMIT 1`,
           [cameraId]
         ).catch(() => ({ rows: [] }));
 

@@ -5,6 +5,7 @@ import type { DeviceIdentityRepository } from "./device-identity-repository.js";
 import type { ProvisioningStageId } from "../provisioning/stages.js";
 import { EDGE_AGENT_HEARTBEAT_TTL_MS } from "../edge-agent/presence.js";
 import { normalizeMacAddress, normalizeOnvifUuid } from "../device-identity.js";
+import { activeResourceNode } from "./active-resource.js";
 
 type AgentRow = {
   id: string;
@@ -162,14 +163,17 @@ export class EdgeAgentRepository {
 
   async listByBranch(branchId: string) {
     const result = await this.pool.query<AgentRow>(
-      `SELECT id::text, branch_node_id::text, name, version,
-               ${edgeAgentStatusSql()} AS status,
-               last_seen_at,
-              public_media_url, local_media_url, device_uuid,
-              credential_issued_at, credential_revoked_at
-       FROM edge_agents
-       WHERE branch_node_id = $1
-       ORDER BY name, created_at`,
+      `SELECT agent.id::text, agent.branch_node_id::text, agent.name, agent.version,
+               ${edgeAgentStatusSql("agent")} AS status,
+               agent.last_seen_at,
+              agent.public_media_url, agent.local_media_url, agent.device_uuid,
+              agent.credential_issued_at, agent.credential_revoked_at
+       FROM edge_agents agent
+       JOIN resource_nodes branch ON branch.id = agent.branch_node_id
+       WHERE agent.branch_node_id = $1
+         AND agent.credential_revoked_at IS NULL
+         AND ${activeResourceNode("branch")}
+       ORDER BY agent.name, agent.created_at`,
       [branchId],
     );
     return result.rows.map(mapAgent);
@@ -185,6 +189,8 @@ export class EdgeAgentRepository {
        FROM edge_agents e
        JOIN resource_nodes n ON e.branch_node_id = n.id
        WHERE n.tenant_id = $1
+         AND e.credential_revoked_at IS NULL
+         AND ${activeResourceNode("n")}
        ORDER BY e.name, e.created_at`,
       [tenantId],
     );

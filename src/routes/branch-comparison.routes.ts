@@ -2,6 +2,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import type { Pool } from "pg";
+import { activeCamera, activeResourceNode } from "../database/active-resource.js";
 
 export interface BranchComparisonRouteOptions {
   pool: Pool;
@@ -272,7 +273,10 @@ async function computeBranchMetrics(pool: Pool, tenantId: string, date: string) 
   let branchRows: Array<{ id: string; name: string; code?: string }> = [];
   try {
     const branchesRes = await pool.query(
-      `SELECT id, name, COALESCE(code, id::text) as code FROM branches WHERE tenant_id = $1 AND (status IS NULL OR LOWER(status) != 'deleted')`,
+      `SELECT b.id, b.name, COALESCE(b.code, b.id::text) as code FROM branches b
+       JOIN resource_nodes node ON node.id = b.id
+       WHERE b.tenant_id = $1 AND LOWER(COALESCE(b.status, 'active')) = 'active'
+         AND ${activeResourceNode('node')}`,
       [tenantId]
     );
     branchRows = branchesRes.rows;
@@ -283,7 +287,9 @@ async function computeBranchMetrics(pool: Pool, tenantId: string, date: string) 
   if (branchRows.length === 0) {
     try {
       const nodesRes = await pool.query(
-        `SELECT id, name, COALESCE(code, id::text) as code FROM resource_nodes WHERE tenant_id = $1 AND node_type = 'branch'`,
+        `SELECT id, name, COALESCE(code, id::text) as code FROM resource_nodes node
+         WHERE tenant_id = $1 AND node_type = 'branch'
+           AND ${activeResourceNode('node')}`,
         [tenantId]
       );
       branchRows = nodesRes.rows;
@@ -314,8 +320,8 @@ async function computeBranchMetrics(pool: Pool, tenantId: string, date: string) 
             COUNT(*) as total,
             COUNT(*) FILTER (WHERE status = 'online') as online,
             COUNT(*) FILTER (WHERE status != 'offline') as healthy
-           FROM cameras 
-           WHERE branch_node_id = $1`,
+           FROM cameras c
+           WHERE c.branch_node_id = $1 AND ${activeCamera('c')}`,
           [branchId]
         );
         const cameras = cameraHealth.rows[0] || { total: 0, online: 0, healthy: 0 };

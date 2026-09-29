@@ -8,6 +8,7 @@
 
 import { Router, Request, Response } from 'express';
 import { Pool } from 'pg';
+import { activeCamera } from '../../database/active-resource.js';
 import { authenticateToken } from '../../middleware/auth.middleware.js';
 import { requirePermission } from '../../middleware/require-permission.middleware.js';
 
@@ -236,7 +237,7 @@ async function calculateSecurityPostureScore(
 
     // Camera availability
     const cameras = await pool.query(
-      "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status <> 'offline') as active FROM cameras WHERE tenant_id = $1",
+      `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE c.status <> 'offline') as active FROM cameras c WHERE c.tenant_id = $1 AND ${activeCamera('c')}`,
       [tenantId]
     );
     const cameraAvailability = cameras.rows[0]?.total > 0
@@ -308,7 +309,7 @@ async function calculateOperationalEfficiency(
   try {
     // System uptime (camera availability)
     const uptime = await pool.query(
-      'SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = $1) as active FROM cameras WHERE tenant_id = $2',
+      `SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE c.status = $1) as active FROM cameras c WHERE c.tenant_id = $2 AND ${activeCamera('c')}`,
       ['active', tenantId]
     );
     const uptimePercent = uptime.rows[0]?.total > 0
@@ -491,8 +492,8 @@ async function getCameraHealthStats(pool: Pool, tenantId: string): Promise<any> 
       COUNT(*) FILTER (WHERE status = 'active') as active,
       COUNT(*) FILTER (WHERE status = 'warning') as warning,
       COUNT(*) FILTER (WHERE status = 'critical') as critical
-     FROM cameras 
-     WHERE tenant_id = $1`,
+     FROM cameras c
+     WHERE c.tenant_id = $1 AND ${activeCamera('c')}`,
     [tenantId]
   );
 

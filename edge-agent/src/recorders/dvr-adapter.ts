@@ -93,42 +93,56 @@ export async function discoverRecorderChannels(
 
   const groups = groupProfilesByChannel(resolved);
   const channels: RecorderChannelCandidate[] = [];
-  for (const [sourceChannel, profiles] of [...groups.entries()].sort((left, right) => left[0] - right[0])) {
-    // DVR/NVR main streams remain on the recorder. Prefer the recorder's
-    // lower-bandwidth substream for remote live view and analytics.
-    const primary = [...profiles]
-      .filter((item) => item.uri)
-      .sort(compareProfiles)[0];
-    const probe = primary?.uri ? await input.probeStream(primary.uri) : null;
-    const reasonCodes = unique([
-      ...profiles.flatMap((item) => item.reasonCodes),
-      ...(primary?.uri ? [] : ["recorder_channel_stream_uri_unavailable"]),
-      ...(primary?.role === "sub" ? ["recorder_channel_substream_selected"] : []),
-      ...(probe?.reachable ? ["recorder_channel_rtsp_verified"] : probe ? ["recorder_channel_rtsp_unreachable"] : []),
-    ]);
-    channels.push({
-      sourceChannel,
-      name: channelName(profiles, sourceChannel),
-      sourceType,
-      primaryStreamUri: primary?.uri ?? null,
-      profiles: profiles.map(({ profile, role }) => ({
-        name: role === "unknown" ? profile.name : role,
-        codec: profile.codec,
-        width: profile.width,
-        height: profile.height,
-        role,
-        preferredFor: role === primary?.role
-          ? role === "main"
-            ? ["recording", "live", "analytics"]
-            : ["live", "analytics"]
-          : role === "main"
-            ? ["recording"]
-            : [],
-      })),
-      streamVerified: Boolean(probe?.reachable),
-      probe,
-      reasonCodes,
-    });
+  const entries = [...groups.entries()].sort((left, right) => left[0] - right[0]);
+  // A recorder's channels are independent RTSP streams. Bound concurrency so
+  // one slow/offline input does not make all later channels wait for it.
+  for (let offset = 0; offset < entries.length; offset += 4) {
+    const batch = await Promise.all(entries.slice(offset, offset + 4).map(async ([sourceChannel, profiles]) => {
+      // DVR/NVR main streams remain on the recorder. Prefer the recorder's
+      // lower-bandwidth substream for remote live view and analytics.
+      const primary = [...profiles]
+        .filter((item) => item.uri)
+        .sort(compareProfiles)[0];
+      let probe: RtspProbeResult | null = null;
+      if (primary?.uri) {
+        try {
+          probe = await input.probeStream(primary.uri);
+        } catch (error) {
+          probe = { reachable: false, codec: null, width: null, height: null,
+            error: error instanceof Error ? error.message : String(error) };
+        }
+      }
+      const reasonCodes = unique([
+        ...profiles.flatMap((item) => item.reasonCodes),
+        ...(primary?.uri ? [] : ["recorder_channel_stream_uri_unavailable"]),
+        ...(primary?.role === "sub" ? ["recorder_channel_substream_selected"] : []),
+        ...(probe?.reachable ? ["recorder_channel_rtsp_verified"] : probe ? ["recorder_channel_rtsp_unreachable"] : []),
+      ]);
+      return {
+        sourceChannel,
+        name: channelName(profiles, sourceChannel),
+        sourceType,
+        primaryStreamUri: primary?.uri ?? null,
+        profiles: profiles.map(({ profile, role }) => ({
+          name: role === "unknown" ? profile.name : role,
+          codec: profile.codec,
+          width: profile.width,
+          height: profile.height,
+          role,
+          preferredFor: role === primary?.role
+            ? role === "main"
+              ? ["recording", "live", "analytics"]
+              : ["live", "analytics"]
+            : role === "main"
+              ? ["recording"]
+              : [],
+        })),
+        streamVerified: Boolean(probe?.reachable),
+        probe,
+        reasonCodes,
+      } satisfies RecorderChannelCandidate;
+    }));
+    channels.push(...batch);
   }
   return channels;
 }
@@ -269,10 +283,11 @@ function streamRole(profile: Pick<OnvifProfile, "token" | "name">, uri?: string)
 function groupProfilesByChannel(profiles: ResolvedProfile[]) {
   const groups = new Map<number, ResolvedProfile[]>();
   let nextFallbackChannel = 1;
+  const explicitChannels = new Set(profiles.flatMap((item) => item.channel === null ? [] : [item.channel]));
   for (const item of profiles) {
     let channel = item.channel;
     if (channel === null) {
-      while (groups.has(nextFallbackChannel)) nextFallbackChannel++;
+      while (groups.has(nextFallbackChannel) || explicitChannels.has(nextFallbackChannel)) nextFallbackChannel++;
       channel = nextFallbackChannel++;
       item.reasonCodes.push("recorder_channel_number_inferred_from_profile_order");
     }

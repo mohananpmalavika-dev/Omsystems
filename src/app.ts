@@ -1092,7 +1092,10 @@ export async function buildApp(options?: {
         request.currentUser,
         id,
         action,
-      )).map(safeCamera),
+      )).map((camera) => ({
+        ...safeCamera(camera),
+        storageDiscoveryId: /^edge:\/\/[^/]+\/([^/]+)$/.exec(camera.connectionSecretRef)?.[1],
+      })),
     };
   });
 

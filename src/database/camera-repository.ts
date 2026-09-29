@@ -14,6 +14,7 @@ import type {
   RecorderReplacementResult,
 } from "../control-plane-store.js";
 import type { DeviceIdentityRepository } from "./device-identity-repository.js";
+import { activeResourceNode } from "./active-resource.js";
 
 type CameraRow = {
   id: string;
@@ -105,6 +106,12 @@ function mapCamera(row: CameraRow): Camera {
   };
 }
 
+const activeCameraFrom = `FROM cameras
+  JOIN resource_nodes camera_node ON camera_node.id = cameras.resource_node_id
+    AND ${activeResourceNode("camera_node")}
+  JOIN resource_nodes branch_node ON branch_node.id = cameras.branch_node_id
+    AND ${activeResourceNode("branch_node")}`;
+
 const selectCamera = `SELECT cameras.id::text, cameras.device_identity_id::text,
   cameras.resource_node_id::text, camera_node.tenant_id::text AS tenant_id,
   cameras.branch_node_id::text, cameras.edge_agent_id::text, camera_node.name, cameras.vendor,
@@ -116,9 +123,7 @@ const selectCamera = `SELECT cameras.id::text, cameras.device_identity_id::text,
   cameras.firmware_version, cameras.onvif_uuid, cameras.certificate_ref,
   cameras.certificate_fingerprint, cameras.first_seen_at,
   cameras.identity_last_seen_at
-  FROM cameras
-  JOIN resource_nodes camera_node ON camera_node.id = cameras.resource_node_id
-    AND camera_node.is_active = true`;
+  ${activeCameraFrom}`;
 
 export function normalizeCameraUuid(id: string): string {
   if (!id) return id;
@@ -232,9 +237,8 @@ export class CameraRepository {
         [...values, filters.limit, filters.offset],
       ),
       this.pool.query<{ count: string }>(
-        `SELECT count(*)::text AS count FROM cameras
-         JOIN resource_nodes camera_node ON camera_node.id = cameras.resource_node_id
-         ${where} AND camera_node.is_active = true`,
+        `SELECT count(*)::text AS count ${activeCameraFrom}
+         ${where}`,
         values,
       ),
     ]);

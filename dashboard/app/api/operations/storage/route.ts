@@ -67,7 +67,7 @@ function uniqueDisks(items: Disk[]): Disk[] {
   const latest = new Map<string, Disk>();
   for (const disk of items) {
     const id = diskId(disk);
-    if (!id || !recent(disk)) continue;
+    if (!id) continue;
     const key = `${string(disk.branchId)}:${id}`;
     const previous = latest.get(key);
     if (!previous || observedAt(disk) > observedAt(previous)) latest.set(key, disk);

@@ -6,6 +6,7 @@
  */
 
 import type { Pool } from 'pg';
+import { activeCamera } from '../../database/active-resource.js';
 import type { TailgatingAnalysisResult, TailgatingViolationType } from './sequence-correlator.js';
 
 export interface AirlockPortalRecord {
@@ -297,7 +298,9 @@ export class TailgatingRepository {
         const limit = Math.min(100, Math.max(1, filter.limit ?? 50));
         const offset = Math.max(0, filter.offset ?? 0);
 
-        const countQuery = `SELECT COUNT(*) as total FROM tailgating_detection_events e WHERE ${whereClause};`;
+        const countQuery = `SELECT COUNT(*) as total FROM tailgating_detection_events e
+          LEFT JOIN cameras c ON c.id = e.camera_id
+          WHERE (e.camera_id IS NULL OR ${activeCamera('c')}) AND ${whereClause};`;
         const countRes = await this.pool.query(countQuery, values);
         const total = parseInt(countRes.rows[0]?.total ?? '0', 10);
 
@@ -306,7 +309,7 @@ export class TailgatingRepository {
           FROM tailgating_detection_events e
           LEFT JOIN airlock_portals p ON e.portal_id = p.id
           LEFT JOIN cameras c ON e.camera_id = c.id
-          WHERE ${whereClause}
+          WHERE (e.camera_id IS NULL OR ${activeCamera('c')}) AND ${whereClause}
           ORDER BY e.occurred_at DESC
           LIMIT $${idx++} OFFSET $${idx++};
         `;
@@ -351,10 +354,12 @@ export class TailgatingRepository {
           FROM tailgating_detection_events e
           LEFT JOIN airlock_portals p ON e.portal_id = p.id
           LEFT JOIN cameras c ON e.camera_id = c.id
-          WHERE e.id = $1 AND e.tenant_id = $2;
+          WHERE e.id = $1 AND e.tenant_id = $2
+            AND (e.camera_id IS NULL OR ${activeCamera('c')});
         `;
         const res = await this.pool.query(query, [eventId, tenantId]);
         if (res.rows[0]) return res.rows[0];
+        return null;
       } catch (err) {
         console.warn('[TailgatingRepository] Falling back to memory store for getEventById:', err);
       }
