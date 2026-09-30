@@ -763,10 +763,10 @@ export class MediaMtxRouter implements MediaRouter {
       ? {
           source: "publisher",
           sourceOnDemand: false,
-          runOnDemand: `"${this.ffmpegPath}" -hide_banner -loglevel warning -analyzeduration 1000000 -probesize 1000000 -rtsp_transport tcp -fflags nobuffer+fastseek+genpts+discardcorrupt -i "${sourceUri}" -map 0:v:0 ${videoOptions} -map 0:a:0? -c:a aac -b:a 64k -ar 16000 -f rtsp -rtsp_transport tcp rtsp://127.0.0.1:8554/${path}`,
+          runOnDemand: `"${this.ffmpegPath}" -hide_banner -loglevel warning -analyzeduration 1000000 -probesize 1000000 -rtsp_transport tcp -fflags nobuffer+fastseek+genpts+discardcorrupt -i "${sourceUri}" -map 0:v:0 ${videoOptions} -avoid_negative_ts make_zero -max_interleave_delta 0 -map 0:a:0? -c:a aac -b:a 64k -ar 16000 -f rtsp -rtsp_transport tcp rtsp://127.0.0.1:8554/${path}`,
           runOnDemandRestart: true,
           runOnDemandStartTimeout: "30s",
-          runOnDemandCloseAfter: "120s",
+          runOnDemandCloseAfter: "300s",
         }
       : {
           source: sourceUri,

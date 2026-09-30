@@ -120,6 +120,7 @@ export class CameraHeartbeatService {
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private analyticsInterval: NodeJS.Timeout | null = null;
   private heartbeatCycleRunning = false;
+  private analyticsFailureCooldownUntil = 0;
   private analyticsCycleRunning = false;
   private isRunning = false;
 
@@ -187,6 +188,9 @@ export class CameraHeartbeatService {
   }
 
   private async sendAllAnalyticsFrames(): Promise<void> {
+    if (Date.now() < this.analyticsFailureCooldownUntil) {
+      return;
+    }
     if (this.analyticsCycleRunning) {
       logger.warn("Skipping overlapping analytics frame cycle");
       return;
@@ -210,7 +214,11 @@ export class CameraHeartbeatService {
   private async captureAnalyticsFrame(camera: CameraConfig): Promise<void> {
     const width = 320;
     const height = 180;
-    const frame = await captureRtspRgbFrame(camera.rtspUrl!, this.ffmpegPath, 10_000, width, height);
+    let captureUrl = camera.rtspUrl!;
+    if (captureUrl.includes("subtype=0")) {
+      captureUrl = captureUrl.replace("subtype=0", "subtype=1");
+    }
+    const frame = await captureRtspRgbFrame(captureUrl, this.ffmpegPath, 10_000, width, height);
     if (!frame) {
       logger.warn("Analytics frame capture unavailable", { cameraId: camera.id });
       return;
@@ -466,10 +474,13 @@ export class CameraHeartbeatService {
       height,
       imageBase64: frame.toString("base64"),
       metadata: { source, edgeAgentId: this.edgeAgentId },
-    }).catch((error: unknown) => logger.warn("Analytics frame delivery failed", {
-      cameraId,
-      error: error instanceof Error ? error.message : String(error),
-    }));
+    }).catch((error: unknown) => {
+      this.analyticsFailureCooldownUntil = Date.now() + 60_000;
+      logger.warn("Analytics frame delivery failed; pausing analytics polling for 60s", {
+        cameraId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   getStats() {
