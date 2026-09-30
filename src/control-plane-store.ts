@@ -1295,6 +1295,7 @@ export interface ControlPlaneStore {
     cameraId: string,
   ): Promise<boolean>;
   processAnalyticsEvent(input: AnalyticsEventInput): Promise<AnalyticsIngestResult>;
+  getAnalyticsEvent(id: string, tenantId: string): Promise<AnalyticsEvent | undefined>;
   listAnalyticsEvents(
     tenantId: string,
     filters: AnalyticsEventFilters,

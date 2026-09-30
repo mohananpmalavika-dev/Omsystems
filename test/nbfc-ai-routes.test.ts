@@ -5,9 +5,11 @@ import { MemoryStore } from "../src/store.js";
 
 describe("NBFC AI rules API production safeguards", () => {
   let app: FastifyInstance;
+  let store: MemoryStore;
 
   beforeEach(async () => {
-    app = await buildApp({ store: new MemoryStore() });
+    store = new MemoryStore();
+    app = await buildApp({ store, analyticsEngineSharedKey: "opening-test-engine-key" });
   }, 60000);
 
   afterEach(async () => {
@@ -71,8 +73,9 @@ describe("NBFC AI rules API production safeguards", () => {
       openingStart: "08:15",
       openingEnd: "09:05",
       requiredStaff: 2,
-      graceSeconds: 30,
+      graceSeconds: 0,
       enforcementMode: "ALERT_EVIDENCE_AND_INCIDENT",
+      today: { status: "NOT_CHECKED" },
     });
 
     const loaded = await app.inject({
@@ -98,6 +101,37 @@ describe("NBFC AI rules API production safeguards", () => {
       },
     });
     expect(response.statusCode).toBe(400);
+  });
+
+  it("creates one immediate failed-opening alert per local day", async () => {
+    const saved = await app.inject({
+      method: "PUT", url: "/api/ai/branch-opening-policy/A005",
+      headers: { "x-user-id": "user-global-admin" },
+      payload: { openingStart: "08:30", openingEnd: "09:30", timezone: "Asia/Kolkata", activeDays: [1, 2, 3, 4, 5, 6] },
+    });
+    expect(saved.statusCode).toBe(200);
+    const dualRule = await store.createAnalyticsRule("omsystems", "cam-001", "user-global-admin", {
+      name: "Opening dual control", detectionType: "dual-control-verification", enabled: true,
+      objectClasses: [], minConfidence: 0.5, minDurationSeconds: 0,
+      direction: "any", severity: "P1", cooldownSeconds: 0, recipients: [],
+      recordingPolicy: "protect-window", preRollSeconds: 30, postRollSeconds: 120,
+    });
+    const submit = (sourceEventId: string, occurredAt: string, count: number) => app.inject({
+      method: "POST", url: "/internal/analytics/events",
+      headers: { "x-analytics-engine-key": "opening-test-engine-key" },
+      payload: {
+        tenantId: "omsystems", cameraId: "cam-001", sourceEventId,
+        detectionType: "person-counting", occurredAt, confidence: 0.95,
+        durationSeconds: 0, modelVersion: "test", metadata: { personCount: count },
+        objects: Array.from({ length: count }, () => ({ label: "person", confidence: 0.95 })),
+      },
+    });
+    expect((await submit("opening-first", "2026-09-21T03:05:00.000Z", 1)).statusCode).toBe(202);
+    expect(store.analyticsAlerts.filter((alert) => alert.ruleId === dualRule.id)).toHaveLength(1);
+    expect((await submit("opening-later", "2026-09-21T03:06:00.000Z", 2)).statusCode).toBe(202);
+    expect(store.analyticsAlerts.filter((alert) => alert.ruleId === dualRule.id)).toHaveLength(1);
+    expect((await submit("opening-next-day", "2026-09-22T03:05:00.000Z", 1)).statusCode).toBe(202);
+    expect(store.analyticsAlerts.filter((alert) => alert.ruleId === dualRule.id)).toHaveLength(2);
   });
 
   it("allows POST/PATCH/DELETE with content-type application/json and empty body without FST_ERR_CTP_EMPTY_JSON_BODY error", async () => {

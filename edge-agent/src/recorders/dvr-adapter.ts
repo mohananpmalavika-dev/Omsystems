@@ -206,6 +206,25 @@ export async function discoverVendorRecorderChannels(input: {
   return channels;
 }
 
+/** Keep explicitly numbered recorder inputs visible even when their video is offline. */
+export function mergeRecorderChannelCandidates(
+  onvifChannels: RecorderChannelCandidate[],
+  vendorChannels: RecorderChannelCandidate[],
+  model: string,
+): RecorderChannelCandidate[] {
+  const knownCapacity = inferRecorderChannelCount(model);
+  const channelsByNumber = new Map(onvifChannels.map((channel) => [channel.sourceChannel, channel]));
+  for (const vendorChannel of vendorChannels) {
+    const current = channelsByNumber.get(vendorChannel.sourceChannel);
+    if (vendorChannel.streamVerified && !current?.streamVerified) {
+      channelsByNumber.set(vendorChannel.sourceChannel, vendorChannel);
+    } else if (!current && knownCapacity !== null && vendorChannel.sourceChannel <= knownCapacity) {
+      channelsByNumber.set(vendorChannel.sourceChannel, vendorChannel);
+    }
+  }
+  return [...channelsByNumber.values()].sort((left, right) => left.sourceChannel - right.sourceChannel);
+}
+
 export function inferRecorderChannelCount(model: string) {
   const value = model.match(/(?:^|[^\d])(4|8|16|24|32|64)[\s_-]*(?:ch(?:annel)?s?|input)/i)?.[1]
     ?? model.match(/(?:dvr|xvr|nvr|uvr)[\s_-]*(4|8|16|24|32|64)(?:[^\d]|$)/i)?.[1]

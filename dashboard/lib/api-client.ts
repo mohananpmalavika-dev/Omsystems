@@ -1199,6 +1199,12 @@ export interface BranchOpeningPolicy {
   requiredStaff: 2;
   graceSeconds: number;
   enforcementMode: "ALERT_EVIDENCE_AND_INCIDENT";
+  today: {
+    status: "NOT_CHECKED" | "SUCCESS" | "FAILED";
+    checkedAt: string | null;
+    personCount: number | null;
+    alertEmitted: boolean;
+  };
 }
 
 export const branchOpeningPolicyApi = {

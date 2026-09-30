@@ -923,7 +923,6 @@ export async function registerAnalyticsRoutes(
 
     let openingViolationCount = 0;
     if (
-      result.event.status === "accepted" &&
       input.detectionType !== "dual-control-verification" &&
       options.nbfcRuleRepository &&
       options.nbfcRuleEngine
@@ -940,14 +939,21 @@ export async function registerAnalyticsRoutes(
         for (const violation of violations) {
           const violationInput: AnalyticsEventInput = {
             ...eventInput,
-            sourceEventId: `${input.sourceEventId}:opening:${violation.ruleId}`.slice(0, 300),
+            cameraId: violation.cameraId,
+            sourceEventId: `branch-opening:${violation.ruleId}:${violation.branchId}:${violation.localDate}`,
             detectionType: "dual-control-verification",
-            durationSeconds: violation.evaluation.durationPersistedMs / 1000,
+            occurredAt: violation.occurredAt,
+            durationSeconds: 0,
+            objects: [],
+            snapshotReference: violation.snapshotReference,
+            clipReference: violation.clipReference,
             metadata: {
               ...(eventInput.metadata || {}),
               branchId: violation.branchId,
               sourceRuleId: violation.ruleId,
               sourceRuleName: violation.ruleName,
+              correlationKey: `branch-opening:${violation.branchId}:${violation.localDate}`,
+              personBoundingBox: violation.personBoundingBox,
               staffCount: violation.staffCount,
               requiredStaff: violation.requiredStaff,
               violation: "BRANCH_OPENING_MINIMUM_STAFF",
@@ -955,6 +961,14 @@ export async function registerAnalyticsRoutes(
           };
           const violationResult = await store.processAnalyticsEvent(violationInput);
           await applyAnalyticsIngestSideEffects(app, store, options, violationInput, violationResult);
+          if (violationResult.alerts.length > 0) {
+            await options.nbfcRuleRepository.markBranchOpeningAlertEmitted(
+              violation.ruleId, violation.branchId, violation.localDate,
+            );
+          } else {
+            app.log.error({ ruleId: violation.ruleId, cameraId: violation.cameraId },
+              "Branch opening failed but no dual-control alert rule matched");
+          }
         }
       }
     }
@@ -1470,7 +1484,8 @@ async function applyAnalyticsIngestSideEffects(
       await triggerRecording(app, options, alert.cameraId,
         input.detectionType === "motion" ? "motion" : "event");
     }
-    if (rule.recordingPolicy === "protect-window" && rule.createdBy) {
+    if (rule.recordingPolicy === "protect-window" && rule.createdBy &&
+        (input.detectionType !== "dual-control-verification" || result.event.status === "accepted")) {
       try {
         const incident = await store.createLiveIncident({
           tenantId: input.tenantId, cameraId: input.cameraId,

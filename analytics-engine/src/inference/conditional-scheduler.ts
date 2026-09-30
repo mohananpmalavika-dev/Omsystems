@@ -373,7 +373,6 @@ export class ConditionalScheduler {
 
         case 'helmet':
         case 'helmet-worn':
-        case 'no-helmet':
           required.add('yolov8n');
           required.add('helmet');
           break;
@@ -617,7 +616,6 @@ export class ConditionalScheduler {
       'smoke',
       'helmet',
       'helmet-worn',
-      'no-helmet',
       'ppe',
       'intrusion',
       'loitering',

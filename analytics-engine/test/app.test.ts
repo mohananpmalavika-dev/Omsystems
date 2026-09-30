@@ -221,6 +221,34 @@ describe("analytics engine adapter", () => {
     expect(submitted).toHaveLength(0);
   });
 
+  it("emits one helmet-worn event when both current and legacy helmet rules are enabled", async () => {
+    const submitted: any[] = [];
+    const app = buildAnalyticsEngine({
+      sourceSharedKey: sourceKey,
+      controlPlaneSharedKey: controlPlaneKey,
+      submit: async (event) => { submitted.push(event); return { accepted: true }; },
+    });
+    apps.push(app);
+    const response = await app.inject({
+      method: "POST", url: "/internal/frames",
+      headers: { "x-analytics-source-key": sourceKey },
+      payload: {
+        tenantId: "tenant-1", cameraId: "camera-helmet", width: 1280, height: 720,
+        detections: [
+          { label: "person", confidence: 0.95, boundingBox: { x: 0.1, y: 0.1, width: 0.4, height: 0.8 } },
+          { label: "helmet", confidence: 0.95, boundingBox: { x: 0.18, y: 0.11, width: 0.24, height: 0.12 } },
+        ],
+        rules: ["helmet", "helmet-worn"].map((detectionType) => ({
+          id: `rule-${detectionType}`, cameraId: "camera-helmet", detectionType,
+          enabled: true, minConfidence: 0.7, minDurationSeconds: 0,
+        })),
+      },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(submitted.map((event) => event.detectionType)).toEqual(["helmet-worn"]);
+  });
+
   it("uses the local ONNX path when frame observations are omitted", async () => {
     const app = buildAnalyticsEngine({
       sourceSharedKey: sourceKey,

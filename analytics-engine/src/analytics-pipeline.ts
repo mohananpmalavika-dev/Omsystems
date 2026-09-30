@@ -405,12 +405,12 @@ export class AnalyticsPipeline {
 
       // Helmet detection (if scheduled or active in rules)
       if (schedule.modelsToRun.includes('helmet') ||
-          this.needsDetection(rules, ['helmet', 'helmet-worn', 'no-helmet'])) {
+          this.needsDetection(rules, ['helmet', 'helmet-worn'])) {
         specializedPromises.push(this.helmetDetector.detect(trackedFrame));
       }
 
       // PPE violations originate from a dedicated edge/local PPE model or chromatic inspector
-      if (this.needsDetection(rules, ['ppe', 'no-helmet', 'no-safety-vest', 'no-gloves', 'no-shoes'])) {
+      if (this.needsDetection(rules, ['ppe', 'no-safety-vest', 'no-gloves', 'no-shoes'])) {
         specializedPromises.push(this.ppeDetector.detect(trackedFrame));
       }
 
@@ -884,7 +884,6 @@ export class AnalyticsPipeline {
       "queue",
       "helmet",
       "helmet-worn",
-      "no-helmet",
       "no-safety-vest",
       "no-gloves",
       "no-shoes",
@@ -915,7 +914,6 @@ export class AnalyticsPipeline {
       "wrong-way",
       "helmet",
       "helmet-worn",
-      "no-helmet",
       "line-crossing",
       "anpr",
       "vehicle-watchlist",
@@ -930,7 +928,7 @@ export class AnalyticsPipeline {
   private needsObjectDetection(rules: AnalyticsRule[]): boolean {
     return this.needsDetection(rules, [
       "object", "person", "person-counting", "occupancy-counting", "footfall", "customer-counting",
-      "vehicle", "helmet", "helmet-worn", "no-helmet", "no-safety-vest", "no-gloves", "no-shoes", "ppe", "fall", "person-down", "fire", "smoke",
+      "vehicle", "helmet", "helmet-worn", "no-safety-vest", "no-gloves", "no-shoes", "ppe", "fall", "person-down", "fire", "smoke",
       "crowd-density", "crowd", "tailgating", "queue", "loitering", "intrusion", "line-crossing",
       "wrong-direction", "wrong-way",
       "face", "face-recognition", "watchlist-match",

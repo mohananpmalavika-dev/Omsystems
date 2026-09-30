@@ -47,6 +47,7 @@ import { acquireSingleInstanceLock } from "./security/instance-lock.js";
 import {
   discoverRecorderChannels,
   discoverVendorRecorderChannels,
+  mergeRecorderChannelCandidates,
   recorderAdapterVendor,
 } from "./recorders/dvr-adapter.js";
 import { identifyVendorFamily, probeVendorStream } from "./devices/vendor-stream-adapter.js";
@@ -665,16 +666,7 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
           maxChannels: config.RECORDER_DISCOVERY_MAX_CHANNELS,
           probeStream: (uri) => probeRtsp(uri, config.FFPROBE_PATH, config.ONVIF_TIMEOUT_MS),
         });
-        const channelsByNumber = new Map(channels.map((channel) => [channel.sourceChannel, channel]));
-        for (const vendorChannel of vendorChannels) {
-          const current = channelsByNumber.get(vendorChannel.sourceChannel);
-          // Keep ONVIF-observed offline channels visible, but do not invent
-          // inputs solely because a vendor RTSP guess failed to connect.
-          if (vendorChannel.streamVerified && !current?.streamVerified) {
-            channelsByNumber.set(vendorChannel.sourceChannel, vendorChannel);
-          }
-        }
-        channels = [...channelsByNumber.values()].sort((left, right) => left.sourceChannel - right.sourceChannel);
+        channels = mergeRecorderChannelCandidates(channels, vendorChannels, device.model);
         activeRecorders.set(discoveredId, {
           id: discoveredId,
           name: `${device.manufacturer} ${device.model}`,

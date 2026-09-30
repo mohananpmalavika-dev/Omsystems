@@ -93,6 +93,35 @@ describe("automatic RTSP recorder discovery", () => {
     expect(result.channels[0]?.uri).toContain("/cam/realmonitor?channel=1&subtype=1");
   });
 
+  it("scans past offline input gaps when the recorder capacity is known", async () => {
+    const result = await discoverRtspRecorderChannels({
+      host: "192.0.2.20", ports: [554], vendor: "cp-plus",
+      username: "admin", password: "secret", maxChannels: 16,
+      emptyBatchLimit: 1, scanFullRange: true,
+      probe: async (uri) => {
+        const channel = Number(new URL(uri).searchParams.get("channel"));
+        return { reachable: channel === 1 || channel === 13,
+          codec: "h264", width: 640, height: 360 };
+      },
+    });
+    expect(result.channels.map((channel) => channel.sourceChannel)).toEqual([1, 13]);
+  });
+
+  it("keeps known RTSP-only recorder inputs in review when their video is offline", async () => {
+    const result = await discoverRtspRecorderChannels({
+      host: "192.0.2.20", ports: [554], vendor: "cp-plus",
+      username: "admin", password: "secret", maxChannels: 4,
+      scanFullRange: true, includeUnverifiedChannels: true,
+      probe: async (uri) => ({
+        reachable: new URL(uri).searchParams.get("channel") === "3",
+        codec: "h264", width: 640, height: 360,
+      }),
+    });
+    expect(result.channels.map((channel) => channel.sourceChannel)).toEqual([1, 2, 3, 4]);
+    expect(result.channels.map((channel) => channel.probe.reachable)).toEqual([false, false, true, false]);
+    expect(result.channels[0]?.uri).toBeNull();
+  });
+
   it("returns one credential activation signal instead of creating fake channels", async () => {
     const probe = vi.fn(async () => ({
       reachable: false,

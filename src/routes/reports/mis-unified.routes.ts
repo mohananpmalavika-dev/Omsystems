@@ -21,6 +21,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Pool } from 'pg';
+import sharp from 'sharp';
 import type { ControlPlaneStore } from '../../control-plane-store.js';
 import { activeCamera, activeResourceNode } from '../../database/active-resource.js';
 
@@ -78,6 +79,41 @@ const misReportQuerySchema = z.object({
 });
 
 type MISReportQuery = z.infer<typeof misReportQuerySchema>;
+
+const openingFailuresQuerySchema = z.object({
+  timeRange: z.enum(['today', '7d', '30d', '90d', 'custom']).default('today'),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  organization: reportFilter,
+  zone: reportFilter,
+  region: reportFilter,
+  area: reportFilter,
+  branchId: reportFilter,
+}).superRefine((query, context) => {
+  if (query.timeRange !== 'custom') return;
+  const valid = (date: string | undefined) => date &&
+    !Number.isNaN(Date.parse(`${date}T00:00:00.000Z`)) &&
+    new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10) === date;
+  if (!valid(query.startDate) || !valid(query.endDate) || query.startDate! > query.endDate!) {
+    context.addIssue({ code: 'custom', message: 'Select a valid start and end date in order' });
+  }
+});
+
+function openingReportDateRange(query: z.infer<typeof openingFailuresQuerySchema>) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date()).map((part) => [part.type, part.value]));
+  const today = `${parts.year}-${parts.month}-${parts.day}`;
+  const endDay = query.timeRange === 'custom' ? query.endDate! : today;
+  const days = query.timeRange === '7d' ? 7 : query.timeRange === '30d' ? 30 : query.timeRange === '90d' ? 90 : 1;
+  const startDay = query.timeRange === 'custom' ? query.startDate! :
+    new Date(Date.parse(`${today}T00:00:00.000Z`) - (days - 1) * 86_400_000).toISOString().slice(0, 10);
+  return {
+    startDate: new Date(`${startDay}T00:00:00+05:30`),
+    endDate: new Date(Date.parse(`${endDay}T00:00:00+05:30`) + 86_400_000 - 1),
+    startDay, endDay,
+  };
+}
 
 // ============================================================================
 // DATE & SHIFT HELPERS
@@ -209,12 +245,19 @@ async function resolveBranchHierarchy(
 
       const pType = (parent.node_type || '').toLowerCase();
       if (pType === 'area') area_name = parent.name;
-      else if (pType === 'region' || pType === 'division') region_name = parent.name;
+      else if (pType === 'region' || pType === 'division') {
+        if (region_name === 'General Region') region_name = parent.name;
+      }
       else if (pType === 'zone') zone_name = parent.name;
       else if (pType === 'company' || pType === 'organization' || pType === 'headquarters') org_name = parent.name;
 
       current = parent;
       depth++;
+    }
+
+    // Some estates model a geographical zone as a region node named "... Zone".
+    if (zone_name === 'General Zone' && /\bzone\b/i.test(region_name)) {
+      zone_name = region_name;
     }
 
     branches.push({
@@ -870,6 +913,127 @@ function buildFilterOptions(branches: BranchHierarchy[]) {
 // ============================================================================
 
 export function createMISUnifiedRoutes(instance: FastifyInstance, pool: Pool, store: ControlPlaneStore) {
+  instance.get('/mis/branch-opening-failures/:eventId/photo', async (request, reply) => {
+    const parsed = z.object({ eventId: z.string().uuid() }).safeParse(request.params);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_event_id' });
+    const event = await store.getAnalyticsEvent(parsed.data.eventId, request.currentUser.tenantId);
+    if (!event || event.detectionType !== 'dual-control-verification' ||
+        event.metadata?.violation !== 'BRANCH_OPENING_MINIMUM_STAFF') {
+      return reply.code(404).send({ error: 'photo_not_found' });
+    }
+    const camera = await store.getCamera(event.cameraId);
+    const branches = await store.listAccessibleNodes(request.currentUser, 'analytics:view', 'branch');
+    if (!camera || !branches.some((branch) => branch.id === camera.branchId)) {
+      return reply.code(404).send({ error: 'photo_not_found' });
+    }
+    const encoded = event.metadata?.snapshotBase64;
+    if (typeof encoded !== 'string' || !encoded || encoded.length > 20_000_000) {
+      return reply.code(404).send({ error: 'photo_unavailable' });
+    }
+    let photo = Buffer.from(encoded, 'base64');
+    if (photo.length < 4 || photo[0] !== 0xff || photo[1] !== 0xd8 || photo[2] !== 0xff) {
+      return reply.code(404).send({ error: 'photo_unavailable' });
+    }
+    const box = event.metadata?.personBoundingBox;
+    if (box && typeof box === 'object' && !Array.isArray(box)) {
+      const bounds = box as Record<string, unknown>;
+      const { x, y, width, height } = bounds;
+      if ([x, y, width, height].every((value) => typeof value === 'number' && Number.isFinite(value)) &&
+          Number(x) >= 0 && Number(y) >= 0 && Number(width) > 0 && Number(height) > 0 &&
+          Number(x) + Number(width) <= 1 && Number(y) + Number(height) <= 1) {
+        try {
+          const image = sharp(photo);
+          const dimensions = await image.metadata();
+          if (dimensions.width && dimensions.height) {
+            const padding = 0.03;
+            const left = Math.max(0, Math.floor((Number(x) - padding) * dimensions.width));
+            const top = Math.max(0, Math.floor((Number(y) - padding) * dimensions.height));
+            const right = Math.min(dimensions.width, Math.ceil((Number(x) + Number(width) + padding) * dimensions.width));
+            const bottom = Math.min(dimensions.height, Math.ceil((Number(y) + Number(height) + padding) * dimensions.height));
+            photo = await image.extract({ left, top, width: right - left, height: bottom - top })
+              .jpeg({ quality: 85 }).toBuffer();
+          }
+        } catch {
+          // Keep the original camera frame if its bounding box cannot be cropped.
+        }
+      }
+    }
+    return reply.header('content-type', 'image/jpeg')
+      .header('cache-control', 'private, no-store')
+      .header('x-content-type-options', 'nosniff')
+      .send(photo);
+  });
+
+  instance.get('/mis/branch-opening-failures', async (request, reply) => {
+    try {
+      const query = openingFailuresQuerySchema.parse(request.query);
+      const tenantId = request.currentUser.tenantId;
+      const accessibleBranches = await store.listAccessibleNodes(request.currentUser, 'analytics:view', 'branch');
+      const allowedBranchIds = new Set(accessibleBranches.map((branch) => branch.id));
+      if (query.branchId && !allowedBranchIds.has(query.branchId)) {
+        return reply.code(403).send({ error: 'branch_forbidden' });
+      }
+      const hierarchy = (await resolveBranchHierarchy(pool, tenantId, store))
+        .filter((branch) => allowedBranchIds.has(branch.branch_id));
+      const selected = hierarchy.filter((branch) =>
+        (!query.branchId || branch.branch_id === query.branchId) &&
+        (!query.zone || branch.zone_name === query.zone) &&
+        (!query.region || branch.region_name === query.region) &&
+        (!query.area || branch.area_name === query.area) &&
+        (!query.organization || branch.org_name === query.organization));
+      const selectedById = new Map(selected.map((branch) => [branch.branch_id, branch]));
+      const { startDate, endDate, startDay, endDay } = openingReportDateRange(query);
+      if (selectedById.size === 0) return reply.send({ rows: [], total: 0, startDate: startDay, endDate: endDay, truncated: false });
+
+      const cameras = (await store.listCameras(tenantId))
+        .filter((camera) => selectedById.has(camera.branchId));
+      if (cameras.length === 0) return reply.send({ rows: [], total: 0, startDate: startDay, endDate: endDay, truncated: false });
+      const cameraById = new Map(cameras.map((camera) => [camera.id, camera]));
+      const limit = 10_000;
+      const events = await store.listAnalyticsEvents(tenantId, {
+        cameraIds: cameras.map((camera) => camera.id),
+        from: startDate.toISOString(), to: endDate.toISOString(),
+        detectionTypes: ['dual-control-verification'], limit: limit + 1,
+      });
+      const failures = events.filter((event) =>
+        event.metadata?.violation === 'BRANCH_OPENING_MINIMUM_STAFF');
+      const alerts = failures.length ? await store.listAnalyticsAlerts(tenantId, {
+        cameraIds: cameras.map((camera) => camera.id),
+        from: startDate.toISOString(), to: endDate.toISOString(), limit: limit + 1,
+      }) : [];
+      const alertByEvent = new Map(alerts.map((alert) => [alert.eventId, alert]));
+      const rows = failures.slice(0, limit).flatMap((event) => {
+        const camera = cameraById.get(event.cameraId);
+        const branch = camera && selectedById.get(camera.branchId);
+        if (!branch) return [];
+        const count = Number(event.metadata?.staffCount);
+        if (!Number.isInteger(count) || count < 1 || count >= 2) return [];
+        const alert = alertByEvent.get(event.id);
+        return [{
+          eventId: event.id,
+          alertId: alert?.id ?? null,
+          occurredAt: event.occurredAt,
+          zoneName: branch.zone_name === 'General Zone' ? null : branch.zone_name,
+          branchId: branch.branch_id,
+          branchName: branch.branch_name,
+          cameraName: camera.name,
+          personCount: count,
+          photoUrl: typeof event.metadata?.snapshotBase64 === 'string' && event.metadata.snapshotBase64
+            ? `/api/control/v1/reports/mis/branch-opening-failures/${encodeURIComponent(event.id)}/photo`
+            : alert ? `/v1/alerts/${encodeURIComponent(alert.id)}/evidence/snapshot` : null,
+        }];
+      });
+      return reply.send({ rows, total: rows.length, startDate: startDay, endDate: endDay,
+        truncated: events.length > limit });
+    } catch (error) {
+      request.log.error({ error }, 'Failed to generate branch opening failures MIS report');
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({ error: 'invalid_query_parameters', details: error.errors });
+      }
+      return reply.code(500).send({ error: 'report_generation_failed' });
+    }
+  });
+
   instance.get('/mis', async (request, reply) => {
     try {
       const query = misReportQuerySchema.parse(request.query);

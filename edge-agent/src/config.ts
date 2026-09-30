@@ -31,7 +31,8 @@ const schema = z.object({
   // Multicast UPnP SSDP camera discovery
   SSDP_DISCOVERY_ENABLED: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
   // Upper safety bound for automatic DVR/NVR channel enumeration. Discovery
-  // stops earlier after consecutive empty channel batches.
+  // stops earlier after consecutive empty channel batches during broad scans;
+  // targeted IP probes inspect the full bounded range.
   RECORDER_DISCOVERY_MAX_CHANNELS: z.coerce.number().int().min(1).max(256).default(64),
   // Comma-separated list of common RTSP path suffixes to try
   RTSP_SCAN_PATHS: z.string().default("/,/stream,/h264,/live.sdp,/mpeg4,/Streaming/Channels/101,/cam/realmonitor?channel=1&subtype=1,/cam/realmonitor?channel=1&subtype=0"),

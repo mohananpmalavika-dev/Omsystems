@@ -458,6 +458,14 @@ export class AnalyticsRepository {
     }
   }
 
+  async getEvent(id: string, tenantId: string): Promise<AnalyticsEvent | undefined> {
+    const result = await this.pool.query(
+      `SELECT event.* FROM analytics_events event WHERE event.id=$1::uuid AND event.tenant_id=$2 LIMIT 1`,
+      [id, tenantId],
+    );
+    return result.rows[0] ? mapEvent(result.rows[0], []) : undefined;
+  }
+
   async listEvents(tenantId: string, filters: AnalyticsEventFilters): Promise<AnalyticsEvent[]> {
     const conditions = ["event.tenant_id=$1"];
     const values: unknown[] = [tenantId];

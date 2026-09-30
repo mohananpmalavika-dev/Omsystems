@@ -57,10 +57,40 @@ import {
 
 type TimeRange = "today" | "7d" | "30d" | "90d";
 type GroupBy = "organization" | "zone" | "region" | "area" | "branch" | "date" | "time";
-type TabKey = "all-in-one" | "threat" | "health" | "operations" | "attendance" | "sla" | "compliance";
+type TabKey = "all-in-one" | "threat" | "health" | "operations" | "attendance" | "sla" | "compliance" | "branch-opening";
+type OpeningRange = "today" | "7d" | "30d" | "90d" | "custom";
+type OpeningFailure = {
+  eventId: string;
+  alertId: string | null;
+  occurredAt: string;
+  zoneName: string | null;
+  branchId: string;
+  branchName: string;
+  cameraName: string;
+  personCount: number;
+  photoUrl: string | null;
+};
+type OpeningReport = {
+  rows: OpeningFailure[];
+  total: number;
+  startDate: string;
+  endDate: string;
+  truncated: boolean;
+};
+
+function openingCsvCell(value: unknown) {
+  const raw = value == null ? "" : String(value);
+  const safe = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
+  return `"${safe.replaceAll('"', '""')}"`;
+}
 
 export default function MisReportsPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("all-in-one");
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tab") === "branch-opening") {
+      setActiveTab("branch-opening");
+    }
+  }, []);
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
   const [groupBy, setGroupBy] = useState<GroupBy>("branch");
 
@@ -76,6 +106,12 @@ export default function MisReportsPage() {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [openingRange, setOpeningRange] = useState<OpeningRange>("today");
+  const [openingStartDate, setOpeningStartDate] = useState("");
+  const [openingEndDate, setOpeningEndDate] = useState("");
+  const [openingReport, setOpeningReport] = useState<OpeningReport | null>(null);
+  const [openingLoading, setOpeningLoading] = useState(false);
+  const [openingError, setOpeningError] = useState<string | null>(null);
 
   // Executive Scorecard Auto-Dispatch
   const [isDispatching, setIsDispatching] = useState(false);
@@ -139,6 +175,65 @@ export default function MisReportsPage() {
     }, 30000);
     return () => clearInterval(interval);
   }, [autoRefresh, fetchMisData]);
+
+  const fetchOpeningFailures = useCallback(async () => {
+    if (openingRange === "custom" && (!openingStartDate || !openingEndDate || openingStartDate > openingEndDate)) {
+      setOpeningReport(null);
+      setOpeningError("Select a valid start and end date.");
+      return;
+    }
+    setOpeningLoading(true);
+    try {
+      const params = new URLSearchParams({ timeRange: openingRange });
+      if (openingRange === "custom") {
+        params.set("startDate", openingStartDate);
+        params.set("endDate", openingEndDate);
+      }
+      for (const [key, value] of Object.entries({
+        organization: selectedOrg, zone: selectedZone, region: selectedRegion,
+        area: selectedArea, branchId: selectedBranch,
+      })) {
+        if (value !== "all") params.set(key, value);
+      }
+      const response = await fetch(`/api/control/v1/reports/mis/branch-opening-failures?${params}`, {
+        headers: getReportAuthHeaders(), credentials: "include", cache: "no-store",
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.message || payload?.error || "Opening report unavailable.");
+      setOpeningReport(payload as OpeningReport);
+      setOpeningError(null);
+    } catch (cause) {
+      setOpeningReport(null);
+      setOpeningError(cause instanceof Error ? cause.message : "Opening report unavailable.");
+    } finally {
+      setOpeningLoading(false);
+    }
+  }, [openingRange, openingStartDate, openingEndDate, selectedOrg, selectedZone, selectedRegion,
+    selectedArea, selectedBranch, getReportAuthHeaders]);
+
+  useEffect(() => {
+    if (activeTab === "branch-opening") void fetchOpeningFailures();
+  }, [activeTab, fetchOpeningFailures]);
+
+  const handleOpeningExportCsv = () => {
+    if (!openingReport) return;
+    const records = [
+      ["Opening time (IST)", "Zone", "Branch", "Persons detected", "Camera", "Photo URL"],
+      ...openingReport.rows.map((row) => [
+        new Date(row.occurredAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+        row.zoneName ?? "Unassigned", row.branchName, row.personCount, row.cameraName,
+        row.photoUrl ? `${window.location.origin}${row.photoUrl}` : "Unavailable",
+      ]),
+    ];
+    const blob = new Blob(["\uFEFF", records.map((record) => record.map(openingCsvCell).join(",")).join("\r\n")],
+      { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Branch_Opening_Failures_${openingReport.startDate}_${openingReport.endDate}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handlePrint = () => {
     window.print();
@@ -213,7 +308,7 @@ export default function MisReportsPage() {
 
           <div className="flex flex-wrap items-center gap-2.5 print:hidden">
             {/* Time Range Selector */}
-            <div className="inline-flex rounded-lg bg-slate-800/80 p-1 border border-slate-700/60">
+            {activeTab !== "branch-opening" && <div className="inline-flex rounded-lg bg-slate-800/80 p-1 border border-slate-700/60">
               {(["today", "7d", "30d", "90d"] as TimeRange[]).map((tr) => (
                 <button
                   key={tr}
@@ -227,20 +322,21 @@ export default function MisReportsPage() {
                   {tr === "today" ? "Today" : tr === "7d" ? "7 Days" : tr === "30d" ? "30 Days" : "90 Days"}
                 </button>
               ))}
-            </div>
+            </div>}
 
             {/* Refresh */}
             <button
-              onClick={() => fetchMisData()}
+              onClick={() => activeTab === "branch-opening" ? fetchOpeningFailures() : fetchMisData()}
               className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs flex items-center gap-1.5 transition-colors"
               title="Refresh MIS Telemetry"
             >
-              <RefreshCw size={14} className={loading ? "animate-spin text-sky-400" : ""} />
+              <RefreshCw size={14} className={(activeTab === "branch-opening" ? openingLoading : loading) ? "animate-spin text-sky-400" : ""} />
             </button>
 
             {/* Export CSV */}
             <button
-              onClick={handleExportCsv}
+              onClick={activeTab === "branch-opening" ? handleOpeningExportCsv : handleExportCsv}
+              disabled={activeTab === "branch-opening" && !openingReport}
               className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition-colors"
             >
               <Download size={14} /> Export CSV
@@ -257,7 +353,7 @@ export default function MisReportsPage() {
         <FieldVisual /></div>
 
         {/* DAILY 08:00 PM AUTO-DISPATCH EXECUTIVE SCORECARD BANNER */}
-        <div className="relative overflow-hidden rounded-2xl border border-sky-500/30 bg-gradient-to-r from-slate-950 via-slate-900 to-sky-950/40 p-5 shadow-xl print:hidden">
+        {activeTab !== "branch-opening" && <div className="relative overflow-hidden rounded-2xl border border-sky-500/30 bg-gradient-to-r from-slate-950 via-slate-900 to-sky-950/40 p-5 shadow-xl print:hidden">
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
             <div className="space-y-1.5 max-w-3xl">
               <div className="flex items-center gap-2">
@@ -314,9 +410,9 @@ export default function MisReportsPage() {
               )}
             </div>
           </div>
-        </div>
+        </div>}
 
-        {error && (
+        {activeTab !== "branch-opening" && error && (
           <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
             {error} <button onClick={fetchMisData} className="ml-2 font-semibold text-rose-100 underline">Try again</button>
           </div>
@@ -390,7 +486,7 @@ export default function MisReportsPage() {
           </select>
 
           {/* Shift Filter */}
-          <select
+          {activeTab !== "branch-opening" && <select
             value={selectedShift}
             onChange={(e) => setSelectedShift(e.target.value)}
             className="bg-slate-800 border border-slate-700 text-xs rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-sky-500"
@@ -399,9 +495,9 @@ export default function MisReportsPage() {
             <option value="morning">Shift A: Morning (08:00 - 16:00)</option>
             <option value="evening">Shift B: Evening (16:00 - 24:00)</option>
             <option value="night">Shift C: Night / Off-Hours (00:00 - 08:00)</option>
-          </select>
+          </select>}
 
-          {(selectedOrg !== "all" || selectedZone !== "all" || selectedRegion !== "all" || selectedArea !== "all" || selectedBranch !== "all" || selectedShift !== "all") && (
+          {(selectedOrg !== "all" || selectedZone !== "all" || selectedRegion !== "all" || selectedArea !== "all" || selectedBranch !== "all" || (activeTab !== "branch-opening" && selectedShift !== "all")) && (
             <button
               onClick={() => {
                 setSelectedOrg("all");
@@ -419,7 +515,7 @@ export default function MisReportsPage() {
         </div>
 
         {/* Executive Summary Scorecards */}
-        {summary && (
+        {activeTab !== "branch-opening" && summary && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 print:grid-cols-3">
             <div className="bg-slate-900/70 border border-slate-800/80 rounded-xl p-4 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 left-0 h-1 w-full bg-emerald-500" />
@@ -527,6 +623,12 @@ export default function MisReportsPage() {
             onClick={() => setActiveTab("compliance")}
             icon={<Award size={16} />}
             label="Audit Compliance"
+          />
+          <TabButton
+            active={activeTab === "branch-opening"}
+            onClick={() => setActiveTab("branch-opening")}
+            icon={<Building2 size={16} />}
+            label="Branch Opening Failures"
           />
         </div>
 
@@ -847,9 +949,118 @@ export default function MisReportsPage() {
             </div>
           </div>
         )}
+
+        {activeTab === "branch-opening" && (
+          <section className="space-y-4">
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Branch Opening Two-Person Failure MIS</h2>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Branches where the first person observation during opening showed fewer than two people together.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 print:hidden">
+                  <button type="button" onClick={handleOpeningExportCsv} disabled={!openingReport}
+                    className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">
+                    <Download size={13} className="mr-1 inline" />Export CSV
+                  </button>
+                  <button type="button" onClick={handlePrint}
+                    className="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-semibold text-white">
+                    <Printer size={13} className="mr-1 inline" />Print / Save PDF
+                  </button>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap items-end gap-3 print:hidden">
+                <label className="text-xs text-slate-300">Report period
+                  <select value={openingRange} onChange={(event) => setOpeningRange(event.target.value as OpeningRange)}
+                    className="mt-1 block rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white">
+                    <option value="today">Today (daily)</option>
+                    <option value="7d">Last 7 days</option>
+                    <option value="30d">Last 30 days</option>
+                    <option value="90d">Last 90 days</option>
+                    <option value="custom">Custom period</option>
+                  </select>
+                </label>
+                {openingRange === "custom" && <>
+                  <label className="text-xs text-slate-300">From
+                    <input type="date" value={openingStartDate} onChange={(event) => setOpeningStartDate(event.target.value)}
+                      className="mt-1 block rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white" />
+                  </label>
+                  <label className="text-xs text-slate-300">To
+                    <input type="date" value={openingEndDate} min={openingStartDate || undefined}
+                      onChange={(event) => setOpeningEndDate(event.target.value)}
+                      className="mt-1 block rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white" />
+                  </label>
+                </>}
+              </div>
+              {openingReport && <p className="mt-3 text-xs text-slate-400">
+                {openingReport.startDate} to {openingReport.endDate} (Asia/Kolkata) · {openingReport.total} failed openings
+                {openingReport.truncated ? " · Results capped at 10,000; narrow the period for a complete export." : ""}
+              </p>}
+            </div>
+
+            {openingError && <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{openingError}</div>}
+            {openingLoading && <p className="text-sm text-slate-400">Loading opening failures…</p>}
+            {!openingLoading && openingReport && <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/60">
+              <table className="w-full min-w-[760px] text-left text-xs">
+                <thead className="bg-slate-800 text-slate-300">
+                  <tr>
+                    <th className="p-3">Opening time (IST)</th>
+                    <th className="p-3">Zone</th>
+                    <th className="p-3">Branch</th>
+                    <th className="p-3">Persons detected</th>
+                    <th className="p-3">Camera</th>
+                    <th className="p-3">Photo at opening</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800 text-slate-200">
+                  {openingReport.rows.length === 0 ? <tr><td colSpan={6} className="p-8 text-center text-slate-400">No failed branch openings for this period and filter.</td></tr> :
+                    openingReport.rows.map((row) => <tr key={row.eventId}>
+                      <td className="p-3 whitespace-nowrap">{new Date(row.occurredAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</td>
+                      <td className="p-3">{row.zoneName ?? "Unassigned"}</td>
+                      <td className="p-3 font-semibold">{row.branchName}</td>
+                      <td className="p-3 font-bold text-rose-300">{row.personCount}</td>
+                      <td className="p-3">{row.cameraName}</td>
+                      <td className="p-3"><OpeningEvidencePhoto url={row.photoUrl} getHeaders={getReportAuthHeaders} /></td>
+                    </tr>)}
+                </tbody>
+              </table>
+            </div>}
+          </section>
+        )}
       </div>
     </AppLayout>
   );
+}
+
+function OpeningEvidencePhoto({ url, getHeaders }: {
+  url: string | null;
+  getHeaders: () => Record<string, string>;
+}) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [unavailable, setUnavailable] = useState(!url);
+  useEffect(() => {
+    if (!url) { setUnavailable(true); return; }
+    let active = true;
+    let objectUrl: string | null = null;
+    fetch(url, { headers: getHeaders(), credentials: "include", cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok || !response.headers.get("content-type")?.startsWith("image/")) throw new Error("photo_unavailable");
+        const blob = await response.blob();
+        if (!active) return;
+        objectUrl = URL.createObjectURL(blob);
+        setImageUrl(objectUrl);
+        setUnavailable(false);
+      })
+      .catch(() => { if (active) setUnavailable(true); });
+    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [url, getHeaders]);
+  if (!url || unavailable) return <span className="text-slate-500">Photo unavailable</span>;
+  if (!imageUrl) return <span className="text-slate-500">Loading photo…</span>;
+  return <a href={imageUrl} target="_blank" rel="noopener noreferrer" title="Open event photo">
+    <img src={imageUrl} alt="Camera frame at failed branch opening" className="h-20 w-32 rounded object-cover" />
+  </a>;
 }
 
 function TabButton({

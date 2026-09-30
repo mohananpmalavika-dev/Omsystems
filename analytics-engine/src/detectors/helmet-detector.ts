@@ -110,27 +110,6 @@ export class HelmetDetector extends BaseDetector {
         },
       ]);
       results.push({
-        detectionType: "helmet",
-        status: "SUCCESS",
-        provenance: this.classifier ? "LIVE_INFERENCE" : "HEURISTIC_RULE_ENGINE",
-        confidence: effectiveConf,
-        durationSeconds: 1,
-        objects: compliantObjects,
-        metadata: {
-          compliantCount: helmetWearers.length,
-          threatType: "helmet_detected",
-        },
-        executionMetadata: {
-          status: "SUCCESS",
-          provenance: this.classifier ? "LIVE_INFERENCE" : "HEURISTIC_RULE_ENGINE",
-          modelId: "helmet-classifier",
-          modelVersion: "1.0.0",
-          simulated: false,
-          timestamp: new Date().toISOString(),
-        },
-        requiresAlert: true,
-      });
-      results.push({
         detectionType: "helmet-worn",
         status: "SUCCESS",
         provenance: this.classifier ? "LIVE_INFERENCE" : "HEURISTIC_RULE_ENGINE",
@@ -170,7 +149,7 @@ export class HelmetDetector extends BaseDetector {
     const vehicles = observations.filter((item) => item.label === "motorcycle" || item.label === "bicycle")
       .filter((item) => (item.confidence ?? 0) >= this.MIN_CONFIDENCE);
     const helmets = observations.filter((item) => item.label === "helmet")
-      .filter((item) => (item.confidence ?? 0) >= this.MIN_CONFIDENCE);
+      .filter((item) => (item.confidence ?? 0) >= Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE));
     const heads = observations.filter((item) => item.label === "head")
       .filter((item) => (item.confidence ?? 0) >= this.MIN_CONFIDENCE);
 

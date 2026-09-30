@@ -3,6 +3,7 @@ import {
   discoverRecorderChannels,
   discoverVendorRecorderChannels,
   inferRecorderChannelCount,
+  mergeRecorderChannelCandidates,
   recorderAdapterVendor,
   recorderChannelIdentity,
   recorderChannelNumber,
@@ -129,6 +130,22 @@ describe("universal DVR channel adapter", () => {
     });
 
     expect(channels.map((channel) => channel.sourceChannel)).toEqual([2, 3, 4]);
+  });
+
+  it("retains offline inputs for a recorder with an explicit channel count", async () => {
+    const vendorChannels = await discoverVendorRecorderChannels({
+      manufacturer: "CP PLUS", model: "XVR 4 Channel", host: "192.0.2.20",
+      credentials: { username: "admin", password: "secret" },
+      probeStream: async (uri) => ({
+        reachable: new URL(uri).searchParams.get("channel") === "3",
+        codec: "h264", width: 640, height: 360,
+      }),
+    });
+    const merged = mergeRecorderChannelCandidates([], vendorChannels, "XVR 4 Channel");
+    expect(merged.map((channel) => channel.sourceChannel)).toEqual([1, 2, 3, 4]);
+    expect(merged.map((channel) => channel.streamVerified)).toEqual([false, false, true, false]);
+    expect(mergeRecorderChannelCandidates([], vendorChannels, "XVR")
+      .map((channel) => channel.sourceChannel)).toEqual([3]);
   });
 
   it("keeps a failed channel visible and continues probing the other ONVIF channels", async () => {

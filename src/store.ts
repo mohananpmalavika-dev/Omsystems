@@ -3697,6 +3697,8 @@ export class MemoryStore {
       });
       const recent = this.analyticsAlerts.find((alert) => {
         return alert.ruleId === rule.id && alert.cameraId === input.cameraId &&
+            (input.detectionType !== "dual-control-verification" ||
+              alert.correlationKey === input.metadata?.correlationKey) &&
             !isTerminalAlertStatus(alert.status);
       });
       if (recent) {
@@ -3755,6 +3757,10 @@ export class MemoryStore {
     };
     this.analyticsEvents.push(event);
     return { event, alerts, rules: matchingRules };
+  }
+
+  async getAnalyticsEvent(id: string, inputTenantId: string) {
+    return this.analyticsEvents.find((event) => event.id === id && event.tenantId === inputTenantId);
   }
 
   async listAnalyticsEvents(

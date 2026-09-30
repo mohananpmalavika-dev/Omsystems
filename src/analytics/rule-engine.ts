@@ -11,14 +11,20 @@ export function sortedMatchingRules(
   event: AnalyticsEventInput,
 ): AnalyticsRule[] {
   const detectionTypes = new Set(eventDetectionTypes(event));
-  return rules
-    .filter((rule) => rule.enabled && detectionTypes.has(rule.detectionType))
+  const matches = rules
+    .filter((rule) => rule.enabled && rule.detectionType !== "no-helmet" && detectionTypes.has(rule.detectionType))
     .filter((rule) => event.confidence >= rule.minConfidence)
     .filter((rule) => event.durationSeconds >= rule.minDurationSeconds)
     .filter((rule) => objectClassesMatch(rule, event))
     .filter((rule) => directionMatches(rule, event))
     .filter((rule) => zoneMatches(rule, event))
-    .filter((rule) => isWithinSchedule(rule, event.occurredAt))
+    .filter((rule) => isWithinSchedule(rule, event.occurredAt));
+  // Older cameras may still have the generic helmet rule alongside the
+  // dedicated indoor helmet-worn rule. They describe the same observation;
+  // prefer the dedicated rule so a single person creates a single alarm.
+  const hasHelmetWornRule = matches.some((rule) => rule.detectionType === "helmet-worn");
+  return matches
+    .filter((rule) => !hasHelmetWornRule || rule.detectionType !== "helmet")
     .sort((left, right) => severityOrder[left.severity] - severityOrder[right.severity]);
 }
 

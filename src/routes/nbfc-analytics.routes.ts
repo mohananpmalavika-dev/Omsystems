@@ -4,7 +4,7 @@ import type { NbfcRuleRepository } from "../analytics/nbfc-rule-repository.js";
 import type { NbfcRuleEngineService } from "../analytics/nbfc-rule-engine.service.js";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import { immutableAuditService } from "../security/audit/immutable-audit.service.js";
-import { OPENING_RULE_TEMPLATE_ID } from "../analytics/branch-opening-dual-control.service.js";
+import { OPENING_RULE_TEMPLATE_ID, branchOpeningLocalDate } from "../analytics/branch-opening-dual-control.service.js";
 
 export interface NbfcAnalyticsRouteOptions {
   repository: NbfcRuleRepository;
@@ -21,9 +21,12 @@ export function registerNbfcAnalyticsRoutes(
   const openingPolicySchema = z.object({
     openingStart: timeValue,
     openingEnd: timeValue,
-    timezone: z.string().trim().min(1).max(100).default("Asia/Kolkata"),
+    timezone: z.string().trim().min(1).max(100).refine((timezone) => {
+      try { new Intl.DateTimeFormat("en-US", { timeZone: timezone }); return true; }
+      catch { return false; }
+    }, "Use a valid timezone").default("Asia/Kolkata"),
     activeDays: z.array(z.number().int().min(0).max(6)).min(1).default([1, 2, 3, 4, 5, 6]),
-    graceSeconds: z.number().int().min(0).max(900).default(30),
+    graceSeconds: z.number().int().min(0).max(900).optional(),
   }).superRefine((value, context) => {
     if (value.openingStart >= value.openingEnd) {
       context.addIssue({ code: "custom", path: ["openingEnd"], message: "Opening window end must be after its start" });
@@ -78,8 +81,12 @@ export function registerNbfcAnalyticsRoutes(
     return true;
   }
 
-  function openingPolicyResponse(rule: Awaited<ReturnType<NbfcRuleRepository["getRule"]>>, branchId: string) {
+  async function openingPolicyResponse(rule: Awaited<ReturnType<NbfcRuleRepository["getRule"]>>, branchId: string) {
     const schedule = rule?.schedule;
+    const today = rule
+      ? await repository.getBranchOpeningCheck(rule.id, branchId,
+          branchOpeningLocalDate(new Date(), schedule?.timezone || "Asia/Kolkata"))
+      : null;
     return {
       branchId,
       ruleId: rule?.id,
@@ -90,8 +97,16 @@ export function registerNbfcAnalyticsRoutes(
       timezone: schedule?.timezone || "Asia/Kolkata",
       activeDays: schedule?.days || [1, 2, 3, 4, 5, 6],
       requiredStaff: 2,
-      graceSeconds: Math.round((rule?.durationMs ?? 30_000) / 1000),
+      graceSeconds: 0,
       enforcementMode: "ALERT_EVIDENCE_AND_INCIDENT",
+      today: {
+        status: today?.currentMetrics?.outcome === "SUCCESS" ? "SUCCESS"
+          : today?.currentMetrics?.outcome === "FAILED" ? "FAILED" : "NOT_CHECKED",
+        checkedAt: today?.firstConditionMetAt || null,
+        personCount: typeof today?.currentMetrics?.personCount === "number"
+          ? today.currentMetrics.personCount : null,
+        alertEmitted: today?.currentMetrics?.alertEmitted === true,
+      },
     };
   }
 
@@ -133,7 +148,7 @@ export function registerNbfcAnalyticsRoutes(
     const rule = candidates.find((candidate) => candidate.branchIds.includes(branchId))
       || candidates.find((candidate) => candidate.branchIds.length === 0)
       || null;
-    return reply.send(openingPolicyResponse(rule, branchId));
+    return reply.send(await openingPolicyResponse(rule, branchId));
   });
 
   app.put("/api/ai/branch-opening-policy/:branchId", async (request, reply) => {
@@ -166,13 +181,13 @@ export function registerNbfcAnalyticsRoutes(
 
     const updated = await repository.updateRule(rule.id, {
       name: "Branch Opening Two-Person Enforcement",
-      description: "Requires two people to be visible together during the configured branch opening window and escalates non-compliance with evidence.",
+      description: "Checks the first person observation during the branch opening window: two people together pass; fewer than two fail immediately, once per local day.",
       enabled: true,
       state: "ACTIVE",
       branchIds: [branchId],
       cameraIds: [],
       condition: { metric: "staff_count", operator: "LESS_THAN", value: 2 },
-      durationMs: policy.graceSeconds * 1000,
+      durationMs: 0,
       schedule: {
         type: "BRANCH_OPENING",
         start: policy.openingStart,
@@ -202,7 +217,7 @@ export function registerNbfcAnalyticsRoutes(
       metadata: { openingStart: policy.openingStart, openingEnd: policy.openingEnd, requiredStaff: 2 },
       timestamp: new Date().toISOString(),
     });
-    return reply.send(openingPolicyResponse(updated, branchId));
+    return reply.send(await openingPolicyResponse(updated, branchId));
   });
 
   // Create rule

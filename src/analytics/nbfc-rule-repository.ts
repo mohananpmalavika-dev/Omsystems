@@ -730,6 +730,83 @@ export class NbfcRuleRepository {
     }
   }
 
+  /** Atomically record the first positive person count for a branch's local opening day. */
+  async claimBranchOpeningCheck(input: {
+    ruleId: string;
+    branchId: string;
+    localDate: string;
+    cameraId: string;
+    personCount: number;
+    occurredAt: string;
+    snapshotReference?: string | undefined;
+    clipReference?: string | undefined;
+    personBoundingBox?: { x: number; y: number; width: number; height: number } | undefined;
+  }): Promise<{ state: RuntimeRuleState; claimed: boolean }> {
+    const entityKey = `branch-opening-day:${input.branchId}:${input.localDate}`;
+    const state: RuntimeRuleState = {
+      ruleId: input.ruleId,
+      entityKey,
+      currentStatus: input.personCount >= 2 ? "RESOLVED" : "ACTIVE_ALERTING",
+      firstConditionMetAt: input.occurredAt,
+      lastEvaluatedAt: input.occurredAt,
+      lastTriggeredAt: input.personCount < 2 ? input.occurredAt : undefined,
+      fencingToken: 1,
+      currentMetrics: {
+        branchId: input.branchId,
+        localDate: input.localDate,
+        cameraId: input.cameraId,
+        personCount: input.personCount,
+        snapshotReference: input.snapshotReference,
+        clipReference: input.clipReference,
+        personBoundingBox: input.personBoundingBox,
+        outcome: input.personCount >= 2 ? "SUCCESS" : "FAILED",
+        alertEmitted: false,
+      },
+    };
+    const key = `${input.ruleId}:${entityKey}`;
+    if (this.pool) {
+      // The primary key is the once-per-day gate across all control-plane replicas.
+      // A database failure must not be reported as an enforced decision.
+      const inserted = await this.pool.query(
+        `INSERT INTO nbfc_rule_state (
+          rule_id, entity_key, current_status, first_condition_met_at,
+          last_evaluated_at, last_triggered_at, fencing_token, current_metrics
+        ) VALUES ($1::uuid, $2, $3, $4, $4, $5, 1, $6::jsonb)
+        ON CONFLICT (rule_id, entity_key) DO NOTHING
+        RETURNING rule_id`,
+        [state.ruleId, state.entityKey, state.currentStatus, state.firstConditionMetAt,
+          state.lastTriggeredAt || null, JSON.stringify(state.currentMetrics)],
+      );
+      if (inserted.rowCount) return { state, claimed: true };
+      const existing = await this.getRuntimeState(input.ruleId, entityKey);
+      if (!existing) throw new Error("branch_opening_check_unavailable");
+      return { state: existing, claimed: false };
+    }
+    this.assertProductionStorage();
+    const existing = this.inMemoryStates.get(key);
+    if (existing) return { state: existing, claimed: false };
+    this.inMemoryStates.set(key, state);
+    return { state, claimed: true };
+  }
+
+  async getBranchOpeningCheck(ruleId: string, branchId: string, localDate: string): Promise<RuntimeRuleState | null> {
+    return this.getRuntimeState(ruleId, `branch-opening-day:${branchId}:${localDate}`);
+  }
+
+  async markBranchOpeningAlertEmitted(ruleId: string, branchId: string, localDate: string): Promise<void> {
+    const entityKey = `branch-opening-day:${branchId}:${localDate}`;
+    if (this.pool) {
+      await this.pool.query(
+        `UPDATE nbfc_rule_state SET current_metrics = current_metrics || '{"alertEmitted":true}'::jsonb
+         WHERE rule_id = $1::uuid AND entity_key = $2 AND current_status = 'ACTIVE_ALERTING'`,
+        [ruleId, entityKey],
+      );
+      return;
+    }
+    const state = this.inMemoryStates.get(`${ruleId}:${entityKey}`);
+    if (state) state.currentMetrics = { ...state.currentMetrics, alertEmitted: true };
+  }
+
   async clearRuntimeState(ruleId: string, entityKey?: string): Promise<void> {
     if (entityKey) {
       this.inMemoryStates.delete(`${ruleId}:${entityKey}`);
@@ -1639,10 +1716,10 @@ export class NbfcRuleRepository {
         id: "tmpl-27-opening-staff-count",
         name: "Branch Opening Two-Person Enforcement",
         category: "CASH_OPERATIONS",
-        description: "Requires two people to be visible together during the configured branch opening window and escalates non-compliance with evidence.",
+        description: "Checks the first person observation during the branch opening window: two people together pass; fewer than two fail immediately, once per local day.",
         detectorType: "person",
         defaultCondition: { metric: "staff_count", operator: "LESS_THAN", value: 2 },
-        defaultDurationMs: 30000,
+        defaultDurationMs: 0,
         defaultSeverity: "CRITICAL",
         defaultCooldownMs: 600000,
         defaultActions: ["CREATE_ALERT", "CREATE_INCIDENT", "CAPTURE_SNAPSHOT", "CAPTURE_EVIDENCE_CLIP", "NOTIFY_SOC", "NOTIFY_BRANCH_MANAGER"],

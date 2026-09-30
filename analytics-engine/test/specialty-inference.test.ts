@@ -37,6 +37,18 @@ describe("local specialty model adapters", () => {
     expect(results.map((result) => result.detectionType)).not.toContain("no-shoes");
   });
 
+  it("ignores no-helmet and no-hardhat PPE observations while the rule is paused", async () => {
+    const detector = new PPEDetector(0.7);
+    await detector.initialize();
+
+    const results = await detector.detect(frame([
+      object("no-helmet", 0.99),
+      object("no-hardhat", 0.99),
+    ]));
+
+    expect(results).toHaveLength(0);
+  });
+
   it("produces fire and smoke events without external detections", async () => {
     const detector = new SmokeFireDetector({ run: async () => [object("fire", 0.93)] });
     await detector.initialize();
@@ -106,9 +118,23 @@ describe("local specialty model adapters", () => {
       object("helmet", 0.93, { x: 0.18, y: 0.11, width: 0.24, height: 0.12 }),
     ]));
 
+    expect(results).toHaveLength(1);
     expect(results).toEqual(expect.arrayContaining([
       expect.objectContaining({ detectionType: "helmet-worn", requiresAlert: true }),
     ]));
+  });
+
+  it("does not alert on a low-confidence normalized helmet observation", async () => {
+    const detector = new HelmetDetector(null, 0.7);
+    await detector.initialize();
+    const observation = frame([
+      object("person", 0.95, { x: 0.1, y: 0.1, width: 0.4, height: 0.8 }),
+      object("helmet", 0.8, { x: 0.18, y: 0.11, width: 0.24, height: 0.12 }),
+    ]);
+    observation.metadata!.inferenceMode = "normalized-observation";
+    const results = await detector.detect(observation);
+
+    expect(results).toHaveLength(0);
   });
 
   it("classifies a helmeted person without requiring a vehicle", async () => {

@@ -262,8 +262,10 @@ export default function NbfcOperationsPage() {
       return;
     }
     let active = true;
+    const branchId = activeBranch.id;
+    setOpeningPolicy(null);
     setOpeningPolicyMessage(null);
-    branchOpeningPolicyApi.get(activeBranch.id)
+    branchOpeningPolicyApi.get(branchId)
       .then((policy) => {
         if (!active) return;
         setOpeningPolicy(policy);
@@ -273,7 +275,12 @@ export default function NbfcOperationsPage() {
       .catch((error) => {
         if (active) setOpeningPolicyMessage(error instanceof Error ? error.message : "Opening policy unavailable");
       });
-    return () => { active = false; };
+    const refresh = setInterval(() => {
+      branchOpeningPolicyApi.get(branchId).then((policy) => {
+        if (active) setOpeningPolicy(policy);
+      }).catch(() => {});
+    }, 15_000);
+    return () => { active = false; clearInterval(refresh); };
   }, [activeBranch?.id]);
 
   const saveOpeningPolicy = async () => {
@@ -286,7 +293,7 @@ export default function NbfcOperationsPage() {
         openingEnd,
         timezone: openingPolicy?.timezone || "Asia/Kolkata",
         activeDays: openingPolicy?.activeDays || [1, 2, 3, 4, 5, 6],
-        graceSeconds: openingPolicy?.graceSeconds ?? 30,
+        graceSeconds: 0,
       });
       setOpeningPolicy(updated);
       setOpeningPolicyMessage("Opening policy saved and enforcement activated.");
@@ -451,8 +458,16 @@ export default function NbfcOperationsPage() {
                   </label>
                 </div>
                 <p className="text-xs leading-5 text-slate-400">
-                  Minimum <strong className="text-white">2 people</strong> must remain visible together. Non-compliance creates a P1 alert, evidence clip and incident after {openingPolicy?.graceSeconds ?? 30}s.
+                  At the first person detection during the opening window, <strong className="text-white">2 people must be visible together</strong>. One person fails immediately and creates one P1 alert for the day. The next check is on the following day.
                 </p>
+                {openingPolicy?.enabled && (
+                  <p className={`text-xs font-semibold ${openingPolicy.today?.status === "SUCCESS" ? "text-emerald-300" : openingPolicy.today?.status === "FAILED" ? "text-rose-300" : "text-slate-400"}`}>
+                    Today: {openingPolicy.today?.status === "SUCCESS" ? "Success — two people together" : openingPolicy.today?.status === "FAILED" ? openingPolicy.today.alertEmitted ? "Failed — P1 alert created" : "Failed — alert pending" : "Waiting for first person"}
+                  </p>
+                )}
+                <Link href="/reports/mis?tab=branch-opening" className="inline-block text-xs font-semibold text-cyan-400 hover:text-cyan-300">
+                  View opening failure MIS →
+                </Link>
                 {openingPolicyMessage && <p className={`text-[11px] ${openingPolicyMessage.includes("saved") ? "text-emerald-300" : "text-amber-300"}`}>{openingPolicyMessage}</p>}
               </div>
             </div>

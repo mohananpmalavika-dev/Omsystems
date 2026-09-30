@@ -15,9 +15,7 @@ import {
   type InferenceObject,
 } from "./base-detector.js";
 
-const VIOLATION_TYPES: Record<string, "no-helmet" | "no-safety-vest" | "no-gloves" | "no-shoes"> = {
-  "no-helmet": "no-helmet",
-  "no-hardhat": "no-helmet",
+const VIOLATION_TYPES: Record<string, "no-safety-vest" | "no-gloves" | "no-shoes"> = {
   "no-vest": "no-safety-vest",
   "no-safety-vest": "no-safety-vest",
   "no-high-vis-vest": "no-safety-vest",
@@ -64,12 +62,6 @@ export class PPEDetector extends BaseDetector {
           list.push({ ...person, label: "no-safety-vest" });
           violations.set("no-safety-vest", list);
         }
-        // Maximum accuracy: only alert no-helmet if person detection confidence is high (>= 0.80)
-        if (analysis.missingHelmet && (person.confidence ?? 0) >= 0.80) {
-          const list = violations.get("no-helmet") ?? [];
-          list.push({ ...person, label: "no-helmet" });
-          violations.set("no-helmet", list);
-        }
       }
     }
 
@@ -96,12 +88,12 @@ export class PPEDetector extends BaseDetector {
   private analyzePersonPPE(
     frame: DetectionFrame,
     person: InferenceObject,
-  ): { missingVest: boolean; missingHelmet: boolean } {
+  ): { missingVest: boolean } {
     const width = frame.width;
     const height = frame.height;
     const buffer = frame.imageData;
     if (!buffer || buffer.length < width * height * 3) {
-      return { missingVest: false, missingHelmet: false };
+      return { missingVest: false };
     }
 
     const bbox = person.boundingBox;
@@ -110,7 +102,7 @@ export class PPEDetector extends BaseDetector {
     const pw = Math.min(width - px, Math.floor(bbox.width * width));
     const ph = Math.min(height - py, Math.floor(bbox.height * height));
 
-    if (pw < 10 || ph < 15) return { missingVest: false, missingHelmet: false };
+    if (pw < 10 || ph < 15) return { missingVest: false };
 
     // Torso region (20% to 65% of person height)
     const torsoStartY = py + Math.floor(ph * 0.20);
@@ -136,37 +128,8 @@ export class PPEDetector extends BaseDetector {
       }
     }
 
-    // Head region (top 20% of person height)
-    const headStartY = py;
-    const headEndY = py + Math.floor(ph * 0.20);
-    let headPixels = 0;
-    let helmetPixels = 0;
-
-    for (let y = headStartY; y < headEndY; y++) {
-      for (let x = px; x < px + pw; x++) {
-        const idx = (y * width + x) * 3;
-        const r = buffer[idx] ?? 0;
-        const g = buffer[idx + 1] ?? 0;
-        const b = buffer[idx + 2] ?? 0;
-        headPixels++;
-
-        // Hardhat: bright yellow, white hardhat (R,G,B > 220), or safety blue
-        const isYellowHelmet = r > 180 && g > 170 && b < 80;
-        const isWhiteHelmet = r > 220 && g > 220 && b > 220;
-        const isBlueHelmet = b > 160 && b > r + 40 && b > g + 20;
-        if (isYellowHelmet || isWhiteHelmet || isBlueHelmet) {
-          helmetPixels++;
-        }
-      }
-    }
-
     const vestCoverage = torsoPixels > 0 ? highVisPixels / torsoPixels : 0;
-    const helmetCoverage = headPixels > 0 ? helmetPixels / headPixels : 0;
-
-    return {
-      missingVest: vestCoverage < 0.08,
-      missingHelmet: helmetCoverage < 0.12,
-    };
+    return { missingVest: vestCoverage < 0.08 };
   }
 
   async cleanup(): Promise<void> {
