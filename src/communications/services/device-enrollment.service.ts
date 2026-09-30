@@ -290,7 +290,12 @@ export class DeviceEnrollmentService {
       }
       if (employeeIds.length) {
         const employees = await client.query(
-          `SELECT id FROM users WHERE id = ANY($1::uuid[]) AND tenant_id = $2 AND branch_id = $3 AND is_active = true`,
+          `SELECT u.id FROM users u
+           WHERE u.id = ANY($1::uuid[]) AND u.tenant_id = $2 AND (u.status = 'active' OR u.active = true)
+             AND (
+               EXISTS (SELECT 1 FROM user_organizational_assignments uoa WHERE uoa.user_id = u.id AND uoa.scope_node_id = $3)
+               OR u.role IN ('super_admin', 'company_admin')
+             )`,
           [employeeIds, enrollment.tenantId, enrollment.branchId]
         );
         if (employees.rowCount !== employeeIds.length) throw new Error('ENROLLMENT_INVALID_EMPLOYEE');

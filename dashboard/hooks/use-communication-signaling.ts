@@ -141,17 +141,16 @@ export function useCommunicationSignaling(identity: 'operator' | 'device' = 'ope
       ? (identity === 'device' ? deviceToken : sessionStorage.getItem('activityAccessToken') || sessionStorage.getItem('accessToken') || localStorage.getItem('accessToken'))
       : null;
     
-    if (!token) {
-      console.warn('[CommunicationSignaling] No access token found, deferring connection');
+    if (identity === 'device' && !token) {
+      console.warn('[CommunicationSignaling] No device access token found, deferring connection');
       return;
     }
     
     // Connect to Socket.IO server
     const socket = io(process.env.NEXT_PUBLIC_WS_URL || window.location.origin, {
       path: '/ws',
-      auth: {
-        token,
-      },
+      withCredentials: true,
+      auth: token ? { token } : undefined,
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionDelay: 1000,

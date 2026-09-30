@@ -275,6 +275,7 @@ export function DeviceManager() {
   const [gateways, setGateways] = useState<EdgeAgent[]>([]);
   const [cameras, setCameras] = useState<CameraRecord[]>([]);
   const [storageDisks, setStorageDisks] = useState<BranchStorageDisk[]>([]);
+  const [discoveredStorageDisks, setDiscoveredStorageDisks] = useState<BranchStorageDisk[]>([]);
   const [storageLoadError, setStorageLoadError] = useState<string>();
   const [inventoryRecords, setInventoryRecords] = useState<DeviceInventoryRecord[]>([]);
   const [discoveredCameras, setDiscoveredCameras] = useState<any[]>([]);
@@ -307,6 +308,9 @@ export function DeviceManager() {
   const refreshRequestRef = useRef(0);
   const [cameraToDelete, setCameraToDelete] = useState<CameraRecord | null>(null);
   const [deletingCamera, setDeletingCamera] = useState(false);
+  const [removingStorageId, setRemovingStorageId] = useState<string | null>(null);
+  const [removingDiskId, setRemovingDiskId] = useState<string | null>(null);
+  const [addingDiscoveredStorageId, setAddingDiscoveredStorageId] = useState<string | null>(null);
 
   // Portable Camera Subsystem State
   const portableRequestRef = useRef(0);
@@ -445,6 +449,70 @@ export function DeviceManager() {
       setError(messageOf(reason, `Failed to remove camera "${cameraToDelete.name}".`));
     } finally {
       setDeletingCamera(false);
+    }
+  }
+
+  async function removeRegisteredStorage(record: DeviceInventoryRecord) {
+    if (record.deviceType !== "storage-device" || removingStorageId) return;
+    const label = `${record.manufacturer} ${record.model}`.trim() || record.deviceId;
+    if (!window.confirm(`Remove "${label}" from this branch inventory? The record will be decommissioned.`)) return;
+    setRemovingStorageId(record.id);
+    setError(undefined);
+    try {
+      await deviceInventoryApi.update(record.id, { lifecycleState: "decommissioned" });
+      setNotice(`Storage device "${label}" was removed from inventory.`);
+      await refreshBranch(selectedBranch);
+    } catch (reason) {
+      setError(messageOf(reason, `Failed to remove storage device "${label}".`));
+    } finally {
+      setRemovingStorageId(null);
+    }
+  }
+
+  async function removeReportedStorage(disk: BranchStorageDisk) {
+    if (!selectedBranch || removingDiskId) return;
+    const label = disk.model && disk.model !== "Unknown disk" ? disk.model : disk.devicePath || disk.id;
+    if (!window.confirm(`Remove "${label}" from this branch inventory? New telemetry will place it in Device discovery for review.`)) return;
+    setRemovingDiskId(disk.id);
+    setError(undefined);
+    try {
+      const response = await fetch(
+        `/api/control/v1/operations/health/disks?diskId=${encodeURIComponent(disk.id)}&branchId=${encodeURIComponent(selectedBranch)}`,
+        { method: "DELETE", credentials: "include", headers: getPortableAuthHeaders() },
+      );
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.message || payload?.error || `Request failed (${response.status})`);
+      }
+      setNotice(`Storage device "${label}" was removed from inventory.`);
+      await refreshBranch(selectedBranch);
+    } catch (reason) {
+      setError(messageOf(reason, `Failed to remove storage device "${label}".`));
+    } finally {
+      setRemovingDiskId(null);
+    }
+  }
+
+  async function addDiscoveredStorage(disk: BranchStorageDisk) {
+    if (!selectedBranch || addingDiscoveredStorageId) return;
+    const label = disk.model && disk.model !== "Unknown disk" ? disk.model : disk.devicePath || disk.id;
+    setAddingDiscoveredStorageId(disk.id);
+    setError(undefined);
+    try {
+      const response = await fetch(
+        `/api/control/v1/operations/health/disks/discovery/add?diskId=${encodeURIComponent(disk.id)}&branchId=${encodeURIComponent(selectedBranch)}`,
+        { method: "POST", credentials: "include", headers: getPortableAuthHeaders() },
+      );
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.message || payload?.error || `Request failed (${response.status})`);
+      }
+      await refreshBranch(selectedBranch);
+      setNotice(`Storage device "${label}" was added to inventory.`);
+    } catch (reason) {
+      setError(messageOf(reason, `Failed to add storage device "${label}" to inventory.`));
+    } finally {
+      setAddingDiscoveredStorageId(null);
     }
   }
 
@@ -879,6 +947,7 @@ export function DeviceManager() {
     setGateways([]);
     setCameras([]);
     setStorageDisks([]);
+    setDiscoveredStorageDisks([]);
     setStorageLoadError(undefined);
     setInventoryRecords([]);
     setDiscoveredCameras([]);
@@ -920,14 +989,28 @@ export function DeviceManager() {
     void loadPortableDevices();
   }, []);
 
+  async function loadStorageDiscoveries(branchId: string): Promise<BranchStorageDisk[]> {
+    const response = await fetch(
+      `/api/control/v1/operations/health/disks/discovery?branchId=${encodeURIComponent(branchId)}`,
+      { credentials: "include", headers: getPortableAuthHeaders(), cache: "no-store" },
+    );
+    if (!response.ok) throw new Error(`Storage discovery request failed (${response.status})`);
+    const payload = await response.json() as { success?: boolean; data?: BranchStorageDisk[] };
+    if (payload.success === false || !Array.isArray(payload.data)) {
+      throw new Error("Storage discovery response is incomplete");
+    }
+    return payload.data.filter((disk) => disk.branchId === branchId && disk.id);
+  }
+
   // Periodic background polling for discoveries and online edge agent status
   useEffect(() => {
     if (!selectedBranch) return;
     const interval = window.setInterval(async () => {
       if (document.hidden) return;
-      const [gwResp, discResp] = await Promise.allSettled([
+      const [gwResp, discResp, storageDiscoveryResp] = await Promise.allSettled([
         cameraInventoryApi.listGateways(selectedBranch),
         cameraInventoryApi.listDiscovered(selectedBranch),
+        loadStorageDiscoveries(selectedBranch),
       ]);
       if (selectedBranchRef.current !== selectedBranch) return;
       if (gwResp.status === "fulfilled" && gwResp.value?.data) {
@@ -937,6 +1020,7 @@ export function DeviceManager() {
         setDiscoveredCameras(discResp.value.data);
         updateDiscoveryReviewState(discResp.value.data);
       }
+      if (storageDiscoveryResp.status === "fulfilled") setDiscoveredStorageDisks(storageDiscoveryResp.value);
       void loadPortableDevices();
     }, 4_000);
 
@@ -962,7 +1046,7 @@ export function DeviceManager() {
     setLoading(true);
     setError(undefined);
     try {
-      const [gatewayResult, cameraResult, discoveredResult, inventoryResult, storageResult] = await Promise.allSettled([
+      const [gatewayResult, cameraResult, discoveredResult, inventoryResult, storageResult, storageDiscoveryResult] = await Promise.allSettled([
         cameraInventoryApi.listGateways(branchId),
         cameraInventoryApi.listByBranch(branchId, "device:configure"),
         cameraInventoryApi.listDiscovered(branchId),
@@ -979,6 +1063,7 @@ export function DeviceManager() {
           }
           return payload;
         }),
+        loadStorageDiscoveries(branchId),
       ]);
       if (selectedBranchRef.current !== branchId || requestId !== refreshRequestRef.current) return [];
       if (gatewayResult.status === "fulfilled") setGateways(gatewayResult.value.data);
@@ -991,6 +1076,8 @@ export function DeviceManager() {
         setStorageDisks([]);
         setStorageLoadError(messageOf(storageResult.reason, "Storage inventory could not be loaded."));
       }
+      if (storageDiscoveryResult.status === "fulfilled") setDiscoveredStorageDisks(storageDiscoveryResult.value);
+      else setDiscoveredStorageDisks([]);
       if (discoveredResult.status === "fulfilled") {
         setDiscoveredCameras(discoveredResult.value.data);
         updateDiscoveryReviewState(discoveredResult.value.data);
@@ -2117,7 +2204,19 @@ export function DeviceManager() {
                 <span className="camera-device-icon"><HardDrive size={15} /></span>
                 <div><strong>{disk.model && disk.model !== "Unknown disk" ? disk.model : disk.devicePath || disk.id}</strong><small>{owner ? `Storage for ${owner.name}` : "Branch storage"} · {diskCapacity(disk.capacityBytes)}</small></div>
                 <span className={`inventory-status ${status.tone}`}>{status.label}</span>
-                <div className="camera-inventory-actions"><a className="secondary-button" href="/operations/storage">View storage</a></div>
+                <div className="camera-inventory-actions">
+                  <a className="secondary-button" href="/operations/storage">View storage</a>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => void removeReportedStorage(disk)}
+                    disabled={removingDiskId !== null}
+                    title={`Remove ${disk.model || disk.id} from branch inventory`}
+                    style={{ color: "#ef4444", borderColor: "rgba(239, 68, 68, 0.4)", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                  >
+                    <Trash2 size={13} /> {removingDiskId === disk.id ? "Removing…" : "Remove"}
+                  </button>
+                </div>
               </article>;
             })}
             {registeredStorage.map((record) => (
@@ -2125,6 +2224,18 @@ export function DeviceManager() {
                 <span className="camera-device-icon"><HardDrive size={15} /></span>
                 <div><strong>{record.manufacturer} {record.model}</strong><small>Registered storage · {record.deviceId} · hardware telemetry pending</small></div>
                 <span className="inventory-status degraded">Unverified</span>
+                <div className="camera-inventory-actions">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => void removeRegisteredStorage(record)}
+                    disabled={removingStorageId !== null}
+                    title={`Remove ${record.manufacturer} ${record.model} from branch inventory`}
+                    style={{ color: "#ef4444", borderColor: "rgba(239, 68, 68, 0.4)", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                  >
+                    <Trash2 size={13} /> {removingStorageId === record.id ? "Removing…" : "Remove"}
+                  </button>
+                </div>
               </article>
             ))}
           </section>
@@ -2281,20 +2392,20 @@ export function DeviceManager() {
       )}
 
       <section className="device-card discovery-section">
-        <div className="device-card-heading"><Search size={18} /><div><h3>Device discovery</h3><p>{pendingReviewCount} awaiting review · {approvedReviewCount} approved</p></div></div>
-        <div className={`discovery-status-panel ${scanning ? "scanning" : discoveryQueueItems.length === 0 ? "idle" : "ready"}`}>
+        <div className="device-card-heading"><Search size={18} /><div><h3>Device discovery</h3><p>{pendingReviewCount + discoveredStorageDisks.length} awaiting review · {approvedReviewCount} cameras approved · {discoveredStorageDisks.length} storage</p></div></div>
+        <div className={`discovery-status-panel ${scanning ? "scanning" : discoveryQueueItems.length === 0 && discoveredStorageDisks.length === 0 ? "idle" : "ready"}`}>
           <div className="discovery-status-copy">
             <div className="discovery-status-title">
               {scanning ? <span className="scanning-icon" aria-hidden="true"><span /></span> : <Search size={18} aria-hidden="true" />}
-              <strong>{scanning ? "Camera search in progress" : !onlineGateway ? "Scanner connection required" : discoveryQueueItems.length === 0 ? "Scan ready" : "Cameras are ready for review"}</strong>
+              <strong>{scanning ? "Camera search in progress" : !onlineGateway && discoveredStorageDisks.length === 0 ? "Scanner connection required" : discoveryQueueItems.length === 0 && discoveredStorageDisks.length === 0 ? "Scan ready" : "Devices are ready for review"}</strong>
             </div>
             <p>{scanning
               ? `Checking ${scanStages[scanStageIndex].toLowerCase()}. The search continues automatically through every configured path.`
-              : !onlineGateway
+              : !onlineGateway && discoveredStorageDisks.length === 0
                 ? "The cloud service cannot access cameras until a Branch Gateway or local scanner is running on the same network."
-                : discoveryQueueItems.length === 0
+                : discoveryQueueItems.length === 0 && discoveredStorageDisks.length === 0
                 ? "Select Scan cameras once. The module checks the local network, VPN routes, and tunnel-connected access in sequence."
-                : "Approve all verified cameras to start recording, AI detection, and alerts automatically."}</p>
+                : "Review camera discoveries and add returned storage devices to the active inventory."}</p>
             {scanning ? (
               <div className="scan-route-steps" aria-label="Camera search paths">
                 {scanStages.map((stage, index) => (
@@ -2336,15 +2447,15 @@ export function DeviceManager() {
             </div>
           </div>
           <div className="discovery-status-metrics">
-            <div><span>Found</span><strong>{pendingDiscoveryQueueItems.length + approvedReviewCount}</strong></div>
-            <div><span>Pending</span><strong>{pendingDiscoveryQueueItems.length}</strong></div>
+            <div><span>Found</span><strong>{pendingDiscoveryQueueItems.length + approvedReviewCount + discoveredStorageDisks.length}</strong></div>
+            <div><span>Pending</span><strong>{pendingDiscoveryQueueItems.length + discoveredStorageDisks.length}</strong></div>
             <div><span>Approved</span><strong>{approvedReviewCount}</strong></div>
           </div>
           {scanning ? <span className="scanning-progress" aria-hidden="true" /> : null}
         </div>
-        {pendingDiscoveryQueueItems.length === 0 ? (
+        {pendingDiscoveryQueueItems.length === 0 && discoveredStorageDisks.length === 0 ? (
           <div className="device-empty"><Camera size={25} /><strong>No pending discoveries</strong><span>{approvedReviewCount > 0 ? "All discovered cameras have been approved and added to active branch monitoring." : "Use the single camera scan to search the branch network without entering IP addresses manually."}</span></div>
-        ) : (
+        ) : pendingDiscoveryQueueItems.length > 0 ? (
           <div className="discovery-camera-list">
             {pendingDiscoveryQueueItems.map((item) => {
               const profileText = Array.isArray(item.profiles) && item.profiles.length > 0
@@ -2425,7 +2536,42 @@ export function DeviceManager() {
               );
             })}
           </div>
-        )}
+        ) : null}
+        {discoveredStorageDisks.length > 0 ? (
+          <div className="mt-4">
+            <h4 className="mb-2 text-sm font-semibold">Storage returned by telemetry</h4>
+            <div className="discovery-camera-list">
+              {discoveredStorageDisks.map((disk) => (
+                <article className="discovery-camera-card pending" key={`storage-discovery:${disk.id}`}>
+                  <div className="discovery-camera-main">
+                    <div className="discovery-camera-head">
+                      <div>
+                        <strong>{disk.model && disk.model !== "Unknown disk" ? disk.model : disk.devicePath || disk.id}</strong>
+                        <span>Storage device · {activeBranch?.name ?? "Selected branch"} · {diskCapacity(disk.capacityBytes)}</span>
+                      </div>
+                      <span className="review-pill">Pending add</span>
+                    </div>
+                    <div className="discovery-chip-row">
+                      <span className="discovery-chip">{diskStatus(disk).label}</span>
+                      {disk.lastCheck ? <span className="discovery-chip">Reported {new Date(disk.lastCheck).toLocaleString()}</span> : null}
+                    </div>
+                    <p className="discovery-footnote">Telemetry was reported for a storage device previously removed from inventory. Add it here to return it to the active storage inventory.</p>
+                  </div>
+                  <div className="discovery-card-actions">
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={() => void addDiscoveredStorage(disk)}
+                      disabled={addingDiscoveredStorageId !== null}
+                    >
+                      <Plus size={14} /> {addingDiscoveredStorageId === disk.id ? "Adding…" : "Add to Inventory"}
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <details className="device-card">

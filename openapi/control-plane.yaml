@@ -107,6 +107,55 @@ paths:
       operationId: updateDeviceInventoryRecord
       responses:
         '200': { description: Device inventory record updated }
+  /v1/operations/health/disks:
+    get:
+      operationId: listOperationalStorageDevices
+      parameters:
+        - in: query
+          name: branchId
+          required: false
+          schema: { type: string }
+      responses:
+        '200': { description: Active branch storage telemetry }
+    delete:
+      operationId: retireOperationalStorageDevice
+      parameters:
+        - in: query
+          name: diskId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: branchId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Storage device removed from the active branch inventory }
+        '404': { description: Storage device or branch not found }
+  /v1/operations/health/disks/discovery:
+    get:
+      operationId: listRetiredStorageDiscoveries
+      parameters:
+        - in: query
+          name: branchId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Retired storage devices with current telemetry awaiting review }
+  /v1/operations/health/disks/discovery/add:
+    post:
+      operationId: addDiscoveredStorageToInventory
+      parameters:
+        - in: query
+          name: diskId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: branchId
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Storage device restored to active inventory }
+        '404': { description: Storage discovery not found }
   /v1/maintenance/assets:
     get:
       operationId: listMaintenanceAssets

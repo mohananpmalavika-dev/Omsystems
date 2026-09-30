@@ -26,6 +26,7 @@ import {
   Zap
 } from 'lucide-react';
 import { communicationAPI } from '@/services/communication-api';
+import { cameraInventoryApi } from '@/lib/api-client';
 import type {
   CommunicationDevice,
   CommunicationEnrollmentCode,
@@ -74,16 +75,58 @@ export default function DeviceManagementPage() {
       setLoading(true);
       setError(null);
 
-      const [devicesRes, codesRes, branchesRes, employeesRes] = await Promise.all([
+      const [devicesRes, codesRes, commBranchesRes, vmsBranchesRes, employeesRes] = await Promise.all([
         typeof communicationAPI?.listDevices === 'function' ? communicationAPI.listDevices() : Promise.resolve({ data: [] }),
         typeof communicationAPI?.listEnrollmentCodes === 'function' ? communicationAPI.listEnrollmentCodes() : Promise.resolve({ data: [] }),
-        typeof communicationAPI?.getBranchDirectory === 'function' ? communicationAPI.getBranchDirectory() : Promise.resolve([]),
-        typeof communicationAPI?.getEmployeeDirectory === 'function' ? communicationAPI.getEmployeeDirectory() : Promise.resolve({ data: [] }),
+        typeof communicationAPI?.getBranchDirectory === 'function' ? communicationAPI.getBranchDirectory().catch(() => []) : Promise.resolve([]),
+        cameraInventoryApi.listBranches().catch(() => ({ data: [] })),
+        typeof communicationAPI?.getEmployeeDirectory === 'function' ? communicationAPI.getEmployeeDirectory().catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
       ]);
+
+      const branchMap = new Map<string, { branchId: string; branchName: string; branchCode?: string }>();
+
+      // Ingest VMS accessible branches (authoritative list of user's eligible branches from RBAC)
+      const vmsList = Array.isArray(vmsBranchesRes?.data)
+        ? vmsBranchesRes.data
+        : Array.isArray(vmsBranchesRes)
+        ? vmsBranchesRes
+        : [];
+      for (const b of vmsList) {
+        const id = b.id || b.branchId;
+        if (id) {
+          branchMap.set(id, {
+            branchId: id,
+            branchName: b.name || b.branchName || id,
+            branchCode: b.code || b.branchCode || undefined,
+          });
+        }
+      }
+
+      // Merge with comm directory branches
+      const commList = Array.isArray(commBranchesRes)
+        ? commBranchesRes
+        : Array.isArray((commBranchesRes as any)?.data)
+        ? (commBranchesRes as any).data
+        : [];
+      for (const b of commList) {
+        const id = b.branchId || b.id;
+        if (id) {
+          const existing = branchMap.get(id);
+          branchMap.set(id, {
+            branchId: id,
+            branchName: b.branchName || b.name || existing?.branchName || id,
+            branchCode: b.branchCode || b.code || existing?.branchCode || undefined,
+          });
+        }
+      }
+
+      const allEligibleBranches = Array.from(branchMap.values()).sort((a, b) =>
+        a.branchName.localeCompare(b.branchName)
+      );
 
       setDevices(Array.isArray(devicesRes) ? devicesRes : devicesRes?.data || []);
       setEnrollmentCodes(Array.isArray(codesRes) ? codesRes : codesRes?.data || []);
-      setBranches(branchesRes);
+      setBranches(allEligibleBranches);
       setEmployees(Array.isArray(employeesRes) ? employeesRes : employeesRes?.data || []);
     } catch (err: any) {
       setError(err?.message || 'Failed to load data');
@@ -401,7 +444,7 @@ export default function DeviceManagementPage() {
                     </div>
                   ) : (
                     enrollmentCodes.map((code) => {
-                      const branch = branches.find(b => b.branchId === code.branchId);
+                      const branch = branches.find(b => b.branchId === code.branchId || (b as any).id === code.branchId);
                       const isExpired = new Date(code.expiresAt) < new Date();
                       
                       return (
@@ -426,7 +469,7 @@ export default function DeviceManagementPage() {
                               <div className="flex items-center gap-4 text-sm text-gray-600">
                                 <div className="flex items-center gap-1">
                                   <Building2 className="w-4 h-4" />
-                                  <span>{branch?.branchName || code.branchId}</span>
+                                  <span>{branch?.branchName || (branch as any)?.name || code.branchId}</span>
                                 </div>
                                 <div className="flex items-center gap-1">
                                   <Clock className="w-4 h-4" />
@@ -477,7 +520,7 @@ export default function DeviceManagementPage() {
                     </div>
                   ) : (
                     devices.map((device) => {
-                      const branch = branches.find(b => b.branchId === device.branchId);
+                      const branch = branches.find(b => b.branchId === device.branchId || (b as any).id === device.branchId);
                       const isOnline = device.lastSeenAt && new Date(device.lastSeenAt) > new Date(Date.now() - 120000);
                       const linkedEmployees = employees.filter(e => 
                         device.linkedEmployeeIds?.includes(e.employeeId)
@@ -513,7 +556,7 @@ export default function DeviceManagementPage() {
                                 <div className="space-y-1 text-sm text-gray-600">
                                   <div className="flex items-center gap-2">
                                     <Building2 className="w-4 h-4" />
-                                    <span>{branch?.branchName || device.branchId}</span>
+                                    <span>{branch?.branchName || (branch as any)?.name || device.branchId}</span>
                                   </div>
                                   {device.lastSeenAt && (
                                     <div className="flex items-center gap-2">

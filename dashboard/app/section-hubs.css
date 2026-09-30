@@ -1,29 +1,11 @@
-/* Section landing pages and the direct links in sidebar group headings. */
-.app-shell .sidebar .main-nav .nav-group summary .nav-group-home {
-  display: inline;
-  flex: 1;
-  min-width: 0;
-  width: auto;
-  height: auto;
-  min-height: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  color: inherit;
-  font: inherit;
-  line-height: inherit;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.app-shell .sidebar .main-nav .nav-group summary .nav-group-home:hover { color: var(--ink); background: transparent; transform: none; }
-.app-shell .sidebar .main-nav .nav-group summary .nav-group-home:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
-.app-shell .sidebar .main-nav .nav-group.hub-active summary { background: color-mix(in srgb, var(--ui-accent) 13%, transparent); color: var(--blue) !important; }
-.app-shell .sidebar .main-nav .nav-group.hub-active summary .nav-group-label > svg { color: var(--blue); }
-.app-shell .sidebar .main-nav .nav-admin-link { font-weight: 680; }
+/* Every sidebar section opens a dedicated landing page. */
+.app-shell .sidebar .nav-utility { grid-template-columns: minmax(0, 1fr); }
+.app-shell .sidebar .main-nav .nav-section-link { display: flex; align-items: center; gap: 11px; min-height: 44px; margin: 4px 0; padding: 0 12px; font-weight: 620; }
+.app-shell .sidebar .main-nav .nav-section-link > svg:first-child { flex: 0 0 auto; color: #8ca4c5; }
+.app-shell .sidebar .main-nav .nav-section-link > span { flex: 1; min-width: 0; }
+.app-shell .sidebar .main-nav .nav-section-link .nav-section-arrow { flex: 0 0 auto; opacity: .55; }
+.app-shell .sidebar .main-nav .nav-section-link:hover .nav-section-arrow,.app-shell .sidebar .main-nav .nav-section-link.active .nav-section-arrow { opacity: 1; }
+.app-shell .sidebar .main-nav .nav-section-link.active > svg:first-child { color: var(--blue); }
 
 .section-hub { --hub-accent: #90e7d4; width: min(1440px, calc(100% - 48px)); margin: 22px auto 64px; color: var(--ink); }
 .section-hub-topline { display: flex; justify-content: space-between; gap: 12px; padding: 0 2px 13px; color: var(--muted); font: 10px ui-monospace, monospace; letter-spacing: .13em; }

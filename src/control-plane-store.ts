@@ -663,6 +663,9 @@ export interface ControlPlaneStore {
     tenantId: string,
     branchIds?: string[],
   ): Promise<OperationalTelemetryEnvelope[]>;
+  listRetiredOperationalDisks(tenantId: string, branchIds?: string[]): Promise<OperationalTelemetryEnvelope[]>;
+  retireOperationalDisk(tenantId: string, branchId: string, deviceId: string, retiredBy: string): Promise<void>;
+  restoreOperationalDisk(tenantId: string, branchId: string, deviceId: string, restoredBy: string): Promise<void>;
   listOperationalTelemetryHistory(
     tenantId: string,
     branchId: string,

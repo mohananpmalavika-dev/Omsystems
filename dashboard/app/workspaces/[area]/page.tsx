@@ -33,13 +33,16 @@ export default function SectionWorkspacePage() {
     ? getVisibleNavigation(user).find((entry) => entry.label === hub.group)
     : undefined, [hub, user]);
   const available = useMemo(() => new Map(group?.items.map((item) => [item.href, item]) ?? []), [group]);
-  const journeys = hub?.journeys.map((journey) => ({
+  const mappedJourneys = hub?.journeys.map((journey) => ({
     ...journey,
     items: journey.routes.flatMap((href) => {
       const item = available.get(href);
       return item ? [item] : [];
     }),
   })).filter((journey) => journey.items.length > 0) ?? [];
+  const journeys = mappedJourneys.length > 0 ? mappedJourneys : group?.items.length
+    ? [{ title: "Explore your tools", description: "Open one of the workflows available to your role.", routes: [], items: group.items }]
+    : [];
   const firstItem = journeys[0]?.items[0] ?? group?.items[0];
   const GroupIcon = group?.icon;
 
@@ -49,7 +52,7 @@ export default function SectionWorkspacePage() {
 
   if (error || !group) return <main className="section-hub-state"><LockKeyhole size={26} /><h1>{error ? "Workspace could not load" : "No tools available in this area"}</h1><p>{error ?? "Your role does not currently include this workspace."}</p><div>{error && <button type="button" onClick={loadUser}>Try again <RotateCw size={15} /></button>}<Link href="/modules">Workspace directory <ArrowRight size={15} /></Link></div></main>;
 
-  return <main className="section-hub" style={{ "--hub-index": String(sectionHubs.findIndex((entry) => entry.slug === area) + 1).padStart(2, "0") } as React.CSSProperties}>
+  return <main className="section-hub">
     <div className="section-hub-topline"><span><i /> KRYPTON / WORKSPACES</span><span>{String(group.items.length).padStart(2, "0")} AVAILABLE TOOLS</span></div>
     <section className="section-hub-hero" aria-labelledby="section-hub-title">
       <div className="section-hub-intro">

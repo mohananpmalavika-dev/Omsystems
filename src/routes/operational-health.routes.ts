@@ -139,6 +139,29 @@ const policySchema = z.object({
   message: "edgeAgentCriticalPercent must be at least edgeAgentWarningPercent",
 });
 
+async function requireStorageBranchAccess(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  store: ControlPlaneStore,
+  branchId: string,
+) {
+  const branch = await store.getNode(branchId);
+  if (!branch || branch.type !== "branch" || branch.tenantId !== request.currentUser.tenantId) {
+    await reply.code(404).send({ error: "branch_not_found" });
+    return undefined;
+  }
+  const decision = await store.checkAccess(request.currentUser, "device:configure", branchId);
+  if (!decision) {
+    await reply.code(404).send({ error: "resource_not_found" });
+    return undefined;
+  }
+  if (!decision.allowed) {
+    await reply.code(403).send({ error: "forbidden", reason: decision.reason });
+    return undefined;
+  }
+  return branch;
+}
+
 export async function registerOperationalHealthRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore,
@@ -584,6 +607,49 @@ export async function registerOperationalHealthRoutes(
       });
     if (query.status) disks = disks.filter((disk) => disk.smartStatus === query.status);
     return { success: true, data: disks };
+  });
+
+  app.get("/v1/operations/health/disks/discovery", async (request, reply) => {
+    const { branchId } = z.object({ branchId: z.string().min(1) }).parse(request.query);
+    const branch = await requireStorageBranchAccess(request, reply, store, branchId);
+    if (!branch) return;
+    const retired = await store.listRetiredOperationalDisks(request.currentUser.tenantId, [branchId]);
+    const data = retired.map((item) => ({
+      ...projectDiskHealth(item, branch),
+      discoveryStatus: "pending",
+    }));
+    return { success: true, data };
+  });
+
+  app.post("/v1/operations/health/disks/discovery/add", async (request, reply) => {
+    const { diskId, branchId } = z.object({
+      diskId: z.string().min(1).max(200),
+      branchId: z.string().min(1),
+    }).parse(request.query);
+    const branch = await requireStorageBranchAccess(request, reply, store, branchId);
+    if (!branch) return;
+    const retired = await store.listRetiredOperationalDisks(request.currentUser.tenantId, [branchId]);
+    if (!retired.some((item) => item.deviceId === diskId)) {
+      return reply.code(404).send({ error: "storage_discovery_not_found" });
+    }
+    await store.restoreOperationalDisk(request.currentUser.tenantId, branchId, diskId, request.currentUser.id);
+    return { success: true, data: { branchId, diskId, added: true } };
+  });
+
+  app.delete("/v1/operations/health/disks", async (request, reply) => {
+    const { diskId, branchId } = z.object({
+      diskId: z.string().min(1).max(200),
+      branchId: z.string().min(1),
+    }).parse(request.query);
+    const branch = await requireStorageBranchAccess(request, reply, store, branchId);
+    if (!branch) return;
+
+    const telemetry = await store.listLatestOperationalTelemetry(request.currentUser.tenantId, [branchId]);
+    const disk = telemetry.find((item) => item.deviceType === "disk" && item.deviceId === diskId);
+    if (!disk) return reply.code(404).send({ error: "storage_device_not_found" });
+
+    await store.retireOperationalDisk(request.currentUser.tenantId, branchId, diskId, request.currentUser.id);
+    return { success: true, data: { branchId, diskId, retired: true } };
   });
 
   app.get("/v1/operations/health/network", async (request) => {

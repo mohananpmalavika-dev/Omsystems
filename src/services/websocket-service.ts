@@ -6,6 +6,7 @@
 import { Server as SocketIOServer } from 'socket.io';
 import jsonwebtoken from 'jsonwebtoken';
 const { verify } = jsonwebtoken;
+import { createHash } from 'crypto';
 import type { Server as HTTPServer } from 'http';
 import type { ControlPlaneStore } from '../control-plane-store.js';
 import { CommunicationSignalingGateway } from '../communications/gateways/signaling.gateway.js';
@@ -93,58 +94,102 @@ export class WebSocketService {
     });
 
     this.io.use(async (socket, next) => {
-      const token = typeof socket.handshake.auth?.token === 'string' ? socket.handshake.auth.token : '';
-      try {
-        if (!token) return next(new Error('unauthorized'));
-        const secret = process.env.COMM_DEVICE_TOKEN_SECRET || process.env.JWT_SECRET;
-        if (!secret || secret.length < 32) return next(new Error('authentication_unavailable'));
+      let token = typeof socket.handshake.auth?.token === 'string' ? socket.handshake.auth.token : '';
+      if (!token && typeof socket.handshake.headers?.cookie === 'string') {
+        const parsedCookies = Object.fromEntries(
+          socket.handshake.headers.cookie.split(';').map((c) => {
+            const [k, ...v] = c.trim().split('=');
+            try {
+              return [k, decodeURIComponent(v.join('='))];
+            } catch {
+              return [k, ''];
+            }
+          })
+        );
+        token = parsedCookies['sentinel_access'] || parsedCookies['sentinel_session'] || parsedCookies['accessToken'] || '';
+      }
 
-        const deviceClaims = verify(token, secret, {
-          algorithms: ['HS256'], issuer: 'sentinel-communications', audience: 'communication-device',
-        }) as { typ?: string; deviceId?: string; deviceUuid?: string };
-        if (deviceClaims.typ === 'device-access' && deviceClaims.deviceId) {
-          const pool = (this.store as any).db;
-          if (!pool?.query) return next(new Error('authentication_unavailable'));
-          const result = await pool.query(
-            `SELECT id, tenant_id, branch_id FROM communication_devices
-             WHERE id = $1 AND device_uuid = $2 AND status = 'ACTIVE' AND revoked_at IS NULL LIMIT 1`,
-            [deviceClaims.deviceId, deviceClaims.deviceUuid]
-          );
-          const device = result.rows[0];
-          if (!device) return next(new Error('unauthorized'));
-          socket.data.deviceId = device.id;
-          socket.data.tenantId = device.tenant_id;
-          socket.data.branchId = device.branch_id;
-          const employeeLinks = await pool.query(
-            `SELECT employee_id FROM communication_device_employees
-             WHERE device_id = $1 AND tenant_id = $2 AND unlinked_at IS NULL AND can_receive_calls = true`,
-            [device.id, device.tenant_id]
-          );
-          socket.data.employeeIds = employeeLinks.rows.map((row: { employee_id: string }) => row.employee_id);
-          socket.data.identityType = 'device';
-          return next();
+      if (!token) return next(new Error('unauthorized'));
+
+      // 1. Try Device Token (JWT signed with COMM_DEVICE_TOKEN_SECRET or JWT_SECRET)
+      try {
+        const secret = process.env.COMM_DEVICE_TOKEN_SECRET || process.env.JWT_SECRET;
+        if (secret && secret.length >= 32) {
+          const deviceClaims = verify(token, secret, {
+            algorithms: ['HS256'], issuer: 'sentinel-communications', audience: 'communication-device',
+          }) as { typ?: string; deviceId?: string; deviceUuid?: string };
+          if (deviceClaims.typ === 'device-access' && deviceClaims.deviceId) {
+            const pool = (this.store as any).db || (this.store as any).pool;
+            if (!pool?.query) return next(new Error('authentication_unavailable'));
+            const result = await pool.query(
+              `SELECT id, tenant_id, branch_id FROM communication_devices
+               WHERE id = $1 AND device_uuid = $2 AND status = 'ACTIVE' AND revoked_at IS NULL LIMIT 1`,
+              [deviceClaims.deviceId, deviceClaims.deviceUuid]
+            );
+            const device = result.rows[0];
+            if (!device) return next(new Error('unauthorized'));
+            socket.data.deviceId = device.id;
+            socket.data.tenantId = device.tenant_id;
+            socket.data.branchId = device.branch_id;
+            const employeeLinks = await pool.query(
+              `SELECT employee_id FROM communication_device_employees
+               WHERE device_id = $1 AND tenant_id = $2 AND unlinked_at IS NULL AND can_receive_calls = true`,
+              [device.id, device.tenant_id]
+            );
+            socket.data.employeeIds = employeeLinks.rows.map((row: { employee_id: string }) => row.employee_id);
+            socket.data.identityType = 'device';
+            return next();
+          }
         }
       } catch {
         // Continue by validating a user session token below.
       }
 
+      // 2. Try Operator Session Token (Opaque 64-char token stored in user_sessions)
+      try {
+        if (typeof (this.store as any).findSessionByAccessToken === 'function') {
+          const tokenHash = createHash('sha256').update(token).digest('base64');
+          const session = await (this.store as any).findSessionByAccessToken(tokenHash);
+          if (session) {
+            const expiresAt = new Date(session.accessExpiresAt ?? session.expiresAt).getTime();
+            if (Number.isFinite(expiresAt) && expiresAt > Date.now()) {
+              const user = (typeof (this.store as any).getUserById === 'function' ? await (this.store as any).getUserById(session.userId) : null) || await this.store.getUser(session.userId);
+              if (user && (user.status === 'active' || user.active === true) && user.tenantId === session.tenantId) {
+                socket.data.userId = user.id;
+                socket.data.tenantId = user.tenantId;
+                socket.data.identityType = 'operator';
+                return next();
+              }
+            }
+          }
+        }
+      } catch (err) {
+        this.logger.warn({ err }, 'Error validating operator session token for WebSocket');
+      }
+
+      // 3. Try User JWT (if authenticated with a JWT token signed with JWT_SECRET)
       try {
         const secret = process.env.JWT_SECRET;
-        if (!secret || secret.length < 32) return next(new Error('authentication_unavailable'));
-        const claims = verify(token, secret, { algorithms: ['HS256'] }) as { sub?: string; tid?: string };
-        if (!claims.sub || !claims.tid) return next(new Error('unauthorized'));
-        const user = await this.store.getUser(claims.sub);
-        if (!user || user.status !== 'active' || user.tenantId !== claims.tid) return next(new Error('unauthorized'));
-        socket.data.userId = user.id;
-        socket.data.tenantId = user.tenantId;
-        socket.data.identityType = 'operator';
-        return next();
+        if (secret && secret.length >= 32) {
+          const claims = verify(token, secret, { algorithms: ['HS256'] }) as { sub?: string; tid?: string };
+          if (claims.sub && claims.tid) {
+            const user = (typeof (this.store as any).getUserById === 'function' ? await (this.store as any).getUserById(claims.sub) : null) || await this.store.getUser(claims.sub);
+            if (user && (user.status === 'active' || user.active === true) && user.tenantId === claims.tid) {
+              socket.data.userId = user.id;
+              socket.data.tenantId = user.tenantId;
+              socket.data.identityType = 'operator';
+              return next();
+            }
+          }
+        }
       } catch {
-        return next(new Error('unauthorized'));
+        // Fall through to unauthorized
       }
+
+      return next(new Error('unauthorized'));
     });
 
-    const communicationsPool = (this.store as any).db;
+    const communicationsPool = (this.store as any).db || (this.store as any).pool;
     if (communicationsPool?.query) {
       (this.io as any).communicationSignalingGateway = new CommunicationSignalingGateway(this.io, communicationsPool);
     } else {

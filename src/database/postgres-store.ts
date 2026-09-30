@@ -369,6 +369,15 @@ export class PostgresStore
   async listLatestOperationalTelemetry(tenantId: string, branchIds?: string[]) {
     return this.operationalHealth.listLatest(tenantId, branchIds);
   }
+  async listRetiredOperationalDisks(tenantId: string, branchIds?: string[]) {
+    return this.operationalHealth.listRetiredDisks(tenantId, branchIds);
+  }
+  async retireOperationalDisk(tenantId: string, branchId: string, deviceId: string, retiredBy: string) {
+    return this.operationalHealth.retireDisk(tenantId, branchId, deviceId, retiredBy);
+  }
+  async restoreOperationalDisk(tenantId: string, branchId: string, deviceId: string, restoredBy: string) {
+    return this.operationalHealth.restoreDisk(tenantId, branchId, deviceId, restoredBy);
+  }
   async listOperationalTelemetryHistory(tenantId: string, branchId: string, from: string, to: string, limit?: number) {
     return this.operationalHealth.listHistory(tenantId, branchId, from, to, limit);
   }

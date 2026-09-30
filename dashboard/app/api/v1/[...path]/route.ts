@@ -23,14 +23,13 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
   ]).has(pathString) || pathString.startsWith("communications/devices/enroll");
   const isDeviceCommunicationPath = pathString === "communications/calls/soc" || pathString.startsWith("communications/device-calls/");
 
-  // Routes that work with or without authentication (e.g. KryptonAI pre-login chat & suggestions, communications)
+  // Routes that work with or without authentication (e.g. KryptonAI pre-login chat & suggestions, public communications directory)
   const isOptionalAuthPath = new Set([
     "guardian/chat",
     "guardian/voice",
     "guardian/suggestions",
-    "communications/directory/branches",
     "communications/directory/public",
-  ]).has(pathString) || pathString.startsWith("communications/");
+  ]).has(pathString);
 
   // 1. Direct handling for telemetry analytics ingestion
   if (pathString === "analytics") {
@@ -157,9 +156,7 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
         body: willSendBody ? requestBody : undefined,
         cache: "no-store",
       });
-      if (secondTry.ok || secondTry.status !== 404) {
-        upstreamRes = secondTry;
-      }
+      upstreamRes = secondTry;
     }
 
     // ─── Option 3: Auto-refresh & retry on 401 (expired/invalid access token) ───
@@ -202,9 +199,7 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
               body: willSendBody ? requestBody : undefined,
               cache: "no-store",
             });
-            if (retrySecondTry.ok || retrySecondTry.status !== 404) {
-              retryRes = retrySecondTry;
-            }
+            retryRes = retrySecondTry;
           }
           upstreamRes = retryRes;
           // Mark so we can rotate the sentinel cookies below

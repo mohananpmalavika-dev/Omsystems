@@ -459,7 +459,7 @@ export class CommunicationPresenceService {
    */
   async getAvailableOperators(tenantId: string): Promise<string[]> {
     const result = await this.pool.query<{ id: string }>(
-      `SELECT id FROM users WHERE tenant_id = $1 AND is_active = true`,
+      `SELECT id FROM users WHERE tenant_id = $1 AND (status = 'active' OR active = true)`,
       [tenantId]
     );
 
@@ -559,13 +559,8 @@ export class CommunicationPresenceService {
     // Get total operators with permissions
     const totalOpsResult = await this.pool.query<{ count: string }>(
       `SELECT COUNT(DISTINCT u.id) as count
-      FROM users u
-      INNER JOIN tenant_memberships tm ON u.id = tm.user_id
-      INNER JOIN role_permissions rp ON tm.role_id = rp.role_id
-      WHERE tm.tenant_id = $1
-        AND tm.status = 'active'
-        AND u.status = 'active'
-        AND rp.action IN ('communication.receive.call', 'communication.branch.call')`,
+       FROM users u
+       WHERE u.tenant_id = $1 AND (u.status = 'active' OR u.active = true)`,
       [tenantId]
     );
 

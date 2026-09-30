@@ -6,6 +6,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Activity,
   AlertTriangle,
+  ArrowUpRight,
   BarChart3,
   Bell,
   BellRing,
@@ -17,7 +18,6 @@ import {
   CarFront,
   ChevronDown,
   ChevronRight,
-  ChevronsUpDown,
   CircleUserRound,
   ClipboardCheck,
   Command,
@@ -100,7 +100,6 @@ import { CommandWorkspaceNav } from "@/components/command-workspace-nav";
 interface AppLayoutProps {
   children: React.ReactNode;
   incidentCount?: number;
-  cameraCount?: number;
 }
 
 export type NavItem = {
@@ -519,7 +518,6 @@ import { ThemeSwitcher } from "@/components/ui/theme-switcher";
 import { OrgBrandingProvider, useOrgBranding } from "@/components/ui/org-branding-provider";
 
 const AppLayoutContext = createContext(false);
-const OPEN_GROUPS_STORAGE_KEY = "sentinel-grid-open-navigation-groups";
 const RECENT_MODULES_STORAGE_KEY = "sentinel-grid-recent-modules";
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "sentinel-grid-sidebar-collapsed";
 
@@ -556,20 +554,20 @@ function routeSpecificity(href: string) {
   return routePath(href).length + (query ? 10_000 + query.length : 0);
 }
 
-export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppLayoutProps) {
+export function AppLayout({ children, incidentCount = 0 }: AppLayoutProps) {
   const alreadyInsideAppLayout = useContext(AppLayoutContext);
   if (alreadyInsideAppLayout) return <>{children}</>;
 
   return (
     <AppLayoutContext.Provider value>
       <Suspense fallback={children}>
-        <AppLayoutFrame incidentCount={incidentCount} cameraCount={cameraCount}>{children}</AppLayoutFrame>
+        <AppLayoutFrame incidentCount={incidentCount}>{children}</AppLayoutFrame>
       </Suspense>
     </AppLayoutContext.Provider>
   );
 }
 
-function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLayoutProps) {
+function AppLayoutFrame({ children, incidentCount = 0 }: AppLayoutProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { branding } = useOrgBranding();
@@ -594,7 +592,6 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   }, []);
   const [commandQuery, setCommandQuery] = useState("");
   const [activeCommandIndex, setActiveCommandIndex] = useState(0);
-  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
   const [recentHrefs, setRecentHrefs] = useState<string[]>([]);
   const [operator, setOperator] = useState<(MenuAccessUser & {
     displayName?: string;
@@ -621,16 +618,6 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
       .catch(() => {})
       .finally(() => setOperatorResolved(true));
 
-    // Restore previously open navigation groups from localStorage
-    try {
-      const savedGroups = window.localStorage.getItem(OPEN_GROUPS_STORAGE_KEY);
-      if (savedGroups) {
-        const parsed = JSON.parse(savedGroups);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setOpenGroups(new Set(parsed));
-        }
-      }
-    } catch {}
   }, []);
 
   const handleNavScroll = () => {
@@ -694,7 +681,6 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   const activeGroup = visibleNavigation.find((group) =>
     sectionHubHref(group.label) === pathname || group.items.some((item) => isActive(item.href)));
   const moduleCount = visibleNavigation.reduce((total, group) => total + group.items.length, 0);
-  const allGroupsOpen = visibleNavigation.every((group) => openGroups.has(group.label));
 
   const searchableModules = useMemo(() => visibleNavigation.flatMap((group) =>
     group.items.map((item) => ({ ...item, section: group.label }))), [visibleNavigation]);
@@ -745,20 +731,6 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     const fallback = visibleNavigation.flatMap((group) => group.items)[0]?.href;
     if (fallback) router.replace(fallback);
   }, [operator, operatorResolved, pathname, router, searchParams, visibleHrefs, visibleNavigation]);
-
-  useEffect(() => {
-    if (activeGroup?.label) {
-      setOpenGroups((prev) => {
-        if (prev.has(activeGroup.label)) return prev;
-        const next = new Set(prev);
-        next.add(activeGroup.label);
-        try {
-          window.localStorage.setItem(OPEN_GROUPS_STORAGE_KEY, JSON.stringify([...next]));
-        } catch {}
-        return next;
-      });
-    }
-  }, [pathname, activeGroup?.label]);
 
   // Restore sidebar navigation scroll position so the menu stays in position
   useEffect(() => {
@@ -889,7 +861,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
 
     const targetPath = routePath(href);
     const currentPath = routePath(pathname);
-    if (targetPath === currentPath && href === activeRoute) {
+    if (targetPath === currentPath && (href === activeRoute || (href === pathname && !searchParams?.toString()))) {
       return; // Already on this exact page
     }
 
@@ -936,35 +908,6 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     }
   }, [createMenuOpen]);
 
-
-  const persistOpenGroups = (next: Set<string>) => {
-    setOpenGroups(next);
-    try {
-      window.localStorage.setItem(OPEN_GROUPS_STORAGE_KEY, JSON.stringify([...next]));
-    } catch {}
-  };
-
-  const toggleGroup = (groupLabel: string) => {
-    setOpenGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(groupLabel)) {
-        next.delete(groupLabel);
-      } else {
-        next.add(groupLabel);
-      }
-      persistOpenGroups(next);
-      return next;
-    });
-  };
-
-  const toggleAllGroups = () => {
-    setOpenGroups((prev) => {
-      const allLabels = visibleNavigation.map((group) => group.label);
-      const next = allLabels.every((label) => prev.has(label)) ? new Set<string>() : new Set<string>(allLabels);
-      persistOpenGroups(next);
-      return next;
-    });
-  };
 
   const openCommandResult = (href: string) => {
     setCommandOpen(false);
@@ -1049,14 +992,6 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
             <span>Workspace directory</span>
             <small>{moduleCount}</small>
           </Link>
-          <button
-            type="button"
-            onClick={toggleAllGroups}
-            aria-label={allGroupsOpen ? "Collapse navigation sections" : "Expand navigation sections"}
-            title={allGroupsOpen ? "Collapse sections" : "Expand sections"}
-          >
-            <ChevronsUpDown size={15} />
-          </button>
         </div>
 
         <nav ref={mainNavRef} onScroll={handleNavScroll} className="main-nav" aria-label="Main navigation">
@@ -1064,61 +999,15 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
             if (!group) return null;
             const items = Array.isArray(group.items) ? group.items : [];
             const GroupIcon = group.icon;
-            if (group.label === "ADMINISTRATION") {
-              const adminItem = items[0];
-              return adminItem ? <Link
-                key={group.label}
-                href={adminItem.href}
-                prefetch={false}
-                className={`nav-admin-link ${isActive(adminItem.href) ? "active" : ""}`}
-                onClick={handleNavClick(adminItem.href)}
-                aria-current={isActive(adminItem.href) ? "page" : undefined}
-              ><GroupIcon size={17} /><span>{sectionLabel(group.label)}</span></Link> : null;
-            }
-            const hubHref = sectionHubHref(group.label);
-            return (
-            <details
-              className={`nav-group ${pathname === hubHref ? "hub-active" : ""}`}
+            const href = group.label === "ADMINISTRATION" ? items[0]?.href : sectionHubHref(group.label);
+            return href ? <Link
               key={group.label}
-              open={openGroups.has(group.label)}
-              suppressHydrationWarning
-            >
-              <summary
-                onClick={(e) => {
-                  e.preventDefault();
-                  toggleGroup(group.label);
-                }}
-              >
-                <span className="nav-group-label">{GroupIcon ? <GroupIcon size={14} /> : null}{hubHref ? <Link href={hubHref} className="nav-group-home" prefetch={false} onClick={(event) => { event.stopPropagation(); handleNavClick(hubHref)(event); }} aria-current={pathname === hubHref ? "page" : undefined}>{sectionLabel(group.label)}</Link> : <span>{sectionLabel(group.label)}</span>}</span>
-                <span className="nav-group-meta"><small>{items.length}</small><ChevronRight size={13} /></span>
-              </summary>
-              <div className="nav-items">
-              {items.map((item) => {
-                if (!item) return null;
-                const Icon = item.icon;
-                const count = item.badge === "cameras" ? cameraCount : incidentCount;
-                return (
-                  <Link
-                    key={`${group.label}-${item.label}`}
-                    href={item.href}
-                    prefetch={false}
-                    className={isActive(item.href) ? "active" : ""}
-                    onClick={handleNavClick(item.href)}
-                    aria-current={isActive(item.href) ? "page" : undefined}
-                  >
-                    <Icon size={17} />
-                    <span>{item.label}</span>
-                    {item.badge && count > 0 && (
-                      <em className={item.badge === "incidents" ? "alert-count" : "nav-count"}>
-                        {count}
-                      </em>
-                    )}
-                  </Link>
-                );
-              })}
-              </div>
-            </details>
-            );
+              href={href}
+              prefetch={false}
+              className={`nav-section-link ${activeGroup?.label === group.label ? "active" : ""}`}
+              onClick={handleNavClick(href)}
+              aria-current={pathname === href ? "page" : undefined}
+            ><GroupIcon size={17} /><span>{sectionLabel(group.label)}</span><ArrowUpRight size={14} className="nav-section-arrow" /></Link> : null;
           })}
         </nav>
 
@@ -1162,7 +1051,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
                 {branding.logoUrl ? <img src={branding.logoUrl} alt="" className="h-5 w-5 rounded object-contain" /> : null}
                 <span>{branding.orgName || "KryptonVision"}</span>
               </Link><ChevronRight size={12} />
-              {activeGroup ? <Link href={activeGroup.items[0].href}>{currentPage.section}</Link> : <span>{currentPage.section}</span>}
+              {activeGroup ? <Link href={sectionHubHref(activeGroup.label) ?? activeGroup.items[0].href}>{sectionLabel(activeGroup.label)}</Link> : <span>{currentPage.section}</span>}
             </div>
             <p className="topbar-title">{currentPage.title}</p>
           </div>

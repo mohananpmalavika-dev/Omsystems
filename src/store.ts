@@ -633,6 +633,7 @@ export class MemoryStore {
   readonly operationalTelemetry = new Map<string, OperationalTelemetryEnvelope>();
   readonly operationalTelemetryHistory: OperationalTelemetryEnvelope[] = [];
   readonly operationalTelemetryKeys = new Set<string>();
+  readonly retiredStorageInventory = new Map<string, { retiredAt: string; registryLifecycleState?: string }>();
   readonly operationalHealthPolicies = new Map<string, OperationalHealthPolicy>();
   readonly videoWallLayouts: VideoWallLayout[] = [];
   readonly discoveries = new Map<string, DiscoveredCamera>();
@@ -1939,7 +1940,51 @@ export class MemoryStore {
     const allowed = branchIds ? new Set(branchIds) : undefined;
     return [...this.operationalTelemetry.values()]
       .filter((item) => item.tenantId === tenant && (!allowed || allowed.has(item.branchId)))
+      .filter((item) => item.deviceType !== "disk" || !this.retiredStorageInventory.has(`${tenant}:${item.branchId}:${item.deviceId}`))
       .map((item) => structuredClone(item));
+  }
+
+  async listRetiredOperationalDisks(tenant: string, branchIds?: string[]) {
+    const allowed = branchIds ? new Set(branchIds) : undefined;
+    return [...this.operationalTelemetry.values()]
+      .filter((item) => item.tenantId === tenant && item.deviceType === "disk")
+      .filter((item) => !allowed || allowed.has(item.branchId))
+      .filter((item) => {
+        const retired = this.retiredStorageInventory.get(`${tenant}:${item.branchId}:${item.deviceId}`);
+        return retired !== undefined && Date.parse(item.receivedAt) > Date.parse(retired.retiredAt);
+      })
+      .map((item) => structuredClone(item));
+  }
+
+  async retireOperationalDisk(tenant: string, branchId: string, deviceId: string, _retiredBy: string) {
+    const current = this.operationalTelemetry.get(`${tenant}:${branchId}:disk:${deviceId}`);
+    const retiredAt = Math.max(Date.now(), current ? Date.parse(current.receivedAt) : 0);
+    const registry = this.deviceInventory.find((item) => item.tenantId === tenant
+      && item.branch === branchId && item.deviceId === deviceId
+      && item.deviceType === "storage-device" && item.lifecycleState !== "decommissioned");
+    this.retiredStorageInventory.set(`${tenant}:${branchId}:${deviceId}`, {
+      retiredAt: new Date(retiredAt).toISOString(),
+      registryLifecycleState: registry?.lifecycleState,
+    });
+    if (registry) {
+      registry.lifecycleState = "decommissioned";
+      registry.updatedAt = new Date().toISOString();
+    }
+  }
+
+  async restoreOperationalDisk(tenant: string, branchId: string, deviceId: string, _restoredBy: string) {
+    const key = `${tenant}:${branchId}:${deviceId}`;
+    const retired = this.retiredStorageInventory.get(key);
+    this.retiredStorageInventory.delete(key);
+    if (retired?.registryLifecycleState) {
+      const registry = this.deviceInventory.find((item) => item.tenantId === tenant
+        && item.branch === branchId && item.deviceId === deviceId
+        && item.deviceType === "storage-device" && item.lifecycleState === "decommissioned");
+      if (registry) {
+        registry.lifecycleState = retired.registryLifecycleState;
+        registry.updatedAt = new Date().toISOString();
+      }
+    }
   }
 
   async getOperationalHealthPolicy(tenant: string, branchId?: string) {

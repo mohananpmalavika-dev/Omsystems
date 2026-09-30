@@ -234,14 +234,18 @@ async function requirePermission(
   if (!branchId && typeof body.targetId === 'string' && body.targetType === 'BRANCH') branchId = body.targetId;
   if (!branchId && typeof body.targetId === 'string' && body.targetType === 'EMPLOYEE') {
     const employee = await ctx.pool.query<{ branch_id: string }>(
-      'SELECT branch_id FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true LIMIT 1',
+      `SELECT uoa.scope_node_id::text AS branch_id FROM users u
+       LEFT JOIN user_organizational_assignments uoa ON uoa.user_id = u.id
+       WHERE u.id = $1 AND u.tenant_id = $2 AND (u.status = 'active' OR u.active = true) LIMIT 1`,
       [body.targetId, user.tenantId]
     );
     branchId = employee.rows[0]?.branch_id;
   }
   if (!branchId && typeof params.employeeId === 'string') {
     const employee = await ctx.pool.query<{ branch_id: string }>(
-      'SELECT branch_id FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true LIMIT 1',
+      `SELECT uoa.scope_node_id::text AS branch_id FROM users u
+       LEFT JOIN user_organizational_assignments uoa ON uoa.user_id = u.id
+       WHERE u.id = $1 AND u.tenant_id = $2 AND (u.status = 'active' OR u.active = true) LIMIT 1`,
       [params.employeeId, user.tenantId]
     );
     branchId = employee.rows[0]?.branch_id;
@@ -368,9 +372,24 @@ class LazySignalingGateway {
 }
 
 export async function registerCommunicationsRoutes(
-  app: FastifyInstance,
+  rawApp: FastifyInstance,
   store: ControlPlaneStore
 ): Promise<void> {
+  const app: FastifyInstance = new Proxy(rawApp, {
+    get(target, prop, receiver) {
+      if (typeof prop === 'string' && ['get', 'post', 'put', 'patch', 'delete'].includes(prop)) {
+        return (url: string, ...args: any[]) => {
+          (target as any)[prop](url, ...args);
+          if (typeof url === 'string' && url.startsWith('/v1/')) {
+            const apiPath = url.replace(/^\/v1\//, '/api/v1/');
+            (target as any)[prop](apiPath, ...args);
+          }
+        };
+      }
+      return Reflect.get(target, prop, receiver);
+    }
+  });
+
   const pool: any = (store as any)?.pool || (store as any)?.db || (app as any).pg?.pool;
   let redis: any = (store as any)?.redis || (app as any).redis || redisModule?.getClient?.();
   if (!pool || typeof pool.query !== 'function' || typeof pool.connect !== 'function') {
@@ -498,12 +517,12 @@ export async function registerCommunicationsRoutes(
 
     if (body.actorEmployeeId) {
       const actor = await ctx.pool.query(
-        `SELECT u.id, COALESCE(u.full_name, u.display_name, u.username) AS name
+        `SELECT u.id, COALESCE(u.display_name, u.username) AS name
          FROM communication_device_employees link
          JOIN users u ON u.id = link.employee_id
          WHERE link.device_id = $1 AND link.tenant_id = $2
            AND link.employee_id = $3 AND link.unlinked_at IS NULL
-           AND link.can_make_calls = true AND u.tenant_id = $2 AND u.is_active = true
+           AND link.can_make_calls = true AND u.tenant_id = $2 AND (u.status = 'active' OR u.active = true)
          LIMIT 1`,
         [device.deviceId, device.tenantId, body.actorEmployeeId]
       );
@@ -536,7 +555,7 @@ export async function registerCommunicationsRoutes(
       }
     } else if (targetType === 'EMPLOYEE') {
       const employee = await ctx.pool.query(
-        `SELECT 1 FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true LIMIT 1`,
+        `SELECT 1 FROM users WHERE id = $1 AND tenant_id = $2 AND (status = 'active' OR active = true) LIMIT 1`,
         [targetId, device.tenantId]
       );
       if (!employee.rowCount) {
@@ -1046,7 +1065,13 @@ export async function registerCommunicationsRoutes(
       if (!device || device.tenantId !== request.currentUser.tenantId) return reply.code(404).send({ error: 'device_not_found' });
       if (!(await requirePermission(request, reply, ctx, COMMUNICATION_PERMISSIONS.DEVICE_LINK_EMPLOYEE))) return;
       const employee = await ctx.pool.query(
-        `SELECT 1 FROM users WHERE id = $1 AND tenant_id = $2 AND branch_id = $3 AND is_active = true LIMIT 1`,
+        `SELECT 1 FROM users u
+         WHERE u.id = $1 AND u.tenant_id = $2 AND (u.status = 'active' OR u.active = true)
+           AND (
+             EXISTS (SELECT 1 FROM user_organizational_assignments uoa WHERE uoa.user_id = u.id AND uoa.scope_node_id = $3)
+             OR u.role IN ('super_admin', 'company_admin')
+           )
+         LIMIT 1`,
         [body.employeeId, request.currentUser.tenantId, device.branchId]
       );
       if (!employee.rowCount) return reply.code(400).send({ error: 'employee_must_belong_to_device_branch' });
@@ -1208,8 +1233,17 @@ export async function registerCommunicationsRoutes(
 
       // Same pattern as VMS GET /v1/branches — listAccessibleNodes is the
       // authoritative in-memory source; no raw SQL branch queries needed.
-      const accessible = await store.listAccessibleNodes(request.currentUser, 'device:view', 'branch');
-      const branches = accessible.filter((node) => node.tenantId === user.tenantId);
+      const [liveAccessible, configAccessible] = await Promise.all([
+        store.listAccessibleNodes(request.currentUser, 'live:view', 'branch'),
+        store.listAccessibleNodes(request.currentUser, 'device:configure', 'branch'),
+      ]);
+      const branchMap = new Map<string, typeof liveAccessible[0]>();
+      for (const node of [...liveAccessible, ...configAccessible]) {
+        if (node.tenantId === user.tenantId) {
+          branchMap.set(node.id, node);
+        }
+      }
+      const branches = Array.from(branchMap.values());
 
       const branchIds = branches.map((node) => node.id);
 
@@ -1223,14 +1257,14 @@ export async function registerCommunicationsRoutes(
           `SELECT DISTINCT
              d.id::text AS device_id,
              COALESCE(d.assigned_employee_code, u.id::text) AS employee_id,
-             COALESCE(d.assigned_employee_name, u.full_name, u.display_name, u.username) AS employee_name,
+             COALESCE(d.assigned_employee_name, u.display_name, u.username) AS employee_name,
              u.role,
              d.branch_id::text AS branch_id
            FROM communication_devices d
            LEFT JOIN communication_device_employees e ON e.device_id = d.id AND e.unlinked_at IS NULL
-           LEFT JOIN users u ON u.id = e.employee_id AND u.is_active = true
+           LEFT JOIN users u ON u.id = e.employee_id AND (u.status = 'active' OR u.active = true)
            WHERE d.tenant_id = $1
-             AND d.branch_id = ANY($2::uuid[])
+             AND d.branch_id::text = ANY($2::text[])
              AND d.device_type IN ('EMPLOYEE_MOBILE', 'EMPLOYEE_DESKTOP')
              AND d.status IN ('ACTIVE', 'OFFLINE') AND d.revoked_at IS NULL
              AND (d.assigned_employee_name IS NOT NULL OR u.id IS NOT NULL)
@@ -1238,12 +1272,13 @@ export async function registerCommunicationsRoutes(
           [user.tenantId, branchIds]
         ),
         ctx.pool.query(
-          `SELECT id::text, COALESCE(full_name, display_name, username) AS name,
-                  username, role, branch_id::text
-           FROM users
-           WHERE tenant_id = $1
-             AND branch_id = ANY($2::uuid[])
-             AND is_active = true
+          `SELECT u.id::text, COALESCE(u.display_name, u.username) AS name,
+                  u.username, u.role, uoa.scope_node_id::text AS branch_id
+           FROM users u
+           JOIN user_organizational_assignments uoa ON uoa.user_id = u.id
+           WHERE u.tenant_id = $1
+             AND uoa.scope_node_id::text = ANY($2::text[])
+             AND (u.status = 'active' OR u.active = true)
            ORDER BY name`,
           [user.tenantId, branchIds]
         ),
@@ -1311,16 +1346,26 @@ export async function registerCommunicationsRoutes(
       if (!currentUser || currentUser.tenantId !== request.currentUser.tenantId) {
         return reply.code(401).send({ error: 'unauthenticated' });
       }
-      const accessible = await store.listAccessibleNodes(request.currentUser, 'device:view', 'branch');
-      const branches = accessible.filter((node) => node.tenantId === currentUser.tenantId);
+      const [liveAccessible, configAccessible] = await Promise.all([
+        store.listAccessibleNodes(request.currentUser, 'live:view', 'branch'),
+        store.listAccessibleNodes(request.currentUser, 'device:configure', 'branch'),
+      ]);
+      const branchMap = new Map<string, typeof liveAccessible[0]>();
+      for (const node of [...liveAccessible, ...configAccessible]) {
+        if (node.tenantId === currentUser.tenantId) {
+          branchMap.set(node.id, node);
+        }
+      }
+      const branches = Array.from(branchMap.values());
       const branchNames = new Map(branches.map((branch) => [branch.id, branch.name]));
       const users = await ctx.pool.query(
-        `SELECT id::text, COALESCE(full_name, display_name, username) AS name,
-                role, branch_id::text AS branch_id
-         FROM users
-         WHERE tenant_id = $1 AND (branch_id = ANY($2::uuid[]) OR branch_id IS NULL) AND is_active = true
+        `SELECT DISTINCT u.id::text, COALESCE(u.display_name, u.username) AS name,
+                u.role, uoa.scope_node_id::text AS branch_id
+         FROM users u
+         LEFT JOIN user_organizational_assignments uoa ON uoa.user_id = u.id
+         WHERE u.tenant_id = $1 AND (u.status = 'active' OR u.active = true)
          ORDER BY name`,
-        [currentUser.tenantId, [...branchNames.keys()]]
+        [currentUser.tenantId]
       );
       return { data: await Promise.all(users.rows.map(async (user: any) => ({
         employeeId: user.id,
@@ -1348,19 +1393,29 @@ export async function registerCommunicationsRoutes(
       if (!currentUser || currentUser.tenantId !== request.currentUser.tenantId) {
         return reply.code(401).send({ error: 'unauthenticated' });
       }
-      const accessible = await store.listAccessibleNodes(request.currentUser, 'device:view', 'branch');
-      const branchIds = accessible.filter((node) => node.tenantId === currentUser.tenantId).map((node) => node.id);
+      const [liveAccessible, configAccessible] = await Promise.all([
+        store.listAccessibleNodes(request.currentUser, 'live:view', 'branch'),
+        store.listAccessibleNodes(request.currentUser, 'device:configure', 'branch'),
+      ]);
+      const branchMap = new Map<string, typeof liveAccessible[0]>();
+      for (const node of [...liveAccessible, ...configAccessible]) {
+        if (node.tenantId === currentUser.tenantId) {
+          branchMap.set(node.id, node);
+        }
+      }
+      const branchIds = Array.from(branchMap.keys());
       if (!branchIds.length) return { data: { branches: [], employees: [] } };
       const branches = await ctx.pool.query(
         `SELECT id::text, name, code FROM resource_nodes
-         WHERE tenant_id = $1 AND id = ANY($2::uuid[]) AND lower(node_type) = 'branch'
+         WHERE tenant_id = $1 AND id::text = ANY($2::text[]) AND lower(node_type) = 'branch'
          ORDER BY name`, [currentUser.tenantId, branchIds]
       );
       const users = await ctx.pool.query(
-        `SELECT id::text, COALESCE(full_name, display_name, username) AS name,
-                role, branch_id::text AS branch_id FROM users
-         WHERE tenant_id = $1 AND branch_id = ANY($2::uuid[]) AND is_active = true
-         ORDER BY name`, [currentUser.tenantId, branchIds]
+        `SELECT DISTINCT u.id::text, COALESCE(u.display_name, u.username) AS name,
+                u.role, uoa.scope_node_id::text AS branch_id FROM users u
+         LEFT JOIN user_organizational_assignments uoa ON uoa.user_id = u.id
+         WHERE u.tenant_id = $1 AND (u.status = 'active' OR u.active = true)
+         ORDER BY name`, [currentUser.tenantId]
       );
       const matchingBranches = branches.rows.filter((branch: any) =>
         branch.name.toLowerCase().includes(query) || branch.code?.toLowerCase().includes(query)
