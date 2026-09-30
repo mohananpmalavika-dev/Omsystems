@@ -48,7 +48,7 @@ export class OperationalHealthRepository {
              SELECT 1 FROM retired_storage_inventory retired
              WHERE retired.tenant_id = operational_health_latest.tenant_id
                AND retired.branch_id = operational_health_latest.branch_id
-               AND retired.device_id = operational_health_latest.device_id
+               AND lower(retired.device_id) = lower(operational_health_latest.device_id)
            ))
            AND ($2::uuid[] IS NULL OR branch_id = ANY($2::uuid[]))
          ORDER BY tenant_id, branch_id, device_type, device_id`,
@@ -68,7 +68,7 @@ export class OperationalHealthRepository {
              SELECT 1 FROM retired_storage_inventory retired
              WHERE retired.tenant_id = t.tenant_id
                AND retired.branch_id = t.branch_id
-               AND retired.device_id = t.device_id
+               AND lower(retired.device_id) = lower(t.device_id)
            ))
            AND ($2::uuid[] IS NULL OR t.branch_id = ANY($2::uuid[]))
          ORDER BY t.tenant_id, t.branch_id, t.device_type, t.device_id, t.observed_at DESC, t.received_at DESC`,
@@ -88,7 +88,7 @@ export class OperationalHealthRepository {
          INNER JOIN retired_storage_inventory retired
            ON retired.tenant_id = latest.tenant_id
           AND retired.branch_id = latest.branch_id
-          AND retired.device_id = latest.device_id
+          AND lower(retired.device_id) = lower(latest.device_id)
          WHERE latest.tenant_id = $1
            AND latest.device_type = 'disk'
            AND latest.idempotency_key NOT LIKE 'auto-storage:%'
@@ -108,7 +108,7 @@ export class OperationalHealthRepository {
          INNER JOIN retired_storage_inventory retired
            ON retired.tenant_id = t.tenant_id
           AND retired.branch_id = t.branch_id
-          AND retired.device_id = t.device_id
+          AND lower(retired.device_id) = lower(t.device_id)
          WHERE t.tenant_id = $1
            AND t.device_type = 'disk'
            AND t.idempotency_key NOT LIKE 'auto-storage:%'
@@ -127,7 +127,7 @@ export class OperationalHealthRepository {
       await client.query("BEGIN");
       const registry = await client.query<{ id: string; lifecycle_state: string }>(
         `SELECT id::text, lifecycle_state FROM device_inventory
-         WHERE tenant_id = $1 AND branch = $2 AND device_id = $3
+         WHERE tenant_id = $1 AND branch = $2 AND lower(device_id) = lower($3)
            AND device_type = 'storage-device' AND lifecycle_state <> 'decommissioned'
          FOR UPDATE`,
         [tenantId, branchId, deviceId],
@@ -174,7 +174,7 @@ export class OperationalHealthRepository {
       await client.query("BEGIN");
       const retired = await client.query<{ registry_lifecycle_state: string | null }>(
         `DELETE FROM retired_storage_inventory
-         WHERE tenant_id = $1 AND branch_id = $2 AND device_id = $3
+         WHERE tenant_id = $1 AND branch_id = $2 AND lower(device_id) = lower($3)
          RETURNING registry_lifecycle_state`,
         [tenantId, branchId, deviceId],
       );
@@ -182,7 +182,7 @@ export class OperationalHealthRepository {
       if (registryState) {
         await client.query(
           `UPDATE device_inventory SET lifecycle_state = $4, updated_at = now()
-           WHERE tenant_id = $1 AND branch = $2 AND device_id = $3
+           WHERE tenant_id = $1 AND branch = $2 AND lower(device_id) = lower($3)
              AND device_type = 'storage-device' AND lifecycle_state = 'decommissioned'`,
           [tenantId, branchId, deviceId, registryState],
         );

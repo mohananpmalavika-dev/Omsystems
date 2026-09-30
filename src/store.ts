@@ -1940,7 +1940,7 @@ export class MemoryStore {
     const allowed = branchIds ? new Set(branchIds) : undefined;
     return [...this.operationalTelemetry.values()]
       .filter((item) => item.tenantId === tenant && (!allowed || allowed.has(item.branchId)))
-      .filter((item) => item.deviceType !== "disk" || !this.retiredStorageInventory.has(`${tenant}:${item.branchId}:${item.deviceId}`))
+      .filter((item) => item.deviceType !== "disk" || !this.retiredStorageInventory.has(`${tenant}:${item.branchId}:${item.deviceId.toLowerCase()}`))
       .map((item) => structuredClone(item));
   }
 
@@ -1950,7 +1950,7 @@ export class MemoryStore {
       .filter((item) => item.tenantId === tenant && item.deviceType === "disk")
       .filter((item) => !allowed || allowed.has(item.branchId))
       .filter((item) => {
-        const retired = this.retiredStorageInventory.get(`${tenant}:${item.branchId}:${item.deviceId}`);
+        const retired = this.retiredStorageInventory.get(`${tenant}:${item.branchId}:${item.deviceId.toLowerCase()}`);
         return retired !== undefined && Date.parse(item.receivedAt) > Date.parse(retired.retiredAt);
       })
       .map((item) => structuredClone(item));
@@ -1960,9 +1960,9 @@ export class MemoryStore {
     const current = this.operationalTelemetry.get(`${tenant}:${branchId}:disk:${deviceId}`);
     const retiredAt = Math.max(Date.now(), current ? Date.parse(current.receivedAt) : 0);
     const registry = this.deviceInventory.find((item) => item.tenantId === tenant
-      && item.branch === branchId && item.deviceId === deviceId
+      && item.branch === branchId && item.deviceId?.toLowerCase() === deviceId.toLowerCase()
       && item.deviceType === "storage-device" && item.lifecycleState !== "decommissioned");
-    this.retiredStorageInventory.set(`${tenant}:${branchId}:${deviceId}`, {
+    this.retiredStorageInventory.set(`${tenant}:${branchId}:${deviceId.toLowerCase()}`, {
       retiredAt: new Date(retiredAt).toISOString(),
       registryLifecycleState: registry?.lifecycleState,
     });
@@ -1973,12 +1973,12 @@ export class MemoryStore {
   }
 
   async restoreOperationalDisk(tenant: string, branchId: string, deviceId: string, _restoredBy: string) {
-    const key = `${tenant}:${branchId}:${deviceId}`;
+    const key = `${tenant}:${branchId}:${deviceId.toLowerCase()}`;
     const retired = this.retiredStorageInventory.get(key);
     this.retiredStorageInventory.delete(key);
     if (retired?.registryLifecycleState) {
       const registry = this.deviceInventory.find((item) => item.tenantId === tenant
-        && item.branch === branchId && item.deviceId === deviceId
+        && item.branch === branchId && item.deviceId?.toLowerCase() === deviceId.toLowerCase()
         && item.deviceType === "storage-device" && item.lifecycleState === "decommissioned");
       if (registry) {
         registry.lifecycleState = retired.registryLifecycleState;

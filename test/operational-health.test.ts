@@ -256,6 +256,96 @@ describe("Phase 1 operational health", () => {
     )).toBe(true);
   });
 
+  it("removes storage until new telemetry is reviewed in discovery and added back", async () => {
+    const branchId = "branch-blr-001";
+    const tenantId = store.nodes.get(branchId)!.tenantId;
+    const diskId = "nvr-review:disk:1";
+    const registry = await store.createDeviceInventoryRecord({
+      tenantId, tenant: tenantId, region: "South", branch: branchId,
+      deviceId: diskId, deviceType: "storage-device", manufacturer: "Test",
+      model: "Disk", lifecycleState: "operational",
+    });
+    const first = await app.inject({
+      method: "POST", url: `/v1/edge-agents/${agentId}/telemetry`, headers: admin,
+      payload: {
+        branchId, edgeAgentId: agentId, deviceType: "disk", deviceId: diskId,
+        observedAt: new Date(Date.now() - 2_000).toISOString(), source: "system",
+        quality: "verified", idempotencyKey: "disk-review:first",
+        metrics: { model: "Disk", capacityBytes: 1_000_000 }, reasonCodes: [],
+      },
+    });
+    expect(first.statusCode).toBe(202);
+
+    const url = `/v1/operations/health/disks?branchId=${branchId}`;
+    expect((await app.inject({ method: "GET", url, headers: admin })).json().data)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: diskId })]));
+
+    const removed = await app.inject({ method: "DELETE", url: `${url}&diskId=${encodeURIComponent(diskId)}`, headers: admin });
+    expect(removed.statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url, headers: admin })).json().data).toEqual([]);
+    expect((await store.getDeviceInventory(registry.id))?.lifecycleState).toBe("decommissioned");
+
+    const discoveryUrl = `/v1/operations/health/disks/discovery?branchId=${branchId}`;
+    expect((await app.inject({ method: "GET", url: discoveryUrl, headers: admin })).json().data).toEqual([]);
+    await store.ingestOperationalTelemetry({
+      tenantId, branchId, edgeAgentId: agentId, deviceType: "disk", deviceId: diskId,
+      observedAt: new Date(Date.now() + 1_000).toISOString(),
+      receivedAt: new Date(Date.now() + 1_000).toISOString(),
+      source: "system", quality: "verified", idempotencyKey: "disk-review:again",
+      metrics: { model: "Disk", capacityBytes: 1_000_000 }, reasonCodes: [],
+    });
+    expect((await app.inject({ method: "GET", url, headers: admin })).json().data).toEqual([]);
+    expect((await app.inject({ method: "GET", url: discoveryUrl, headers: admin })).json().data)
+      .toEqual([expect.objectContaining({ id: diskId, discoveryStatus: "pending" })]);
+
+    const added = await app.inject({
+      method: "POST", url: `/v1/operations/health/disks/discovery/add?branchId=${branchId}&diskId=${encodeURIComponent(diskId)}`,
+      headers: admin,
+    });
+    expect(added.statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url, headers: admin })).json().data)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: diskId })]));
+    expect((await app.inject({ method: "GET", url: discoveryUrl, headers: admin })).json().data).toEqual([]);
+    expect((await store.getDeviceInventory(registry.id))?.lifecycleState).toBe("operational");
+  });
+
+  it("sends a removed registered storage device to discovery when telemetry first arrives", async () => {
+    const branchId = "branch-blr-001";
+    const tenantId = store.nodes.get(branchId)!.tenantId;
+    const diskId = "registered-disk-1";
+    const registry = await store.createDeviceInventoryRecord({
+      tenantId, tenant: tenantId, region: "South", branch: branchId,
+      deviceId: diskId, deviceType: "storage-device", manufacturer: "Test",
+      model: "Registered disk", lifecycleState: "approved",
+    });
+    const removed = await app.inject({
+      method: "DELETE",
+      url: `/v1/operations/health/disks?branchId=${branchId}&diskId=${diskId}`,
+      headers: admin,
+    });
+    expect(removed.statusCode).toBe(200);
+    expect((await store.getDeviceInventory(registry.id))?.lifecycleState).toBe("decommissioned");
+
+    await store.ingestOperationalTelemetry({
+      tenantId, branchId, edgeAgentId: agentId, deviceType: "disk", deviceId: diskId,
+      observedAt: new Date(Date.now() + 1_000).toISOString(),
+      receivedAt: new Date(Date.now() + 1_000).toISOString(),
+      source: "system", quality: "verified", idempotencyKey: "registered-disk:first",
+      metrics: { model: "Registered disk" }, reasonCodes: [],
+    });
+    expect((await app.inject({ method: "GET", url: `/v1/operations/health/disks?branchId=${branchId}`, headers: admin })).json().data).toEqual([]);
+    expect((await app.inject({ method: "GET", url: `/v1/operations/health/disks/discovery?branchId=${branchId}`, headers: admin })).json().data)
+      .toEqual([expect.objectContaining({ id: diskId })]);
+
+    const added = await app.inject({
+      method: "POST",
+      url: `/v1/operations/health/disks/discovery/add?branchId=${branchId}&diskId=${diskId}`,
+      headers: admin,
+    });
+    expect(added.statusCode).toBe(200);
+    expect((await store.getDeviceInventory(registry.id))?.lifecycleState).toBe("approved");
+  });
+
   it("keeps discovered HDD and memory-card telemetry visible before camera approval", async () => {
     store.cameras.clear();
     for (const [recorderId, diskNo, capacity] of [

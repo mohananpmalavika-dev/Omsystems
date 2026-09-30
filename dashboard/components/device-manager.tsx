@@ -455,11 +455,18 @@ export function DeviceManager() {
   async function removeRegisteredStorage(record: DeviceInventoryRecord) {
     if (record.deviceType !== "storage-device" || removingStorageId) return;
     const label = `${record.manufacturer} ${record.model}`.trim() || record.deviceId;
-    if (!window.confirm(`Remove "${label}" from this branch inventory? The record will be decommissioned.`)) return;
+    if (!window.confirm(`Remove "${label}" from this branch inventory? New telemetry will place it in Device discovery for review.`)) return;
     setRemovingStorageId(record.id);
     setError(undefined);
     try {
-      await deviceInventoryApi.update(record.id, { lifecycleState: "decommissioned" });
+      const response = await fetch(
+        `/api/control/v1/operations/health/disks?diskId=${encodeURIComponent(record.deviceId)}&branchId=${encodeURIComponent(selectedBranch)}`,
+        { method: "DELETE", credentials: "include", headers: getPortableAuthHeaders() },
+      );
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.message || payload?.error || `Request failed (${response.status})`);
+      }
       setNotice(`Storage device "${label}" was removed from inventory.`);
       await refreshBranch(selectedBranch);
     } catch (reason) {

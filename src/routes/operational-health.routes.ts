@@ -646,7 +646,10 @@ export async function registerOperationalHealthRoutes(
 
     const telemetry = await store.listLatestOperationalTelemetry(request.currentUser.tenantId, [branchId]);
     const disk = telemetry.find((item) => item.deviceType === "disk" && item.deviceId === diskId);
-    if (!disk) return reply.code(404).send({ error: "storage_device_not_found" });
+    const registry = await store.listDeviceInventory(request.currentUser.tenantId, branchId);
+    const registeredStorage = registry.find((item) => item.deviceType === "storage-device"
+      && item.deviceId.toLowerCase() === diskId.toLowerCase());
+    if (!disk && !registeredStorage) return reply.code(404).send({ error: "storage_device_not_found" });
 
     await store.retireOperationalDisk(request.currentUser.tenantId, branchId, diskId, request.currentUser.id);
     return { success: true, data: { branchId, diskId, retired: true } };

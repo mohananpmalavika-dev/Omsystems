@@ -726,6 +726,8 @@ function resolveFfmpegPath(configuredPath: string, runtimeDirectory: string): st
 }
 
 export class MediaMtxRouter implements MediaRouter {
+  private readonly codecCache = new Map<string, string>();
+
   constructor(
     private readonly apiUrl: string,
     private readonly ffmpegPath?: string,
@@ -736,9 +738,13 @@ export class MediaMtxRouter implements MediaRouter {
     const isRtsp = /^rtsps?:\/\//i.test(sourceUri);
     // H.265 reaches MediaMTX but cannot play in Chrome's HLS MediaSource path.
     // Preserve H.264 and convert every other codec, including probe failures.
-    const codec = this.ffmpegPath && isRtsp && this.probeCodec
-      ? await this.probeCodec(sourceUri).catch(() => null)
-      : null;
+    let codec = this.codecCache.get(sourceUri) ?? null;
+    if (!codec && this.ffmpegPath && isRtsp && this.probeCodec) {
+      codec = await this.probeCodec(sourceUri).catch(() => null);
+      if (codec) {
+        this.codecCache.set(sourceUri, codec);
+      }
+    }
     const videoOptions = codec?.toLowerCase() === "h264"
       ? "-c:v copy"
       : "-vf \"scale='min(iw,960)':-2,fps=15\" -c:v libopenh264 -pix_fmt yuv420p -b:v 900k -g 30";
@@ -746,7 +752,7 @@ export class MediaMtxRouter implements MediaRouter {
       ? {
           source: "publisher",
           sourceOnDemand: false,
-          runOnDemand: `"${this.ffmpegPath}" -hide_banner -loglevel warning -rtsp_transport tcp -i "${sourceUri}" -map 0:v:0 ${videoOptions} -map 0:a:0? -c:a aac -b:a 64k -ar 16000 -f rtsp rtsp://127.0.0.1:8554/${path}`,
+          runOnDemand: `"${this.ffmpegPath}" -hide_banner -loglevel warning -rtsp_transport tcp -fflags +genpts+discardcorrupt -i "${sourceUri}" -map 0:v:0 ${videoOptions} -map 0:a:0? -c:a aac -b:a 64k -ar 16000 -f rtsp -rtsp_transport tcp rtsp://127.0.0.1:8554/${path}`,
           runOnDemandRestart: true,
           runOnDemandStartTimeout: "15s",
           runOnDemandCloseAfter: "120s",
@@ -848,6 +854,7 @@ hlsSegmentDuration: 1s
 hlsPartDuration: 200ms
 rtsp: yes
 rtspAddress: 127.0.0.1:8554
+protocols: [tcp]
 rtmp: no
 webrtc: ${config.EDGE_MEDIA_ENABLE_WEBRTC ? "yes" : "no"}
 webrtcAddress: 127.0.0.1:8889
@@ -859,7 +866,7 @@ srtAddress: 127.0.0.1:8890
 # udp+mpegts://). It is intentionally not exposed as a public listener.
 pathDefaults:
   sourceOnDemand: yes
-  sourceOnDemandStartTimeout: 8s
+  sourceOnDemandStartTimeout: 15s
   sourceOnDemandCloseAfter: 120s
 paths: {}
 `;

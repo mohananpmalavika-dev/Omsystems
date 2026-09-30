@@ -6,7 +6,7 @@ import { Loader2, RotateCw, Sliders, Zap, ChevronDown } from "lucide-react";
 import { isSnapshotSource, playLiveVideo } from "@/lib/live-playback";
 
 const MAX_RECOVERY_ATTEMPTS = 25;
-const STALL_TIMEOUT_MS = 20_000;
+const STALL_TIMEOUT_MS = 8_000;
 const RECOVERY_DELAY_MS = 1_200;
 const STARTUP_TIMEOUT_MS = 45_000;
 
@@ -252,14 +252,14 @@ export function HlsPlayer({
             pLoader: CleanPlaylistLoader as any,
             // LL-HLS: fetch 200ms parts as soon as available via blocking playlist reload
             lowLatencyMode: true,
-            backBufferLength: 3,
-            maxBufferLength: 4,
-            maxMaxBufferLength: 8,
+            backBufferLength: 4,
+            maxBufferLength: 6,
+            maxMaxBufferLength: 10,
             startPosition: -1, // Start directly at the live edge
-            // Fixed 0.5s sync window — player stays within ~0.5s of live edge
-            liveSyncDuration: 0.5,
-            liveMaxLatencyDuration: 3,
-            maxLiveSyncPlaybackRate: 1.5,
+            // 1.5s sync window — resilient against network jitter without noticeable delay
+            liveSyncDuration: 1.5,
+            liveMaxLatencyDuration: 4,
+            maxLiveSyncPlaybackRate: 1.25,
             liveDurationInfinity: true,
             highBufferWatchdogPeriod: 2,
             fragLoadingTimeOut: 15_000,

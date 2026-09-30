@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, ArrowUpRight, Building2, Camera as CameraIcon, Check, ChevronLeft, ChevronRight, Crosshair, Eye, Film, LayoutDashboard, Lock, Pin, PinOff, RefreshCw, Search, ShieldAlert, X } from "lucide-react";
+import { Activity, ArrowUpRight, Building2, Camera as CameraIcon, Check, ChevronLeft, ChevronRight, Crosshair, Eye, Film, LayoutDashboard, Lock, Maximize2, Minimize2, Pin, PinOff, RefreshCw, Search, ShieldAlert, X } from "lucide-react";
 import { fleetCameraPage, operationalStageAlerts } from "./live-stage-model";
 import { EnhancedCameraGrid, type GridLayout, type GridSize } from "./enhanced-camera-grid";
 import { PlaybackController } from "./playback-controller";
@@ -56,6 +56,8 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
   const [replayNonce, setReplayNonce] = useState(0);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string>();
   const [controlsOpen, setControlsOpen] = useState(false);
+  const [monitorFullscreen, setMonitorFullscreen] = useState(false);
+  const monitorRef = useRef<HTMLDivElement>(null);
   const previousScope = useRef("");
   const externalFocus = useRef<string | undefined>(undefined);
 
@@ -95,6 +97,11 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
     }
   }, [focusCameraId, cameras]);
   useEffect(() => { if (mode === "investigate" && !selectedEvent && !replayAnchor) setReplayAnchor(new Date().toISOString()); }, [mode, selectedEvent, replayAnchor]);
+  useEffect(() => {
+    const syncFullscreen = () => setMonitorFullscreen(document.fullscreenElement === monitorRef.current);
+    document.addEventListener("fullscreenchange", syncFullscreen);
+    return () => document.removeEventListener("fullscreenchange", syncFullscreen);
+  }, []);
 
   const anchor = selectedEvent ? eventTime(selectedEvent) : replayAnchor;
   const replayWindow = useMemo(() => {
@@ -116,6 +123,10 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
   const selectedSegment = segments.find(segment => segment.id === selectedSegmentId);
 
   function selectCamera(id: string) { if (busy) return; if (mode === "fleet") setMode("watch"); setCameraId(id); setPinned(false); setInterventionsOpen(false); setSelectedEventId(undefined); setFeedback(undefined); setReplayAnchor(undefined); }
+  function toggleMonitorFullscreen() {
+    if (document.fullscreenElement === monitorRef.current) void document.exitFullscreen();
+    else void monitorRef.current?.requestFullscreen();
+  }
   function stepCamera(direction: -1 | 1) {
     if (!scoped.length) return;
     const currentIndex = Math.max(0, scoped.findIndex(camera => camera.id === active?.id));
@@ -161,8 +172,8 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
           <button type="button" aria-pressed={fleetRotating} onClick={() => setFleetRotating(!fleetRotating)}>{fleetRotating ? "Pause rotation" : "Rotate every 15s"}</button>
           <small>Substreams use the configured viewer capacity. Select a camera in the dock to investigate it.</small>
         </div>}
-        <div className={`los-video-stage ${controlsOpen ? "controls-visible" : ""}`} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); const id = event.dataTransfer.getData("text/plain"); if (scopedIds.has(id)) { selectCamera(id); setMode("watch"); } }}>
-          <div className="los-monitor-bar"><span><i aria-hidden="true" />{mode === "fleet" || mode === "overview" ? "MULTI-FEED MONITOR" : active?.status?.toLowerCase() === "online" ? mode === "investigate" ? "LIVE SOURCE / REPLAY BELOW" : "LIVE SOURCE" : "CAMERA MONITOR"}</span><span>{mode === "fleet" ? `PAGE ${fleet.currentPage + 1} / ${fleet.pageCount}` : mode === "overview" ? `${stageCameras.length} BRANCH FEEDS` : active?.branchName || "NO BRANCH SELECTED"}</span></div>
+        <div ref={monitorRef} className={`los-video-stage ${controlsOpen ? "controls-visible" : ""}`} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); const id = event.dataTransfer.getData("text/plain"); if (scopedIds.has(id)) { selectCamera(id); setMode("watch"); } }}>
+          <div className="los-monitor-bar"><span><i aria-hidden="true" />{mode === "fleet" || mode === "overview" ? "MULTI-FEED MONITOR" : active?.status?.toLowerCase() === "online" ? mode === "investigate" ? "LIVE SOURCE / REPLAY BELOW" : "LIVE SOURCE" : "CAMERA MONITOR"}</span><div className="los-monitor-actions"><span>{mode === "fleet" ? `PAGE ${fleet.currentPage + 1} / ${fleet.pageCount}` : mode === "overview" ? `${stageCameras.length} BRANCH FEEDS` : active?.branchName || "NO BRANCH SELECTED"}</span><button type="button" onClick={toggleMonitorFullscreen} aria-label={monitorFullscreen ? "Exit fullscreen monitor" : "Open fullscreen monitor"} aria-pressed={monitorFullscreen} title={monitorFullscreen ? "Exit fullscreen monitor (Esc)" : "Open fullscreen monitor"}>{monitorFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}{monitorFullscreen ? "Exit fullscreen" : "Fullscreen"}</button></div></div>
           {stageCameras.length ? <EnhancedCameraGrid key={mode === "fleet" ? `fleet:${fleetBranch}:${fleetColumns}:${fleet.currentPage}` : mode === "overview" ? "overview" : active?.id} cameras={stageCameras} initialLayout={layout} compactStage maxConcurrentStreams={mode === "fleet" ? maxConcurrentStreams : mode === "overview" ? Math.min(4, maxConcurrentStreams) : 1} enableVirtualScrolling={false} aiByCamera={aiByCamera} showAiOverlay={showAiOverlay} onOpenCameraAi={onOpenCameraAi} onActiveStreamsChange={onActiveStreamsChange} onMonitoredCamerasChange={onMonitoredCamerasChange} /> : <div className="los-empty"><CameraIcon size={36} /><strong>No cameras in this scene.</strong><p>Choose another area or adjust the wall scope.</p></div>}
         </div>
         {mode === "investigate" && <section className="los-replay" aria-label="Recorded replay"><header><div><span className="los-eyebrow">RECORDED / {selectedEvent ? "EVENT WINDOW" : "RECENT WINDOW"}</span><h3>Review what led here.</h3><p>{replayWindow ? `${timeLabel(replayWindow.from)} → ${timeLabel(replayWindow.to)}` : "Select an event to set the replay window."}</p></div><button type="button" onClick={() => { if (!selectedEvent) setReplayAnchor(new Date().toISOString()); setReplayNonce(value => value + 1); }} disabled={replayLoading}><RefreshCw size={15} />Refresh replay</button></header>{replayLoading ? <div className="los-empty">Looking for recorded coverage…</div> : replayError ? <p role="alert">{replayError}</p> : selectedSegment && active ? <><PlaybackController key={`${active.id}:${selectedSegment.id}:${anchor}`} segmentId={selectedSegment.id} cameraId={active.id} cameraName={active.name} startTime={selectedSegment.startTime} endTime={selectedSegment.endTime} initialOffsetSeconds={Math.max(0, ((replayWindow?.timestamp ?? Date.parse(selectedSegment.startTime)) - Date.parse(selectedSegment.startTime)) / 1000)} /><label>Recorded segment<select value={selectedSegment.id} onChange={event => setSelectedSegmentId(event.target.value)}>{segments.map(segment => <option key={segment.id} value={segment.id}>{timeLabel(segment.startTime)} → {timeLabel(segment.endTime)}</option>)}</select></label></> : <div className="los-empty"><Film size={26} /><strong>No playable recording in this window.</strong><p>Live video remains available above. Recorder archives can be reviewed in the recording workspace.</p></div>}{active && <Link href={`/recordings?cameraId=${encodeURIComponent(active.id)}`}>Open recording workspace <ArrowUpRight size={14} /></Link>}</section>}
