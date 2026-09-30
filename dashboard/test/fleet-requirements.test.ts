@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadCameraInventory, loadCameraBatches } from "../lib/fleet-loading";
-import { fleetCameraPage, operationalStageAlerts } from "../components/live-stage-model";
+import { fleetCameraPage, fleetTileOptions, operationalStageAlerts } from "../components/live-stage-model";
 import { RetentionSummary } from "../components/branch-command-center/retention-summary";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
@@ -33,6 +33,16 @@ describe("full fleet requirements", () => {
     expect(branch.total).toBe(300);
     expect(branch.cameras).toHaveLength(12);
     expect(branch.cameras.every(camera => camera.branchId === "b")).toBe(true);
+  });
+  it("offers every tile count up to the cameras in scope without padding the last page", () => {
+    expect(fleetTileOptions(1)).toEqual([1]);
+    expect(fleetTileOptions(2)).toEqual([1, 2]);
+    expect(fleetTileOptions(8)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    const cameras = Array.from({ length: 17 }, (_, index) => ({ id: `camera-${index}`, branchId: "a" })) as Camera[];
+    expect(fleetTileOptions(cameras.length)).toHaveLength(17);
+    expect(fleetCameraPage(cameras, "a", 17, 0).cameras).toHaveLength(17);
+    expect(fleetCameraPage(cameras, "a", 8, 2).cameras).toHaveLength(1);
+    expect(fleetTileOptions(200)).toHaveLength(144);
   });
   it("keeps P4/P5 out of the attention and event presentation", () => {
     const alerts = ["P1", "P2", "P3", "P4", "P5"].map(severity => ({ severity, cameraId: "camera-1" })) as AnalyticsAlert[];

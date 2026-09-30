@@ -604,6 +604,7 @@ export function DeviceManager() {
     const username = probeUsername.trim();
     const password = probePassword || "";
 
+    scanAbortedRef.current = false;
     setSaving(true);
     setError(undefined);
     try {
@@ -743,6 +744,13 @@ export function DeviceManager() {
     const port = Number(probePort || 554);
     if (!Number.isInteger(port) || port < 1 || port > 65_535) {
       setError("Enter a valid RTSP port from 1 to 65535.");
+      return;
+    }
+
+    // A cloud probe only checks one guessed RTSP path. Use the branch scanner
+    // for private LAN recorders so their individual channels are enumerated.
+    if (probeTargetMode === "single" && isPrivateIpv4(targets[0]!)) {
+      await addDirectCameraToBranch();
       return;
     }
 
@@ -3218,7 +3226,7 @@ export function DeviceManager() {
             </div>
             <div className="modal-body space-y-4">
               <p className="text-xs text-slate-500">
-                Probe one camera or a bounded IPv4 range on the branch network. Reachable devices go to Device discovery; shared credentials are encrypted and queued to the assigned Branch Gateway for final verification.
+                A single branch LAN IP is scanned by the Branch Gateway for DVR/NVR channels. An IP range checks addresses and queues devices for gateway verification; it does not list channels immediately.
               </p>
               
               <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void runDirectProbe(); }}>
@@ -3293,23 +3301,12 @@ export function DeviceManager() {
                 {probeTargetMode === "range" && probeCredentialMode === "different" ? <p className="field-help">The range is checked without a shared login. Reachable cameras are added to Device discovery so each address can be verified with its own credentials.</p> : null}
 
                 <div className="modal-actions">
-                  {probeTargetMode === "single" && (
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => void addDirectCameraToBranch()}
-                      disabled={saving || !probeIp.trim() || !probeUsername.trim()}
-                      title="Ask the scanner in the selected branch to discover this device and its channels"
-                    >
-                      <Plus size={14} /> {saving ? "Discovering…" : "Discover channels on branch scanner"}
-                    </button>
-                  )}
                   <button
                     type="submit"
                     className="primary-button"
-                    disabled={probing || !probeIp.trim() || ((probeCredentialMode === "same" || probeTargetMode === "single") && !probeUsername.trim())}
+                    disabled={probing || saving || !probeIp.trim() || ((probeCredentialMode === "same" || probeTargetMode === "single") && !probeUsername.trim())}
                   >
-                    <Search size={14} /> {probing ? "Probing camera network..." : probeTargetMode === "range" ? "Probe IP range" : "Probe Camera"}
+                    <Search size={14} /> {probing || saving ? "Probing camera network..." : probeTargetMode === "range" ? "Probe IP range" : isPrivateIpv4(probeIp.trim()) ? "Discover channels on branch scanner" : "Probe Camera"}
                   </button>
                 </div>
               </form>

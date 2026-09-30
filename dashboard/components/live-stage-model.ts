@@ -10,3 +10,7 @@ export function fleetCameraPage(cameras: Camera[], branchId: string, size: numbe
   const currentPage = Math.min(Math.max(0, page), pageCount - 1);
   return { total: scoped.length, pageCount, currentPage, cameras: scoped.slice(currentPage * size, (currentPage + 1) * size) };
 }
+
+export function fleetTileOptions(total: number) {
+  return Array.from({ length: Math.min(Math.max(0, total), 144) }, (_, index) => index + 1);
+}

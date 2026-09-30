@@ -74,6 +74,7 @@ export interface EnhancedCameraGridProps {
   onOpenCameraAi?: (cameraId: string) => void;
   focusCameraId?: string;
   compactStage?: boolean;
+  tileCount?: number;
 }
 
 interface VisibleRange {
@@ -201,6 +202,7 @@ export function EnhancedCameraGrid({
   onOpenCameraAi,
   focusCameraId,
   compactStage = false,
+  tileCount,
 }: EnhancedCameraGridProps) {
   const [gridSize, setGridSize] = useState<GridSize>(
     initialLayout?.gridSize || "2x2"
@@ -846,7 +848,9 @@ export function EnhancedCameraGrid({
     "12x12": 144,
   };
 
-  const totalPositions = gridSizeMap[gridSize];
+  const totalPositions = compactStage && tileCount && Number.isInteger(tileCount) && tileCount > 0
+    ? tileCount
+    : gridSizeMap[gridSize];
   const totalPages = Math.max(1, Math.ceil(displayedCameras.length / totalPositions));
   const decoderCapacityOptions = useMemo(
     () => getDecoderCapacityOptions(maxConcurrentStreams),
