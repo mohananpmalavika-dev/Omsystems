@@ -43,11 +43,10 @@ export function HlsPlayer({
   const [retryNonce, setRetryNonce] = useState(0);
   const [autoplayMuted, setAutoplayMuted] = useState(false);
 
-  // Sub-Second Zero-Latency & Dynamic Bitrate Switcher State
+  // Stream transport and display settings.
   const isEdgeRelay = Boolean((url && url.includes("/edge-media/")) || (whepUrl && whepUrl.includes("/edge-media/")));
   const [streamProtocol, setStreamProtocol] = useState<"webrtc" | "ll-hls">(whepUrl && !isEdgeRelay ? "webrtc" : "ll-hls");
   const [resolution, setResolution] = useState<"1080p" | "720p" | "480p" | "240p">("1080p");
-  const [latencyMs, setLatencyMs] = useState<number>(whepUrl && !isEdgeRelay ? 280 : 800);
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
@@ -211,7 +210,6 @@ export function HlsPlayer({
       cleanupStreaming();
       currentProtocol = "ll-hls";
       setStreamProtocol("ll-hls");
-      setLatencyMs(800);
 
       const refreshedSource = sourceUrl;
       if (Hls.isSupported()) {
@@ -363,7 +361,6 @@ export function HlsPlayer({
             void playVideo();
             currentProtocol = "webrtc";
             setStreamProtocol("webrtc");
-            setLatencyMs(280);
           }
         };
 
@@ -374,7 +371,6 @@ export function HlsPlayer({
               cleanupStreaming();
               currentProtocol = "ll-hls";
               setStreamProtocol("ll-hls");
-              setLatencyMs(1200);
               startHls(url);
             }
           }
@@ -391,7 +387,6 @@ export function HlsPlayer({
             cleanupStreaming();
             currentProtocol = "ll-hls";
             setStreamProtocol("ll-hls");
-            setLatencyMs(1200);
             startHls(url);
           }
         }, 4_000);
@@ -454,7 +449,6 @@ export function HlsPlayer({
           cleanupStreaming();
           currentProtocol = "ll-hls";
           setStreamProtocol("ll-hls");
-          setLatencyMs(1200);
           if (url) {
             startHls(url);
           } else {
@@ -532,7 +526,7 @@ export function HlsPlayer({
     setStatus("loading");
     setError(null);
 
-    // Prioritize WebRTC for sub-second zero latency; fallback automatically to HLS
+    // Prefer WebRTC where available; fall back to HLS.
     if (whepUrl && (currentProtocol === "webrtc" || !url)) {
       void startWebRtc(whepUrl);
     } else if (url) {
@@ -552,10 +546,10 @@ export function HlsPlayer({
         return;
       }
 
-      // Automatically snap to live edge if HLS playback severely drifted behind (> 6s)
+      // Keep HLS close to its live sync point after transient stalls or tab throttling.
       if (hls && typeof hls.liveSyncPosition === "number" && !isNaN(hls.liveSyncPosition)) {
         const drift = hls.liveSyncPosition - video.currentTime;
-        if (drift > 6) {
+        if (drift > 2) {
           try {
             video.currentTime = hls.liveSyncPosition;
           } catch {
@@ -676,11 +670,11 @@ export function HlsPlayer({
         <>
           <div className="absolute left-2 top-2 z-20 flex items-center gap-1.5 rounded bg-black/85 backdrop-blur-md px-2 py-1 text-[10px] font-mono text-emerald-300 border border-emerald-500/30 shadow-lg">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-bold">{streamProtocol === "webrtc" ? "WebRTC LIVE" : "LL-HLS"}</span>
+            <span className="font-bold">{streamProtocol === "webrtc" ? "WebRTC LIVE" : "HLS LIVE"}</span>
             <span className="text-slate-500">•</span>
             <span className="text-emerald-400 flex items-center gap-0.5">
               <Zap className="w-2.5 h-2.5" />
-              {streamProtocol === "webrtc" ? `${latencyMs}ms` : "1.2s"}
+              {streamProtocol === "webrtc" ? "Low delay" : "Buffered"}
             </span>
             <span className="text-slate-500">•</span>
             <span className="text-cyan-300">{resolution}</span>
@@ -708,25 +702,25 @@ export function HlsPlayer({
                     <div className="grid grid-cols-2 gap-1 text-[11px] font-mono">
                       <button
                         type="button"
+                        disabled={!whepUrl || isEdgeRelay}
+                        title={!whepUrl || isEdgeRelay ? "WebRTC is unavailable for this camera connection" : "Use WebRTC"}
                         onClick={() => {
                           setStreamProtocol("webrtc");
-                          setLatencyMs(280);
                           setShowSettings(false);
                           setRetryNonce((v) => v + 1);
                         }}
                         className={`p-1 rounded text-center transition-all ${
                           streamProtocol === "webrtc"
                             ? "bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30"
-                            : "bg-slate-800 text-slate-400 hover:text-white"
+                            : "bg-slate-800 text-slate-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
                         }`}
                       >
-                        WebRTC (&lt;0.4s)
+                        WebRTC
                       </button>
                       <button
                         type="button"
                         onClick={() => {
                           setStreamProtocol("ll-hls");
-                          setLatencyMs(1200);
                           setShowSettings(false);
                           setRetryNonce((v) => v + 1);
                         }}
@@ -736,7 +730,7 @@ export function HlsPlayer({
                             : "bg-slate-800 text-slate-400 hover:text-white"
                         }`}
                       >
-                        LL-HLS (1.2s)
+                        HLS
                       </button>
                     </div>
                   </div>
