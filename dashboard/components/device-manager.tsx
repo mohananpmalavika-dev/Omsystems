@@ -2860,7 +2860,7 @@ export function DeviceManager() {
                   <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                     <span className="text-slate-400">Installer Version:</span>
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/30">
-                      v0.1.36 (Latest Release)
+                      v0.1.37 (Latest Release)
                     </span>
                   </div>
                   <div className="flex items-center justify-between border-b border-slate-800 pb-2">
@@ -2883,7 +2883,7 @@ export function DeviceManager() {
                       }}
                       disabled={saving}
                     >
-                      <Download size={14} /> {saving ? "Generating Package..." : "Prepare & Download Installer (v0.1.36)"}
+                      <Download size={14} /> {saving ? "Generating Package..." : "Prepare & Download Installer (v0.1.37)"}
                     </button>
                   </div>
                 ) : (
@@ -2896,10 +2896,10 @@ export function DeviceManager() {
                         disabled={saving}
                       >
                         <div className="flex items-center gap-1.5 font-semibold text-xs text-emerald-300">
-                          <Download size={14} /> {saving ? "Downloading installer..." : "Download Installer ZIP (v0.1.36)"}
+                          <Download size={14} /> {saving ? "Downloading installer..." : "Download Installer ZIP (v0.1.37)"}
                         </div>
                         <span className="text-[11px] text-slate-300 leading-tight">
-                          Includes KryptonVisionInstaller-v0.1.36-windows.exe, pre-filled branch configuration, and installation launcher.
+                          Includes KryptonVisionInstaller-v0.1.37-windows.exe, pre-filled branch configuration, and installation launcher.
                         </span>
                       </button>
                     </div>
