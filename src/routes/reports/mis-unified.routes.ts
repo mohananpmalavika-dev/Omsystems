@@ -23,6 +23,8 @@ import { z } from 'zod';
 import type { Pool } from 'pg';
 import sharp from 'sharp';
 import type { ControlPlaneStore } from '../../control-plane-store.js';
+import type { NbfcRuleRepository } from '../../analytics/nbfc-rule-repository.js';
+import { branchOpeningLocalDate } from '../../analytics/branch-opening-dual-control.service.js';
 import { activeCamera, activeResourceNode } from '../../database/active-resource.js';
 
 // ============================================================================
@@ -912,7 +914,139 @@ function buildFilterOptions(branches: BranchHierarchy[]) {
 // ROUTE REGISTRATION
 // ============================================================================
 
-export function createMISUnifiedRoutes(instance: FastifyInstance, pool: Pool, store: ControlPlaneStore) {
+export function createMISUnifiedRoutes(instance: FastifyInstance, pool: Pool, store: ControlPlaneStore, openingRepository?: NbfcRuleRepository) {
+  instance.get('/mis/branch-openings/:ruleId/:branchId/:localDate/photo', async (request, reply) => {
+    const parsed = z.object({ ruleId: z.string().uuid(), branchId: z.string(),
+      localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).safeParse(request.params);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_photo_id' });
+    const { ruleId, branchId, localDate } = parsed.data;
+    const branches = await store.listAccessibleNodes(request.currentUser, 'analytics:view', 'branch');
+    if (!branches.some((branch) => branch.id === branchId)) return reply.code(404).send({ error: 'photo_not_found' });
+    const state = await openingRepository?.getBranchOpeningCheckForTenant(
+      request.currentUser.tenantId, ruleId, branchId, localDate);
+    if (!state || state.currentMetrics?.branchId !== branchId || state.currentMetrics?.localDate !== localDate) {
+      return reply.code(404).send({ error: 'photo_not_found' });
+    }
+    const eventId = state.currentMetrics?.sourceEventId;
+    const event = typeof eventId === 'string' ? await store.getAnalyticsEvent(eventId, request.currentUser.tenantId) : null;
+    const camera = event && await store.getCamera(event.cameraId);
+    if (!event || !camera || camera.branchId !== branchId || event.cameraId !== state.currentMetrics?.cameraId) {
+      return reply.code(404).send({ error: 'photo_not_found' });
+    }
+    const encoded = event.metadata?.snapshotBase64;
+    if (typeof encoded !== 'string' || !encoded || encoded.length > 20_000_000) {
+      return reply.code(404).send({ error: 'photo_unavailable' });
+    }
+    let photo = Buffer.from(encoded, 'base64');
+    if (photo.length < 4 || photo[0] !== 0xff || photo[1] !== 0xd8 || photo[2] !== 0xff) {
+      return reply.code(404).send({ error: 'photo_unavailable' });
+    }
+    const box = state.currentMetrics?.personBoundingBox as Record<string, unknown> | undefined;
+    if (state.currentMetrics?.personCount === 1 && box &&
+        ['x', 'y', 'width', 'height'].every((key) => typeof box[key] === 'number') &&
+        Number(box.x) >= 0 && Number(box.y) >= 0 && Number(box.width) > 0 && Number(box.height) > 0 &&
+        Number(box.x) + Number(box.width) <= 1 && Number(box.y) + Number(box.height) <= 1) {
+      try {
+        const image = sharp(photo);
+        const dimensions = await image.metadata();
+        if (dimensions.width && dimensions.height) {
+          const left = Math.max(0, Math.floor((Number(box.x) - 0.03) * dimensions.width));
+          const top = Math.max(0, Math.floor((Number(box.y) - 0.03) * dimensions.height));
+          const right = Math.min(dimensions.width, Math.ceil((Number(box.x) + Number(box.width) + 0.03) * dimensions.width));
+          const bottom = Math.min(dimensions.height, Math.ceil((Number(box.y) + Number(box.height) + 0.03) * dimensions.height));
+          photo = await image.extract({ left, top, width: right - left, height: bottom - top }).jpeg({ quality: 85 }).toBuffer();
+        }
+      } catch { /* Show the full frame if cropping fails. */ }
+    }
+    return reply.header('content-type', 'image/jpeg').header('cache-control', 'private, no-store')
+      .header('x-content-type-options', 'nosniff').send(photo);
+  });
+
+  instance.get('/mis/branch-openings', async (request, reply) => {
+    try {
+      const query = openingFailuresQuerySchema.parse(request.query);
+      const tenantId = request.currentUser.tenantId;
+      const accessibleBranches = await store.listAccessibleNodes(request.currentUser, 'analytics:view', 'branch');
+      const allowedBranchIds = new Set(accessibleBranches.map((branch) => branch.id));
+      if (query.branchId && !allowedBranchIds.has(query.branchId)) return reply.code(403).send({ error: 'branch_forbidden' });
+      const hierarchy = (await resolveBranchHierarchy(pool, tenantId, store))
+        .filter((branch) => allowedBranchIds.has(branch.branch_id));
+      const selected = hierarchy.filter((branch) =>
+        (!query.branchId || branch.branch_id === query.branchId) &&
+        (!query.zone || branch.zone_name === query.zone) &&
+        (!query.region || branch.region_name === query.region) &&
+        (!query.area || branch.area_name === query.area) &&
+        (!query.organization || branch.org_name === query.organization));
+      const selectedById = new Map(selected.map((branch) => [branch.branch_id, branch]));
+      const { startDate, endDate, startDay, endDay } = openingReportDateRange(query);
+      if (!openingRepository || selectedById.size === 0) {
+        return reply.send({ rows: [], total: 0, startDate: startDay, endDate: endDay, truncated: false });
+      }
+      const limit = 10_000;
+      const states = await openingRepository.listBranchOpeningChecks(tenantId, [...selectedById.keys()], startDay, endDay, limit + 1);
+      const cameraById = new Map((await store.listCameras(tenantId)).map((camera) => [camera.id, camera]));
+      const selectedCameraIds = [...cameraById.values()].filter((camera) => selectedById.has(camera.branchId)).map((camera) => camera.id);
+      const needsHistoricalPhoto = states.some((state) => state.currentMetrics?.outcome === 'FAILED' &&
+        typeof state.currentMetrics?.sourceEventId !== 'string');
+      const historicalFailures = needsHistoricalPhoto && selectedCameraIds.length ? await store.listAnalyticsEvents(tenantId, {
+        cameraIds: selectedCameraIds, from: startDate.toISOString(), to: endDate.toISOString(),
+        detectionTypes: ['dual-control-verification'], limit: limit + 1,
+      }) : [];
+      const historicalPhotoByBranchDay = new Map(historicalFailures.flatMap((event) => {
+        if (event.metadata?.violation !== 'BRANCH_OPENING_MINIMUM_STAFF' ||
+            typeof event.metadata?.snapshotBase64 !== 'string' || !event.metadata.snapshotBase64) return [];
+        const branchId = cameraById.get(event.cameraId)?.branchId;
+        if (!branchId) return [];
+        const day = branchOpeningLocalDate(new Date(event.occurredAt), 'Asia/Kolkata');
+        return [[`${branchId}:${day}`, `/api/control/v1/reports/mis/branch-opening-failures/${encodeURIComponent(event.id)}/photo`] as const];
+      }));
+      const recorded = states.slice(0, limit).flatMap((state) => {
+        const metrics = state.currentMetrics || {};
+        const branchId = String(metrics.branchId || '');
+        const branch = selectedById.get(branchId);
+        const count = Number(metrics.personCount);
+        if (!branch || !Number.isInteger(count) || count < 1 || !state.firstConditionMetAt) return [];
+        const photoUrl = typeof metrics.sourceEventId === 'string'
+          ? `/api/control/v1/reports/mis/branch-openings/${encodeURIComponent(state.ruleId)}/${encodeURIComponent(branchId)}/${encodeURIComponent(String(metrics.localDate))}/photo`
+          : historicalPhotoByBranchDay.get(`${branchId}:${String(metrics.localDate)}`) || null;
+        return [{
+          ruleId: state.ruleId, branchId, localDate: String(metrics.localDate),
+          occurredAt: state.firstConditionMetAt,
+          zoneName: branch.zone_name === 'General Zone' ? null : branch.zone_name,
+          branchName: branch.branch_name,
+          cameraName: cameraById.get(String(metrics.cameraId))?.name || 'Unknown camera',
+          personCount: count, outcome: count >= 2 ? 'SUCCESS' : 'FAILED', photoUrl,
+        }];
+      });
+      const recordedByBranchDay = new Map(recorded.map((row) => [`${row.branchId}:${row.localDate}`, row]));
+      const rows: Array<{
+        ruleId: string; branchId: string; localDate: string; occurredAt: string | null;
+        zoneName: string | null; branchName: string; cameraName: string | null;
+        personCount: number | null; outcome: string; photoUrl: string | null;
+      }> = [];
+      let truncated = states.length > limit;
+      const startTime = Date.parse(`${startDay}T00:00:00.000Z`);
+      for (let timestamp = Date.parse(`${endDay}T00:00:00.000Z`);
+        timestamp >= startTime && rows.length < limit; timestamp -= 86_400_000) {
+        const day = new Date(timestamp).toISOString().slice(0, 10);
+        for (const branch of selected) {
+          if (rows.length >= limit) { truncated = true; break; }
+          rows.push(recordedByBranchDay.get(`${branch.branch_id}:${day}`) || {
+            ruleId: 'unrecorded', branchId: branch.branch_id, localDate: day,
+            occurredAt: null, zoneName: branch.zone_name === 'General Zone' ? null : branch.zone_name,
+            branchName: branch.branch_name, cameraName: null, personCount: null,
+            outcome: 'NOT_RECORDED', photoUrl: null,
+          });
+        }
+      }
+      return reply.send({ rows, total: rows.length, startDate: startDay, endDate: endDay, truncated });
+    } catch (error) {
+      request.log.error({ error }, 'Failed to generate branch openings report');
+      if (error instanceof z.ZodError) return reply.code(400).send({ error: 'invalid_query_parameters', details: error.errors });
+      return reply.code(500).send({ error: 'report_generation_failed' });
+    }
+  });
+
   instance.get('/mis/branch-opening-failures/:eventId/photo', async (request, reply) => {
     const parsed = z.object({ eventId: z.string().uuid() }).safeParse(request.params);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid_event_id' });

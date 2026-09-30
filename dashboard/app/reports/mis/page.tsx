@@ -59,19 +59,20 @@ type TimeRange = "today" | "7d" | "30d" | "90d";
 type GroupBy = "organization" | "zone" | "region" | "area" | "branch" | "date" | "time";
 type TabKey = "all-in-one" | "threat" | "health" | "operations" | "attendance" | "sla" | "compliance" | "branch-opening";
 type OpeningRange = "today" | "7d" | "30d" | "90d" | "custom";
-type OpeningFailure = {
-  eventId: string;
-  alertId: string | null;
-  occurredAt: string;
+type OpeningEntry = {
+  ruleId: string;
+  localDate: string;
+  occurredAt: string | null;
   zoneName: string | null;
   branchId: string;
   branchName: string;
-  cameraName: string;
-  personCount: number;
+  cameraName: string | null;
+  personCount: number | null;
+  outcome: "SUCCESS" | "FAILED" | "NOT_RECORDED";
   photoUrl: string | null;
 };
 type OpeningReport = {
-  rows: OpeningFailure[];
+  rows: OpeningEntry[];
   total: number;
   startDate: string;
   endDate: string;
@@ -176,7 +177,7 @@ export default function MisReportsPage() {
     return () => clearInterval(interval);
   }, [autoRefresh, fetchMisData]);
 
-  const fetchOpeningFailures = useCallback(async () => {
+  const fetchOpenings = useCallback(async () => {
     if (openingRange === "custom" && (!openingStartDate || !openingEndDate || openingStartDate > openingEndDate)) {
       setOpeningReport(null);
       setOpeningError("Select a valid start and end date.");
@@ -195,7 +196,7 @@ export default function MisReportsPage() {
       })) {
         if (value !== "all") params.set(key, value);
       }
-      const response = await fetch(`/api/control/v1/reports/mis/branch-opening-failures?${params}`, {
+      const response = await fetch(`/api/control/v1/reports/mis/branch-openings?${params}`, {
         headers: getReportAuthHeaders(), credentials: "include", cache: "no-store",
       });
       const payload = await response.json().catch(() => null);
@@ -212,16 +213,16 @@ export default function MisReportsPage() {
     selectedArea, selectedBranch, getReportAuthHeaders]);
 
   useEffect(() => {
-    if (activeTab === "branch-opening") void fetchOpeningFailures();
-  }, [activeTab, fetchOpeningFailures]);
+    if (activeTab === "branch-opening") void fetchOpenings();
+  }, [activeTab, fetchOpenings]);
 
   const handleOpeningExportCsv = () => {
     if (!openingReport) return;
     const records = [
-      ["Opening time (IST)", "Zone", "Branch", "Persons detected", "Camera", "Photo URL"],
+      ["Opening time (IST)", "Zone", "Branch", "Persons detected", "Result", "Camera", "Photo URL"],
       ...openingReport.rows.map((row) => [
-        new Date(row.occurredAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
-        row.zoneName ?? "Unassigned", row.branchName, row.personCount, row.cameraName,
+        row.occurredAt ? new Date(row.occurredAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : row.localDate,
+        row.zoneName ?? "Unassigned", row.branchName, row.personCount, row.outcome, row.cameraName,
         row.photoUrl ? `${window.location.origin}${row.photoUrl}` : "Unavailable",
       ]),
     ];
@@ -230,7 +231,7 @@ export default function MisReportsPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `Branch_Opening_Failures_${openingReport.startDate}_${openingReport.endDate}.csv`;
+    link.download = `Branch_Openings_${openingReport.startDate}_${openingReport.endDate}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -326,7 +327,7 @@ export default function MisReportsPage() {
 
             {/* Refresh */}
             <button
-              onClick={() => activeTab === "branch-opening" ? fetchOpeningFailures() : fetchMisData()}
+              onClick={() => activeTab === "branch-opening" ? fetchOpenings() : fetchMisData()}
               className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs flex items-center gap-1.5 transition-colors"
               title="Refresh MIS Telemetry"
             >
@@ -628,7 +629,7 @@ export default function MisReportsPage() {
             active={activeTab === "branch-opening"}
             onClick={() => setActiveTab("branch-opening")}
             icon={<Building2 size={16} />}
-            label="Branch Opening Failures"
+            label="Branch Openings"
           />
         </div>
 
@@ -955,9 +956,9 @@ export default function MisReportsPage() {
             <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-semibold text-white">Branch Opening Two-Person Failure MIS</h2>
+                  <h2 className="text-lg font-semibold text-white">Branch Opening Report</h2>
                   <p className="mt-1 text-xs text-slate-400">
-                    Branches where the first person observation during opening showed fewer than two people together.
+                    Each branch and day shows its first opening observation, person count and two-person result. Missing observations appear as Not recorded.
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 print:hidden">
@@ -995,13 +996,13 @@ export default function MisReportsPage() {
                 </>}
               </div>
               {openingReport && <p className="mt-3 text-xs text-slate-400">
-                {openingReport.startDate} to {openingReport.endDate} (Asia/Kolkata) · {openingReport.total} failed openings
+                {openingReport.startDate} to {openingReport.endDate} (Asia/Kolkata) · {openingReport.rows.filter((row) => row.outcome !== "NOT_RECORDED").length} recorded openings across {openingReport.total} branch-days
                 {openingReport.truncated ? " · Results capped at 10,000; narrow the period for a complete export." : ""}
               </p>}
             </div>
 
             {openingError && <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{openingError}</div>}
-            {openingLoading && <p className="text-sm text-slate-400">Loading opening failures…</p>}
+            {openingLoading && <p className="text-sm text-slate-400">Loading branch openings…</p>}
             {!openingLoading && openingReport && <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/60">
               <table className="w-full min-w-[760px] text-left text-xs">
                 <thead className="bg-slate-800 text-slate-300">
@@ -1010,19 +1011,22 @@ export default function MisReportsPage() {
                     <th className="p-3">Zone</th>
                     <th className="p-3">Branch</th>
                     <th className="p-3">Persons detected</th>
+                    <th className="p-3">Result</th>
                     <th className="p-3">Camera</th>
                     <th className="p-3">Photo at opening</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 text-slate-200">
-                  {openingReport.rows.length === 0 ? <tr><td colSpan={6} className="p-8 text-center text-slate-400">No failed branch openings for this period and filter.</td></tr> :
-                    openingReport.rows.map((row) => <tr key={row.eventId}>
-                      <td className="p-3 whitespace-nowrap">{new Date(row.occurredAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</td>
+                  {openingReport.rows.length === 0 ? <tr><td colSpan={7} className="p-8 text-center text-slate-400">No recorded branch openings for this period and filter.</td></tr> :
+                    openingReport.rows.map((row) => <tr key={`${row.ruleId}:${row.branchId}:${row.localDate}`}>
+                      <td className="p-3 whitespace-nowrap">{row.occurredAt ? new Date(row.occurredAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : `${row.localDate} · Not recorded`}</td>
                       <td className="p-3">{row.zoneName ?? "Unassigned"}</td>
                       <td className="p-3 font-semibold">{row.branchName}</td>
-                      <td className="p-3 font-bold text-rose-300">{row.personCount}</td>
-                      <td className="p-3">{row.cameraName}</td>
-                      <td className="p-3"><OpeningEvidencePhoto url={row.photoUrl} getHeaders={getReportAuthHeaders} /></td>
+                      <td className="p-3 font-bold">{row.personCount ?? "—"}</td>
+                      <td className={`p-3 font-semibold ${row.outcome === "SUCCESS" ? "text-emerald-300" : row.outcome === "FAILED" ? "text-rose-300" : "text-slate-400"}`}>{row.outcome === "SUCCESS" ? "Success" : row.outcome === "FAILED" ? "Failed" : "Not recorded"}</td>
+                      <td className="p-3">{row.cameraName ?? "—"}</td>
+                      <td className="p-3">{row.outcome === "NOT_RECORDED" ? "—" :
+                        <OpeningEvidencePhoto url={row.photoUrl} getHeaders={getReportAuthHeaders} />}</td>
                     </tr>)}
                 </tbody>
               </table>
@@ -1059,7 +1063,7 @@ function OpeningEvidencePhoto({ url, getHeaders }: {
   if (!url || unavailable) return <span className="text-slate-500">Photo unavailable</span>;
   if (!imageUrl) return <span className="text-slate-500">Loading photo…</span>;
   return <a href={imageUrl} target="_blank" rel="noopener noreferrer" title="Open event photo">
-    <img src={imageUrl} alt="Camera frame at failed branch opening" className="h-20 w-32 rounded object-cover" />
+    <img src={imageUrl} alt="Camera frame at branch opening" className="h-20 w-32 rounded object-cover" />
   </a>;
 }
 

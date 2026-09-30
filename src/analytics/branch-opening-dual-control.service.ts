@@ -48,6 +48,7 @@ export async function evaluateBranchOpeningDualControl(
   engine: NbfcRuleEngineService,
   event: AnalyticsEventInput,
   camera: Pick<Camera, "id" | "branchId">,
+  sourceEventId?: string,
 ): Promise<BranchOpeningViolation[]> {
   const personCount = observedStaffCount(event);
   if (personCount === undefined || personCount === 0) return [];
@@ -67,6 +68,7 @@ export async function evaluateBranchOpeningDualControl(
   const { state } = await repository.claimBranchOpeningCheck({
     ruleId: rule.id, branchId: camera.branchId, localDate,
     cameraId: camera.id, personCount, occurredAt: event.occurredAt,
+    sourceEventId,
     snapshotReference: event.snapshotReference, clipReference: event.clipReference,
     personBoundingBox: event.objects.find((object) => object.label.toLowerCase() === "person")?.boundingBox,
   });

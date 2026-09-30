@@ -934,6 +934,7 @@ export async function registerAnalyticsRoutes(
           options.nbfcRuleEngine,
           eventInput,
           camera,
+          result.event.id,
         );
         openingViolationCount = violations.length;
         for (const violation of violations) {

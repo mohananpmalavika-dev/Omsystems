@@ -738,6 +738,7 @@ export class NbfcRuleRepository {
     cameraId: string;
     personCount: number;
     occurredAt: string;
+    sourceEventId?: string | undefined;
     snapshotReference?: string | undefined;
     clipReference?: string | undefined;
     personBoundingBox?: { x: number; y: number; width: number; height: number } | undefined;
@@ -755,6 +756,7 @@ export class NbfcRuleRepository {
         branchId: input.branchId,
         localDate: input.localDate,
         cameraId: input.cameraId,
+        sourceEventId: input.sourceEventId,
         personCount: input.personCount,
         snapshotReference: input.snapshotReference,
         clipReference: input.clipReference,
@@ -791,6 +793,58 @@ export class NbfcRuleRepository {
 
   async getBranchOpeningCheck(ruleId: string, branchId: string, localDate: string): Promise<RuntimeRuleState | null> {
     return this.getRuntimeState(ruleId, `branch-opening-day:${branchId}:${localDate}`);
+  }
+
+  async getBranchOpeningCheckForTenant(tenantId: string, ruleId: string, branchId: string, localDate: string): Promise<RuntimeRuleState | null> {
+    if (this.pool) {
+      const rule = await this.pool.query(
+        `SELECT 1 FROM nbfc_analytics_rules WHERE id = $1::uuid AND tenant_id = $2::uuid
+         AND template_id = 'tmpl-27-opening-staff-count' LIMIT 1`, [ruleId, tenantId],
+      );
+      if (!rule.rowCount) return null;
+    } else {
+      const rule = this.inMemoryRules.get(ruleId);
+      if (rule?.tenantId !== tenantId || rule.templateId !== 'tmpl-27-opening-staff-count') return null;
+    }
+    return this.getBranchOpeningCheck(ruleId, branchId, localDate);
+  }
+
+  async listBranchOpeningChecks(tenantId: string, branchIds: string[], startDay: string, endDay: string, limit = 10_001): Promise<RuntimeRuleState[]> {
+    if (branchIds.length === 0) return [];
+    if (this.pool) {
+      const result = await this.pool.query(
+        `SELECT state.* FROM nbfc_rule_state state
+         JOIN nbfc_analytics_rules rule ON rule.id = state.rule_id
+         WHERE rule.tenant_id = $1::uuid AND rule.template_id = $2
+           AND state.entity_key LIKE 'branch-opening-day:%'
+           AND state.current_metrics->>'branchId' = ANY($3::text[])
+           AND state.current_metrics->>'localDate' BETWEEN $4 AND $5
+         ORDER BY state.first_condition_met_at DESC LIMIT $6`,
+        [tenantId, 'tmpl-27-opening-staff-count', branchIds, startDay, endDay, limit],
+      );
+      return result.rows.map((row) => ({
+        ruleId: row.rule_id,
+        entityKey: row.entity_key,
+        currentStatus: row.current_status,
+        firstConditionMetAt: row.first_condition_met_at?.toISOString?.() || row.first_condition_met_at,
+        lastEvaluatedAt: row.last_evaluated_at?.toISOString?.() || row.last_evaluated_at,
+        lastTriggeredAt: row.last_triggered_at?.toISOString?.() || row.last_triggered_at,
+        activeAlertId: row.active_alert_id,
+        fencingToken: Number(row.fencing_token || 0),
+        currentMetrics: typeof row.current_metrics === 'string' ? JSON.parse(row.current_metrics) : row.current_metrics,
+      }));
+    }
+    this.assertProductionStorage();
+    const allowed = new Set(branchIds);
+    return Array.from(this.inMemoryStates.values())
+      .filter((state) => state.entityKey.startsWith('branch-opening-day:') &&
+        allowed.has(String(state.currentMetrics?.branchId)) &&
+        String(state.currentMetrics?.localDate) >= startDay &&
+        String(state.currentMetrics?.localDate) <= endDay &&
+        this.inMemoryRules.get(state.ruleId)?.tenantId === tenantId &&
+        this.inMemoryRules.get(state.ruleId)?.templateId === 'tmpl-27-opening-staff-count')
+      .sort((a, b) => String(b.firstConditionMetAt).localeCompare(String(a.firstConditionMetAt)))
+      .slice(0, limit);
   }
 
   async markBranchOpeningAlertEmitted(ruleId: string, branchId: string, localDate: string): Promise<void> {

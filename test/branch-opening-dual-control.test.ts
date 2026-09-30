@@ -70,7 +70,7 @@ describe("branch opening two-person enforcement", () => {
       event(1, "2026-09-22T03:05:00.000Z"), { id: "camera-entrance", branchId: "branch-1" })).toHaveLength(1);
   });
 
-  it("passes once when the first observed frame has two people, even if a later frame has one", async () => {
+  it("passes once when the first observed frame has at least two people, even if a later frame has one", async () => {
     const repository = new NbfcRuleRepository();
     const engine = new NbfcRuleEngineService(repository);
     const rule = await repository.instantiateTemplate("tmpl-27-opening-staff-count", {
@@ -85,9 +85,11 @@ describe("branch opening two-person enforcement", () => {
       schedule: { type: "BRANCH_OPENING", start: "08:30", end: "09:30", timezone: "Asia/Kolkata", days: [1] },
     });
 
-    expect(await evaluateBranchOpeningDualControl(repository, engine, event(2), { id: "camera-entrance", branchId: "branch-1" })).toHaveLength(0);
+    expect(await evaluateBranchOpeningDualControl(repository, engine, event(3),
+      { id: "camera-entrance", branchId: "branch-1" }, "source-opening-3")).toHaveLength(0);
     const today = await repository.getBranchOpeningCheck(rule.id, "branch-1", "2026-09-21");
     expect(today?.currentMetrics?.outcome).toBe("SUCCESS");
+    expect(today?.currentMetrics).toMatchObject({ personCount: 3, sourceEventId: "source-opening-3" });
     expect(await evaluateBranchOpeningDualControl(repository, engine,
       event(1, "2026-09-21T03:06:00.000Z"), { id: "camera-entrance", branchId: "branch-1" })).toHaveLength(0);
     expect(await evaluateBranchOpeningDualControl(repository, engine, event(1, "2026-09-21T05:30:00.000Z"), { id: "camera-entrance", branchId: "branch-1" })).toHaveLength(0);

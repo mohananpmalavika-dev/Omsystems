@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KryptonAI — Product Features Assistant</title>
-  <meta name="description" content="Ask KryptonAI about KryptonVision platform features in English, Malayalam, or Manglish." />
+  <title>KryptonAI — Product and Knowledge Assistant</title>
+  <meta name="description" content="Ask KryptonAI about KryptonVision, CCTV, VMS, and general knowledge in English, Malayalam, or Manglish." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -228,11 +228,12 @@
       <div class="welcome" id="welcomeScreen">
         <div class="welcome-orb">🛡️</div>
         <h2>Hello! I'm KryptonAI</h2>
-        <p>Ask me about KryptonVision platform features, AI analytics, camera support, or how to get started. I understand English, Malayalam &amp; Manglish!</p>
+        <p>Ask me about KryptonVision features, CCTV and VMS, or simple general knowledge. I understand English, Malayalam &amp; Manglish!</p>
         <div class="welcome-chips">
           <span class="chip" onclick="sendChip('What AI features are available?')">🤖 AI Features</span>
           <span class="chip" onclick="sendChip('enthellam features unduo')">🌸 ML-ൽ ചോദിക്കൂ</span>
           <span class="chip" onclick="sendChip('Banking NBFC module')">🏦 Banking</span>
+          <span class="chip" onclick="sendChip('What is VMS software?')">📹 VMS basics</span>
         </div>
       </div>
     </div>
@@ -245,7 +246,7 @@
       </div>
       <div class="input-wrap">
         <textarea id="msgInput" rows="1"
-          placeholder="Ask about features, cameras, analytics… or type in Malayalam!"
+          placeholder="Ask about features, CCTV, VMS, or general knowledge…"
           onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
         <button class="send-btn" id="sendBtn" onclick="sendMessage()" title="Send">➤</button>
       </div>
@@ -267,7 +268,7 @@
     document.getElementById('btnML').classList.toggle('active', lang === 'ml');
     document.getElementById('msgInput').placeholder = lang === 'ml'
       ? 'Features, cameras, analytics… Malayalam-ൽ ചോദിക്കൂ!'
-      : 'Ask about features, cameras, analytics… or type in Malayalam!';
+      : 'Ask about features, CCTV, VMS, or general knowledge…';
   }
 
   function autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; }
@@ -401,6 +402,7 @@
     return text
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
       .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+      .replace(/\[([^\]]+)\]\((\/(?!\/)[a-zA-Z0-9/_?=&.-]+)\)/g,'<a href="$2">$1</a>')
       .replace(/`([^`]+)`/g,'<code>$1</code>')
       .replace(/^• (.+)$/gm,'<li>$1</li>')
       .replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>')

@@ -2874,7 +2874,7 @@ export async function buildApp(options?: {
         try { (createFinancialTcoRoutes as any)(instance, pool); } catch {}
         try { (createBranchBenchmarkingRoutes as any)(instance, pool); } catch {}
         try { (createComplianceScorecardRoutes as any)(instance, pool); } catch {}
-        try { (createMISUnifiedRoutes as any)(instance, pool, store); } catch {}
+        try { (createMISUnifiedRoutes as any)(instance, pool, store, nbfcRuleRepo); } catch {}
         try { (createHistoricalTrendsRoutes as any)(instance, pool, store); } catch {}
       };
 

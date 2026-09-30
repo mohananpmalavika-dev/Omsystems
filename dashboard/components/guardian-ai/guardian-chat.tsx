@@ -214,9 +214,11 @@ function extractNavigationAction(message: ChatMessage): NavigationActionInfo | n
 function NavigationActionDisplay({
   navInfo,
   onNavigate,
+  isOpening,
 }: {
   navInfo: NavigationActionInfo;
   onNavigate: (href: string) => void;
+  isOpening: boolean;
 }) {
   return (
     <div className="mt-3 p-3.5 bg-gradient-to-r from-sky-950/70 via-slate-900 to-indigo-950/70 border border-sky-500/40 rounded-xl space-y-2.5 shadow-lg text-left">
@@ -231,8 +233,8 @@ function NavigationActionDisplay({
           </div>
         </div>
         <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-          Opening...
+          <span className={`w-1.5 h-1.5 rounded-full bg-emerald-400 ${isOpening ? "animate-ping" : ""}`} />
+          {isOpening ? "Opening..." : "Available to open"}
         </span>
       </div>
 
@@ -267,7 +269,7 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
-      content: "KryptonAI online. How can I assist you? I can answer questions about KryptonVision security capabilities, supported camera hardware, or guide you with signing in.",
+      content: "KryptonAI online. Ask me about KryptonVision features, CCTV and VMS, or general knowledge. I can also help you find the right page.",
       type: "text",
       timestamp: new Date().toISOString(),
     },
@@ -386,8 +388,10 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
       setMessages((prev) => [...prev, assistantMessage]);
 
       // Auto-navigate to menu if requested
-      const navInfo = extractNavigationAction(assistantMessage);
-      if (navInfo && navInfo.href) {
+      const navInfo = assistantMessage.actions?.some((action) => action.function === "navigate_to_menu")
+        ? extractNavigationAction(assistantMessage)
+        : null;
+      if (navInfo?.href) {
         setTimeout(() => {
           handleNavigate(navInfo.href);
         }, 800);
@@ -488,8 +492,10 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
       setMessages((prev) => [...prev, assistantVoiceMessage]);
 
       // Auto-navigate to menu if requested
-      const navInfo = extractNavigationAction(assistantVoiceMessage);
-      if (navInfo && navInfo.href) {
+      const navInfo = assistantVoiceMessage.actions?.some((action) => action.function === "navigate_to_menu")
+        ? extractNavigationAction(assistantVoiceMessage)
+        : null;
+      if (navInfo?.href) {
         setTimeout(() => {
           handleNavigate(navInfo.href);
         }, 800);
@@ -643,7 +649,7 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
                       <>
                         {cleanText && <p className="text-sm whitespace-pre-wrap">{cleanText}</p>}
                         {cameraAction && <CameraFeedDisplay cameraInfo={cameraAction} />}
-                        {navAction && <NavigationActionDisplay navInfo={navAction} onNavigate={handleNavigate} />}
+                        {navAction && <NavigationActionDisplay navInfo={navAction} onNavigate={handleNavigate} isOpening={Boolean(message.actions?.some((action) => action.function === "navigate_to_menu"))} />}
                       </>
                     );
                   })()}

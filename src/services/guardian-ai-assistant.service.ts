@@ -12,6 +12,7 @@
 import { z } from "zod";
 import type { Pool } from "pg";
 import { activeCamera } from "../database/active-resource.js";
+import { CCTV_VMS_PRIMER, cctvKnowledgeAnswer } from "./guardian-cctv-knowledge.js";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -409,7 +410,7 @@ export const APP_ROUTES: AppRouteItem[] = [
   { label: "Camera Import / Export (Excel)", href: "/admin/camera-import-export", category: "ADMINISTRATION", keywords: ["camera import", "camera export", "excel import"] },
   { label: "Stream Quality Settings", href: "/admin/system", category: "ADMINISTRATION", keywords: ["stream quality", "main stream", "sub stream"] },
   { label: "System Settings", href: "/settings", category: "ADMINISTRATION", keywords: ["settings", "system settings", "preferences", "config", "configuration"] },
-  { label: "Users & RBAC", href: "/admin/users", category: "ADMINISTRATION", keywords: ["users", "rbac", "user management", "accounts", "permissions", "user list"] },
+  { label: "Users & RBAC", href: "/admin/organization?tab=employees", category: "ADMINISTRATION", keywords: ["users", "rbac", "user management", "accounts", "permissions", "user list"] },
   { label: "Account & Security Settings", href: "/account/security", category: "ADMINISTRATION", keywords: ["account settings", "profile", "change password", "my account", "security settings"] },
   { label: "Mobile Operations View", href: "/mobile", category: "ADMINISTRATION", keywords: ["mobile", "mobile view", "mobile operations"] },
 ];
@@ -620,7 +621,7 @@ export function resolveAppRoute(query: string): AppRouteItem | null {
   // 5. Keyword substring match with cleaned
   if (cleaned.length >= 3) {
     match = APP_ROUTES.find((r) =>
-      r.keywords.some((k) => cleaned.includes(k) || k.includes(cleaned))
+      r.keywords.some((k) => k.length >= 3 && (cleaned.includes(k) || k.includes(cleaned)))
     );
     if (match) return match;
   }
@@ -632,6 +633,76 @@ export function resolveAppRoute(query: string): AppRouteItem | null {
   if (match) return match;
 
   return null;
+}
+
+type FeatureGuide = { purpose: string; working: string; steps: string[] };
+
+const FEATURE_GUIDES: Record<string, FeatureGuide> = {
+  "/control-room": { purpose: "Monitor live cameras across branches from one workspace.", working: "Choose a branch or camera and the wall displays the available live feeds; operators can inspect an individual feed and its alerts.", steps: ["Open Live branch coverage.", "Select the branch and cameras.", "Choose a layout and inspect the live feeds."] },
+  "/analytics/rules": { purpose: "Define detection zones and automate responses to video events.", working: "A camera rule watches a selected line or zone and creates the configured response when its condition is detected.", steps: ["Select a branch and camera.", "Draw a virtual tripwire with two points or a polygon zone with at least three points, then save it.", "Choose the matching condition and alert action, then save the rule."] },
+  "/analytics/face-recognition": { purpose: "Review face detections and manage authorized or watched people.", working: "Enrolled face records and watchlists are compared with supported camera detections so operators can review matches and alerts.", steps: ["Open Face Recognition & Watchlists.", "Choose the relevant camera, person, or watchlist.", "Verify any match against the source video before acting."] },
+  "/analytics/anpr": { purpose: "Review recognized vehicle plates and related vehicle events.", working: "Supported camera detections extract plate details for searches, logs, and configured alerts.", steps: ["Open ANPR & Vehicle Telemetry.", "Select the camera, branch, or time range.", "Review plate events and verify the image before taking action."] },
+  "/video-search": { purpose: "Find relevant recorded video quickly during an investigation.", working: "Search criteria narrow footage and event results; the operator reviews the matching clips.", steps: ["Set the branch, camera, and time window.", "Enter a search description or available filters.", "Open and verify a result before saving evidence."] },
+  "/playback/synced": { purpose: "Review footage from multiple cameras at the same time.", working: "Selected camera recordings align on a shared timeline for comparing an event across views.", steps: ["Select the cameras and time range.", "Start synchronized playback.", "Compare views and note the relevant timestamps."] },
+  "/recordings": { purpose: "Find and review stored CCTV recordings.", working: "The vault lists available footage by camera and time for playback and investigation.", steps: ["Select a branch, camera, and time range.", "Open the matching recording.", "Check availability and use the evidence workflow if a clip must be preserved."] },
+  "/evidence": { purpose: "Preserve investigation material with a traceable chain of custody.", working: "Evidence records keep footage, supporting details, and handling history together.", steps: ["Open the relevant evidence case or create a record.", "Attach the verified clip and details.", "Review custody information before export or handoff."] },
+  "/analytics/alerts": { purpose: "Review security detections and triage possible incidents.", working: "Analytics events are listed with severity, camera, and supporting context for operator review.", steps: ["Filter alerts by branch, severity, or time.", "Open an alert and verify its video context.", "Acknowledge, escalate, or resolve it according to the procedure."] },
+  "/incidents": { purpose: "Coordinate investigation and response to confirmed events.", working: "Incident records connect alerts, assignees, status, and response notes.", steps: ["Open or select the incident.", "Review evidence and assign the next action.", "Record updates and close only after verification."] },
+  "/operations/cameras": { purpose: "Check camera availability and diagnose offline devices.", working: "The page summarizes each camera's current health and connectivity signals.", steps: ["Filter to the affected branch or camera.", "Review its status and recent health details.", "Run an approved check or escalate the fault."] },
+  "/operations/edge-fleet": { purpose: "Manage branch edge agents and their deployment status.", working: "Registered agents connect branch cameras and report their health to the platform.", steps: ["Select the branch or agent.", "Review connectivity and installation status.", "Follow the branch gateway activation workflow for a new installation."] },
+  "/nbfc-operations": { purpose: "Monitor bank and NBFC branch security workflows.", working: "The workspace brings together cash, vault, camera, and operational risk views for authorized staff.", steps: ["Select the branch and operational area.", "Review relevant events and supporting camera context.", "Record or escalate exceptions under your branch procedure."] },
+  "/reports/mis": { purpose: "Review management information and operational trends.", working: "The report page summarizes selected periods and branches into traceable metrics and exports.", steps: ["Choose the date range and branch scope.", "Review metrics and exceptions.", "Export the report if your role permits it."] },
+};
+
+const CATEGORY_GUIDES: Record<string, FeatureGuide> = {
+  WORKSPACE: { purpose: "Access the tools for this operational task.", working: "The workspace groups the relevant records and controls for your role.", steps: ["Open the workspace.", "Choose the relevant branch or record.", "Review the available information and complete the task."] },
+  OPERATIONS: { purpose: "Monitor and respond to operational activity.", working: "The page presents current status and relevant events for operator review.", steps: ["Select the branch or item.", "Review status and supporting details.", "Record or escalate the outcome."] },
+  "DEVICE HEALTH & MAINTENANCE": { purpose: "Keep devices and recording services healthy.", working: "The page displays health signals and exceptions for the selected equipment.", steps: ["Filter to the device or branch.", "Inspect the health details.", "Run an approved check or create a work order."] },
+  "INVESTIGATE & PLAYBACK": { purpose: "Find and verify footage or evidence.", working: "The page organizes recordings and related events for investigation.", steps: ["Select cameras and a time range.", "Review the matching footage or records.", "Preserve verified findings when needed."] },
+  "INTELLIGENCE & AI": { purpose: "Review detections and configure video analytics.", working: "Analytics process supported camera events and show results for operator verification.", steps: ["Choose the branch, camera, or rule.", "Review detections against source video.", "Save an approved rule or record the outcome."] },
+  "FLEET MAINTENANCE": { purpose: "Plan and track equipment maintenance.", working: "The page keeps the selected assets, tasks, and status together.", steps: ["Find the asset or work order.", "Review its history and current status.", "Assign and document the next action."] },
+  "COMPLIANCE & GOVERNANCE": { purpose: "Manage controls and supporting audit evidence.", working: "The page organizes requirements, findings, and evidence for review.", steps: ["Select the applicable control or assessment.", "Review evidence and gaps.", "Record remediation and ownership."] },
+  "AUDIT & REPORTING": { purpose: "Review activity and produce management reports.", working: "The page summarizes selected records and time periods into reports.", steps: ["Set the date range and branch scope.", "Check the figures and exceptions.", "Export if authorized."] },
+  ADMINISTRATION: { purpose: "Configure platform settings and access.", working: "Authorized administrators review and save changes for the selected scope.", steps: ["Confirm the organization and target record.", "Review the current configuration and impact.", "Save the approved change."] },
+};
+
+export function isExplicitNavigationRequest(query: string): boolean {
+  const text = query.toLowerCase().trim();
+  return /^(?:please\s+)?(?:open|go to|goto|navigate to|launch|take me to|bring up|open cheyy|open aak|thurakk|poku|pokam|pokanam|edukk|kaanikk|kaanikku)\b/.test(text)
+    && !/\b(?:where|why|how|what|purpose|working|explain|evide|engane|enthina|enthaanu|manassila|doubt|link|path|url|cheyyan|aakan)\b/.test(text);
+}
+
+export function isFeatureQuestion(query: string): boolean {
+  if (/\b(?:how many|how much|count|number of|currently|today|right now)\b|എത്ര/i.test(query)
+      && !/\b(?:where|evide|how to|guide)\b|എവിടെ/.test(query)) return false;
+  return /\b(?:where|how|what is|what does|why|purpose|working|works|explain|guide|steps|use|configure|setup|find|evide|engane|enthina|enthaanu|entha|evideya|evideyanu|paranju|ariyanam|doubt)\b/i.test(query)
+    || /(?:എവിടെ|എങ്ങനെ|എന്താണ്|എന്താ|ഉദ്ദേശം|പ്രവർത്തി|വിശദീകരി|ഉപയോഗ)/.test(query);
+}
+
+export function featureGuideResponse(query: string, isGuest = false, previousRoute?: AppRouteItem): GuardianResponse | null {
+  const specificFeature = APP_ROUTES.some((route) => route.keywords.some((keyword) => keyword.includes(" ") && keyword.length >= 6 && query.toLowerCase().includes(keyword)));
+  const catalogQuestion = /\b(?:all|list|available|ella|full)\b.*\b(?:features?|modules?|pages?)\b|\b(?:features?|modules?|pages?)\b.*\b(?:available|und|ella)\b/i.test(query);
+  if ((!isFeatureQuestion(query) && !(query.trim().endsWith("?") && specificFeature) && !catalogQuestion) || isExplicitNavigationRequest(query)) return null;
+  if (/\b(?:who|when|which year|invented|capital of|translate|calculate)\b/i.test(query)) return null;
+  if (catalogQuestion) {
+    const groups = ["WORKSPACE", "OPERATIONS", "INVESTIGATE & PLAYBACK", "INTELLIGENCE & AI", "DEVICE HEALTH & MAINTENANCE", "AUDIT & REPORTING", "ADMINISTRATION"];
+    const sections = groups.map((category) => {
+      const names = APP_ROUTES.filter((route) => route.category === category).slice(0, 5).map((route) => route.label);
+      return names.length ? `- **${category}:** ${names.join(", ")}` : "";
+    }).filter(Boolean).join("\n");
+    return { message: `KryptonVision modules include:\n${sections}\n\nSee the full [Module Directory](/modules) for every workspace and its link.${isGuest ? " Sign in to open role-restricted pages." : ""}`, type: "text", timestamp: new Date().toISOString() };
+  }
+  const matchedRoute = resolveAppRoute(query);
+  const refersToPrevious = Boolean(previousRoute && /\b(?:this|that|it|athu|athinte|ithu|ee module)\b/i.test(query) && (!matchedRoute || !query.toLowerCase().includes(matchedRoute.label.toLowerCase())));
+  const route = refersToPrevious ? previousRoute : matchedRoute;
+  if (!route) return null;
+  const guide = FEATURE_GUIDES[route.href] ?? CATEGORY_GUIDES[route.category] ?? CATEGORY_GUIDES.WORKSPACE!;
+  const manglish = /\b(?:evide|engane|enthina|entha|cheyy|paranj|ariyanam|module ne|kurich)\b/i.test(query) || /[\u0D00-\u0D7F]/.test(query);
+  const path = `${route.category} → ${route.label}`;
+  const message = manglish
+    ? `**${route.label}**\n\n**Evide:** ${path}\n**Open cheyyan:** [${route.label}](${route.href})\n**Purpose:** ${guide.purpose}\n**Working:** ${guide.working}\n**Engane use cheyyam:**\n${guide.steps.map((step, index) => `${index + 1}. ${step}`).join("\n")}${isGuest ? "\n\nEe page access cheyyan sign in cheyyanam; role permission anusarich access labhikkum." : ""}`
+    : `**${route.label}**\n\n**Path:** ${path}\n**Open:** [${route.label}](${route.href})\n**Purpose:** ${guide.purpose}\n**How it works:** ${guide.working}\n**How to use it:**\n${guide.steps.map((step, index) => `${index + 1}. ${step}`).join("\n")}${isGuest ? "\n\nSign in to open this page; access depends on your role." : ""}`;
+  return { message, type: "text", timestamp: new Date().toISOString() };
 }
 
 export interface GuardianMessage {
@@ -849,6 +920,7 @@ export class GuardianAIAssistant {
   private openAIBaseUrl: string;
   private model: string;
   private conversationHistory: Map<string, GuardianMessage[]> = new Map();
+  private lastFeatureRoute: Map<string, AppRouteItem> = new Map();
 
   constructor(
     private pool: Pool,
@@ -897,49 +969,23 @@ export class GuardianAIAssistant {
     message: string,
     context: GuardianContext
   ): Promise<GuardianResponse> {
+    const matchedRoute = resolveAppRoute(message);
+    const guide = featureGuideResponse(message, Boolean(context.isGuest), this.lastFeatureRoute.get(sessionId));
+    if (guide) {
+      const refersToPrevious = /\b(?:this|that|it|athu|athinte|ithu|ee module)\b/i.test(message);
+      const route = (refersToPrevious ? this.lastFeatureRoute.get(sessionId) : matchedRoute) ?? this.lastFeatureRoute.get(sessionId);
+      if (route) this.lastFeatureRoute.set(sessionId, route);
+      const history = this.conversationHistory.get(sessionId) ?? [this.buildSystemPrompt(context)];
+      history.push({ role: "user", content: message }, { role: "assistant", content: guide.message });
+      this.conversationHistory.set(sessionId, history);
+      return guide;
+    }
+
     // In authenticated session, if user asks to open/navigate to ANY menu/page or names a menu, resolve immediately!
     if (!context.isGuest) {
       const lower = message.toLowerCase().trim();
       const navMatch = resolveAppRoute(lower);
-      const cleaned = cleanNavQuery(lower);
-      const isNavIntent =
-        lower.includes("open") ||
-        lower.includes("go") ||
-        lower.includes("show") ||
-        lower.includes("view") ||
-        lower.includes("menu") ||
-        lower.includes("navigate") ||
-        lower.includes("poku") ||
-        lower.includes("pokanam") ||
-        lower.includes("pokaam") ||
-        lower.includes("pokaan") ||
-        lower.includes("kaanik") ||
-        lower.includes("kaanikkanam") ||
-        lower.includes("kaanich") ||
-        lower.includes("edukk") ||
-        lower.includes("edukkanam") ||
-        lower.includes("eduth") ||
-        lower.includes("aak") ||
-        lower.includes("aakanam") ||
-        lower.includes("aakk") ||
-        lower.includes("aakkanam") ||
-        lower.includes("cheyy") ||
-        lower.includes("cheyyanam") ||
-        lower.includes("thurak") ||
-        lower.includes("thurann") ||
-        lower.includes("launch") ||
-        lower.includes("load") ||
-        lower.includes("display") ||
-        lower.includes("start");
-
-      const isDirectMatch = Boolean(
-        navMatch &&
-        (cleaned === navMatch.label.toLowerCase() ||
-         navMatch.keywords.some((k) => cleaned === k) ||
-         cleaned.length >= 3)
-      );
-
-      if (navMatch && (isNavIntent || isDirectMatch)) {
+      if (navMatch && isExplicitNavigationRequest(message)) {
         return {
           message: `Opening **${navMatch.label}** (${navMatch.href}). Navigating now...`,
           type: "action",
@@ -1430,10 +1476,24 @@ export class GuardianAIAssistant {
    * Build system prompt with context
    */
   private buildSystemPrompt(context: GuardianContext): GuardianMessage {
+    const trainerPolicy = `FEATURE TRAINER RULES:
+- Answer feature doubts like a patient product trainer: explain purpose, how it works, where it is, and practical steps. Answer follow-up questions using the preceding feature context.
+- Use only the route directory below for paths and links. If the feature is absent or ambiguous, say so and ask which feature the user means; never invent a path or claim an action was performed.
+- A question about where a feature is, its link, purpose, or workflow is an explanation request. Only navigate when the user explicitly commands you to open a page.
+- Also answer ordinary general knowledge questions directly, including simple science, history, geography, language, and arithmetic. Do not force unrelated questions into KryptonVision features or require sign-in for general knowledge.
+- Keep general answers clear and brief, explain further when asked, and say when you are unsure. Do not guess about current or changing facts without a reliable source.
+- Match the user's language, including Malayalam or Manglish. For guests, explain general features but never disclose organization data or perform operations.
+ROUTE DIRECTORY (page name | path):
+${APP_ROUTES.map((route) => `${route.label} | ${route.href}`).join("\n")}`;
+    const generalKnowledgePolicy = `GENERAL KNOWLEDGE: Answer ordinary questions beyond KryptonVision directly. For CCTV and VMS questions, use the following training reference and explain terms, workflows, comparisons, or troubleshooting at the level requested.\n${CCTV_VMS_PRIMER}`;
     if (context.isGuest) {
       return {
         role: "system",
         content: `You are KryptonAI, the intelligent assistant for the KryptonVision (Sentinel Grid) security and video analytics platform.
+
+${trainerPolicy}
+
+${generalKnowledgePolicy}
 
 IMPORTANT CONTEXT:
 The user is currently a GUEST (pre-login mode) and has not authenticated yet.
@@ -1465,16 +1525,11 @@ KRYPTONVISION PLATFORM ARCHITECTURE & HOW-TO KNOWLEDGE:
    PATH for both: Dashboard sidebar → Analytics → Rules & Automation → /analytics/rules
    Malayalam: Line Crossing-ന് 2 points, Polygon Zone-ന് 3+ points ക്ലിക്ക് ചെയ്ത് area draw ചെയ്ത് save ചെയ്യുക. Condition-ൽ Line Crossing / Zone Intrusion select ചെയ്ത് Rule save ചെയ്യുക.
 
-2. EDGE AGENT INSTALLATION & MULTI-SYSTEM TROUBLESHOOTING (എഡ്ജ് ഏജന്റ് ഇൻസ്റ്റാളേഷൻ):
-   - How to install: In Dashboard Branch Management, download the branch package ("<Branch>-edge-agent-setup.zip").
-     * CRITICAL: Extract ALL files first (Right-click ➔ Extract All; never run from inside compressed zip preview).
-     * Verify "edge-agent.env" is next to "KryptonVisionInstaller-v0.1.27-windows.exe".
-     * Right-click and "Run as administrator".
-   - Why it fails on another system:
-     a) Missing edge-agent.env: User copied only the .exe file alone, or ran it without extracting the ZIP.
-     b) Duplicate Agent ID: Using the same downloaded setup zip on two different machines conflicts. Each PC needs its own branch/gateway package from the dashboard.
-     c) Network: The PC must reach the cloud control plane at https://34-14-220-41.sslip.io.
-     d) Diagnosis: Check logs at "C:\\Program Files\\Sentinel Grid\\Edge Agent\\logs\\edge-agent.log" and Windows Scheduled Task "Sentinel Grid Edge Agent" in taskschd.msc.
+2. EDGE AGENT INSTALLATION & TROUBLESHOOTING:
+   - Open Edge Agent Management (/operations/edge-fleet), select the branch, and follow its current installer and one-time gateway activation instructions.
+   - Use the package and activation issued for that branch. Do not reuse credentials or activation for another branch.
+   - Approve the Windows administrator prompt. Check the agent status in the dashboard and the installed logs under C:\\Program Files\\KryptonVision\\Edge Agent if the connection fails.
+   - Refer to the control-plane address displayed in the deployment; do not prescribe an old hard-coded URL or installer version.
 
 3. COMPLETE PRODUCT FEATURES KNOWLEDGE (Answer these in detail — including in Malayalam/Manglish when asked):
 
@@ -1516,6 +1571,7 @@ KRYPTONVISION PLATFORM ARCHITECTURE & HOW-TO KNOWLEDGE:
 
 4. GENERAL QUESTIONS (PERMITTED IN GUEST MODE):
    - You CAN freely answer questions about KryptonVision platform features, architecture, and system capabilities.
+   - You CAN answer simple general knowledge questions unrelated to the platform, such as science, geography, history, words, and arithmetic. Do not ask the user to sign in for these.
    - You CAN explain AI video analytics (facial recognition, perimeter intrusion, crowd counting, loitering detection, vehicle ANPR).
    - You CAN explain CCTV camera support: ONVIF (Profile S/G/T), RTSP, and native compatibility with vendors like Hikvision, Dahua, CP Plus, Axis, Uniview, and Hanwha.
    - You CAN guide users on how to log in (Username/Password or Voice ID), how to reset passwords via OTP, and how to contact the administrator.
@@ -1533,6 +1589,10 @@ Personality: Professional, welcoming, concise, and helpful. Always reply in the 
     return {
       role: "system",
       content: `You are KryptonAI, an intelligent AI security assistant similar to JARVIS for the KryptonVision (Sentinel Grid) platform.
+
+${trainerPolicy}
+
+${generalKnowledgePolicy}
 
 Your role:
 - Monitor security operations across all branches
@@ -1573,16 +1633,11 @@ KRYPTONVISION PLATFORM HOW-TO KNOWLEDGE:
    PATH for both: Dashboard sidebar → Analytics → Rules & Automation → /analytics/rules
    Malayalam: /analytics/rules page-ൽ branch & camera select ചെയ്ത് Designer-ൽ mode choose ചെയ്ത് points click ചെയ്ത് save ചെയ്യുക. Rule Configuration-ൽ condition set ചെയ്ത് Rule save ചെയ്യുക.
 
-2. EDGE AGENT INSTALLATION & MULTI-SYSTEM TROUBLESHOOTING (എഡ്ജ് ഏജന്റ് ഇൻസ്റ്റാളേഷൻ):
-   - How to install: In Dashboard Branch Management, download the branch package ("<Branch>-edge-agent-setup.zip").
-     * CRITICAL: Extract ALL files first (Right-click ➔ Extract All; never run from inside compressed zip preview).
-     * Verify "edge-agent.env" is next to "KryptonVisionInstaller-v0.1.27-windows.exe".
-     * Right-click and "Run as administrator".
-   - Why it fails on another system:
-     a) Missing edge-agent.env: User copied only the .exe file alone, or ran it without extracting the ZIP.
-     b) Duplicate Agent ID: Using the same downloaded setup zip on two different machines conflicts. Each PC needs its own branch/gateway package from the dashboard.
-     c) Network: The PC must reach the cloud control plane at https://34-14-220-41.sslip.io.
-     d) Diagnosis: Check logs at "C:\\Program Files\\Sentinel Grid\\Edge Agent\\logs\\edge-agent.log" and Windows Scheduled Task "Sentinel Grid Edge Agent" in taskschd.msc.
+2. EDGE AGENT INSTALLATION & TROUBLESHOOTING:
+   - Open Edge Agent Management (/operations/edge-fleet), select the branch, and follow its current installer and one-time gateway activation instructions.
+   - Use the package and activation issued for that branch. Do not reuse credentials or activation for another branch.
+   - Approve the Windows administrator prompt. Check the agent status in the dashboard and the installed logs under C:\\Program Files\\KryptonVision\\Edge Agent if the connection fails.
+   - Refer to the control-plane address displayed in the deployment; do not prescribe an old hard-coded URL or installer version.
 
 3. COMPLETE PRODUCT FEATURES (Explain in detail when asked — reply in Malayalam when user asks in Malayalam/Manglish):
 
@@ -2091,6 +2146,12 @@ Personality:
     const lower = message.toLowerCase().trim();
     const timestamp = new Date().toISOString();
 
+    const guide = featureGuideResponse(message, Boolean(context.isGuest));
+    if (guide) return guide;
+
+    const cctvAnswer = cctvKnowledgeAnswer(message);
+    if (cctvAnswer) return { message: cctvAnswer, type: "text", timestamp };
+
     // In pre-login guest mode, handle general questions and prompt login for module/operational data
     if (context.isGuest) {
       return this.processGuestFallbackMessage(message, timestamp);
@@ -2144,38 +2205,7 @@ Personality:
 
     // 0. Navigation / Open Menu Command
     const navMatch = resolveAppRoute(lower);
-    const cleaned = cleanNavQuery(lower);
-    const isNavIntent =
-      lower.includes("open") ||
-      lower.includes("go") ||
-      lower.includes("show") ||
-      lower.includes("view") ||
-      lower.includes("menu") ||
-      lower.includes("navigate") ||
-      lower.includes("poku") ||
-      lower.includes("pokanam") ||
-      lower.includes("kaanik") ||
-      lower.includes("kaanikkanam") ||
-      lower.includes("edukk") ||
-      lower.includes("edukkanam") ||
-      lower.includes("aak") ||
-      lower.includes("aakanam") ||
-      lower.includes("cheyy") ||
-      lower.includes("cheyyanam") ||
-      lower.includes("thurak") ||
-      lower.includes("launch") ||
-      lower.includes("load") ||
-      lower.includes("display") ||
-      lower.includes("start");
-
-    const isDirectMatch = Boolean(
-      navMatch &&
-      (cleaned === navMatch.label.toLowerCase() ||
-       navMatch.keywords.some((k) => cleaned === k) ||
-       cleaned.length >= 3)
-    );
-
-    if (navMatch && (isNavIntent || isDirectMatch)) {
+    if (navMatch && isExplicitNavigationRequest(message)) {
       return {
         message: `Opening **${navMatch.label}** (${navMatch.href}). Navigating now...`,
         type: "action",
@@ -2247,22 +2277,15 @@ Personality:
       };
     }
 
-    // Edge Agent Installation & Multi-System Troubleshooting query
+    // Edge Agent installation and troubleshooting guidance comes from the current fleet workflow.
     if (
-      (lower.includes("edge") || lower.includes("agent") || lower.includes("installer") || lower.includes("kryptonvision")) &&
-      (lower.includes("install") || lower.includes("another") || lower.includes("work") || lower.includes("other system") || lower.includes("system") || lower.includes("setup"))
+      (lower.includes("edge") || lower.includes("agent") || lower.includes("installer")) &&
+      (lower.includes("install") || lower.includes("another") || lower.includes("work") || lower.includes("system") || lower.includes("setup"))
     ) {
       return {
-        message:
-          "**Edge Agent മറ്റൊരു സിസ്റ്റത്തിൽ ഇൻസ്റ്റാൾ ചെയ്യുമ്പോൾ ശ്രദ്ധിക്കേണ്ട കാര്യങ്ങൾ:**\n\n" +
-          "1. **Extract ZIP First**: ഡാഷ്‌ബോർഡിൽ നിന്ന് ഡൗൺലോഡ് ചെയ്ത `<Branch>-edge-agent-setup.zip` ഫയൽ **Right-click ➔ Extract All** നൽകി ഒരു സാധാരണ ഫോൾഡറിലേക്ക് എക്‌സ്‌ട്രാക്റ്റ് ചെയ്യുക. ZIP-നുള്ളിൽ നിന്ന് നേരിട്ട് `.exe` റൺ ചെയ്യരുത്.\n" +
-          "2. **edge-agent.env**: എക്‌സ്‌ട്രാക്റ്റ് ചെയ്ത ഫോൾഡറിൽ `KryptonVisionInstaller-v0.1.27-windows.exe`-ന്റെ കൂടെത്തന്നെ `edge-agent.env` ഉണ്ടെന്ന് ഉറപ്പുവരുത്തുക. `.exe` മാത്രം മറ്റൊരു പിസിയിലേക്ക് കോപ്പി ചെയ്താൽ വർക്ക് ആവില്ല.\n" +
-          "3. **Unique Branch Package**: രണ്ട് കമ്പ്യൂട്ടറുകളിൽ ഒരേ ഏജന്റ് ക്രെഡൻഷ്യലുകൾ ഉപയോഗിക്കാൻ പാടില്ല. ഓരോ സിസ്റ്റത്തിനും ഡാഷ്‌ബോർഡിൽ പ്രത്യേക ബ്രാഞ്ച്/ഏജന്റ് സെറ്റപ്പ് ഡൗൺലോഡ് ചെയ്യുക.\n" +
-          "4. **Run as Administrator**: ഇൻസ്റ്റാളറിൽ Right-click ചെയ്ത് **Run as administrator** നൽകുക.\n" +
-          "5. **Network Connection**: ആ സിസ്റ്റത്തിൽ നിന്ന് `https://34-14-220-41.sslip.io` റീച്ച് ചെയ്യാൻ സാധിക്കുന്നുണ്ടെന്ന് ഉറപ്പുവരുത്തുക.\n" +
-          "6. **Logs**: എന്തെങ്കിലും പ്രശ്നമുണ്ടെങ്കിൽ `C:\\Program Files\\Sentinel Grid\\Edge Agent\\logs\\edge-agent.log` ഫയൽ പരിശോധിക്കുക.",
+        message: "**Edge Agent setup and troubleshooting**\n\n**Path:** Operations → Edge Agent Management\n**Open:** [Edge Agent Management](/operations/edge-fleet)\n\n1. Select the correct branch and start its current gateway activation or installer workflow.\n2. Use the installer package and one-time activation issued for that branch. Follow the instructions shown in the dashboard; do not reuse another branch installation.\n3. On the branch PC, approve the installer administrator prompt and confirm it can reach the configured control plane.\n4. If it remains offline, check the agent status in Edge Agent Management and inspect the installed agent logs under `C:\\Program Files\\KryptonVision\\Edge Agent`. Share the displayed error with the administrator.",
         type: "text",
-        suggestions: ["Open Edge Fleet", "Open Branch Overview", "Open Command Center"],
+        suggestions: ["Open Edge Fleet", "Open Branch Overview"],
         timestamp,
       };
     }
@@ -2372,6 +2395,15 @@ Personality:
     const tip = this.openAIApiKey
       ? ""
       : "\n\n(Tip: Configure the GROQ_API_KEY or OPENAI_API_KEY environment variable to enable full generative conversational dialogue.)";
+    if (/\?|\b(?:what|who|when|where|why|how|explain|define|calculate|translate)\b|(?:എന്താണ്|എങ്ങനെ|ആരാണ്)/i.test(message)) {
+      return {
+        message: this.openAIApiKey
+          ? "I couldn't reach the AI knowledge service just now. Please try your question again shortly."
+          : "General knowledge answers need the AI knowledge service. Ask an administrator to configure the KryptonAI provider, then try again.",
+        type: "text",
+        timestamp,
+      };
+    }
     return {
       message: `KryptonAI operational assistant is online.\n\nQuick commands:\n• "How many alerts are open?"\n• "Show me camera status"\n• "What is the system health?"${tip}`,
       type: "text",
@@ -2405,7 +2437,7 @@ Personality:
     ) {
       return {
         message:
-          "Hello! I am KryptonAI, the intelligent security assistant for KryptonVision (Sentinel Grid).\n\nIn pre-login mode, I can help answer general questions about our surveillance platform, supported CCTV hardware, and AI video analytics.\n\nTo monitor live camera feeds, manage operational alerts, or access system modules, please sign in with your credentials or Voice ID.",
+          "Hello! I am KryptonAI. Ask me about KryptonVision, CCTV and VMS concepts, or simple general knowledge.\n\nTo view live feeds, alerts, or your organization's records, sign in with your account.",
         type: "text",
         suggestions: [
           "What is KryptonVision?",
@@ -2742,19 +2774,13 @@ Personality:
     }
 
     if (
-      (lower.includes("edge") || lower.includes("agent") || lower.includes("installer") || lower.includes("kryptonvision")) &&
-      (lower.includes("install") || lower.includes("another") || lower.includes("work") || lower.includes("other system") || lower.includes("system") || lower.includes("setup"))
+      (lower.includes("edge") || lower.includes("agent") || lower.includes("installer")) &&
+      (lower.includes("install") || lower.includes("another") || lower.includes("work") || lower.includes("system") || lower.includes("setup"))
     ) {
       return {
-        message:
-          "**KryptonVision Edge Agent മറ്റൊരു കമ്പ്യൂട്ടറിൽ ഇൻസ്റ്റാൾ ചെയ്യുമ്പോൾ:**\n\n" +
-          "1. **Extract ZIP First**: ഡാഷ്‌ബോർഡിൽ നിന്ന് ലഭിച്ച `<Branch>-edge-agent-setup.zip` പൂർണ്ണമായി **Extract All** ചെയ്യുക. ZIP-നുള്ളിൽ നിന്ന് നേരിട്ട് `.exe` പ്രവർത്തിപ്പിക്കരുത്.\n" +
-          "2. **edge-agent.env ഫയൽ നിർബന്ധമാണ്**: `.exe` ഫയലിന്റെ കൂടെത്തന്നെ `edge-agent.env` ഫയലും ഉണ്ടായിരിക്കണം. `.exe` മാത്രം കോപ്പി ചെയ്താൽ സെർവറുമായി കണക്റ്റാവില്ല.\n" +
-          "3. **ഒരു സിസ്റ്റത്തിന് ഒരു ഏജന്റ്**: ഒരേ ഏജന്റ് പാക്കേജ് രണ്ട് പിസിയിൽ ഒരേസമയം ഉപയോഗിച്ചാൽ കണക്ഷൻ ഡ്രോപ്പ് ആകും. പുതിയ പിസിക്ക് പുതിയ ബ്രാഞ്ച് ഏജന്റ് സെറ്റപ്പ് ഡൗൺലോഡ് ചെയ്യുക.\n" +
-          "4. **Run as Administrator**: ഇൻസ്റ്റാളറിൽ റൈറ്റ് ക്ലിക്ക് ചെയ്ത് **Run as administrator** കൊടുക്കുക.\n" +
-          "5. **Network Connectivity**: ആ കമ്പ്യൂട്ടറിൽ നിന്ന് ക്ലൗഡ് സെർവർ (`https://34-14-220-41.sslip.io`) ആക്സസ് ചെയ്യാൻ സാധിക്കണം.",
+        message: "**Edge Agent installation**\n\n**Where:** [Edge Agent Management](/operations/edge-fleet). After signing in, select the branch and use its current installer and one-time gateway activation workflow. Do not reuse another branch activation. Approve the Windows administrator prompt and check the displayed agent status. If setup fails, give the administrator the exact error shown; do not share activation codes or camera passwords.",
         type: "text",
-        suggestions: ["How do I sign in?", "What is KryptonVision?", "Supported CCTV cameras"],
+        suggestions: ["How do I sign in?", "What is KryptonVision?"],
         timestamp,
       };
     }
@@ -3394,6 +3420,15 @@ Personality:
     }
 
     // 8. General fallback for unauthenticated guest
+    if (/\?|\b(?:what|who|when|where|why|how|explain|define|calculate|translate)\b|(?:എന്താണ്|എങ്ങനെ|ആരാണ്)/i.test(message)) {
+      return {
+        message: this.openAIApiKey
+          ? "I couldn't reach the AI knowledge service just now. Please try your question again shortly."
+          : "General knowledge answers need the AI knowledge service. Please try again after KryptonAI is configured.",
+        type: "text",
+        timestamp,
+      };
+    }
     return {
       message:
         "I am KryptonAI, your security operations assistant. In pre-login mode, I can answer general questions about KryptonVision platform features, supported camera hardware, and signing in.\n\nTo view organization-specific module data, live camera streams, or incident queues, please sign in with your account credentials or Voice ID.",
@@ -3460,5 +3495,6 @@ Personality:
    */
   clearSession(sessionId: string): void {
     this.conversationHistory.delete(sessionId);
+    this.lastFeatureRoute.delete(sessionId);
   }
 }

@@ -4,16 +4,18 @@ import type { Pool } from "pg";
 import sharp from "sharp";
 import { MemoryStore } from "../src/store.js";
 import { createMISUnifiedRoutes } from "../src/routes/reports/mis-unified.routes.js";
+import { NbfcRuleRepository } from "../src/analytics/nbfc-rule-repository.js";
 
 describe("MIS report branch permissions", () => {
   const store = new MemoryStore();
   const app = Fastify();
   const pool = { query: async () => ({ rows: [] }) } as unknown as Pool;
+  const openingRepository = new NbfcRuleRepository();
 
   app.addHook("preHandler", async (request) => {
     request.currentUser = (await store.getUser("user-branch-manager"))!;
   });
-  createMISUnifiedRoutes(app, pool, store);
+  createMISUnifiedRoutes(app, pool, store, openingRepository);
   afterAll(async () => app.close());
 
   it("includes only permitted branches in data and filter choices", async () => {
@@ -95,6 +97,47 @@ describe("MIS report branch permissions", () => {
     expect(daily.json().rows.some((row: { occurredAt: string }) =>
       row.occurredAt === new Date(`${today}T09:00:00+05:30`).toISOString())).toBe(true);
     const forbidden = await app.inject({ method: "GET", url: "/mis/branch-opening-failures?branchId=A008" });
+    expect(forbidden.statusCode).toBe(403);
+  });
+
+  it("reports first opening counts of one and three with their outcome and scoped photos", async () => {
+    const rule = await openingRepository.createRule({
+      tenantId: "omsystems", templateId: "tmpl-27-opening-staff-count",
+      branchIds: ["A005"], detectorType: "person", name: "Opening count",
+    });
+    const snapshot = await sharp({ create: {
+      width: 100, height: 100, channels: 3, background: "#334455",
+    } }).jpeg().toBuffer();
+    for (const [day, count] of [["2026-09-23", 1], ["2026-09-24", 3]] as const) {
+      const occurredAt = `${day}T03:10:00.000Z`;
+      const result = await store.processAnalyticsEvent({
+        tenantId: "omsystems", cameraId: "cam-001", sourceEventId: `opening-${day}`,
+        detectionType: "person-counting", occurredAt, confidence: 0.95,
+        durationSeconds: 0, modelVersion: "test", objects: [],
+        metadata: { personCount: count, snapshotBase64: snapshot.toString("base64") },
+      });
+      await openingRepository.claimBranchOpeningCheck({
+        ruleId: rule.id, branchId: "A005", localDate: day, cameraId: "cam-001",
+        personCount: count, occurredAt, sourceEventId: result.event.id,
+        personBoundingBox: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
+      });
+    }
+    const report = await app.inject({ method: "GET",
+      url: "/mis/branch-openings?timeRange=custom&startDate=2026-09-23&endDate=2026-09-24" });
+    expect(report.statusCode).toBe(200);
+    expect(report.json().rows.map((row: { personCount: number; outcome: string }) =>
+      [row.personCount, row.outcome])).toEqual([[3, "SUCCESS"], [1, "FAILED"]]);
+    for (const row of report.json().rows) {
+      const photo = await app.inject({ method: "GET", url: row.photoUrl.replace("/api/control/v1/reports", "") });
+      expect(photo.statusCode).toBe(200);
+      const frame = await sharp(photo.rawPayload).metadata();
+      expect(frame.width).toBe(row.personCount === 1 ? 56 : 100);
+    }
+    const missing = await app.inject({ method: "GET",
+      url: "/mis/branch-openings?timeRange=custom&startDate=2026-09-25&endDate=2026-09-25" });
+    expect(missing.json().rows[0]).toMatchObject({ branchId: "A005", personCount: null,
+      outcome: "NOT_RECORDED", photoUrl: null });
+    const forbidden = await app.inject({ method: "GET", url: "/mis/branch-openings?branchId=A008" });
     expect(forbidden.statusCode).toBe(403);
   });
 });
