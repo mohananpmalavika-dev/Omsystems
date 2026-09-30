@@ -1448,11 +1448,11 @@ export async function registerCommunicationsRoutes(
         ctx.pool.query(
           `SELECT d.id::text AS device_id,
                   COALESCE(d.assigned_employee_code, u.id::text) AS id,
-                  COALESCE(d.assigned_employee_name, u.full_name, u.display_name, u.username) AS name,
+                  COALESCE(d.assigned_employee_name, u.display_name, u.username) AS name,
                   u.role, d.branch_id::text AS branch_id
            FROM communication_devices d
            LEFT JOIN communication_device_employees link ON link.device_id = d.id AND link.unlinked_at IS NULL
-           LEFT JOIN users u ON u.id = link.employee_id AND u.is_active = true
+           LEFT JOIN users u ON u.id = link.employee_id AND u.active = true
            WHERE d.tenant_id = $1 AND d.device_type IN ('EMPLOYEE_MOBILE', 'EMPLOYEE_DESKTOP')
              AND d.status IN ('ACTIVE', 'OFFLINE') AND d.revoked_at IS NULL
              AND (d.assigned_employee_name IS NOT NULL OR u.id IS NOT NULL)
@@ -1460,20 +1460,21 @@ export async function registerCommunicationsRoutes(
           [device.tenantId]
         ),
         ctx.pool.query(
-          `SELECT u.id::text, COALESCE(u.full_name, u.display_name, u.username) AS name,
-                  u.role, u.branch_id::text AS branch_id
+          `SELECT u.id::text, COALESCE(u.display_name, u.username) AS name,
+                  u.role, d.branch_id::text AS branch_id
            FROM communication_device_employees link
            JOIN users u ON u.id = link.employee_id
+           JOIN communication_devices d ON d.id = link.device_id AND d.tenant_id = link.tenant_id
            WHERE link.device_id = $1 AND link.tenant_id = $2
              AND link.unlinked_at IS NULL AND link.can_make_calls = true
-             AND u.tenant_id = $2 AND u.is_active = true
+             AND u.tenant_id = $2 AND u.active = true
            ORDER BY name ASC`,
           [device.deviceId, device.tenantId]
         ),
         ctx.pool.query(
-          `SELECT id::text, COALESCE(full_name, display_name, username) AS name,
-                  role, branch_id::text AS branch_id
-           FROM users WHERE tenant_id = $1 AND is_active = true ORDER BY name ASC`,
+          `SELECT id::text, COALESCE(display_name, username) AS name,
+                  role, NULL::text AS branch_id
+           FROM users WHERE tenant_id = $1 AND active = true ORDER BY name ASC`,
           [device.tenantId]
         ),
       ]);
@@ -1688,7 +1689,7 @@ export async function registerCommunicationsRoutes(
       const { employeeId } = request.params as { employeeId: string };
       const body = request.body as { context?: any };
       const target = await ctx.pool.query(
-        `SELECT 1 FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true LIMIT 1`,
+        `SELECT 1 FROM users WHERE id = $1 AND tenant_id = $2 AND active = true LIMIT 1`,
         [employeeId, request.currentUser.tenantId]
       );
       if (!target.rowCount) return reply.code(404).send({ error: 'employee_not_found' });
@@ -2288,7 +2289,7 @@ export async function registerCommunicationsRoutes(
               m.recipient_type AS "recipientType", m.recipient_id::text AS "recipientId",
               m.body, m.created_at AS "createdAt",
               CASE WHEN m.sender_type = 'OPERATOR' THEN
-                (SELECT COALESCE(u.full_name, u.display_name, u.username) FROM users u WHERE u.id = m.sender_id)
+                (SELECT COALESCE(u.display_name, u.username) FROM users u WHERE u.id = m.sender_id)
               ELSE (SELECT COALESCE(d.assigned_employee_name, d.device_name) FROM communication_devices d WHERE d.id = m.sender_id)
               END AS "senderName"
        FROM communication_direct_messages m
@@ -2314,11 +2315,11 @@ export async function registerCommunicationsRoutes(
     let targetBranchId: string | null = null;
     if (recipientType === 'OPERATOR') {
       const target = await ctx.pool.query(
-        'SELECT branch_id FROM users WHERE id = $1 AND tenant_id = $2 AND is_active = true LIMIT 1',
+        'SELECT id FROM users WHERE id = $1 AND tenant_id = $2 AND active = true LIMIT 1',
         [recipientId, identity.tenantId]
       );
       if (!target.rowCount) return reply.code(404).send({ error: 'recipient_not_found' });
-      targetBranchId = target.rows[0].branch_id;
+      targetBranchId = null;
     } else if (recipientType === 'DEVICE') {
       const target = await ctx.pool.query(
         `SELECT branch_id FROM communication_devices WHERE id = $1 AND tenant_id = $2
