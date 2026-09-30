@@ -18,3 +18,6 @@ WHERE detector_type = 'helmet-worn';
 UPDATE nbfc_analytics_rules
 SET enabled = false, state = 'INACTIVE', updated_at = NOW()
 WHERE detector_type != 'helmet-worn' AND enabled = true;
+
+-- 3. Ensure alert suppression is not blocking helmet alerts.
+DELETE FROM alert_suppression_config;
