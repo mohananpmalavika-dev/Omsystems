@@ -1,4 +1,5 @@
 import { authenticatedFetch } from "./http-auth.js";
+import { inferRecorderChannelCount } from "../recorders/dvr-adapter.js";
 
 export interface RecorderConfig {
   id: string; name: string; deviceType: "dvr" | "nvr";
@@ -96,7 +97,9 @@ interface RecordingMatch {
 const RECORDING_EVIDENCE_WINDOW_MS = 5 * 60_000;
 
 export function looksLikeRecorder(identity: { model?: string | undefined; manufacturer?: string | undefined }, scopes: string[] = []) {
-  return /(?:^|[\s_-])(dvr|nvr|xvr|uvr|nvs)(?:$|[\s_-])|video recorder|network\s*video\s*storage/i.test(`${identity.manufacturer ?? ""} ${identity.model ?? ""} ${scopes.join(" ")}`);
+  const description = `${identity.manufacturer ?? ""} ${identity.model ?? ""} ${scopes.join(" ")}`;
+  return /(?:^|[\s_-])(dvr|nvr|xvr|uvr|nvs)(?=$|[\s_-]|\d)|video recorder|network\s*video\s*storage/i.test(description)
+    || inferRecorderChannelCount(identity.model ?? "") !== null;
 }
 
 export function recorderPlaybackUri(config: RecorderConfig, sourceChannel: number, newestPlayableAt: string) {

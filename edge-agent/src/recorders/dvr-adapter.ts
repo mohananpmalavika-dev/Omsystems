@@ -243,7 +243,7 @@ export function recorderChannelIdentity(recorderSerialNumber: string, sourceChan
 }
 
 export function recorderChannelSource(model: string): RecorderChannelSource {
-  return /(?:^|[\s_-])(dvr|xvr|uvr)(?:$|[\s_-])/i.test(model)
+  return /(?:^|[\s_-])(dvr|xvr|uvr)(?=$|[\s_-]|\d)/i.test(model)
     ? "analog-dvr-channel"
     : "nvr-channel";
 }

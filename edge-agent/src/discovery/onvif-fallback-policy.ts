@@ -1,8 +1,14 @@
+import { inferRecorderChannelCount } from "../recorders/dvr-adapter.js";
+
 export function fallbackCredentialsRequired(
   streamVerified: boolean,
   credentialFailureDetected: boolean,
 ) {
   return !streamVerified && credentialFailureDetected;
+}
+
+export function needsRecorderRtspFallback(model: string, verifiedChannels: number) {
+  return verifiedChannels < (inferRecorderChannelCount(model) ?? 2);
 }
 
 export function rtspOnvifExclusions(input: {

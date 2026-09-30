@@ -6,6 +6,8 @@ describe("vendor recorder probes", () => {
 
   it("identifies recorder identities during ONVIF discovery without classifying ordinary cameras", () => {
     expect(looksLikeRecorder({ manufacturer: "CP PLUS", model: "8 Channel XVR" })).toBe(true);
+    expect(looksLikeRecorder({ manufacturer: "Dahua", model: "DH-XVR1B08-I" })).toBe(true);
+    expect(looksLikeRecorder({ manufacturer: "Hikvision", model: "DS-7216HQHI" })).toBe(true);
     expect(looksLikeRecorder({ manufacturer: "Hikvision", model: "DS-2CD2143G2" })).toBe(false);
   });
 

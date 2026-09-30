@@ -83,6 +83,7 @@ describe("universal DVR channel adapter", () => {
     expect(recorderAdapterVendor("CP-PLUS")).toBe("cp-plus");
     expect(recorderAdapterVendor("CPPLUS")).toBe("cp-plus");
     expect(recorderChannelSource("Enterprise NVR")).toBe("nvr-channel");
+    expect(recorderChannelSource("DH-XVR1B08-I")).toBe("analog-dvr-channel");
     expect(recorderChannelNumber(
       { token: "unknown", name: "unknown" },
       "rtsp://192.0.2.1/cam/realmonitor?channel=12&subtype=0",

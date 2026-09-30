@@ -1688,7 +1688,7 @@ export async function buildApp(options?: {
     const { branchId } = branchParams.parse(request.params);
     if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
     const parsed = z.object({
-      discoveryId: z.string().min(1).optional(),
+      discoveryId: z.string().trim().min(1).optional().or(z.literal("")).transform((val) => val ? val : undefined),
       name: z.string().trim().min(2).max(120),
       channel: z.number().int().positive(),
       protocol: z.enum(["onvif-t", "onvif-s", "rtsp", "vendor-adapter"]),
@@ -1736,7 +1736,21 @@ export async function buildApp(options?: {
         (!connectivity || !transportIsAllowed(connectionTransport, connectivity))) {
       return reply.code(409).send({ error: "branch_connectivity_not_configured" });
     }
-    if (!isPortable && connectionTransport === "edge-gateway" && !parsed.connectionSecretRef?.startsWith("edge://")) {
+    const recorderBacked = parsed.sourceType === "analog-dvr-channel" || parsed.sourceType === "nvr-channel";
+    if (recorderBacked && (!parsed.recorderId || !parsed.recorderChannel)) {
+      return reply.code(400).send({ error: "recorder_channel_requires_recorder_id_and_channel" });
+    }
+    const targetSlug = recorderBacked
+      ? `${parsed.recorderId || "recorder"}-ch${parsed.recorderChannel || parsed.channel}`
+      : (parsed.name || "camera").toLowerCase().replace(/[^a-z0-9_-]/g, "-");
+    const connectionSecretRef = parsed.connectionSecretRef ?? (connectionTransport === "vpn"
+      ? vpnSecretReference(branchId, parsed.sourceType, parsed.ipAddress!, parsed.recorderId, parsed.recorderChannel)
+      : isPortable
+      ? `rtsp://media-gateway:8554/camera-${(parsed.name || "portable").toLowerCase().replace(/[^a-z0-9_-]/g, "-")}`
+      : connectionTransport === "edge-gateway"
+      ? `edge://${branchId}/${targetSlug}`
+      : undefined);
+    if (!isPortable && connectionTransport === "edge-gateway" && !connectionSecretRef?.startsWith("edge://")) {
       return reply.code(400).send({ error: "edge_gateway_requires_edge_secret_reference" });
     }
     if (connectionTransport === "vpn" && (!parsed.ipAddress || !isPrivateIpv4Address(parsed.ipAddress))) {
@@ -1746,15 +1760,6 @@ export async function buildApp(options?: {
         !isAddressWithinAnyCidr(parsed.ipAddress, connectivity?.vpnRemoteNetworks ?? [])) {
       return reply.code(400).send({ error: "camera_address_outside_configured_vpn_networks" });
     }
-    const recorderBacked = parsed.sourceType === "analog-dvr-channel" || parsed.sourceType === "nvr-channel";
-    if (recorderBacked && (!parsed.recorderId || !parsed.recorderChannel)) {
-      return reply.code(400).send({ error: "recorder_channel_requires_recorder_id_and_channel" });
-    }
-    const connectionSecretRef = parsed.connectionSecretRef ?? (connectionTransport === "vpn"
-      ? vpnSecretReference(branchId, parsed.sourceType, parsed.ipAddress!, parsed.recorderId, parsed.recorderChannel)
-      : isPortable
-      ? `rtsp://media-gateway:8554/camera-${(parsed.name || "portable").toLowerCase().replace(/[^a-z0-9_-]/g, "-")}`
-      : undefined);
     if (!connectionSecretRef) return reply.code(400).send({ error: "connection_secret_ref_required" });
     const approvalInput = {
       discoveryId: parsed.discoveryId ?? "",

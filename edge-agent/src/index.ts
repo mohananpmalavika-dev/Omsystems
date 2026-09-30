@@ -6,7 +6,7 @@ import { onvifEndpointRole, onvifServiceCandidates } from "./discovery/onvif-ser
 import { createDeviceFingerprint } from "./discovery/device-fingerprint.js";
 import { fingerprintHttpRecorder } from "./discovery/recorder-http-fingerprint.js";
 import { discoverRtspDevices, recorderIdForHost, runWithConcurrency } from "./discovery/rtsp-network-scan.js";
-import { fallbackCredentialsRequired, rtspOnvifExclusions } from "./discovery/onvif-fallback-policy.js";
+import { fallbackCredentialsRequired, needsRecorderRtspFallback, rtspOnvifExclusions } from "./discovery/onvif-fallback-policy.js";
 import { targetFromScanJob, targetedOnvifEndpoint, type DeviceScanTarget } from "./discovery/targeted-scan.js";
 import { attachCredentials, OnvifClient } from "./devices/onvif-client.js";
 import { compatibilityNotes, normalizeVendor } from "./devices/compatibility-registry.js";
@@ -820,6 +820,11 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
           channels: channels.length,
           verifiedChannels: channels.filter((channel) => channel.streamVerified).length,
         });
+        if (needsRecorderRtspFallback(device.model, channels.filter((channel) => channel.streamVerified).length)) {
+          // ONVIF often exposes only the first recorder input. Let the RTSP
+          // scan fingerprint the same host and try its channel-specific paths.
+          recorderFallbackHosts.add(endpoint.remoteAddress);
+        }
         continue;
       }
       const profiles: DiscoveredCameraPayload["profiles"] = [];

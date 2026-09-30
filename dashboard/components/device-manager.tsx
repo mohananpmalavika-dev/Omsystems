@@ -1043,23 +1043,29 @@ export function DeviceManager() {
   // Periodic background polling for discoveries and online edge agent status
   useEffect(() => {
     if (!selectedBranch) return;
+    let polling = false;
     const interval = window.setInterval(async () => {
-      if (document.hidden) return;
-      const [gwResp, discResp, storageDiscoveryResp] = await Promise.allSettled([
-        cameraInventoryApi.listGateways(selectedBranch),
-        cameraInventoryApi.listDiscovered(selectedBranch),
-        loadStorageDiscoveries(selectedBranch),
-      ]);
-      if (selectedBranchRef.current !== selectedBranch) return;
-      if (gwResp.status === "fulfilled" && gwResp.value?.data) {
-        setGateways(gwResp.value.data);
+      if (document.hidden || polling) return;
+      polling = true;
+      try {
+        const [gwResp, discResp, storageDiscoveryResp] = await Promise.allSettled([
+          cameraInventoryApi.listGateways(selectedBranch),
+          cameraInventoryApi.listDiscovered(selectedBranch),
+          loadStorageDiscoveries(selectedBranch),
+        ]);
+        if (selectedBranchRef.current !== selectedBranch) return;
+        if (gwResp.status === "fulfilled" && gwResp.value?.data) {
+          setGateways(gwResp.value.data);
+        }
+        if (discResp.status === "fulfilled" && Array.isArray(discResp.value?.data)) {
+          setDiscoveredCameras(discResp.value.data);
+          updateDiscoveryReviewState(discResp.value.data);
+        }
+        if (storageDiscoveryResp.status === "fulfilled") setDiscoveredStorageDisks(storageDiscoveryResp.value);
+        void loadPortableDevices();
+      } finally {
+        polling = false;
       }
-      if (discResp.status === "fulfilled" && Array.isArray(discResp.value?.data)) {
-        setDiscoveredCameras(discResp.value.data);
-        updateDiscoveryReviewState(discResp.value.data);
-      }
-      if (storageDiscoveryResp.status === "fulfilled") setDiscoveredStorageDisks(storageDiscoveryResp.value);
-      void loadPortableDevices();
     }, 4_000);
 
     return () => window.clearInterval(interval);
@@ -1978,8 +1984,7 @@ export function DeviceManager() {
       }
 
       const streamProfile = cameraProfilePayload(cameraForm);
-      await cameraInventoryApi.approveCamera(selectedBranch, {
-        discoveryId: "",
+      await cameraInventoryApi.createCamera(selectedBranch, {
         name: cameraForm.name,
         channel: Number(cameraForm.channel),
         protocol: cameraForm.protocol,
@@ -1989,7 +1994,11 @@ export function DeviceManager() {
         retentionDays: Number(cameraForm.retentionDays || 90),
         recordingMode: cameraForm.recordingMode,
         storageLocationName: cameraForm.storageLocationName.trim() || undefined,
-        ...(cameraForm.connectionSecretRef.trim() ? { connectionSecretRef: cameraForm.connectionSecretRef.trim() } : {}),
+        ...(cameraForm.connectionSecretRef.trim()
+          ? { connectionSecretRef: cameraForm.connectionSecretRef.trim() }
+          : cameraForm.connectionTransport === "edge-gateway" && (cameraForm.edgeAgentId || gateways[0]?.id)
+          ? { connectionSecretRef: `edge://${cameraForm.edgeAgentId || gateways[0]?.id}/${cameraForm.sourceType !== "ip-camera" ? `${cameraForm.recorderId || "recorder"}-ch${cameraForm.recorderChannel || cameraForm.channel}` : (cameraForm.name || "camera").toLowerCase().replace(/[^a-z0-9_-]/g, "-")}` }
+          : {}),
         ...(cameraForm.sourceType !== "ip-camera" ? {
           recorderId: cameraForm.recorderId,
           recorderChannel: Number(cameraForm.recorderChannel),
@@ -3138,7 +3147,7 @@ export function DeviceManager() {
                 <div className="form-group"><label htmlFor="rtspPort">RTSP port</label><input id="rtspPort" type="number" min="1" max="65535" value={cameraForm.rtspPort} onChange={(event) => setCameraForm((form) => ({ ...form, rtspPort: event.target.value }))} required /></div>
               </div>
               {(cameraForm.sourceType === "analog-dvr-channel" || cameraForm.sourceType === "nvr-channel") ? <div className="form-row"><div className="form-group"><label htmlFor="recorderId">DVR / NVR ID <span className="required">*</span></label><input id="recorderId" value={cameraForm.recorderId} onChange={(event) => setCameraForm((form) => ({ ...form, recorderId: event.target.value }))} required placeholder="DVR-BLR-01" /></div><div className="form-group"><label htmlFor="recorderChannel">Recorder channel <span className="required">*</span></label><input id="recorderChannel" type="number" min="1" value={cameraForm.recorderChannel} onChange={(event) => setCameraForm((form) => ({ ...form, recorderChannel: event.target.value }))} required /></div><div className="form-group"><label htmlFor="recorderSerial">Recorder serial</label><input id="recorderSerial" value={cameraForm.recorderSerialNumber} onChange={(event) => setCameraForm((form) => ({ ...form, recorderSerialNumber: event.target.value }))} placeholder="Optional" /></div></div> : null}
-              <div className="form-group"><label htmlFor="secretRef">Stream secret reference {registrationMode === "manual" && cameraForm.connectionTransport !== "vpn" ? <span className="required">*</span> : null}</label><input id="secretRef" value={cameraForm.connectionSecretRef} onChange={(event) => setCameraForm((form) => ({ ...form, connectionSecretRef: event.target.value }))} minLength={cameraForm.connectionSecretRef ? 8 : undefined} required={registrationMode === "manual" && cameraForm.connectionTransport !== "vpn"} placeholder={cameraForm.connectionTransport === "vpn" ? "Generated automatically for VPN when left blank" : "edge://gateway/device or gateway secret reference"} /><small className="field-help">VPN references are generated from the private address when left blank. Gateway and tunnel references must map to the RTSP source in that gateway's encrypted secret store. Credentials are never saved in the inventory database.</small></div></div>
+              <div className="form-group"><label htmlFor="secretRef">Stream secret reference {registrationMode === "manual" && cameraForm.connectionTransport !== "vpn" && cameraForm.connectionTransport !== "edge-gateway" ? <span className="required">*</span> : null}</label><input id="secretRef" value={cameraForm.connectionSecretRef} onChange={(event) => setCameraForm((form) => ({ ...form, connectionSecretRef: event.target.value }))} minLength={cameraForm.connectionSecretRef ? 8 : undefined} required={registrationMode === "manual" && cameraForm.connectionTransport !== "vpn" && cameraForm.connectionTransport !== "edge-gateway"} placeholder={cameraForm.connectionTransport === "vpn" ? "Generated automatically for VPN when left blank" : cameraForm.connectionTransport === "edge-gateway" ? "Generated automatically for Branch Gateway when left blank" : "edge://gateway/device or gateway secret reference"} /><small className="field-help">VPN and Branch Gateway references are generated automatically when left blank. Gateway and tunnel references map to the RTSP source in the encrypted gateway store.</small></div></div>
 
               <div className="form-section">
                 <h3>Storage and recording allocation</h3>
@@ -3785,10 +3794,22 @@ export function DeviceManager() {
 }
 
 function messageOf(reason: unknown, fallback: string) {
-
-  return reason instanceof Error && reason.message !== "Request failed"
-    ? reason.message
-    : fallback;
+  if (reason instanceof Error && reason.message && reason.message !== "Request failed") {
+    try {
+      const parsed = JSON.parse(reason.message);
+      if (Array.isArray(parsed) && parsed.length > 0 && parsed[0]?.message) {
+        return parsed.map((e: any) => `${e.path?.length ? `${e.path.join(".")}: ` : ""}${e.message}`).join("; ");
+      }
+      if (typeof parsed === "object" && parsed !== null) {
+        if (typeof parsed.message === "string") return parsed.message;
+        if (typeof parsed.error === "string") return parsed.error;
+      }
+    } catch {
+      // not JSON, keep original message
+    }
+    return reason.message;
+  }
+  return fallback;
 }
 
 function isGatewayReady(gateway: EdgeAgent) {

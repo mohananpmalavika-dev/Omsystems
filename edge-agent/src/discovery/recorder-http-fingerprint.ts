@@ -1,4 +1,5 @@
 import { identifyVendorFamily, type VendorStreamFamily } from "../devices/vendor-stream-adapter.js";
+import { inferRecorderChannelCount, recorderChannelSource } from "../recorders/dvr-adapter.js";
 
 export interface HttpRecorderFingerprint {
   vendor: VendorStreamFamily;
@@ -32,10 +33,10 @@ export async function fingerprintHttpRecorder(
     const server = response.headers.get("server") ?? "";
     const evidence = `${title} ${server} ${body.slice(0, 64_000)}`;
 
-    if (looksLikeRouterOrGateway(evidence)) {
+    if (looksLikeRouterOrGateway(evidence, title)) {
       return undefined;
     }
-    if (!looksLikeRecorder(evidence)) return undefined;
+    if (!looksLikeRecorder(evidence, title)) return undefined;
 
     const vendor = identifyVendorFamily(evidence);
     const manufacturer = manufacturerFor(vendor, evidence);
@@ -45,6 +46,7 @@ export async function fingerprintHttpRecorder(
       manufacturer,
       model,
       sourceType: /\b(?:dvr|xvr|uvr|digital video recorder)\b/i.test(evidence)
+        || recorderChannelSource(title) === "analog-dvr-channel"
         ? "analog-dvr-channel"
         : "nvr-channel",
     };
@@ -55,8 +57,9 @@ export async function fingerprintHttpRecorder(
   }
 }
 
-export function looksLikeRouterOrGateway(value: string) {
-  const isCamera = /\b(?:camera|tapo|kasa|cam\b|ipcam|ipc\b|netcam|nvr|dvr|cctv|dome|bullet|ptz|reolink|foscam|vivotek|amcrest|hikvision|dahua|axis)\b/i.test(value);
+export function looksLikeRouterOrGateway(value: string, title = "") {
+  const isCamera = /\b(?:camera|tapo|kasa|cam\b|ipcam|ipc\b|netcam|nvr|dvr|cctv|dome|bullet|ptz|reolink|foscam|vivotek|amcrest|hikvision|dahua|axis)\b/i.test(value)
+    || inferRecorderChannelCount(title) !== null;
   if (isCamera) return false;
   return /\b(?:tenda|tp-link|tplink|d-link|dlink|netgear|asus|linksys|mikrotik|openwrt|dd-wrt|huawei|zte|broadband\s*router|wireless\s*router|home\s*gateway|wifi\s*router|mini_httpd|goahead-webs|rompager|boa\b|router\s*management|router\s*login|gateway\s*login|admin\s*login)\b/i.test(value);
 }
@@ -87,12 +90,14 @@ export async function isRouterHost(
   }
 }
 
-function looksLikeRecorder(value: string) {
+function looksLikeRecorder(value: string, title: string) {
   const hasCameraOnlyMarker = /\b(?:ipc|ip\s*camera|network\s*camera)\b/i.test(value)
-    && !/\b(?:dvr|xvr|nvr|uvr|digital video recorder|network video recorder|network video storage)\b/i.test(value);
+    && !/\b(?:dvr|xvr|nvr|uvr|digital video recorder|network video recorder|network video storage)\b/i.test(value)
+    && inferRecorderChannelCount(title) === null;
   if (hasCameraOnlyMarker) return false;
 
   return /\b(?:dvr|xvr|nvr|uvr|digital video recorder|network video recorder|network video storage)\b/i.test(value)
+    || inferRecorderChannelCount(title) !== null
     || /cp[\s_-]*plus/i.test(value);
 }
 

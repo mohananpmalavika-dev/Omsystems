@@ -36,6 +36,18 @@ describe("automatic RTSP recorder discovery", () => {
     });
   });
 
+  it("recognizes a recorder model embedded in a web title even with a generic server banner", async () => {
+    const fetchImpl = vi.fn(async () => new Response(
+      "<html><head><title>DH-XVR1B08-I</title></head></html>",
+      { status: 200, headers: { Server: "boa" } },
+    )) as unknown as typeof fetch;
+
+    await expect(fingerprintHttpRecorder("192.0.2.20", 1_000, fetchImpl)).resolves.toMatchObject({
+      model: "DH-XVR1B08-I",
+      sourceType: "analog-dvr-channel",
+    });
+  });
+
   it("does not classify a CP PLUS IP-camera page as a recorder", async () => {
     const fetchImpl = vi.fn(async () => new Response(
       "<html><head><title>CPPLUS IPC - Web View</title></head></html>",

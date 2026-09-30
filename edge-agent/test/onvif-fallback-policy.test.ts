@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   fallbackCredentialsRequired,
+  needsRecorderRtspFallback,
   rtspOnvifExclusions,
 } from "../src/discovery/onvif-fallback-policy.js";
 
@@ -26,5 +27,12 @@ describe("ONVIF fallback policy", () => {
       handledOnvifHosts,
       recorderFallbackHosts,
     })).toEqual([]);
+  });
+
+  it("tries RTSP enumeration when ONVIF verifies fewer inputs than a recorder exposes", () => {
+    expect(needsRecorderRtspFallback("DH-XVR1B08-I", 1)).toBe(true);
+    expect(needsRecorderRtspFallback("DH-XVR1B08-I", 8)).toBe(false);
+    expect(needsRecorderRtspFallback("Generic NVR", 1)).toBe(true);
+    expect(needsRecorderRtspFallback("Generic NVR", 2)).toBe(false);
   });
 });
