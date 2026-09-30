@@ -15,6 +15,28 @@ export interface SnapshotRecord {
   cameraId: string;
 }
 export const snapshotCache = new Map<string, SnapshotRecord>();
+
+export async function markHelmetSnapshot(
+  jpeg: Buffer,
+  objects: Array<{ label?: string; boundingBox?: { x: number; y: number; width: number; height: number } }>,
+): Promise<Buffer> {
+  const { width, height } = await sharp(jpeg).metadata();
+  if (!width || !height) return jpeg;
+  const boxes = objects.filter((object) => object.label === "helmet").flatMap((object) => {
+    const box = object.boundingBox;
+    if (!box || ![box.x, box.y, box.width, box.height].every(Number.isFinite) ||
+      box.width <= 0 || box.height <= 0) return [];
+    const x = Math.max(0, Math.min(1, box.x));
+    const y = Math.max(0, Math.min(1, box.y));
+    const right = Math.max(x, Math.min(1, box.x + box.width));
+    const bottom = Math.max(y, Math.min(1, box.y + box.height));
+    if (right === x || bottom === y) return [];
+    return [`<rect x="${x * width}" y="${y * height}" width="${(right - x) * width}" height="${(bottom - y) * height}" fill="none" stroke="#f43f5e" stroke-width="3"/>`];
+  });
+  if (boxes.length === 0) return jpeg;
+  const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${boxes.join("")}</svg>`);
+  return sharp(jpeg).composite([{ input: svg }]).jpeg({ quality: 85 }).toBuffer();
+}
 import { CameraHealthDetector } from "./detectors/camera-health-detector.js";
 import { CameraTamperDetector } from "./detectors/camera-tamper-detector.js";
 import { MotionDetector } from "./detectors/motion-detector.js";
@@ -777,6 +799,7 @@ export class AnalyticsPipeline {
   ): Promise<z.infer<typeof detectionSchema>> {
     const eventId = randomUUID();
     let snapshotBase64: string | undefined;
+    let annotatedSnapshotBase64: string | undefined;
 
     if (
       frame.imageData &&
@@ -797,8 +820,12 @@ export class AnalyticsPipeline {
           .toBuffer();
 
         snapshotBase64 = jpegBuffer.toString("base64");
+        const markedBuffer = result.detectionType === "helmet-worn"
+          ? await markHelmetSnapshot(jpegBuffer, result.objects ?? [])
+          : jpegBuffer;
+        if (markedBuffer !== jpegBuffer) annotatedSnapshotBase64 = markedBuffer.toString("base64");
         snapshotCache.set(eventId, {
-          buffer: jpegBuffer,
+          buffer: markedBuffer,
           createdAt: Date.now(),
           cameraId: frame.cameraId,
         });
@@ -837,6 +864,7 @@ export class AnalyticsPipeline {
       metadata: {
         ...(result.metadata ?? {}),
         ...(snapshotBase64 ? { snapshotBase64 } : {}),
+        ...(annotatedSnapshotBase64 ? { annotatedSnapshotBase64 } : {}),
       },
     };
   }

@@ -14,6 +14,7 @@ import {
 
 export interface HelmetDetection {
   personBoundingBox: { x: number; y: number; width: number; height: number };
+  helmetBoundingBox?: { x: number; y: number; width: number; height: number };
   helmetDetected: boolean;
   confidence: number | null;
   vehicleType?: "motorcycle" | "bicycle";
@@ -101,7 +102,7 @@ export class HelmetDetector extends BaseDetector {
         {
           label: "helmet",
           confidence: detection.confidence ?? effectiveConf,
-          boundingBox: detection.personBoundingBox,
+          boundingBox: detection.helmetBoundingBox ?? this.headRegion(detection.personBoundingBox),
         },
         {
           label: "person",
@@ -209,6 +210,7 @@ export class HelmetDetector extends BaseDetector {
     if (!helmet) return undefined;
     return {
       personBoundingBox: person.boundingBox,
+      helmetBoundingBox: helmet.boundingBox,
       helmetDetected: true,
       confidence: helmet.confidence ?? null,
       riskLevel: "violation",
@@ -337,6 +339,7 @@ export class HelmetDetector extends BaseDetector {
       : Math.max(upperResult.unwearingHelmetConfidence, standardResult.unwearingHelmetConfidence);
     return {
       personBoundingBox: person.boundingBox,
+      helmetBoundingBox: this.headRegion(person.boundingBox),
       helmetDetected,
       confidence,
       riskLevel: helmetDetected ? "violation" : "compliant",

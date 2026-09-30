@@ -5,6 +5,8 @@ import { HelmetDetector } from "../src/detectors/helmet-detector.js";
 import { PPEDetector } from "../src/detectors/ppe-detector.js";
 import { FaceDetector } from "../src/detectors/face-detector.js";
 import { ANPRDetector } from "../src/detectors/anpr-detector.js";
+import { markHelmetSnapshot } from "../src/analytics-pipeline.js";
+import sharp from "sharp";
 
 const object = (label: string, confidence: number, boundingBox = { x: 0.1, y: 0.1, width: 0.4, height: 0.4 }): InferenceObject => ({
   label, confidence, boundingBox,
@@ -122,6 +124,23 @@ describe("local specialty model adapters", () => {
     expect(results).toEqual(expect.arrayContaining([
       expect.objectContaining({ detectionType: "helmet-worn", requiresAlert: true }),
     ]));
+    const helmetBox = results[0]?.objects.find((item) => item.label === "helmet")?.boundingBox;
+    expect(helmetBox?.x).toBeCloseTo(0.18);
+    expect(helmetBox?.y).toBeCloseTo(0.11);
+    expect(helmetBox?.width).toBeCloseTo(0.24);
+    expect(helmetBox?.height).toBeCloseTo(0.12);
+  });
+
+  it("marks the helmet on an alert snapshot while leaving the source image intact", async () => {
+    const original = await sharp({ create: { width: 100, height: 100, channels: 3, background: "#808080" } })
+      .jpeg().toBuffer();
+    const marked = await markHelmetSnapshot(original, [
+      { label: "helmet", boundingBox: { x: 0.18, y: 0.11, width: 0.24, height: 0.12 } },
+    ]);
+    const pixel = await sharp(marked).raw().toBuffer({ resolveWithObject: true });
+    const offset = (11 * pixel.info.width + 25) * pixel.info.channels;
+    expect(pixel.data[offset]).toBeGreaterThan(pixel.data[offset + 1] + 30);
+    expect(marked.equals(original)).toBe(false);
   });
 
   it("does not alert on a low-confidence normalized helmet observation", async () => {

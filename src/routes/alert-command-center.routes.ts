@@ -243,8 +243,10 @@ export async function registerAlertCommandCenterRoutes(
             [alert.eventId],
           );
           const meta = eventResult.rows?.[0]?.metadata;
-          if (meta && typeof meta === "object" && typeof meta.snapshotBase64 === "string" && meta.snapshotBase64.length > 0) {
-            snapshotBase64 = meta.snapshotBase64;
+          if (meta && typeof meta === "object") {
+            snapshotBase64 = typeof meta.annotatedSnapshotBase64 === "string"
+              ? meta.annotatedSnapshotBase64
+              : typeof meta.snapshotBase64 === "string" ? meta.snapshotBase64 : undefined;
           }
         }
         if (snapshotBase64) {

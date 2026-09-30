@@ -859,10 +859,12 @@ export async function registerAnalyticsRoutes(
           [alert.eventId]
         );
         const meta = res.rows?.[0]?.metadata;
-        if (meta && typeof meta === "object" && typeof meta.snapshotBase64 === "string" && meta.snapshotBase64.length > 0) {
+        const marked = typeof meta?.annotatedSnapshotBase64 === "string"
+          ? meta.annotatedSnapshotBase64 : undefined;
+        if (marked || (meta && typeof meta === "object" && typeof meta.snapshotBase64 === "string" && meta.snapshotBase64.length > 0)) {
           reply.header("content-type", "image/jpeg");
           reply.header("cache-control", "public, max-age=86400, immutable");
-          return reply.send(Buffer.from(meta.snapshotBase64, "base64"));
+          return reply.send(Buffer.from(marked || meta.snapshotBase64, "base64"));
         }
       } catch {}
     }
