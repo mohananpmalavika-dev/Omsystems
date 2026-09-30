@@ -303,12 +303,23 @@ export class EdgeLiveGateway {
         }
         const consumed = await this.options.consumer.consume(body.controlPlaneToken);
         if (consumed.purpose && consumed.purpose !== "view") return sendJson(response, 403, { error: "invalid_live_session" });
-        const sourceUri = this.options.resolveSecret(consumed.connectionSecretRef);
+        const requestedProfile = body.profile === "sub" || (consumed as { profile?: string }).profile === "sub" ? "sub" : "main";
+        let sourceUri = (requestedProfile === "sub" ? this.options.resolveSecret(`${consumed.connectionSecretRef}#sub`) : undefined)
+          || this.options.resolveSecret(consumed.connectionSecretRef);
         if (!sourceUri) return sendJson(response, 503, { error: "stream_secret_unavailable" });
+        if (requestedProfile === "sub" && !sourceUri.includes("subtype=1")) {
+          if (sourceUri.includes("subtype=0")) {
+            sourceUri = sourceUri.replace("subtype=0", "subtype=1");
+          } else if (sourceUri.includes("/Streaming/Channels/101")) {
+            sourceUri = sourceUri.replace("/Streaming/Channels/101", "/Streaming/Channels/102");
+          } else if (sourceUri.includes("/onvif1")) {
+            sourceUri = sourceUri.replace("/onvif1", "/onvif2");
+          }
+        }
         if (!isAllowedIngestSource(sourceUri, this.options.allowSrtIngest ?? false, this.options.allowMulticastIngest ?? false)) {
           return sendJson(response, 409, { error: "stream_transport_not_enabled" });
         }
-        const path = `camera-${safeIdentifier(consumed.cameraId)}`;
+        const path = `camera-${safeIdentifier(consumed.cameraId)}${requestedProfile === "sub" ? "-sub" : ""}`;
         await this.options.router.ensurePath(path, sourceUri);
         const session = this.access.issue(path);
         return sendJson(response, 201, {
@@ -752,16 +763,16 @@ export class MediaMtxRouter implements MediaRouter {
       ? {
           source: "publisher",
           sourceOnDemand: false,
-          runOnDemand: `"${this.ffmpegPath}" -hide_banner -loglevel warning -rtsp_transport tcp -fflags +genpts+discardcorrupt -i "${sourceUri}" -map 0:v:0 ${videoOptions} -map 0:a:0? -c:a aac -b:a 64k -ar 16000 -f rtsp -rtsp_transport tcp rtsp://127.0.0.1:8554/${path}`,
+          runOnDemand: `"${this.ffmpegPath}" -hide_banner -loglevel warning -analyzeduration 1000000 -probesize 1000000 -rtsp_transport tcp -fflags nobuffer+fastseek+genpts+discardcorrupt -i "${sourceUri}" -map 0:v:0 ${videoOptions} -map 0:a:0? -c:a aac -b:a 64k -ar 16000 -f rtsp -rtsp_transport tcp rtsp://127.0.0.1:8554/${path}`,
           runOnDemandRestart: true,
-          runOnDemandStartTimeout: "15s",
+          runOnDemandStartTimeout: "30s",
           runOnDemandCloseAfter: "120s",
         }
       : {
           source: sourceUri,
           rtspTransport: "tcp",
           sourceOnDemand: true,
-          sourceOnDemandStartTimeout: "15s",
+          sourceOnDemandStartTimeout: "30s",
           sourceOnDemandCloseAfter: "120s",
         };
     // MediaMTX tears down an active path (including its HLS muxer) when it is
