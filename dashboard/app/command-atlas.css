@@ -33,40 +33,35 @@ html[data-theme] .app-shell .command-atlas .atlas-intro h1 { margin: 22px 0 20px
 .atlas-network-core { position: absolute; left: 50%; top: 49%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 7px; }
 .atlas-core-mark { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 18px; color: #d6e7ff; border: 1px solid #a6cbff91; background: linear-gradient(145deg, #4c7cb7, #142e56); box-shadow: 0 10px 0 -4px #091e3d, 0 17px 0 -7px #7daeff4d, 0 0 55px #72a8ff3b; transform: rotate(-12deg); }
 .atlas-core-mark svg { transform: rotate(12deg); }
-.atlas-network-core strong { margin-top: 13px; color: #b8d3fa; font: 9px/1.5 ui-monospace, monospace; letter-spacing: .15em; }
-.atlas-network-core small { font-size: 8px; color: #7f97bd; white-space: nowrap; }
+.atlas-network-core strong { max-width: 145px; overflow: hidden; margin-top: 13px; color: #b8d3fa; font: 9px/1.5 ui-monospace, monospace; letter-spacing: .15em; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.atlas-network-core small { max-width: 150px; overflow: hidden; font-size: 8px; color: #7f97bd; text-overflow: ellipsis; white-space: nowrap; }
+.atlas-core-back { cursor: pointer; }
+.atlas-core-back:hover, .atlas-core-back:focus-visible { box-shadow: 0 0 0 2px #a6cbff, 0 0 65px #72a8ff66; }
 .atlas-node { position: absolute; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 145px; border: 0; padding: 6px; border-radius: 8px; background: #11213be8; color: #bbd7ff; text-align: left; box-shadow: 0 6px 20px #050b1955; transition: background .2s, box-shadow .2s; }
 .atlas-node:hover { background: #203958; box-shadow: 0 0 0 1px #8bb7ff, 0 0 25px #628fff30; z-index: 3; }
 .atlas-node-icon { display: grid; place-items: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px; border: 1px solid #709ce057; background: #31568733; }
 .atlas-node.is-risk .atlas-node-icon { border-color: #ffa3b073; color: #ffa3b0; background: #ff7f9314; }
 .atlas-node > span:last-child { min-width: 0; }
+.atlas-node em { display: block; color: #9dbdff; font: 7px/1.3 ui-monospace, monospace; font-style: normal; letter-spacing: .09em; text-transform: uppercase; }
 .atlas-node strong { display: block; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; color: #d0e2ff; }
 .atlas-node small { display: block; color: #90a6c9; font-size: 7px; white-space: nowrap; }
+.atlas-node-zone .atlas-node-icon { color: #c9b6ff; border-color: #b8a3ff66; background: #7558bc33; }
+.atlas-node-region .atlas-node-icon { color: #a9cbff; }
+.atlas-node-area .atlas-node-icon { color: #97e6df; border-color: #7ad4cf55; background: #277d7a33; }
+.atlas-node-branch .atlas-node-icon { color: #a9efd2; border-color: #84d9af55; background: #2c755433; }
 .atlas-network-empty { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 7px; white-space: nowrap; }
 .atlas-network-empty > span { color: #9bafd0; font-size: 10px; }
 .atlas-network-empty a { display: flex; align-items: center; gap: 6px; color: #a6c9ff; font-size: 9px; }
 .atlas-network-caption { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px 0; font-size: 8px; color: #7f94b6; }
 .atlas-network-caption i { display: inline-block; width: 4px; height: 4px; margin-right: 4px; background: #89baff; border-radius: 50%; }
 .atlas-network-caption a { display: inline-flex; align-items: center; gap: 4px; color: #acc7f0; white-space: nowrap; }
-.atlas-hierarchy { position: relative; display: flex; flex-direction: column; gap: 10px; height: 100%; min-height: 280px; padding: 12px 15px; }
-.atlas-hierarchy-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.atlas-hierarchy-heading p { margin: 3px 0 0; color: #7f97bd; font: 8px/1.4 ui-monospace, monospace; white-space: nowrap; }
-.atlas-hierarchy-crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 3px; min-width: 0; }
-.atlas-hierarchy-crumbs span { display: inline-flex; align-items: center; gap: 3px; color: #7294c6; }
-.atlas-hierarchy-crumbs button { border: 0; background: none; padding: 2px 0; color: #8faad2; font-size: 9px; cursor: pointer; }
-.atlas-hierarchy-crumbs button[aria-current="location"] { color: #d4e5ff; font-weight: 700; }
-.atlas-hierarchy-back { display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; padding: 4px 0; border: 0; background: none; color: #a9c7ff; font-size: 9px; cursor: pointer; }
-.atlas-hierarchy-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 8px; min-height: 0; overflow-y: auto; padding: 2px 3px 8px 1px; scrollbar-width: thin; scrollbar-color: #466697 #111d35; }
-.atlas-hierarchy-card { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; min-height: 72px; padding: 10px; border: 1px solid #6c91d135; border-radius: 10px; background: linear-gradient(135deg, #1b2c4cef, #111c34ef); color: #bbd7ff; text-align: left; cursor: pointer; text-decoration: none; transition: background .2s, border-color .2s, box-shadow .2s; }
-.atlas-hierarchy-card:hover, .atlas-hierarchy-card:focus-visible { border-color: #8bb7ff; background: #203958; box-shadow: 0 0 20px #628fff25; }
-.atlas-hierarchy-icon { display: grid; place-items: center; width: 31px; height: 31px; flex: none; border-radius: 8px; color: #a9cbff; background: #31568755; }
-.atlas-hierarchy-copy { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
-.atlas-hierarchy-copy small { color: #7897c5; font: 8px/1.2 ui-monospace, monospace; text-transform: uppercase; letter-spacing: .08em; }
-.atlas-hierarchy-copy strong { overflow: hidden; color: #d9e7ff; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.atlas-hierarchy-copy > span { overflow: hidden; color: #8fa8cf; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
-.atlas-hierarchy-chevron { flex: none; margin-left: auto; color: #85a9df; }
-.atlas-hierarchy .atlas-network-empty { position: static; transform: none; margin: auto; }
-@media (max-width: 600px) { .atlas-hierarchy-list { grid-template-columns: minmax(0, 1fr); } .atlas-hierarchy-heading { flex-wrap: wrap; } }
+.atlas-network-path { display: flex; align-items: center; flex-wrap: wrap; gap: 3px; min-height: 25px; padding: 4px 12px 0; }
+.atlas-network-path span { display: inline-flex; align-items: center; gap: 3px; color: #7294c6; }
+.atlas-network-path button { border: 0; background: none; padding: 2px 0; color: #8faad2; font-size: 9px; cursor: pointer; }
+.atlas-network-path button[aria-current="location"] { color: #d4e5ff; font-weight: 700; }
+.atlas-network-pages { display: inline-flex; align-items: center; gap: 6px; color: #acc7f0; white-space: nowrap; }
+.atlas-network-pages button { display: grid; place-items: center; border: 1px solid #6c91d155; border-radius: 4px; background: #203958; color: #bbd7ff; cursor: pointer; }
+.atlas-network-pages button:disabled { opacity: .4; cursor: default; }
 .atlas-coverage { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 26px 18px; border-left: 1px solid var(--atlas-line); margin: 24px 0 24px 15px; }
 .atlas-coverage-instrument { position: relative; width: 100%; padding: 25px 0 15px; text-align: center; }
 .atlas-coverage-bars { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-bottom: 18px; }
@@ -147,7 +142,7 @@ html[data-theme] .app-shell .command-deck .atlas-intro h1 { font-size: clamp(52p
 .command-deck .atlas-intro-description { font-size: 11px; line-height: 1.7; padding-left: 2px; }
 .command-deck .atlas-live-link { position: absolute; left: calc(100% + 22px); top: 42px; white-space: nowrap; z-index: 3; margin: 0; background: #bbd2ff; box-shadow: 0 0 25px #6d99ff15; }
 .command-deck .atlas-intro-foot { margin-top: 14px; max-width: 210px; font-size: 8px; }
-.command-deck .atlas-network { grid-column: 2; grid-row: 1 / 3; min-height: 550px; padding: 112px 0 27px; justify-content: flex-end; }
+.command-deck .atlas-network { grid-column: 2; grid-row: 1 / 3; min-height: 550px; padding: 90px 0 27px; justify-content: flex-end; }
 .command-deck .atlas-network-toolbar { flex-wrap: wrap; padding: 0 15px; }
 .command-deck .atlas-network-toolbar > span { width: 100%; margin-bottom: 9px; color: #a4bfeb; font-size: 9px; }
 .command-deck .atlas-layer-switch { position: relative; z-index: 4; }

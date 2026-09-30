@@ -368,7 +368,7 @@ export function CommandCenterView() {
             <Link href="/control-room" onClick={navigateTo("/control-room")} className="atlas-live-link"><span><Play size={17} /></span> Enter live wall <ArrowUpRight size={17} /></Link>
             <div className="atlas-intro-foot"><ShieldCheck size={16} /><span>{freshness.detail}</span></div>
           </div>
-          <CommandNetworkCanvas branches={branches} organizationTree={organizationTree} confirmed={hasBranchData} />
+          <CommandNetworkCanvas branches={branches} organizationTree={organizationTree} confirmed={hasBranchData} onSelect={setSelectedBranchWorkspace} />
           <aside className="atlas-coverage" aria-label="Camera coverage">
             <span className="atlas-eyebrow">COVERAGE</span>
             <div className="atlas-coverage-instrument" style={{ "--coverage": `${hasCameraCountData && !cameraTelemetryUnavailable && totalCamerasCount > 0 ? Math.round(workingCamerasCount / totalCamerasCount * 100) : 0}%` } as React.CSSProperties}>

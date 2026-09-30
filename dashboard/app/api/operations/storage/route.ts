@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { buildControlPlaneHeaders } from "@/lib/server/control-plane-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -116,25 +117,30 @@ function isCloudNode(node: StorageNode): boolean {
   return /(?:\bs3\b|object|cloud)/.test(identity);
 }
 
-function headers(request: NextRequest): Record<string, string> {
-  const authorization = request.headers.get("authorization");
-  const bearer = authorization?.toLowerCase().startsWith("bearer ") ? authorization.slice(7).trim() : "";
-  const session = request.cookies.get("sentinel_access")?.value
-    ?? request.headers.get("x-sentinel-session") ?? bearer;
-  return session ? { authorization: `Bearer ${session}` } : {};
-}
-
 export async function GET(request: NextRequest) {
-  const upstream = process.env.CONTROL_PLANE_INTERNAL_URL || process.env.CONTROL_PLANE_URL || "http://control-plane:8080";
-  const options = { headers: headers(request), cache: "no-store" as const };
+  const authHeaders = buildControlPlaneHeaders(request);
+  if (!authHeaders) {
+    return NextResponse.json({ success: false, error: "Sign in to view storage" }, { status: 401 });
+  }
+  const configured = process.env.CONTROL_PLANE_INTERNAL_URL || process.env.CONTROL_PLANE_PUBLIC_URL || process.env.CONTROL_PLANE_URL
+    || (process.env.NODE_ENV === "production" ? "http://control-plane:8080" : "http://localhost:8080");
+  const upstream = (/^[a-z][a-z\d+.-]*:\/\//i.test(configured) ? configured : `http://${configured}`).replace(/\/$/, "");
+  const options = { headers: authHeaders, cache: "no-store" as const };
   try {
     const [cameraResponse, diskResponse, nodeResponse] = await Promise.all([
       fetch(`${upstream}/v1/cameras?limit=500`, options),
       fetch(`${upstream}/v1/operations/health/disks`, options),
-      fetch(`${upstream}/api/v1/storage/nodes`, options),
+      fetch(`${upstream}/api/v1/storage/nodes`, options).catch(() => null),
     ]);
     if (!cameraResponse.ok || !diskResponse.ok) {
-      return NextResponse.json({ success: false, error: "Camera or disk inventory unavailable" }, { status: 503 });
+      const unauthorized = cameraResponse.status === 401 || diskResponse.status === 401;
+      const forbidden = cameraResponse.status === 403 || diskResponse.status === 403;
+      return NextResponse.json({
+        success: false,
+        error: unauthorized ? "Storage session expired. Sign in again."
+          : forbidden ? "Your account cannot view storage inventory."
+            : "Camera or disk inventory unavailable",
+      }, { status: unauthorized ? 401 : forbidden ? 403 : 503 });
     }
     const firstPage = await cameraResponse.json();
     const cameraRows = rows(firstPage);
@@ -153,7 +159,7 @@ export async function GET(request: NextRequest) {
     const cameras = [...new Map(cameraRows.filter((camera) => cameraId(camera))
       .map((camera) => [cameraId(camera), camera])).values()];
     const disks = uniqueDisks(rows(await diskResponse.json()));
-    const nodes = nodeResponse.ok ? rows(await nodeResponse.json()) : [];
+    const nodes = nodeResponse?.ok ? rows(await nodeResponse.json()) : [];
     const cloud = nodes.find((node) => isCloudNode(node) && nodeHealthy(node));
     const sdCards = disks.filter(isSdCard);
     const recorderDisks = disks.filter((disk) => !isSdCard(disk));
@@ -193,7 +199,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       cameras: mappings,
-      storageDevices: disks,
+      storageDevices: disks.map((disk) => recent(disk) ? disk : {
+        ...disk,
+        operationalStatus: "unknown",
+        smartStatus: "unknown",
+        telemetryStale: true,
+      }),
       summary: {
         totalCameras: mappings.length,
         tier1SdCardCount: sdCards.filter(healthy).length,

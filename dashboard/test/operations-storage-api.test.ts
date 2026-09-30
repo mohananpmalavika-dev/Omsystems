@@ -20,11 +20,21 @@ function mockInventory(cameras: unknown[], disks: unknown[], nodes: unknown[] = 
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   if (oldDatabaseUrl === undefined) delete process.env.DATABASE_URL;
   else process.env.DATABASE_URL = oldDatabaseUrl;
 });
 
 describe("Storage operations inventory", () => {
+  it("uses the local control plane when no upstream URL is configured", async () => {
+    vi.stubEnv("CONTROL_PLANE_INTERNAL_URL", "");
+    vi.stubEnv("CONTROL_PLANE_PUBLIC_URL", "");
+    vi.stubEnv("CONTROL_PLANE_URL", "");
+    const fetchMock = mockInventory([], []);
+    await GET(request());
+    expect(String(fetchMock.mock.calls[0][0])).toBe("http://localhost:8080/v1/cameras?limit=500");
+  });
+
   it("prefers a verified SD card and counts each disk once", async () => {
     const fetchMock = mockInventory(
       [{ id: "camera-1", name: "Entrance", recorderId: "recorder-1" }],
@@ -57,7 +67,7 @@ describe("Storage operations inventory", () => {
     expect(data.summary.tier2DvrHddCount).toBe(1);
   });
 
-  it("ignores stale telemetry and matches an ONVIF discovered memory card", async () => {
+  it("does not treat stale telemetry as healthy and matches an ONVIF discovered memory card", async () => {
     mockInventory(
       [{ id: "camera-1", storageDiscoveryId: "discovery-1" }],
       [
@@ -68,7 +78,11 @@ describe("Storage operations inventory", () => {
     const data = await (await GET(request())).json();
     expect(data.cameras[0].activeStorageTier).toBe("sd_card");
     expect(data.cameras[0].capacity).toBe("128.0 GB");
-    expect(data.storageDevices).toHaveLength(1);
+    expect(data.storageDevices).toHaveLength(2);
+    expect(data.storageDevices.find((disk: { id: string }) => disk.id === "camera-1:sdcard")).toMatchObject({
+      operationalStatus: "unknown",
+      telemetryStale: true,
+    });
   });
 
   it("reports unavailable when there is no verified local or cloud target", async () => {
@@ -89,6 +103,29 @@ describe("Storage operations inventory", () => {
     expect(data.cameras[0].activeStorageTier).toBe("online_cloud");
     expect(data.cameras[0].recordingVerified).toBe(false);
     expect(data.summary.cloudNode.capacity).toBe("10.0 TB");
+  });
+
+  it("keeps local storage available when the optional cloud node request fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/v1/cameras")) return Response.json({ data: [{ id: "camera-1" }] });
+      if (url.endsWith("/health/disks")) return Response.json({ data: [{
+        id: "camera-1:sdcard", operationalStatus: "healthy", capacityBytes: 128e9, lastCheck: now,
+      }] });
+      throw new Error("Cloud node service unavailable");
+    });
+    const response = await GET(request());
+    const data = await response.json();
+    expect(response.status).toBe(200);
+    expect(data.cameras[0].activeStorageTier).toBe("sd_card");
+    expect(data.summary.cloudNode.status).toBe("unavailable");
+  });
+
+  it("reports an expired session instead of a connection error", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ error: "unauthenticated" }, { status: 401 }));
+    const response = await GET(request());
+    expect(response.status).toBe(401);
+    expect((await response.json()).error).toContain("session expired");
   });
 
   it("does not pretend that a POST switched recording storage", async () => {

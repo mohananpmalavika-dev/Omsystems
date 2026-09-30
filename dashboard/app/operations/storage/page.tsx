@@ -64,17 +64,15 @@ export default function StoragePage() {
     try {
       setRefreshing(true);
       const res = await fetch("/api/operations/storage", { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          setCameras(data.cameras || []);
-          setLoadError(null);
-          if (data.summary) {
-            setSummary(data.summary);
-          }
-        }
-      } else {
-        setLoadError("Storage inventory is unavailable. Check the control plane connection and retry.");
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setLoadError(typeof data.error === "string" ? data.error : "Storage inventory is unavailable. Check the control plane connection and retry.");
+        return;
+      }
+      setCameras(data.cameras || []);
+      setLoadError(null);
+      if (data.summary) {
+        setSummary(data.summary);
       }
     } catch (err) {
       console.error("Failed to load live storage operations data:", err);
