@@ -601,12 +601,39 @@ export function DeviceManager() {
       return;
     }
     const port = Number(targetResult?.rtspPort || probePort || 554);
-    const username = probeUsername.trim() || "admin";
+    const username = probeUsername.trim();
     const password = probePassword || "";
 
     setSaving(true);
     setError(undefined);
     try {
+      if (isPrivateIpv4(ip)) {
+        const gateway = gateways.find(isGatewayReady);
+        if (!gateway) throw new Error("The selected branch scanner must be online to discover channels at this local IP address. Check Branch Gateway status, then retry.");
+        if (!username) throw new Error("Enter the DVR/NVR username before scanning its channels.");
+        const command = await cameraInventoryApi.updateGatewayCameraCredentials(selectedBranch, gateway.id, {
+          cameraIp: ip,
+          username,
+          password: password || null,
+        });
+        const completed = await waitForCredentialCommand(command.commandId, 300_000);
+        const discoveries = await cameraInventoryApi.listDiscovered(selectedBranch);
+        const verifiedChannels = (discoveries.data ?? []).filter((item: any) =>
+          item.edgeAgentId === gateway.id && item.ipAddress === ip &&
+          item.streamVerified === true && Number.isInteger(item.recorderChannel)
+        );
+        closeDirectProbe();
+        setDiscoveredCameras(discoveries.data ?? []);
+        updateDiscoveryReviewState(discoveries.data ?? []);
+        setShowDiscoveredList(true);
+        setNotice(Number(completed.result?.rediscovered) === 0
+          ? `The branch scanner reached ${ip}, but did not discover a playable channel. Check the recorder login, RTSP service, and channel permissions.`
+          : verifiedChannels.length > 0
+          ? `The branch scanner verified ${verifiedChannels.length} channel${verifiedChannels.length === 1 ? "" : "s"} at ${ip}. Review the results in Device discovery.`
+          : `The branch scanner finished probing ${ip}, but no DVR/NVR channels were verified. Check the recorder login, model, RTSP service, and channel permissions.`);
+        await refreshBranch(selectedBranch);
+        return;
+      }
       const preferred = gateways.find(isGatewayReady) ?? gateways[0];
       const transport = preferred ? "edge-gateway" : "vpn";
       const secretRef = preferred
@@ -646,6 +673,10 @@ export function DeviceManager() {
       setNotice(`✓ Camera at ${ip} added successfully to ${activeBranch?.name ?? "branch"}. Local Branch Gateway will connect to this local IP on the branch LAN.`);
       await refreshBranch(selectedBranch);
     } catch (err: any) {
+      if (isPrivateIpv4(ip)) {
+        setError(messageOf(err, "The branch scanner could not discover this device's channels."));
+        return;
+      }
       // If direct camera creation failed, fall back to adding to discovery
       try {
         const preferred = gateways.find(isGatewayReady) ?? gateways[0];
@@ -731,7 +762,7 @@ export function DeviceManager() {
         if (result.online) {
           setNotice(`Camera at ${result.ipAddress} responded (${result.server || "RTSP"}).`);
         } else if (isPrivateIpv4(result.ipAddress)) {
-          setNotice(`Local branch LAN IP (${result.ipAddress}). The AWS cloud server cannot reach local private IPs directly over the public internet. Use "Add Camera with this Local IP" or "Add to Device Discovery" below.`);
+          setNotice(`Local branch LAN IP (${result.ipAddress}). Use "Discover channels on branch scanner" to verify this device from its branch network.`);
         } else {
           setError(`Camera at ${result.ipAddress} is unreachable: ${result.error || "Connection error"}`);
         }
@@ -1406,9 +1437,9 @@ export function DeviceManager() {
     window.history.replaceState(window.history.state, "", `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
   }, [cameras, loading, selectedBranch]);
 
-  async function waitForCredentialCommand(commandId: string) {
+  async function waitForCredentialCommand(commandId: string, timeoutMs = 60_000) {
     if (!selectedBranch) throw new Error("Select a branch before verifying device credentials.");
-    const deadline = Date.now() + 60_000;
+    const deadline = Date.now() + timeoutMs;
     let lastStatus = "queued";
     while (Date.now() < deadline) {
       if (scanAbortedRef.current) {
@@ -1428,7 +1459,7 @@ export function DeviceManager() {
       }
       await wait(1_500);
     }
-    throw new Error("The branch scanner did not complete this credential update within 60 seconds. Confirm the scanner is running and online, then retry.");
+    throw new Error("The branch scanner did not complete this credential update in time. Confirm the scanner is running and online, then retry.");
   }
 
   async function openPendingCredentials() {
@@ -2018,6 +2049,9 @@ export function DeviceManager() {
               <Search size={15} /> Scan cameras
             </button>
           )}
+          <button type="button" className="secondary-button" onClick={openCameraForm} disabled={!selectedBranch || saving} title="Add a camera or DVR channel manually">
+            <Plus size={15} /> Add Camera
+          </button>
           <button type="button" className="secondary-button" onClick={() => setShowDirectProbeModal(true)} disabled={!selectedBranch || saving} title="Directly test and connect an IP camera on the configured local subnet">
             <Wifi size={15} /> Direct IP Probe
           </button>
@@ -2797,6 +2831,31 @@ export function DeviceManager() {
                     : <>Download the pre-configured installer package for <strong>{activeBranch?.name ?? "Branch"}</strong>.</>}
                 </p>
 
+                {/* Release & Package Information Display */}
+                <div className="rounded-xl border border-slate-700/60 bg-slate-900/80 p-3.5 space-y-2.5 text-xs">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <span className="text-slate-400">Package / Installer Name:</span>
+                    <span className="font-semibold text-slate-100 flex items-center gap-1.5">
+                      <Terminal size={13} className="text-blue-400" />
+                      KryptonVision Edge Agent Installer
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <span className="text-slate-400">Installer Version:</span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                      v0.1.35 (Latest Release)
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <span className="text-slate-400">Target Branch:</span>
+                    <span className="font-medium text-slate-200">{activeBranch?.name ?? "Branch"}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400">Architecture / Platform:</span>
+                    <span className="text-slate-300">Windows x64 (10 / 11 / Server)</span>
+                  </div>
+                </div>
+
                 {!gatewayActivation ? (
                   <div className="pt-2">
                     <button
@@ -2807,7 +2866,7 @@ export function DeviceManager() {
                       }}
                       disabled={saving}
                     >
-                      <Download size={14} /> {saving ? "Generating Package..." : "Prepare & Download Installer"}
+                      <Download size={14} /> {saving ? "Generating Package..." : "Prepare & Download Installer (v0.1.35)"}
                     </button>
                   </div>
                 ) : (
@@ -2820,10 +2879,10 @@ export function DeviceManager() {
                         disabled={saving}
                       >
                         <div className="flex items-center gap-1.5 font-semibold text-xs text-emerald-300">
-                          <Download size={14} /> {saving ? "Downloading installer..." : "Download Installer ZIP"}
+                          <Download size={14} /> {saving ? "Downloading installer..." : "Download Installer ZIP (v0.1.35)"}
                         </div>
                         <span className="text-[11px] text-slate-300 leading-tight">
-                          Includes the Windows executable, pre-filled branch configuration, and installation launcher.
+                          Includes KryptonVisionInstaller-v0.1.35-windows.exe, pre-filled branch configuration, and installation launcher.
                         </span>
                       </button>
                     </div>
@@ -3231,9 +3290,9 @@ export function DeviceManager() {
                       className="secondary-button"
                       onClick={() => void addDirectCameraToBranch()}
                       disabled={saving || !probeIp.trim() || !probeUsername.trim()}
-                      title="Directly add this camera to branch monitoring using this local IP"
+                      title="Ask the scanner in the selected branch to discover this device and its channels"
                     >
-                      <Plus size={14} /> {saving ? "Adding…" : "Add Camera with this Local IP"}
+                      <Plus size={14} /> {saving ? "Discovering…" : "Discover channels on branch scanner"}
                     </button>
                   )}
                   <button
@@ -3319,7 +3378,7 @@ export function DeviceManager() {
 
                   {isPrivateIpv4(probeResult.ipAddress) && !probeResult.online && (
                     <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-800/40 text-amber-200 text-xs">
-                      <strong>Branch Local Network Camera:</strong> This IP is on a local private subnet ({probeResult.ipAddress}). The AWS cloud server cannot reach local private IPs directly over the public internet, but the local Branch Gateway / Edge Agent inside your branch connects to it. Click below to add this camera using its local IP.
+                      <strong>Branch Local Network Device:</strong> This IP is on a local private subnet ({probeResult.ipAddress}). The scanner installed in the selected branch will verify the login and discover available DVR/NVR channels.
                     </div>
                   )}
 
@@ -3334,7 +3393,7 @@ export function DeviceManager() {
                       onClick={() => void addDirectCameraToBranch(probeResult)}
                       disabled={saving || !selectedBranch}
                     >
-                      <Plus size={14} /> {saving ? "Adding to branch…" : "Add Camera to Branch (Direct Enrollment)"}
+                      <Plus size={14} /> {saving ? "Discovering…" : isPrivateIpv4(probeResult.ipAddress) ? "Discover channels on branch scanner" : "Add Camera to Branch (Direct Enrollment)"}
                     </button>
                     <button
                       type="button"

@@ -1586,14 +1586,51 @@ select, textarea { font: inherit; }
   color: white; border-radius: 7px; background: #2878ff; text-decoration: none; font-size: 10px; font-weight: 650;
 }
 .tile-actions button:disabled { opacity: .38; cursor: not-allowed; }
-.device-manager { display: grid; gap: 16px; }
+.device-manager { display: grid; gap: 16px; container-type: inline-size; }
 .device-toolbar, .device-toolbar-actions, .device-card-heading, .device-message,
 .remote-camera-note, .gateway-row, .camera-inventory-row { display: flex; align-items: center; }
-.device-toolbar { justify-content: space-between; gap: 14px; }
+.device-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  align-items: center;
+  gap: 16px 24px;
+  min-width: 0;
+}
+.device-toolbar > div { min-width: 0; }
 .device-toolbar h2 { margin: 0; font-size: 17px; }
 .device-toolbar p, .device-card-heading p { margin: 4px 0 0; color: var(--muted); font-size: 10px; }
 .device-card-heading p { color: #687890; }
-.device-toolbar-actions { gap: 8px; }
+.device-toolbar-actions {
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.device-toolbar-actions button {
+  flex: 0 1 auto;
+  min-height: 40px;
+  height: auto;
+  padding: 8px 12px;
+  line-height: 1.35;
+  white-space: normal;
+}
+.device-toolbar-actions button svg { flex-shrink: 0; }
+.device-toolbar-note {
+  grid-column: 1 / -1;
+  margin: 0 !important;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: var(--surface-soft);
+  overflow-wrap: anywhere;
+}
+@container (max-width: 680px) {
+  .device-toolbar { grid-template-columns: minmax(0, 1fr); }
+  .device-toolbar-actions button { flex: 1 1 160px; justify-content: center; }
+  .device-scope { min-width: 0; }
+  .device-scope select { width: 100%; min-width: 0; }
+}
 .device-advanced { border: 1px solid var(--line); border-radius: 10px; background: #fafbfd; }
 .device-advanced summary { padding: 12px 14px; color: #40536d; cursor: pointer; font-size: 10px; font-weight: 700; }
 .device-advanced summary::marker { color: #2878ff; }
