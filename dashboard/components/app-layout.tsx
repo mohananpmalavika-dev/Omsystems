@@ -225,7 +225,12 @@ export const navigation: NavGroup[] = [
     label: "ADMINISTRATION",
     icon: Settings,
     items: [
-      { label: "Administration", href: "/admin", icon: Settings },
+      { label: "Administration tools", href: "/admin", icon: Settings },
+      { label: "Organization & access", href: "/admin/organization", icon: Users },
+      { label: "Branch onboarding", href: "/admin/branch-onboarding", icon: Building2 },
+      { label: "Gateway activation", href: "/admin/zero-touch", icon: Network },
+      { label: "Camera import & export", href: "/admin/camera-import-export", icon: Camera },
+      { label: "System health", href: "/admin/system", icon: Server },
     ],
   },
   {
@@ -997,9 +1002,8 @@ function AppLayoutFrame({ children, incidentCount = 0 }: AppLayoutProps) {
         <nav ref={mainNavRef} onScroll={handleNavScroll} className="main-nav" aria-label="Main navigation">
           {(Array.isArray(visibleNavigation) ? visibleNavigation : navigation).map((group) => {
             if (!group) return null;
-            const items = Array.isArray(group.items) ? group.items : [];
             const GroupIcon = group.icon;
-            const href = group.label === "ADMINISTRATION" ? items[0]?.href : sectionHubHref(group.label);
+            const href = sectionHubHref(group.label);
             return href ? <Link
               key={group.label}
               href={href}

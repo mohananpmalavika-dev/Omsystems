@@ -40,6 +40,8 @@ import {
   X,
 } from "lucide-react";
 import { CommandNetworkCanvas } from "./command-network-canvas";
+import { organizationApi } from "@/lib/api-client";
+import type { OrganizationTreeNode } from "@/lib/branch-hierarchy";
 import { StatusBadge } from "../ui/status-badge";
 import { FleetFilterBar } from "../ui/fleet-filter-bar";
 import { ErrorBoundary } from "../ui/error-boundary";
@@ -49,6 +51,7 @@ import { getTelemetryFreshness } from "@/lib/telemetry-freshness";
 export function CommandCenterView() {
   const [summary, setSummary] = useState<any | null>(null);
   const [branches, setBranches] = useState<any[]>([]);
+  const [organizationTree, setOrganizationTree] = useState<OrganizationTreeNode[]>([]);
   const [hasBranchData, setHasBranchData] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -101,9 +104,10 @@ export function CommandCenterView() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [sumRes, branchRes] = await Promise.all([
+      const [sumRes, branchRes, treeResult] = await Promise.all([
         fetch("/api/control/v1/operations/command-center", { credentials: "include", signal: controller.signal }).catch(() => null),
         fetch("/api/control/v1/operations/branches", { credentials: "include", signal: controller.signal }).catch(() => null),
+        organizationApi.getTree().catch(() => null),
       ]);
       if (controller.signal.aborted) return;
       const sumData = sumRes ? await sumRes.json().catch(() => ({})) : {};
@@ -123,6 +127,8 @@ export function CommandCenterView() {
       } else {
         unavailable.push("branch telemetry");
       }
+
+      if (Array.isArray(treeResult?.data)) setOrganizationTree(treeResult.data);
 
       if (unavailable.length) setLoadError(`${unavailable.join(" and ")} unavailable`);
     } catch (err) {
@@ -362,7 +368,7 @@ export function CommandCenterView() {
             <Link href="/control-room" onClick={navigateTo("/control-room")} className="atlas-live-link"><span><Play size={17} /></span> Enter live wall <ArrowUpRight size={17} /></Link>
             <div className="atlas-intro-foot"><ShieldCheck size={16} /><span>{freshness.detail}</span></div>
           </div>
-          <CommandNetworkCanvas branches={branches} confirmed={hasBranchData} onSelect={setSelectedBranchWorkspace} />
+          <CommandNetworkCanvas branches={branches} organizationTree={organizationTree} confirmed={hasBranchData} />
           <aside className="atlas-coverage" aria-label="Camera coverage">
             <span className="atlas-eyebrow">COVERAGE</span>
             <div className="atlas-coverage-instrument" style={{ "--coverage": `${hasCameraCountData && !cameraTelemetryUnavailable && totalCamerasCount > 0 ? Math.round(workingCamerasCount / totalCamerasCount * 100) : 0}%` } as React.CSSProperties}>

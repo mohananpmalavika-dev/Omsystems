@@ -85,6 +85,18 @@ export const sectionHubs: SectionHub[] = [
     ],
   },
   {
+    slug: "administration",
+    group: "ADMINISTRATION",
+    title: "Set up and manage your estate.",
+    lead: "Bring branches, people, cameras, and gateways into service.",
+    context: "The controls for onboarding, access, and platform health.",
+    journeys: [
+      { title: "Set up a branch", description: "Onboard a site, activate its gateway, and bring in cameras.", routes: ["/admin/branch-onboarding", "/admin/zero-touch", "/admin/camera-import-export"] },
+      { title: "Manage access", description: "Organize teams and review their permissions.", routes: ["/admin/organization"] },
+      { title: "Check the platform", description: "Open the administration tools and review system health.", routes: ["/admin", "/admin/system"] },
+    ],
+  },
+  {
     slug: "others",
     group: "OTHERS",
     title: "Keep the platform ready.",

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getVisibleNavigation, hasCustomMenuConfiguration } from "../components/app-layout";
+import { sectionHubHref } from "../lib/section-hubs";
 
 describe("custom role navigation & menu permissions", () => {
   it("preserves explicitly assigned menus for custom roles without stripping against legacy base workspace", () => {
@@ -58,11 +59,23 @@ describe("custom role navigation & menu permissions", () => {
     const visibleHrefs = visibleNav.flatMap((group) => group.items.map((item) => item.href));
 
     expect(visibleHrefs).toContain("/admin");
-    expect(visibleHrefs).not.toContain("/admin/system");
-    expect(visibleHrefs).not.toContain("/admin/zero-touch");
+    expect(visibleHrefs).toContain("/admin/system");
+    expect(visibleHrefs).toContain("/admin/zero-touch");
     expect(visibleNav.find((group) => group.label === "OTHERS")?.items.map((item) => item.href))
-      .toEqual(["/admin/features", "/settings/alerts", "/account/security"]);
+      .toEqual(["/admin/zero-touch/diagnostics", "/admin/features", "/settings/alerts", "/account/security"]);
     expect(visibleHrefs).toContain("/maintenance/device-configuration");
     expect(visibleHrefs).toContain("/operations/cameras");
+  });
+
+  it("opens Administration through the shared section hub while honoring custom menu access", () => {
+    expect(sectionHubHref("ADMINISTRATION")).toBe("/workspaces/administration");
+
+    const visibleNav = getVisibleNavigation({
+      role: "admin",
+      customRoleId: "restricted-admin",
+      menuAccess: ["/admin/branch-onboarding"],
+    });
+    expect(visibleNav.find((group) => group.label === "ADMINISTRATION")?.items.map((item) => item.href))
+      .toEqual(["/admin/branch-onboarding"]);
   });
 });

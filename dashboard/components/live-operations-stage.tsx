@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Activity, ArrowUpRight, Building2, Camera as CameraIcon, Check, ChevronLeft, ChevronRight, Crosshair, Eye, Film, LayoutDashboard, Lock, Maximize2, Minimize2, Pin, PinOff, RefreshCw, Search, ShieldAlert, X } from "lucide-react";
 import { fleetCameraPage, fleetTileOptions, operationalStageAlerts } from "./live-stage-model";
 import { EnhancedCameraGrid, type GridLayout, type GridSize } from "./enhanced-camera-grid";
@@ -57,6 +57,7 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
   const [selectedSegmentId, setSelectedSegmentId] = useState<string>();
   const [controlsOpen, setControlsOpen] = useState(false);
   const [monitorFullscreen, setMonitorFullscreen] = useState(false);
+  const [fleetMonitorHeight, setFleetMonitorHeight] = useState<number>();
   const monitorRef = useRef<HTMLDivElement>(null);
   const previousScope = useRef("");
   const externalFocus = useRef<string | undefined>(undefined);
@@ -107,6 +108,26 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
     document.addEventListener("fullscreenchange", syncFullscreen);
     return () => document.removeEventListener("fullscreenchange", syncFullscreen);
   }, []);
+  useEffect(() => {
+    if (mode !== "fleet") return;
+    let frame = 0;
+    const fitMonitor = () => {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        const top = monitorRef.current?.getBoundingClientRect().top;
+        if (top === undefined) return;
+        setFleetMonitorHeight(Math.max(180, Math.floor(window.innerHeight - Math.max(0, top) - 12)));
+      });
+    };
+    fitMonitor();
+    window.addEventListener("resize", fitMonitor);
+    window.visualViewport?.addEventListener("resize", fitMonitor);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", fitMonitor);
+      window.visualViewport?.removeEventListener("resize", fitMonitor);
+    };
+  }, [mode, fleetBranch, fleetPageSize, contextOpen]);
 
   const anchor = selectedEvent ? eventTime(selectedEvent) : replayAnchor;
   const replayWindow = useMemo(() => {
@@ -155,6 +176,15 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
   }
   const related = scoped.filter(camera => camera.id !== active?.id).sort((a, b) => Number(b.branchId === active?.branchId) - Number(a.branchId === active?.branchId)).filter(camera => !query || `${camera.name} ${camera.branchName ?? ""}`.toLowerCase().includes(query.toLowerCase()));
   const contextVisible = contextOpen || mode === "respond";
+  const fleetRows = Math.max(1, Math.ceil(stageCameras.length / fleetColumns));
+  const fleetMetaHeight = Math.min(32, Math.max(12, Math.floor(((fleetMonitorHeight ?? 600) - 33) / fleetRows * 0.23)));
+  const fleetMonitorStyle = mode === "fleet" ? {
+    "--fleet-monitor-height": fleetMonitorHeight ? `${fleetMonitorHeight}px` : "75dvh",
+    "--fleet-row-count": fleetRows,
+    "--fleet-mobile-columns": Math.min(2, fleetColumns),
+    "--fleet-mobile-row-count": Math.ceil(stageCameras.length / Math.min(2, fleetColumns)),
+    "--fleet-meta-height": `${fleetMetaHeight}px`,
+  } as CSSProperties : undefined;
   return <div className={`live-operations-stage mode-${mode}`}>
     <header className="los-mode-bar"><div className="los-mode-intro"><span className="los-eyebrow">OPERATING LENS / {String(MODES.findIndex(item => item.id === mode) + 1).padStart(2, "0")}</span><h2>Choose your lens<span>.</span></h2></div><nav aria-label="Operations modes">{MODES.map(item => <button key={item.id} type="button" aria-pressed={mode === item.id} disabled={busy} onClick={() => setMode(item.id)}><item.icon size={16} />{item.label}</button>)}</nav><button type="button" className="los-context-toggle" aria-expanded={contextVisible} onClick={() => { if (mode === "respond") setMode("watch"); setContextOpen(!contextVisible); }}><Activity size={16} />Context{attention.length > 0 && <span className="los-context-count">{attention.length}</span>}</button></header>
     <div className="los-workspace">
@@ -177,7 +207,7 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
           <button type="button" aria-pressed={fleetRotating} onClick={() => setFleetRotating(!fleetRotating)}>{fleetRotating ? "Pause rotation" : "Rotate every 15s"}</button>
           <small>Substreams use the configured viewer capacity. Select a camera in the dock to investigate it.</small>
         </div>}
-        <div ref={monitorRef} className={`los-video-stage ${controlsOpen ? "controls-visible" : ""}`} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); const id = event.dataTransfer.getData("text/plain"); if (scopedIds.has(id)) { selectCamera(id); setMode("watch"); } }}>
+        <div ref={monitorRef} className={`los-video-stage ${controlsOpen ? "controls-visible" : ""} ${mode === "fleet" && stageCameras.length > 36 ? "fleet-dense" : ""}`} style={fleetMonitorStyle} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); const id = event.dataTransfer.getData("text/plain"); if (scopedIds.has(id)) { selectCamera(id); setMode("watch"); } }}>
           <div className="los-monitor-bar"><span><i aria-hidden="true" />{mode === "fleet" || mode === "overview" ? "MULTI-FEED MONITOR" : active?.status?.toLowerCase() === "online" ? mode === "investigate" ? "LIVE SOURCE / REPLAY BELOW" : "LIVE SOURCE" : "CAMERA MONITOR"}</span><div className="los-monitor-actions"><span>{mode === "fleet" ? `PAGE ${fleet.currentPage + 1} / ${fleet.pageCount}` : mode === "overview" ? `${stageCameras.length} BRANCH FEEDS` : active?.branchName || "NO BRANCH SELECTED"}</span><button type="button" onClick={toggleMonitorFullscreen} aria-label={monitorFullscreen ? "Exit fullscreen monitor" : "Open fullscreen monitor"} aria-pressed={monitorFullscreen} title={monitorFullscreen ? "Exit fullscreen monitor (Esc)" : "Open fullscreen monitor"}>{monitorFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}{monitorFullscreen ? "Exit fullscreen" : "Fullscreen"}</button></div></div>
           {stageCameras.length ? <EnhancedCameraGrid key={mode === "fleet" ? `fleet:${fleetBranch}:${fleetPageSize}:${fleet.currentPage}` : mode === "overview" ? "overview" : active?.id} cameras={stageCameras} initialLayout={layout} compactStage tileCount={mode === "fleet" ? stageCameras.length : undefined} maxConcurrentStreams={mode === "fleet" ? maxConcurrentStreams : mode === "overview" ? Math.min(4, maxConcurrentStreams) : 1} enableVirtualScrolling={false} aiByCamera={aiByCamera} showAiOverlay={showAiOverlay} onOpenCameraAi={onOpenCameraAi} onActiveStreamsChange={onActiveStreamsChange} onMonitoredCamerasChange={onMonitoredCamerasChange} /> : <div className="los-empty"><CameraIcon size={36} /><strong>No cameras in this scene.</strong><p>Choose another area or adjust the wall scope.</p></div>}
         </div>
