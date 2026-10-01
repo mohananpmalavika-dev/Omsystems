@@ -20,7 +20,9 @@ git reset --hard origin/main
 
 if [ -n "$RELEASE_MANIFEST_BACKUP" ]; then
   install -d /opt/sentinel-grid/edge-agent/release
-  install -m 0644 "$RELEASE_MANIFEST_BACKUP" /opt/sentinel-grid/edge-agent/release/windows-release.json
+  if [ ! -s /opt/sentinel-grid/edge-agent/release/windows-release.json ]; then
+    install -m 0644 "$RELEASE_MANIFEST_BACKUP" /opt/sentinel-grid/edge-agent/release/windows-release.json
+  fi
   rm -f "$RELEASE_MANIFEST_BACKUP"
 fi
 
