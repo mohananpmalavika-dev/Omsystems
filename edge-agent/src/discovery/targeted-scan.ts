@@ -6,6 +6,17 @@ export interface DeviceScanTarget {
   onvifPort?: number;
 }
 
+export function scanCredentialResolver(
+  target: DeviceScanTarget | undefined,
+  targetCredentials: { username: string; password: string } | undefined,
+  fallback: (host: string) => Promise<{ username: string; password: string }>,
+) {
+  return (host: string) =>
+    target?.ipAddress === host && targetCredentials
+      ? Promise.resolve(targetCredentials)
+      : fallback(host);
+}
+
 export function targetFromScanJob(job: {
   scope?: "branch" | "device";
   targetDiscoveryId?: string;

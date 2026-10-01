@@ -7,7 +7,8 @@ import { createDeviceFingerprint } from "./discovery/device-fingerprint.js";
 import { fingerprintHttpRecorder } from "./discovery/recorder-http-fingerprint.js";
 import { discoverRtspDevices, recorderIdForHost, runWithConcurrency } from "./discovery/rtsp-network-scan.js";
 import { fallbackCredentialsRequired, needsRecorderRtspFallback, rtspOnvifExclusions } from "./discovery/onvif-fallback-policy.js";
-import { targetFromScanJob, targetedOnvifEndpoint, type DeviceScanTarget } from "./discovery/targeted-scan.js";
+import { scanCredentialResolver, targetFromScanJob, targetedOnvifEndpoint, type DeviceScanTarget } from "./discovery/targeted-scan.js";
+import { newestDiscoveryCredential } from "./security/discovery-credential-selection.js";
 import { attachCredentials, OnvifClient } from "./devices/onvif-client.js";
 import { compatibilityNotes, normalizeVendor } from "./devices/compatibility-registry.js";
 import { GatewayClient, type DiscoveredCameraPayload } from "./registration/gateway-client.js";
@@ -551,23 +552,30 @@ await presenceHeartbeat.stop();
 await edgeMediaRuntime?.stop();
 
 async function discoveryCredentials(host: string) {
+  let databaseCredentials;
   try {
-    const databaseCredentials = await dbCredentialProvider.get(host);
-    if (databaseCredentials) return databaseCredentials;
+    databaseCredentials = await dbCredentialProvider.get(host);
   } catch (error) {
     logger.warn("Unable to load discovery credentials from the control plane", {
       error: error instanceof Error ? error.message : String(error),
     });
   }
-  return credentialVault.get(host) ?? {
+  return newestDiscoveryCredential(databaseCredentials, credentialVault.get(host)) ?? {
     username: "",
     password: "",
     updatedAt: "not-configured",
   };
 }
 
-async function scanBranch(options: { persistStreamSecrets?: boolean; target?: DeviceScanTarget } = {}) {
+async function scanBranch(options: {
+  persistStreamSecrets?: boolean;
+  target?: DeviceScanTarget;
+  targetCredentials?: { username: string; password: string };
+} = {}) {
   const persistStreamSecrets = options.persistStreamSecrets ?? true;
+  const credentialsForScan = scanCredentialResolver(
+    options.target, options.targetCredentials, discoveryCredentials,
+  );
   const configuredEndpoints = config.ONVIF_ENDPOINTS
     .split(",")
     .map((value) => value.trim())
@@ -639,7 +647,7 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
   for (const endpoint of endpoints) {
     const serviceUrls = onvifServiceCandidates(endpoint);
     if (!serviceUrls.length) continue;
-    const credentials = await discoveryCredentials(endpoint.remoteAddress);
+    const credentials = await credentialsForScan(endpoint.remoteAddress);
     let serviceUrl = serviceUrls[0]!;
     const inspectionFailures: string[] = [];
     try {
@@ -1190,7 +1198,7 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
         // Use the same resolver as ONVIF so credentials delivered through an
         // encrypted update-credentials command are available to RTSP/DVR
         // channel discovery immediately.
-        credentialsForHost: (host: string) => discoveryCredentials(host),
+        credentialsForHost: credentialsForScan,
         hosts: knownHosts,
         excludeHosts: rtspOnvifExclusions({
           ...(options.target ? { targetIpAddress: options.target.ipAddress } : {}),
@@ -1576,12 +1584,13 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
         password: decrypted.password,
         host: decrypted.scope.host,
       });
-      // The targeted scan must use the credentials from this command. The
-      // database provider may still contain the previous host credential from
-      // an earlier automatic discovery cycle, so invalidate it before the
-      // immediate verification scan falls back to the local vault.
+      // The database may still hold an older host login. Supply this command's
+      // credentials directly to both ONVIF and RTSP verification.
       dbCredentialProvider.invalidate();
-      const discovered = await scanBranch({ target: { ipAddress: decrypted.scope.host } });
+      const discovered = await scanBranch({
+        target: { ipAddress: decrypted.scope.host },
+        targetCredentials: { username: decrypted.username, password: decrypted.password },
+      });
       return { result: { ...saved, rediscovered: discovered } };
     }
     case "apply-update": {
