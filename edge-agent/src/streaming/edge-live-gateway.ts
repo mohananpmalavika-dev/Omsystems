@@ -8,7 +8,6 @@ import { dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import type { EdgeConfig } from "../config.js";
 import type { ConsumedLiveSession, GatewayClient } from "../registration/gateway-client.js";
-import type { LocalStreamSecretStore } from "./secret-store.js";
 import { logger } from "../utils/logger.js";
 import { TalkSessionRegistry } from "../talkback/talk-session-registry.js";
 import { TalkbackTransportError } from "../talkback/rtsp-backchannel.js";
@@ -34,7 +33,6 @@ export interface EdgeMediaRuntimeInput {
   config: EdgeConfig;
   gateway: GatewayClient;
   agentId: string;
-  secrets: LocalStreamSecretStore;
 }
 
 export type QuickTunnelChild = Pick<ChildProcessWithoutNullStreams, "kill" | "once">;
@@ -162,7 +160,7 @@ export class QuickTunnelSupervisor {
 interface LiveGatewayOptions {
   consumer: LiveSessionConsumer;
   router: MediaRouter;
-  resolveSecret(reference: string): string | undefined;
+  resolveSecret(reference: string): Promise<string | undefined>;
   edgeBridgeSharedKey?: string;
   publicBaseUrl: () => string;
   mediaMtxHlsUrl: string;
@@ -254,7 +252,7 @@ export class EdgeLiveGateway {
       }
       const consumed = await this.options.consumer.consume(body.controlPlaneToken);
       if (consumed.purpose !== "playback") return sendJson(response, 403, { error: "recording_access_required" });
-      const sourceUri = this.options.resolveSecret(consumed.connectionSecretRef);
+      const sourceUri = await this.options.resolveSecret(consumed.connectionSecretRef);
       if (!sourceUri) return sendJson(response, 503, { error: "stream_secret_unavailable" });
       let source: URL;
       try { source = new URL(sourceUri); }
@@ -304,8 +302,10 @@ export class EdgeLiveGateway {
         const consumed = await this.options.consumer.consume(body.controlPlaneToken);
         if (consumed.purpose && consumed.purpose !== "view") return sendJson(response, 403, { error: "invalid_live_session" });
         const requestedProfile = body.profile === "sub" || (consumed as { profile?: string }).profile === "sub" ? "sub" : "main";
-        let sourceUri = (requestedProfile === "sub" ? this.options.resolveSecret(`${consumed.connectionSecretRef}#sub`) : undefined)
-          || this.options.resolveSecret(consumed.connectionSecretRef);
+        let sourceUri = requestedProfile === "sub"
+          ? await this.options.resolveSecret(`${consumed.connectionSecretRef}#sub`)
+          : undefined;
+        sourceUri ||= await this.options.resolveSecret(consumed.connectionSecretRef);
         if (!sourceUri) return sendJson(response, 503, { error: "stream_secret_unavailable" });
         if (requestedProfile === "sub" && !sourceUri.includes("subtype=1")) {
           if (sourceUri.includes("subtype=0")) {
@@ -356,7 +356,7 @@ export class EdgeLiveGateway {
       }
       const consumed = await this.options.consumer.consume(body.controlPlaneToken);
       if (consumed.purpose !== "talk") return sendJson(response, 403, { error: "invalid_talk_session" });
-      const sourceUri = this.options.resolveSecret(consumed.connectionSecretRef);
+      const sourceUri = await this.options.resolveSecret(consumed.connectionSecretRef);
       if (!sourceUri) return sendJson(response, 503, { error: "stream_secret_unavailable" });
       const session = await this.talk.start(consumed, sourceUri);
       const base = stripSlash(this.options.publicBaseUrl());
@@ -556,7 +556,7 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
     liveGateway = buildEdgeLiveGateway({
       consumer: { consume: (token) => input.gateway.consumeLiveSession(input.agentId, token) },
       router,
-      resolveSecret: (reference) => input.secrets.get(reference),
+      resolveSecret: (reference) => input.gateway.resolveStreamSecret(input.agentId, reference),
       ...(config.EDGE_BRIDGE_SHARED_KEY ? { edgeBridgeSharedKey: config.EDGE_BRIDGE_SHARED_KEY } : {}),
       publicBaseUrl: currentPublicUrl,
       mediaMtxHlsUrl: config.MEDIAMTX_HLS_URL,

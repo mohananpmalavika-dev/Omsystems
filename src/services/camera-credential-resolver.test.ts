@@ -77,6 +77,7 @@ describe("CameraCredentialResolver", () => {
       mockPool.query.mockResolvedValueOnce({
         rows: [
           {
+            credential_id: "credential-1",
             ip_address: "192.168.1.100",
             onvif_port: 8080,
             username: "camera_user",
@@ -101,10 +102,11 @@ describe("CameraCredentialResolver", () => {
       expect(connection?.credentials.password).toBe("camera_pass");
     });
 
-    it("should use branch default credentials when camera has none", async () => {
+    it("should use host-specific credentials", async () => {
       mockPool.query.mockResolvedValueOnce({
         rows: [
           {
+            credential_id: "credential-2",
             ip_address: "192.168.1.100",
             onvif_port: 80,
             username: "branch_admin",
@@ -149,6 +151,7 @@ describe("CameraCredentialResolver", () => {
       mockPool.query.mockResolvedValueOnce({
         rows: [
           {
+            credential_id: "credential-3",
             ip_address: null,
             onvif_port: 80,
             username: "admin",
@@ -177,6 +180,7 @@ describe("CameraCredentialResolver", () => {
       mockPool.query.mockResolvedValueOnce({
         rows: [
           {
+            credential_id: "credential-4",
             ip_address: "192.168.1.100",
             onvif_port: 80,
             username: "vault_user",
@@ -217,18 +221,15 @@ describe("CameraCredentialResolver", () => {
   describe("Camera Credential Lookup", () => {
     it("should resolve credentials from camera ID", async () => {
       mockPool.query.mockResolvedValueOnce({
-        rows: [
-          {
-            ipAddress: "192.168.1.100",
-            onvifPort: 80,
-            username: "admin",
-            password: "password",
-          },
-        ],
+        rows: [{ branch_node_id: "branch-1" }],
         command: "",
         rowCount: 1,
         oid: 0,
         fields: [],
+      });
+      mockPool.query.mockResolvedValueOnce({
+        rows: [{ credential_id: "credential-5", ip_address: "192.168.1.100", onvif_port: 80,
+          username: "admin", password: "password" }],
       });
 
       const connection = await resolver.resolve("unknown://format", "cam-123");
@@ -299,7 +300,9 @@ describe("CameraCredentialResolver", () => {
   // ========== Credential Storage Tests ==========
 
   describe("Store Credentials", () => {
-    it("should store camera credentials", async () => {
+    it("should store encrypted camera credentials", async () => {
+      const previous = process.env.STREAM_VAULT_KEY;
+      process.env.STREAM_VAULT_KEY = Buffer.alloc(32, 1).toString("base64");
       mockPool.query.mockResolvedValueOnce({
         rows: [],
         command: "UPDATE",
@@ -308,12 +311,17 @@ describe("CameraCredentialResolver", () => {
         fields: [],
       });
 
-      await resolver.storeCredentials("cam-123", "newuser", "newpass");
-
-      expect(mockPool.query).toHaveBeenCalledWith(
-        expect.stringContaining("UPDATE cameras"),
-        ["cam-123", "newuser", "newpass"],
-      );
+      try {
+        await resolver.storeCredentials("cam-123", "newuser", "newpass");
+        const [sql, values] = mockPool.query.mock.calls[0];
+        expect(sql).toContain("password_encrypted");
+        expect(values[0]).toBe("cam-123");
+        expect(values[2]).toBe("newuser");
+        expect(values[3]).not.toContain("newpass");
+      } finally {
+        if (previous === undefined) delete process.env.STREAM_VAULT_KEY;
+        else process.env.STREAM_VAULT_KEY = previous;
+      }
     });
   });
 

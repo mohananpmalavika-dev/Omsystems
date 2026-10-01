@@ -341,6 +341,13 @@ export async function registerEdgeGatewayOperationsRoutes(
         message: "Re-enroll this legacy gateway before sending camera credentials.",
       });
     }
+    if (store.upsertDeviceCredentials) {
+      await store.upsertDeviceCredentials(id, [{
+        host: body.cameraIp,
+        username: body.username,
+        password: body.password,
+      }]);
+    }
     const envelope = sealEdgeCommandPayload({
       username: body.username,
       password: body.password,

@@ -10,12 +10,11 @@ import { resolveNeighborMac } from "./discovery/network-neighbor.js";
 import type { VendorStreamFamily } from "./devices/vendor-stream-adapter.js";
 import { fallbackCredentialsRequired, needsRecorderRtspFallback, rtspOnvifExclusions } from "./discovery/onvif-fallback-policy.js";
 import { scanCredentialResolver, targetFromScanJob, targetedOnvifEndpoint, type DeviceScanTarget } from "./discovery/targeted-scan.js";
-import { newestDiscoveryCredential } from "./security/discovery-credential-selection.js";
 import { attachCredentials, OnvifClient } from "./devices/onvif-client.js";
 import { compatibilityNotes, normalizeVendor } from "./devices/compatibility-registry.js";
 import { GatewayClient, type DiscoveredCameraPayload } from "./registration/gateway-client.js";
 import { captureRtspRgbFrame, probeRtsp } from "./streaming/rtsp-probe.js";
-import { LocalStreamSecretStore, startSecretProvider } from "./streaming/secret-store.js";
+import { LocalStreamSecretStore } from "./streaming/secret-store.js";
 import { uptime } from "node:os";
 import { NetworkCounterSampler, NetworkPathTracker, probeInternetLink } from "./monitoring/internet-probe.js";
 import { EdgeResourceSampler } from "./monitoring/edge-resource-probe.js";
@@ -335,9 +334,20 @@ let lastMediaRuntimeStartAttemptAt = 0;
 const streamSecretRecoveryAttempts = new Map<string, number>();
 let lastRecorderProbeAt = 0;
 let lastRecorderArchiveScanAt = 0;
+const legacyRecorderCredentials = config.RECORDERS_JSON
+  .filter((recorder) => recorder.host && recorder.username)
+  .map((recorder) => ({ host: recorder.host, username: recorder.username!, password: recorder.password ?? "" }));
 const activeRecorders = new Map<string, RecorderConfig>(
-  config.RECORDERS_JSON.map((recorder) => [recorder.id, recorder]),
+  config.RECORDERS_JSON.map((recorder) => {
+    const { username: _username, password: _password, ...withoutCredentials } = recorder;
+    return [recorder.id, withoutCredentials] as const;
+  }),
 );
+for (const recorder of config.RECORDERS_JSON) {
+  delete recorder.username;
+  delete recorder.password;
+}
+delete process.env.RECORDERS_JSON;
 await secrets.load();
 if (scanOnce) {
   const discovered = await scanBranch({ persistStreamSecrets: false });
@@ -353,7 +363,7 @@ if (scanOnce) {
 }
 if (config.LIVE_MEDIA_ENABLED) {
   lastMediaRuntimeStartAttemptAt = Date.now();
-  edgeMediaRuntime = await startEdgeMediaRuntimeIfAvailable({ config, gateway: control, agentId, secrets });
+  edgeMediaRuntime = await startEdgeMediaRuntimeIfAvailable({ config, gateway: control, agentId });
 }
 
 // Hardware TPM 2.0 Attestation Initialization
@@ -427,15 +437,6 @@ await syncCameraHeartbeatConfig().catch((error) => {
   });
 });
 cameraHeartbeat.start(config.CAMERA_HEARTBEAT_INTERVAL_MS, config.CAMERA_ANALYTICS_INTERVAL_MS);
-if (config.EDGE_MEDIA_SHARED_KEY) {
-  await startSecretProvider({
-    store: secrets,
-    host: config.STREAM_SECRET_PROVIDER_HOST,
-    port: config.STREAM_SECRET_PROVIDER_PORT,
-    sharedKey: config.EDGE_MEDIA_SHARED_KEY,
-  });
-  logger.info(`Local stream-secret provider listening on ${config.STREAM_SECRET_PROVIDER_HOST}:${config.STREAM_SECRET_PROVIDER_PORT}`);
-}
 
 logger.info(`Edge agent ${agentId} registered; waiting for branch commands`, { branchId, version: config.EDGE_AGENT_VERSION });
 await heartbeatAndReport().catch((error) => {
@@ -562,7 +563,7 @@ async function discoveryCredentials(host: string) {
       error: error instanceof Error ? error.message : String(error),
     });
   }
-  return newestDiscoveryCredential(databaseCredentials, credentialVault.get(host)) ?? {
+  return databaseCredentials ?? {
     username: "",
     password: "",
     updatedAt: "not-configured",
@@ -732,8 +733,6 @@ async function scanBranch(options: {
           port: Number(parsedServiceUrl.port || (parsedServiceUrl.protocol === "https:" ? 443 : 80)),
           secure: parsedServiceUrl.protocol === "https:",
           rtspPort: 554,
-          username: credentials.username,
-          password: credentials.password,
           ...(recorderVendor === "hikvision" || recorderVendor === "dahua" || recorderVendor === "cp-plus"
             ? {}
             : { systemPath: `${parsedServiceUrl.pathname}${parsedServiceUrl.search}` }),
@@ -754,7 +753,11 @@ async function scanBranch(options: {
         // Save physical storage as part of discovery. A newly found recorder may
         // have no approved camera yet, and the regular health poll can run later.
         try {
-          const storageProbe = await probeRecorder(activeRecorders.get(discoveredId)!, config.RECORDER_PROBE_TIMEOUT_MS);
+          const storageProbe = await probeRecorder({
+            ...activeRecorders.get(discoveredId)!,
+            username: credentials.username,
+            password: credentials.password,
+          }, config.RECORDER_PROBE_TIMEOUT_MS);
           if (storageProbe.hddStatus.length > 0) {
             await control.submitRecorderHdd(agentId, {
               branchId, recorderId: discoveredId, observedAt, source: "onvif",
@@ -859,7 +862,7 @@ async function scanBranch(options: {
             ...(recorderSerialNumber ? { recorderSerialNumber } : {}),
           });
           if (persistStreamSecrets && channel.primaryStreamUri) {
-            await secrets.set(`edge://${agentId}/${channelDiscovery.id}`, channel.primaryStreamUri);
+            await saveStreamSecret(`edge://${agentId}/${channelDiscovery.id}`, channel.primaryStreamUri);
           }
           submitted += 1;
         }
@@ -1005,7 +1008,7 @@ async function scanBranch(options: {
         ...(streamVerified ? {} : { statusReason: "rtsp_stream_unverified" }),
       });
       if (persistStreamSecrets && primarySourceUri) {
-        await secrets.set(`edge://${agentId}/${discovery.id}`, primarySourceUri);
+        await saveStreamSecret(`edge://${agentId}/${discovery.id}`, primarySourceUri);
       }
       try {
         const memoryCards = await probeCameraMemoryCard({
@@ -1108,8 +1111,6 @@ async function scanBranch(options: {
               port: Number(parsedServiceUrl.port || 80),
               secure: false,
               rtspPort: 554,
-              username: credentials.username,
-              password: credentials.password,
             });
 
             for (const ch of recorderProbe.channels) {
@@ -1158,8 +1159,8 @@ async function scanBranch(options: {
                   { layer: "vendor-adapter", status: "fallback", detail: `${recorderManufacturer} recorder adapter verified` },
                 ],
               });
-              if (persistStreamSecrets && secrets && ch.uri) {
-                await secrets.set(`edge://${agentId}/${chDiscovery.id}`, ch.uri);
+              if (persistStreamSecrets && ch.uri) {
+                await saveStreamSecret(`edge://${agentId}/${chDiscovery.id}`, ch.uri);
               }
               submitted += 1;
               logger.info(`Submitted ${recorderManufacturer} DVR channel ${ch.sourceChannel} as discovery ${chDiscovery.id}`, {
@@ -1252,7 +1253,7 @@ async function scanBranch(options: {
           ],
         });
         if (persistStreamSecrets && streamVerified && vendorFallback.candidate) {
-          await secrets.set(`edge://${agentId}/${discovery.id}`, vendorFallback.candidate.uri);
+          await saveStreamSecret(`edge://${agentId}/${discovery.id}`, vendorFallback.candidate.uri);
         }
         if (isRecorder) recorderFallbackHosts.add(endpoint.remoteAddress);
         if (streamVerified) handledOnvifHosts.add(endpoint.remoteAddress);
@@ -1293,7 +1294,8 @@ async function scanBranch(options: {
         connectTimeoutMs: config.RTSP_DISCOVERY_CONNECT_TIMEOUT_MS,
         recorderMaxChannels: config.RECORDER_DISCOVERY_MAX_CHANNELS,
         onRecorderDetected: async (recorder: RecorderConfig) => {
-          activeRecorders.set(recorder.id, recorder);
+          const { username: _username, password: _password, ...withoutCredentials } = recorder;
+          activeRecorders.set(recorder.id, withoutCredentials);
           const observedAt = new Date().toISOString();
           const source = recorder.vendor === "cp-plus" ? "cp-plus-adapter" as const : "system" as const;
           const probe = await probeRecorder(recorder, config.RECORDER_PROBE_TIMEOUT_MS);
@@ -1409,7 +1411,6 @@ async function recoverEdgeMediaRuntimeIfNeeded() {
     config,
     gateway: control,
     agentId,
-    secrets,
   });
   if (!recoveredRuntime) return;
 
@@ -1549,10 +1550,24 @@ function resolveLocalMediaUrl() {
 
 async function syncCameraHeartbeatConfig() {
   const cameras = await control.listMonitoringCameras(agentId, config.EDGE_AGENT_VERSION);
-  const missing = new Map(cameras
-    .filter((camera) => camera.connectionSecretRef.startsWith(`edge://${agentId}/`) &&
-      !secrets.get(camera.connectionSecretRef) && camera.ipAddress && isIP(camera.ipAddress.replace(/\/\d+$/, "")))
-    .map((camera) => [camera.connectionSecretRef, camera]));
+  await syncCentralStreamSecrets().catch((error) => {
+    logger.warn("Central stream-secret migration will retry", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
+  await syncCentralDeviceCredentials().catch((error) => {
+    logger.warn("Central device-credential migration will retry", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
+  const missing = new Map<string, (typeof cameras)[number]>();
+  await runWithConcurrency(cameras, 4, async (camera) => {
+    if (!camera.connectionSecretRef.startsWith(`edge://${agentId}/`) ||
+        !camera.ipAddress || !isIP(camera.ipAddress.replace(/\/\d+$/, ""))) return;
+    if (!(await control.resolveStreamSecret(agentId, camera.connectionSecretRef))) {
+      missing.set(camera.connectionSecretRef, camera);
+    }
+  });
   await runWithConcurrency([...missing.values()], 2, async (camera) => {
     const reference = camera.connectionSecretRef;
     const now = Date.now();
@@ -1572,7 +1587,7 @@ async function syncCameraHeartbeatConfig() {
         probe: (uri) => probeRtsp(uri, config.FFPROBE_PATH, 6_000),
       });
       if (!recovered.candidate) return;
-      await secrets.set(reference, recovered.candidate.uri);
+      await saveStreamSecret(reference, recovered.candidate.uri);
       streamSecretRecoveryAttempts.delete(reference);
       logger.info("Recovered missing camera stream secret from verified branch credentials", { cameraId: camera.id });
     } catch (error) {
@@ -1582,8 +1597,8 @@ async function syncCameraHeartbeatConfig() {
       });
     }
   });
-  cameraHeartbeat.replaceCameras(cameras.map((camera) => {
-    const rtspUrl = secrets.get(camera.connectionSecretRef);
+  const heartbeatCameras = await Promise.all(cameras.map(async (camera) => {
+    const rtspUrl = await control.resolveStreamSecret(agentId, camera.connectionSecretRef);
     return {
       id: camera.id,
       name: camera.name,
@@ -1592,6 +1607,7 @@ async function syncCameraHeartbeatConfig() {
       analyticsEnabled: camera.analyticsEnabled ?? true,
     };
   }));
+  cameraHeartbeat.replaceCameras(heartbeatCameras);
   const channelsByRecorder = new Map<string, Array<{ cameraId: string; channel: number }>>();
   for (const camera of cameras) {
     if (!camera.recorderId || !camera.recorderChannel) continue;
@@ -1614,9 +1630,38 @@ async function syncCameraHeartbeatConfig() {
   lastCameraConfigSyncAt = Date.now();
 }
 
+async function saveStreamSecret(reference: string, sourceUri: string) {
+  const result = await control.syncStreamSecrets(agentId, [{ reference, sourceUri }]);
+  if (result.stored !== 1) throw new Error("Central stream-secret write was incomplete");
+}
+
+async function syncCentralStreamSecrets() {
+  const pending = secrets.entries();
+  for (let offset = 0; offset < pending.length; offset += 100) {
+    const batch = pending.slice(offset, offset + 100);
+    const result = await control.syncStreamSecrets(agentId, batch, false);
+    if (result.stored !== batch.length) throw new Error("Central stream-secret migration was incomplete");
+  }
+  await secrets.removeLegacyFiles();
+}
+
+async function syncCentralDeviceCredentials() {
+  const pending = [...new Map(
+    [...legacyRecorderCredentials, ...credentialVault.entries()]
+      .map((credential) => [credential.host, credential] as const),
+  ).values()];
+  for (let offset = 0; offset < pending.length; offset += 100) {
+    const batch = pending.slice(offset, offset + 100);
+    const result = await control.syncDeviceCredentials(agentId, batch, false);
+    if (result.stored !== batch.length) throw new Error("Central device-credential sync was incomplete");
+  }
+  await credentialVault.removeLegacyFiles();
+  legacyRecorderCredentials.length = 0;
+}
+
 async function collectRecorderReports(observedAt: string, includeArchive: boolean) {
   return Promise.all([...activeRecorders.values()].map(async (recorder) => {
-    const secureCredential = credentialVault.get(recorder.host);
+    const secureCredential = await dbCredentialProvider.get(recorder.host);
     const resolvedRecorder = secureCredential
       ? { ...recorder, username: secureCredential.username, password: secureCredential.password }
       : recorder;
@@ -1658,7 +1703,7 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
       if (!config.LIVE_MEDIA_ENABLED) throw new Error("live_media_disabled");
       await refreshManagedMediaBootstrap();
       await edgeMediaRuntime?.stop();
-      edgeMediaRuntime = await startEdgeMediaRuntime({ config, gateway: control, agentId, secrets });
+      edgeMediaRuntime = await startEdgeMediaRuntime({ config, gateway: control, agentId });
       return { result: { status: "restarted", publicUrl: edgeMediaRuntime.publicUrl } };
     case "restart-agent":
       return { result: { status: "restart_acknowledged" }, restartAgent: true };
@@ -1667,7 +1712,7 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
       if (!cameraId) throw new Error("cameraId_required");
       const camera = (await control.listMonitoringCameras(agentId, config.EDGE_AGENT_VERSION))
         .find((item) => item.id === cameraId);
-      const source = camera ? secrets.get(camera.connectionSecretRef) : undefined;
+      const source = camera ? await control.resolveStreamSecret(agentId, camera.connectionSecretRef) : undefined;
       if (!source) throw new Error("camera_stream_secret_unavailable");
       const probe = await probeRtsp(source, config.FFPROBE_PATH, config.ONVIF_TIMEOUT_MS);
       return { result: { cameraId, ...probe } };
@@ -1681,7 +1726,11 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
       const recorderId = typeof payload.recorderId === "string" ? payload.recorderId : "";
       const recorder = activeRecorders.get(recorderId);
       if (!recorder) throw new Error("recorder_not_configured");
-      const probe = await probeRecorder(recorder, config.RECORDER_PROBE_TIMEOUT_MS, { includeArchive: true });
+      const credential = await dbCredentialProvider.get(recorder.host);
+      const resolvedRecorder = credential
+        ? { ...recorder, username: credential.username, password: credential.password }
+        : recorder;
+      const probe = await probeRecorder(resolvedRecorder, config.RECORDER_PROBE_TIMEOUT_MS, { includeArchive: true });
       return { result: {
         recorderId, metrics: probe.metrics, reasonCodes: probe.reasonCodes,
         hddCount: probe.hddStatus.length, channelHealth: probe.channelHealth,
@@ -1707,11 +1756,12 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
           typeof decrypted.scope.host !== "string" || !decrypted.scope.host) {
         throw new Error("invalid_camera_credential_payload");
       }
-      const saved = await credentialVault.set({
+      const saved = await control.syncDeviceCredentials(agentId, [{
         username: decrypted.username,
         password: decrypted.password,
         host: decrypted.scope.host,
-      });
+      }]);
+      if (saved.stored !== 1) throw new Error("Central device-credential write was incomplete");
       // The database may still hold an older host login. Supply this command's
       // credentials directly to both ONVIF and RTSP verification.
       dbCredentialProvider.invalidate();
@@ -1719,7 +1769,7 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
         target: { ipAddress: decrypted.scope.host },
         targetCredentials: { username: decrypted.username, password: decrypted.password },
       });
-      return { result: { ...saved, rediscovered: discovered } };
+      return { result: { scope: "single-camera", rediscovered: discovered } };
     }
     case "apply-update": {
       const release = await control.getUpdate(agentId, config.EDGE_AGENT_VERSION);
@@ -1784,7 +1834,7 @@ function applyManagedMediaBootstrap(media: NonNullable<typeof identity>["media"]
 async function recoverCameraAtEdge(cameraId: string, trigger: "automatic" | "operator", consecutiveFailures?: number) {
   const camera = (await control.listMonitoringCameras(agentId, config.EDGE_AGENT_VERSION))
     .find((item) => item.id === cameraId);
-  const source = camera ? secrets.get(camera.connectionSecretRef) : undefined;
+  const source = camera ? await control.resolveStreamSecret(agentId, camera.connectionSecretRef) : undefined;
   if (!camera || !source) throw new Error("camera_stream_secret_unavailable");
 
   const startedAt = new Date().toISOString();

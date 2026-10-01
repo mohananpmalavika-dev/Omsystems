@@ -1,17 +1,25 @@
-import { timingSafeEqual } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
-import { createServer, type Server } from "node:http";
+import { createDecipheriv } from "node:crypto";
+import { readFile, unlink } from "node:fs/promises";
 
 export class LocalStreamSecretStore {
   private values: Record<string, string> = {};
-  private pendingWrite: Promise<void> = Promise.resolve();
 
   constructor(private readonly path: string) {}
 
   async load() {
     try {
-      this.values = JSON.parse(await readFile(this.path, "utf8")) as Record<string, string>;
+      const parsed = JSON.parse(await readFile(this.path, "utf8")) as unknown;
+      if (isEncryptedStore(parsed)) {
+        const key = await this.readKey();
+        const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(parsed.iv, "base64url"));
+        decipher.setAuthTag(Buffer.from(parsed.tag, "base64url"));
+        const plaintext = Buffer.concat([
+          decipher.update(Buffer.from(parsed.ciphertext, "base64url")), decipher.final(),
+        ]);
+        this.values = parseSecretRecord(JSON.parse(plaintext.toString("utf8")));
+      } else {
+        this.values = parseSecretRecord(parsed);
+      }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
@@ -19,56 +27,43 @@ export class LocalStreamSecretStore {
 
   async set(reference: string, sourceUri: string) {
     this.values[reference] = sourceUri;
-    // Discovery reports channels concurrently. Serialize whole-store writes so
-    // an older snapshot cannot finish last and erase newer camera references.
-    const write = this.pendingWrite.catch(() => undefined).then(async () => {
-      await mkdir(dirname(this.path), { recursive: true });
-      const temporary = `${this.path}.${process.pid}.tmp`;
-      await writeFile(temporary, JSON.stringify(this.values), { encoding: "utf8", mode: 0o600 });
-      await rename(temporary, this.path);
-    });
-    this.pendingWrite = write;
-    await write;
   }
 
   get(reference: string) {
     return this.values[reference];
   }
+
+  entries() {
+    return Object.entries(this.values).map(([reference, sourceUri]) => ({ reference, sourceUri }));
+  }
+
+  async removeLegacyFiles() {
+    await unlink(this.path).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+    await unlink(`${this.path}.key`).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+    this.values = {};
+  }
+
+  private async readKey() {
+    const key = Buffer.from((await readFile(`${this.path}.key`, "utf8")).trim(), "base64url");
+    if (key.length !== 32) throw new Error("invalid_stream_secret_store_key");
+    return key;
+  }
 }
 
-export function startSecretProvider(options: {
-  store: LocalStreamSecretStore;
-  host: string;
-  port: number;
-  sharedKey: string;
-}): Promise<Server> {
-  const server = createServer((request, response) => {
-    const supplied = request.headers["x-edge-media-key"];
-    if (typeof supplied !== "string" || !secureEqual(supplied, options.sharedKey)) {
-      response.writeHead(401, { "content-type": "application/json" });
-      return response.end('{"error":"invalid_edge_media_identity"}');
-    }
-    const url = new URL(request.url ?? "/", "http://localhost");
-    if (request.method !== "GET" || url.pathname !== "/v1/secrets/resolve") {
-      response.writeHead(404).end();
-      return;
-    }
-    const sourceUri = options.store.get(url.searchParams.get("ref") ?? "");
-    if (!sourceUri) {
-      response.writeHead(404, { "content-type": "application/json" });
-      return response.end('{"error":"stream_secret_unavailable"}');
-    }
-    response.writeHead(200, { "content-type": "application/json", "cache-control": "no-store" });
-    response.end(JSON.stringify({ sourceUri }));
-  });
-  return new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(options.port, options.host, () => resolve(server));
-  });
+function isEncryptedStore(value: unknown): value is { version: 1; iv: string; tag: string; ciphertext: string } {
+  return typeof value === "object" && value !== null && !Array.isArray(value) &&
+    Reflect.get(value, "version") === 1 &&
+    ["iv", "tag", "ciphertext"].every((key) => typeof Reflect.get(value, key) === "string");
 }
 
-function secureEqual(value: string, expected: string) {
-  const supplied = Buffer.from(value);
-  const configured = Buffer.from(expected);
-  return supplied.length === configured.length && timingSafeEqual(supplied, configured);
+function parseSecretRecord(value: unknown): Record<string, string> {
+  if (typeof value !== "object" || value === null || Array.isArray(value) ||
+      !Object.entries(value).every(([key, uri]) => key.startsWith("edge://") && typeof uri === "string")) {
+    throw new Error("invalid_stream_secret_store");
+  }
+  return value as Record<string, string>;
 }

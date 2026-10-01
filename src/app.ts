@@ -565,6 +565,12 @@ export async function buildApp(options?: {
     bodyLimit: 50 * 1024 * 1024,
   });
   const store: ControlPlaneStore = options?.store ?? (new MemoryStore() as unknown as ControlPlaneStore);
+  if (store.migrateLegacyCameraPasswords) {
+    if (!process.env.STREAM_VAULT_KEY && process.env.NODE_ENV === "production") {
+      throw new Error("STREAM_VAULT_KEY is required for the central credential vault");
+    }
+    if (process.env.STREAM_VAULT_KEY) await store.migrateLegacyCameraPasswords();
+  }
   const recorderService = new RecorderService(store, options?.recorderProviderResolver);
   const edgePresenceCache = options?.edgePresenceCache;
   const runtimeGuard = new RuntimeGuard(options?.maxInFlightRequests ?? Number(process.env.MAX_IN_FLIGHT_REQUESTS ?? 500));
@@ -2532,7 +2538,66 @@ export async function buildApp(options?: {
     if (!ref) {
       return reply.code(400).send({ error: "missing_reference" });
     }
-    return reply.code(404).send({ error: "stream_secret_unavailable" });
+    if (!store.resolveStreamSecret) return reply.code(503).send({ error: "stream_vault_unavailable" });
+    const sourceUri = await store.resolveStreamSecret(ref);
+    if (!sourceUri) return reply.code(404).send({ error: "stream_secret_unavailable" });
+    return reply.header("cache-control", "no-store").send({ sourceUri });
+  });
+
+  app.post("/v1/edge-agents/:id/stream-secrets", async (request, reply) => {
+    const { id } = edgeAgentParams.parse(request.params);
+    if (!request.edgeAgentAuthenticated || request.edgeAgentId !== id ||
+        (!request.headers["x-edge-agent-token"] && !(request as any).clientCertFingerprint)) {
+      return reply.code(401).send({ error: "invalid_gateway_identity" });
+    }
+    if (!store.upsertStreamSecrets) return reply.code(503).send({ error: "stream_vault_unavailable" });
+    const body = z.object({
+      secrets: z.array(z.object({
+        reference: z.string().min(8).max(512),
+        sourceUri: z.string().min(8).max(4_096),
+      })).min(1).max(100),
+      overwrite: z.boolean().optional(),
+    }).parse(request.body);
+    try {
+      const stored = await store.upsertStreamSecrets(id, body.secrets, body.overwrite ?? true);
+      return reply.header("cache-control", "no-store").send({ stored });
+    } catch (error) {
+      request.log.error({ err: error instanceof Error ? error.message : "stream secret sync failed" }, "Stream secret sync failed");
+      return reply.code(409).send({ error: "stream_secret_sync_failed" });
+    }
+  });
+
+  app.get("/v1/edge-agents/:id/stream-secrets/resolve", async (request, reply) => {
+    const { id } = edgeAgentParams.parse(request.params);
+    if (!request.edgeAgentAuthenticated || request.edgeAgentId !== id ||
+        (!request.headers["x-edge-agent-token"] && !(request as any).clientCertFingerprint)) {
+      return reply.code(401).send({ error: "invalid_gateway_identity" });
+    }
+    if (!store.resolveStreamSecret) return reply.code(503).send({ error: "stream_vault_unavailable" });
+    const { ref } = z.object({ ref: z.string().min(8).max(512) }).parse(request.query);
+    if (!ref.startsWith(`edge://${id}/`)) return reply.code(404).send({ error: "stream_secret_unavailable" });
+    const sourceUri = await store.resolveStreamSecret(ref, id);
+    if (!sourceUri) return reply.code(404).send({ error: "stream_secret_unavailable" });
+    return reply.header("cache-control", "no-store").send({ sourceUri });
+  });
+
+  app.post("/v1/edge-agents/:id/device-credentials", async (request, reply) => {
+    const { id } = edgeAgentParams.parse(request.params);
+    if (!request.edgeAgentAuthenticated || request.edgeAgentId !== id ||
+        (!request.headers["x-edge-agent-token"] && !(request as any).clientCertFingerprint)) {
+      return reply.code(401).send({ error: "invalid_gateway_identity" });
+    }
+    if (!store.upsertDeviceCredentials) return reply.code(503).send({ error: "device_vault_unavailable" });
+    const body = z.object({ credentials: z.array(z.object({
+      host: z.string().ip({ version: "v4" }), username: z.string().min(1).max(128), password: z.string().max(1_024),
+    })).min(1).max(100), overwrite: z.boolean().optional() }).parse(request.body);
+    try {
+      const stored = await store.upsertDeviceCredentials(id, body.credentials, body.overwrite ?? true);
+      return reply.header("cache-control", "no-store").send({ stored });
+    } catch (error) {
+      request.log.error({ err: error instanceof Error ? error.message : "device credential sync failed" }, "Device credential sync failed");
+      return reply.code(409).send({ error: "device_credential_sync_failed" });
+    }
   });
 
   app.post("/v1/access/check", async (request, reply) => {
@@ -3802,6 +3867,9 @@ function isEdgeAgentIngressRoute(method: string, url: string) {
   } catch {}
   path = (path.split("?", 1)[0] ?? path).split("%3F", 1)[0] ?? path;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/heartbeat$/.test(path)) return true;
+  if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/stream-secrets$/.test(path)) return true;
+  if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/stream-secrets\/resolve$/.test(path)) return true;
+  if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/device-credentials$/.test(path)) return true;
   if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/cameras\/monitoring$/.test(path)) return true;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/live-sessions\/consume$/.test(path)) return true;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/talk-sessions\/[^/]+\/complete$/.test(path)) return true;

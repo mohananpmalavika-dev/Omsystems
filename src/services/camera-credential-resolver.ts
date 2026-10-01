@@ -4,7 +4,9 @@
  */
 
 import type { Pool } from "pg";
+import { randomUUID } from "node:crypto";
 import type { OnvifCredentials } from "../../edge-agent/src/devices/onvif-client.js";
+import { encryptCameraPassword, readCameraPassword } from "../security/vault/camera-credential-codec.js";
 
 export interface CameraConnection {
   host: string;
@@ -111,20 +113,25 @@ export class CameraCredentialResolver {
 
     // Query camera and branch credentials
     const result = await this.pool.query<{
+      credential_id: string | null;
       ip_address: string;
       onvif_port: number | null;
       username: string | null;
       password: string | null;
-      default_username?: string | null;
-      default_password?: string | null;
+      password_encrypted: string | null;
     }>(
-      `SELECT 
-        c.ip_address,
-        c.onvif_port,
-        COALESCE(c.username, bc.default_username, 'admin') as username,
-        COALESCE(c.password, bc.default_password, '') as password
+      `SELECT c.ip_address, c.onvif_port,
+              credential.id::text AS credential_id,
+              credential.username, credential.password, credential.password_encrypted
        FROM cameras c
-       LEFT JOIN branch_credentials bc ON bc.branch_id = c.branch_node_id
+       LEFT JOIN LATERAL (
+         SELECT id, username, password, password_encrypted
+         FROM camera_credentials
+         WHERE branch_id = c.branch_node_id
+           AND scope = 'host-specific'
+           AND ip_address = host(c.ip_address)
+         ORDER BY updated_at DESC LIMIT 1
+       ) credential ON true
        WHERE c.id = $1 AND c.branch_node_id = $2`,
       [targetCameraId, branchId],
     );
@@ -139,7 +146,9 @@ export class CameraCredentialResolver {
       port: row.onvif_port || 80,
       credentials: {
         username: row.username || "admin",
-        password: row.password || "",
+        password: row.credential_id
+          ? readCameraPassword({ id: row.credential_id, password: row.password, password_encrypted: row.password_encrypted })
+          : "",
       },
       onvifServiceUrl: `http://${row.ip_address}:${row.onvif_port || 80}/onvif/device_service`,
     };
@@ -188,29 +197,14 @@ export class CameraCredentialResolver {
    * Resolve credentials directly from camera record
    */
   private async resolveCameraCredential(cameraId: string): Promise<CameraConnection | null> {
-    const result = await this.pool.query<CameraCredentialSource>(
-      `SELECT ip_address, onvif_port, username, password
+    const result = await this.pool.query<{ branch_node_id: string }>(
+      `SELECT branch_node_id::text
        FROM cameras
        WHERE id = $1`,
       [cameraId],
     );
-
-    if (result.rows.length === 0 || !result.rows[0]?.ipAddress) {
-      return null;
-    }
-
-    const row = result.rows[0];
-    const port = row.onvifPort || 80;
-
-    return {
-      host: row.ipAddress!,
-      port,
-      credentials: {
-        username: row.username || "admin",
-        password: row.password || "",
-      },
-      onvifServiceUrl: `http://${row.ipAddress}:${port}/onvif/device_service`,
-    };
+    const branchId = result.rows[0]?.branch_node_id;
+    return branchId ? this.resolveBranchCredential(`branch://${branchId}/camera/${cameraId}`, cameraId) : null;
   }
 
   /**
@@ -258,13 +252,13 @@ export class CameraCredentialResolver {
     username: string,
     password: string,
   ): Promise<void> {
-    // In production, this would encrypt the password
-    // For now, store as-is (should be encrypted at database level)
+    const id = randomUUID();
     await this.pool.query(
-      `UPDATE cameras
-       SET username = $2, password = $3, updated_at = now()
-       WHERE id = $1`,
-      [cameraId, username, password],
+      `INSERT INTO camera_credentials
+         (id, branch_id, ip_address, username, password, password_encrypted, scope)
+       SELECT $2::uuid, branch_node_id, host(ip_address), $3, '', $4, 'host-specific'
+       FROM cameras WHERE id = $1 AND ip_address IS NOT NULL`,
+      [cameraId, id, username, encryptCameraPassword(id, password)],
     );
   }
 

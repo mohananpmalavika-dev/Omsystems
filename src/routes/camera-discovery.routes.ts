@@ -11,6 +11,8 @@ import {
 import { sealEdgeCommandPayload } from "../security/edge-command-envelope.js";
 import { ensureCameraAiBundle } from "../analytics/camera-ai-bundle.js";
 import { AutoStorageTelemetryService } from "../services/auto-storage-telemetry.service.js";
+import { randomUUID } from "node:crypto";
+import { encryptCameraPassword } from "../security/vault/camera-credential-codec.js";
 
 const branchParams = z.object({ branchId: z.string().min(1) });
 const discoveryParams = z.object({ 
@@ -460,11 +462,13 @@ export async function registerCameraDiscoveryRoutes(
            WHERE branch_id = $1 AND ip_address = $2 AND scope = 'host-specific'`,
           [branchId, discovered.ipAddress],
         );
+        const credentialId = randomUUID();
         await client.query(
           `INSERT INTO camera_credentials
-             (branch_id, edge_agent_id, ip_address, username, password, scope)
-           VALUES ($1, $2, $3, $4, $5, 'host-specific')`,
-          [branchId, discovered.edgeAgentId, discovered.ipAddress, body.username, body.password],
+             (id, branch_id, edge_agent_id, ip_address, username, password, password_encrypted, scope)
+           VALUES ($1, $2, $3, $4, $5, '', $6, 'host-specific')`,
+          [credentialId, branchId, discovered.edgeAgentId, discovered.ipAddress, body.username,
+            encryptCameraPassword(credentialId, body.password)],
         );
         await client.query(
           `UPDATE camera_discoveries

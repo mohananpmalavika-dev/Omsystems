@@ -123,3 +123,35 @@ Test a new authorized live session after the heartbeat updates. An HLS `500`
 after the new route is active means the Edge Agent reached MediaMTX but the
 camera stream or muxing still needs diagnosis; changing the tunnel does not
 repair that upstream error.
+
+## Direct camera failover when the Edge Agent is offline
+
+The WireGuard link above terminates on the Edge Agent machine and proxies its
+port 8090. It cannot deliver video if that machine or its media process is down.
+For independent failover, terminate a separate branch-to-GCP VPN on the DVR
+(when supported) or on an always-on router. Route the DVR's camera subnet to
+the GCP media gateway and allow only the required RTSP ports.
+
+Run migration `20261001_central_stream_secrets.sql` and set a stable
+`STREAM_VAULT_KEY` on the GCP control plane before deploying the updated Edge
+Agent. Generate it once with `openssl rand -base64 32`; store it in the GCP
+secret configuration, never in Git. Changing this key without re-encrypting
+existing rows makes the stored streams unreadable. New camera URLs and
+DVR/camera logins are written to the encrypted DB vault. The Edge Agent reads
+stream URLs from GCP when starting a live connection and fetches host
+credentials for discovery and recorder probes. It does not write new camera
+passwords to a local vault. Existing local vault files are imported and
+removed after the complete import succeeds; a failed import leaves those
+legacy files in place for a later retry. New streams require the control
+plane to be reachable, so branch playback cannot start during a GCP outage.
+If an older Edge Agent configuration has usernames or passwords inside
+`RECORDERS_JSON`, remove them from its environment file after confirming that
+the corresponding credentials reached the central vault.
+The first control-plane startup migrates legacy `camera_credentials.password`
+values into encrypted storage. Restrict older database backups that still
+contain plaintext values under your retention policy.
+The central media gateway already uses the control plane's authenticated
+`/v1/secrets/resolve` endpoint. Verify that every required camera reference
+has synced before relying on failover; an already-offline agent cannot upload
+its local credentials. The GCP media gateway must also reach each camera over
+the independent VPN and have the correct main/substream profile.

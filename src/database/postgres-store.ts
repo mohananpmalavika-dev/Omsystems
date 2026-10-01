@@ -38,6 +38,8 @@ import { GridLayoutRepository } from "./grid-layout-repository.js";
 import { OperationalReportRepository } from "./operational-report-repository.js";
 import { ActivityTrackingRepository } from "./activity-tracking-repository.js";
 import { hashPassword } from "../security/password.js";
+import { CentralStreamVault } from "../security/vault/central-stream-vault.js";
+import { encryptCameraPassword } from "../security/vault/camera-credential-codec.js";
 import { PERMANENT_SUPERADMIN } from "../identity/services/bootstrap-onboarding.service.js";
 import { ensureCameraAiBundle } from "../analytics/camera-ai-bundle.js";
 import type {
@@ -91,6 +93,153 @@ export class PostgresStore
   // Public getter for direct database access (use sparingly)
   get db() {
     return this.pool;
+  }
+
+  async upsertStreamSecrets(edgeAgentId: string, secrets: Array<{ reference: string; sourceUri: string }>, overwrite = true): Promise<number> {
+    const vault = new CentralStreamVault();
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      let stored = 0;
+      for (const { reference, sourceUri } of secrets) {
+        const baseReference = reference.replace(/#(?:main|sub)$/, "");
+        if (!reference.startsWith(`edge://${edgeAgentId}/`) || baseReference.includes("#")) {
+          throw new Error("stream_reference_outside_agent_scope");
+        }
+        const parsed = new URL(sourceUri);
+        if (!["rtsp:", "rtsps:", "http:", "https:"].includes(parsed.protocol)) {
+          throw new Error("invalid_stream_protocol");
+        }
+        const encrypted = vault.encrypt(reference, sourceUri);
+        const result = await client.query(
+          `INSERT INTO central_stream_secrets (reference, edge_agent_id, encrypted_uri)
+           SELECT $1, $2::uuid, $3
+           WHERE EXISTS (
+             SELECT 1 FROM edge_agents agent
+             WHERE agent.id = $2::uuid AND agent.credential_revoked_at IS NULL
+           )
+             AND NOT EXISTS (
+               SELECT 1 FROM cameras c
+               WHERE c.edge_agent_id = $2::uuid
+                 AND c.connection_secret_ref = $4
+                 AND c.ip_address IS NOT NULL AND host(c.ip_address) <> $5
+             )
+             AND NOT EXISTS (
+               SELECT 1 FROM camera_discoveries d
+               WHERE d.edge_agent_id = $2::uuid
+                 AND ('edge://' || d.edge_agent_id::text || '/' || d.id::text) = $4
+                 AND host(d.ip_address) <> $5
+             )
+           ON CONFLICT (reference) DO UPDATE
+             SET encrypted_uri = CASE WHEN $6::boolean THEN EXCLUDED.encrypted_uri ELSE central_stream_secrets.encrypted_uri END,
+                 updated_at = CASE WHEN $6::boolean THEN now() ELSE central_stream_secrets.updated_at END
+           WHERE central_stream_secrets.edge_agent_id = EXCLUDED.edge_agent_id`,
+          [reference, edgeAgentId, encrypted, baseReference, parsed.hostname, overwrite],
+        );
+        if (result.rowCount !== 1) throw new Error("stream_reference_not_registered_for_agent");
+        stored++;
+      }
+      await client.query("COMMIT");
+      return stored;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async resolveStreamSecret(reference: string, edgeAgentId?: string): Promise<string | undefined> {
+    const baseReference = reference.replace(/#(?:main|sub)$/, "");
+    if (!reference.startsWith("edge://") || baseReference.includes("#")) return undefined;
+    const result = await this.pool.query<{ encrypted_uri: string }>(
+      `SELECT secret.encrypted_uri
+       FROM central_stream_secrets secret
+       JOIN edge_agents agent ON agent.id = secret.edge_agent_id
+       JOIN cameras camera ON camera.edge_agent_id = agent.id
+         AND camera.connection_secret_ref = $2
+       WHERE secret.reference = $1 AND agent.credential_revoked_at IS NULL
+         AND ($3::uuid IS NULL OR agent.id = $3::uuid)
+       LIMIT 1`,
+      [reference, baseReference, edgeAgentId ?? null],
+    );
+    const encrypted = result.rows[0]?.encrypted_uri;
+    return encrypted ? new CentralStreamVault().decrypt(reference, encrypted) : undefined;
+  }
+
+  async upsertDeviceCredentials(edgeAgentId: string, credentials: Array<{ host: string; username: string; password: string }>, overwrite = true): Promise<number> {
+    const vault = new CentralStreamVault();
+    const agent = await this.pool.query<{ branch_node_id: string }>(
+      `SELECT branch_node_id::text FROM edge_agents WHERE id = $1 AND credential_revoked_at IS NULL`,
+      [edgeAgentId],
+    );
+    const branchId = agent.rows[0]?.branch_node_id;
+    if (!branchId) throw new Error("edge_agent_not_found");
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      for (const credential of credentials) {
+        const reference = `device:${branchId}:${credential.host}`;
+        const encrypted = vault.encrypt(reference, JSON.stringify({
+          username: credential.username,
+          password: credential.password,
+        }));
+        await client.query(
+          `INSERT INTO central_device_credentials (branch_id, host, encrypted_login)
+           VALUES ($1::uuid, $2::inet, $3)
+           ON CONFLICT (branch_id, host) DO UPDATE
+           SET encrypted_login = CASE WHEN $4::boolean THEN EXCLUDED.encrypted_login ELSE central_device_credentials.encrypted_login END,
+               updated_at = CASE WHEN $4::boolean THEN now() ELSE central_device_credentials.updated_at END`,
+          [branchId, credential.host, encrypted, overwrite],
+        );
+      }
+      await client.query("COMMIT");
+      return credentials.length;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async listCentralDeviceCredentials(branchId: string) {
+    const result = await this.pool.query<{ host: string; encrypted_login: string; updated_at: Date }>(
+      `SELECT host(host) AS host, encrypted_login, updated_at
+       FROM central_device_credentials WHERE branch_id = $1::uuid`,
+      [branchId],
+    );
+    const vault = new CentralStreamVault();
+    return result.rows.map((row) => {
+      const value = JSON.parse(vault.decrypt(`device:${branchId}:${row.host}`, row.encrypted_login)) as {
+        username: string; password: string;
+      };
+      return { host: row.host, username: value.username, password: value.password, updatedAt: row.updated_at.toISOString() };
+    });
+  }
+
+  async migrateLegacyCameraPasswords(): Promise<number> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const rows = await client.query<{ id: string; password: string }>(
+        `SELECT id::text, password FROM camera_credentials
+         WHERE password_encrypted IS NULL AND password <> '' FOR UPDATE`,
+      );
+      for (const row of rows.rows) {
+        await client.query(
+          `UPDATE camera_credentials SET password_encrypted = $2, password = '' WHERE id = $1`,
+          [row.id, encryptCameraPassword(row.id, row.password)],
+        );
+      }
+      await client.query("COMMIT");
+      return rows.rowCount ?? 0;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   constructor(pool: Pool) {

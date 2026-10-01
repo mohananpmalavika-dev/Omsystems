@@ -263,6 +263,43 @@ export class GatewayClient {
     );
   }
 
+  async syncStreamSecrets(id: string, secrets: Array<{ reference: string; sourceUri: string }>, overwrite = true) {
+    const path = `/v1/edge-agents/${encodeURIComponent(id)}/stream-secrets`;
+    const endpoint = controlPlaneEndpoint(this.baseUrl, path);
+    if (!isSecureCredentialEndpoint(endpoint)) {
+      throw new Error("Central stream-secret sync requires HTTPS");
+    }
+    return this.request<{ stored: number }>(path, {
+      method: "POST",
+      body: JSON.stringify({ secrets, overwrite }),
+    });
+  }
+
+  async resolveStreamSecret(id: string, reference: string): Promise<string | undefined> {
+    const path = `/v1/edge-agents/${encodeURIComponent(id)}/stream-secrets/resolve?ref=${encodeURIComponent(reference)}`;
+    const endpoint = controlPlaneEndpoint(this.baseUrl, path);
+    if (!isSecureCredentialEndpoint(endpoint)) throw new Error("Stream-secret resolution requires HTTPS");
+    try {
+      const result = await this.request<{ sourceUri: string }>(path, { method: "GET" });
+      return result.sourceUri;
+    } catch (error) {
+      if (error instanceof GatewayRequestError && error.status === 404) return undefined;
+      throw error;
+    }
+  }
+
+  async syncDeviceCredentials(id: string, credentials: Array<{ host: string; username: string; password: string }>, overwrite = true) {
+    const path = `/v1/edge-agents/${encodeURIComponent(id)}/device-credentials`;
+    const endpoint = controlPlaneEndpoint(this.baseUrl, path);
+    if (!isSecureCredentialEndpoint(endpoint)) {
+      throw new Error("Central device-credential sync requires HTTPS");
+    }
+    return this.request<{ stored: number }>(path, {
+      method: "POST",
+      body: JSON.stringify({ credentials, overwrite }),
+    });
+  }
+
   async listMonitoringCameras(agentId: string, version: string) {
     const response = await this.request<{ data: MonitoringCamera[] }>(
       `/v1/edge-agents/${encodeURIComponent(agentId)}/cameras/monitoring`,
@@ -481,11 +518,17 @@ export class GatewayClient {
 function controlPlaneEndpoint(baseUrl: string, path: string) {
   const url = new URL(baseUrl);
   const basePath = url.pathname.replace(/\/+$/, "");
-  const requestPath = path.replace(/^\/+/, "");
+  const [pathname, query] = path.split("?", 2);
+  const requestPath = (pathname ?? "").replace(/^\/+/, "");
   url.pathname = `${basePath}/${requestPath}`.replace(/\/{2,}/g, "/");
-  url.search = "";
+  url.search = query ? `?${query}` : "";
   url.hash = "";
   return url;
+}
+
+function isSecureCredentialEndpoint(url: URL) {
+  return url.protocol === "https:" ||
+    (url.protocol === "http:" && ["localhost", "127.0.0.1", "::1"].includes(url.hostname));
 }
 
 export class GatewayRequestError extends Error {

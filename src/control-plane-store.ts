@@ -627,6 +627,12 @@ export interface ControlPlaneStore {
     tokenHash: string; credentialHash: string; deviceUuid: string; version: string; commandPublicKey?: string;
   }): Promise<{ agent: EdgeAgent; tenantId: string }>;
   verifyEdgeAgentCredential(id: string, credentialHash: string): Promise<boolean>;
+  /** Durable encrypted stream sources used by the central media gateway during edge failure. */
+  upsertStreamSecrets?(edgeAgentId: string, secrets: Array<{ reference: string; sourceUri: string }>, overwrite?: boolean): Promise<number>;
+  resolveStreamSecret?(reference: string, edgeAgentId?: string): Promise<string | undefined>;
+  upsertDeviceCredentials?(edgeAgentId: string, credentials: Array<{ host: string; username: string; password: string }>, overwrite?: boolean): Promise<number>;
+  listCentralDeviceCredentials?(branchId: string): Promise<Array<{ host: string; username: string; password: string; updatedAt: string }>>;
+  migrateLegacyCameraPasswords?(): Promise<number>;
   getEdgeAgentCommandPublicKey(id: string): Promise<string | undefined>;
   revokeEdgeAgentCredential(id: string): Promise<EdgeAgent | undefined>;
   getEdgeManagedTunnel(branchId: string): Promise<EdgeManagedTunnel | undefined>;

@@ -17,6 +17,9 @@ playwright-report/
 .scanner-runtime/*.key
 .scanner-runtime/*-agent-home/
 edge-agent/data/stream-secrets.json
+edge-runtime/data/stream-secrets.json
+edge-runtime/data/stream-secrets.json.key
+local-edge-agent.env
 edge-agent/data/offline-outbox.enc
 edge-agent/data/offline-outbox.key
 repopack-output*.txt

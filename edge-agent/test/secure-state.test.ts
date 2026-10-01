@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -56,7 +56,7 @@ describe("encrypted gateway state", () => {
       .resolves.toEqual({ delivered: 0, pending: 1 });
   });
 
-  it("decrypts gateway-only credential commands into an encrypted local vault", async () => {
+  it("decrypts gateway commands and reads a legacy vault for central migration", async () => {
     const directory = await mkdtemp(join(tmpdir(), "sentinel-camera-vault-"));
     directories.push(directory);
     const pair = DeviceIdentityStore.newCommandKeyPair();
@@ -68,14 +68,22 @@ describe("encrypted gateway state", () => {
     }>(envelope, pair.privateKey);
     const path = join(directory, "credentials.enc");
     const keyPath = join(directory, "credentials.key");
+    const key = randomBytes(32);
+    const iv = randomBytes(12);
+    const cipher = createCipheriv("aes-256-gcm", key, iv);
+    const ciphertext = Buffer.concat([cipher.update(JSON.stringify({
+      "host:192.168.1.20": { username: command.username, password: command.password,
+        updatedAt: new Date().toISOString() },
+    })), cipher.final()]);
+    await writeFile(path, JSON.stringify({ version: 1, iv: iv.toString("base64url"),
+      tag: cipher.getAuthTag().toString("base64url"), ciphertext: ciphertext.toString("base64url") }));
+    await writeFile(keyPath, key.toString("base64url"));
     const vault = new CameraCredentialVault(path, keyPath);
     await vault.load();
-    await vault.set({ ...command, host: command.scope.host });
     expect(await readFile(path, "utf8")).not.toContain("camera-secret");
-    const restored = new CameraCredentialVault(path, keyPath);
-    await restored.load();
-    expect(restored.get("192.168.1.20")).toMatchObject({ username: "operator", password: "camera-secret" });
-    expect(restored.get("192.168.1.21")).toBeUndefined();
+    expect(vault.entries()).toEqual([{ host: "192.168.1.20", username: "operator", password: "camera-secret" }]);
+    await vault.removeLegacyFiles();
+    await expect(readFile(path, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
 });
 

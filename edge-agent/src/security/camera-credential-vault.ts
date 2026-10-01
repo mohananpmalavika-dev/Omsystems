@@ -1,12 +1,9 @@
 import {
   constants,
-  createCipheriv,
   createDecipheriv,
   privateDecrypt,
-  randomBytes,
 } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { readFile, unlink } from "node:fs/promises";
 
 export interface CameraCredential {
   username: string;
@@ -54,26 +51,19 @@ export class CameraCredentialVault {
     return this.values[`host:${host}`];
   }
 
-  async set(input: { username: string; password: string; host: string }) {
-    const key = `host:${input.host}`;
-    this.values[key] = { username: input.username, password: input.password, updatedAt: new Date().toISOString() };
-    await this.persist();
-    return { scope: "single-camera" as const, updatedAt: this.values[key]!.updatedAt };
+  entries(): Array<{ host: string; username: string; password: string }> {
+    return Object.entries(this.values)
+      .filter(([key]) => key.startsWith("host:"))
+      .map(([key, value]) => ({ host: key.slice(5), username: value.username, password: value.password }));
   }
 
-  private async persist() {
-    const key = await this.loadOrCreateKey();
-    const iv = randomBytes(12);
-    const cipher = createCipheriv("aes-256-gcm", key, iv);
-    const ciphertext = Buffer.concat([cipher.update(JSON.stringify(this.values), "utf8"), cipher.final()]);
-    const envelope: Envelope = {
-      version: 1, iv: iv.toString("base64url"),
-      tag: cipher.getAuthTag().toString("base64url"), ciphertext: ciphertext.toString("base64url"),
-    };
-    await mkdir(dirname(this.path), { recursive: true });
-    const temporary = `${this.path}.${process.pid}.tmp`;
-    await writeFile(temporary, JSON.stringify(envelope), { encoding: "utf8", mode: 0o600 });
-    await rename(temporary, this.path);
+  async removeLegacyFiles() {
+    for (const path of [this.path, this.keyPath]) {
+      await unlink(path).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== "ENOENT") throw error;
+      });
+    }
+    this.values = {};
   }
 
   private async readKey() {
@@ -82,15 +72,6 @@ export class CameraCredentialVault {
     return key;
   }
 
-  private async loadOrCreateKey() {
-    try { return await this.readKey(); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
-    const key = randomBytes(32);
-    await mkdir(dirname(this.keyPath), { recursive: true });
-    await writeFile(this.keyPath, key.toString("base64url"), { encoding: "utf8", mode: 0o600, flag: "wx" })
-      .catch(async (error) => { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; });
-    return this.readKey();
-  }
 }
 
 export function openSealedCommand<T>(envelope: SealedCommandEnvelope, privateKeyPem: string): T {

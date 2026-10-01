@@ -5,6 +5,8 @@
 
 import type { FastifyInstance } from "fastify";
 import type { Pool } from "pg";
+import { randomUUID } from "node:crypto";
+import { encryptCameraPassword } from "../security/vault/camera-credential-codec.js";
 
 interface CameraCredential {
   id: string;
@@ -109,19 +111,21 @@ export async function registerCredentialsRoutes(app: FastifyInstance, pool: Pool
       });
     }
     const normalizedPassword = password ?? "";
+    const id = randomUUID();
 
     const result = await pool.query(
       `INSERT INTO camera_credentials 
-         (branch_id, edge_agent_id, ip_address, username, password, scope)
-       VALUES ($1, $2, $3, $4, $5, $6)
+         (id, branch_id, edge_agent_id, ip_address, username, password, password_encrypted, scope)
+       VALUES ($1, $2, $3, $4, $5, '', $6, $7)
        RETURNING id, branch_id, edge_agent_id, ip_address, username, 
                  scope, created_at, updated_at`,
       [
+        id,
         branch_id,
         edge_agent_id || null,
         ip_address || null,
         username,
-        normalizedPassword,
+        encryptCameraPassword(id, normalizedPassword),
         ip_address ? "host-specific" : "default",
       ]
     );
@@ -153,8 +157,9 @@ export async function registerCredentialsRoutes(app: FastifyInstance, pool: Pool
       values.push(username);
     }
     if (Object.prototype.hasOwnProperty.call(request.body, "password")) {
-      updates.push(`password = $${paramIndex++}`);
-      values.push(password ?? "");
+      updates.push(`password_encrypted = $${paramIndex++}`);
+      values.push(encryptCameraPassword(id, password ?? ""));
+      updates.push("password = ''");
     }
     if (ip_address !== undefined) {
       updates.push(`ip_address = $${paramIndex++}`);
@@ -250,16 +255,18 @@ export async function registerCredentialsRoutes(app: FastifyInstance, pool: Pool
       }
       
       try {
+        const id = randomUUID();
         await pool.query(
           `INSERT INTO camera_credentials 
-             (branch_id, edge_agent_id, ip_address, username, password, scope)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
+             (id, branch_id, edge_agent_id, ip_address, username, password, password_encrypted, scope)
+           VALUES ($1, $2, $3, $4, $5, '', $6, $7)`,
           [
+            id,
             cred.branch_id,
             cred.edge_agent_id || null,
             cred.ip_address || null,
             cred.username,
-            cred.password ?? "",
+            encryptCameraPassword(id, cred.password ?? ""),
             cred.ip_address ? "host-specific" : "default",
           ]
         );

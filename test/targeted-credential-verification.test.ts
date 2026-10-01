@@ -1,7 +1,8 @@
-import { generateKeyPairSync } from "node:crypto";
-import { describe, expect, it, vi } from "vitest";
+import { generateKeyPairSync, randomBytes } from "node:crypto";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { MemoryStore } from "../src/store.js";
+import { readCameraPassword } from "../src/security/vault/camera-credential-codec.js";
 
 const headers = { "x-user-id": "user-global-admin" };
 const testTenantId = "00000000-0000-4000-8000-000000000001";
@@ -76,6 +77,8 @@ async function addDiscovery(
 }
 
 describe("targeted credential verification", () => {
+  beforeAll(() => vi.stubEnv("STREAM_VAULT_KEY", randomBytes(32).toString("base64")));
+  afterAll(() => vi.unstubAllEnvs());
   it("queues encrypted credentials and only a single-device compatibility scan job", async () => {
     const store = new MemoryStore() as MemoryStore & { pool: ReturnType<typeof credentialPool> };
     store.pool = credentialPool();
@@ -164,9 +167,11 @@ describe("targeted credential verification", () => {
     });
 
     expect(activated.statusCode).toBe(202);
-    expect(store.pool.client.query.mock.calls.some(
-      ([sql, values]) => String(sql).includes("INSERT INTO camera_credentials") &&
-        Array.isArray(values) && values[4] === "",
+    expect(store.pool.client.query.mock.calls.some(([sql, values]) =>
+      String(sql).includes("INSERT INTO camera_credentials") &&
+      String(sql).includes("password_encrypted") &&
+      Array.isArray(values) &&
+      readCameraPassword({ id: values[0], password_encrypted: values[5] }) === "",
     )).toBe(true);
 
     await app.close();
