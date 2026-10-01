@@ -316,6 +316,7 @@ function CameraTileComponent({
   handoverTarget,
   handoverIncoming,
   onAcceptHandover,
+  showFlashbackPip,
 }: {
   camera: Camera;
   session?: LiveSessionResponse;
@@ -349,6 +350,7 @@ function CameraTileComponent({
   handoverTarget?: { cameraId: string; cameraName: string; direction: "left" | "right" | "top" | "bottom" };
   handoverIncoming?: { originCameraId: string; originCameraName: string };
   onAcceptHandover?: (targetCameraId: string) => void;
+  showFlashbackPip?: boolean;
 }) {
   const tileRef = useRef<HTMLElement>(null);
   const isActive = camera.status !== "offline";
@@ -392,6 +394,42 @@ function CameraTileComponent({
   const [flashbackDismissedAlertId, setFlashbackDismissedAlertId] = useState<string | null>(null);
   const [flashbackLoopTime, setFlashbackLoopTime] = useState<number>(0);
   const [flashbackFrameUrl, setFlashbackFrameUrl] = useState<string | null>(null);
+  const [localFlashbackEnabled, setLocalFlashbackEnabled] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("sentinel.live-view.enable-flashback");
+        if (stored !== null) return stored === "true";
+      } catch {}
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const handleSync = () => {
+      try {
+        const stored = localStorage.getItem("sentinel.live-view.enable-flashback");
+        setLocalFlashbackEnabled(stored === "true");
+      } catch {}
+    };
+    window.addEventListener("sentinel-flashback-toggled", handleSync);
+    window.addEventListener("storage", handleSync);
+    return () => {
+      window.removeEventListener("sentinel-flashback-toggled", handleSync);
+      window.removeEventListener("storage", handleSync);
+    };
+  }, []);
+
+  const isFlashbackEnabled = showFlashbackPip !== undefined ? showFlashbackPip : localFlashbackEnabled;
+  const toggleFlashback = useCallback(() => {
+    setLocalFlashbackEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("sentinel.live-view.enable-flashback", String(next));
+        window.dispatchEvent(new Event("sentinel-flashback-toggled"));
+      } catch {}
+      return next;
+    });
+  }, []);
   const [showDvrScrubber, setShowDvrScrubber] = useState<boolean>(false);
   const [showFlagModal, setShowFlagModal] = useState<boolean>(false);
   const [showAnnotationPanel, setShowAnnotationPanel] = useState<boolean>(false);
@@ -529,6 +567,7 @@ function CameraTileComponent({
   // Synchronized Event Flashback: Capture keyframe when alert triggers
   const lastAlertIdRef = useRef<string | null>(null);
   useEffect(() => {
+    if (!isFlashbackEnabled) return;
     if (!latestAiAlert) return;
     if (flashbackDismissedAlertId === latestAiAlert.id) return;
     if (lastAlertIdRef.current === latestAiAlert.id) return;
@@ -551,16 +590,16 @@ function CameraTileComponent({
     } else if (snapshotUrl) {
       setFlashbackFrameUrl(snapshotUrl);
     }
-  }, [latestAiAlert, internalVideoElement, snapshotUrl, flashbackDismissedAlertId]);
+  }, [isFlashbackEnabled, latestAiAlert, internalVideoElement, snapshotUrl, flashbackDismissedAlertId]);
 
   // Synchronized Event Flashback: 5-second cycling loop timer
   useEffect(() => {
-    if (!latestAiAlert || flashbackDismissedAlertId === latestAiAlert.id) return;
+    if (!isFlashbackEnabled || !latestAiAlert || flashbackDismissedAlertId === latestAiAlert.id) return;
     const interval = setInterval(() => {
       setFlashbackLoopTime((t) => (t >= 5 ? 0 : Number((t + 0.25).toFixed(2))));
     }, 250);
     return () => clearInterval(interval);
-  }, [latestAiAlert, flashbackDismissedAlertId]);
+  }, [isFlashbackEnabled, latestAiAlert, flashbackDismissedAlertId]);
 
   const scheduleDayOptions = [
     { label: "Sun", value: 0 },
@@ -1207,7 +1246,7 @@ function CameraTileComponent({
         )}
 
         {/* Synchronized Event Flashback (Instant Mini Picture-in-Picture 5-second Loop) */}
-        {hasLiveFrame && Boolean(flashbackFrameUrl) && latestAiAlert && flashbackDismissedAlertId !== latestAiAlert.id && (
+        {isFlashbackEnabled && hasLiveFrame && Boolean(flashbackFrameUrl) && latestAiAlert && flashbackDismissedAlertId !== latestAiAlert.id && (
           <div
             className={`absolute ${(showDvrScrubber || isTileHovered || dvrOffset > 0) ? "bottom-28" : "bottom-12"} right-2.5 z-30 w-44 sm:w-48 rounded-lg overflow-hidden border-2 border-red-500/90 bg-zinc-950/95 shadow-[0_0_20px_rgba(239,68,68,0.5)] backdrop-blur text-xs animate-in fade-in slide-in-from-bottom-2 duration-300`}
             onClick={(e) => {
@@ -1222,17 +1261,30 @@ function CameraTileComponent({
                 <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
                 FLASHBACK: 5s LOOP
               </span>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setFlashbackDismissedAlertId(latestAiAlert.id);
-                }}
-                className="text-zinc-400 hover:text-white text-xs px-1 rounded cursor-pointer"
-                title="Dismiss flashback PiP"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFlashback();
+                  }}
+                  className="text-[10px] text-zinc-400 hover:text-amber-300 px-1 py-0.5 rounded cursor-pointer transition-colors"
+                  title="Turn off Flashback PiP frame"
+                >
+                  Turn off
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFlashbackDismissedAlertId(latestAiAlert.id);
+                  }}
+                  className="text-zinc-400 hover:text-white text-xs px-1 rounded cursor-pointer"
+                  title="Dismiss flashback PiP"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
             {/* PiP Visual Content (5s Looping Preview) */}
@@ -1640,6 +1692,24 @@ function CameraTileComponent({
             disabled={!canPlayLive}
           >
             <Tv size={15} />
+          </button>
+          <button
+            type="button"
+            aria-label={isFlashbackEnabled ? "Disable Event Flashback PiP" : "Enable Event Flashback PiP"}
+            title={
+              isFlashbackEnabled
+                ? "Event Flashback PiP is ACTIVE (Click to hide flashback frame)"
+                : "Event Flashback PiP is OFF (Click to show 5s alert preview frame)"
+            }
+            className={
+              isFlashbackEnabled
+                ? "text-red-400 border-red-500/80 bg-red-950/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]"
+                : ""
+            }
+            onClick={toggleFlashback}
+            disabled={!canPlayLive}
+          >
+            <History size={15} />
           </button>
           <button
             type="button"
