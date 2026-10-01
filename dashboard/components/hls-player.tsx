@@ -23,6 +23,7 @@ export function HlsPlayer({
   onPlaybackError,
   onPlaybackStateChange,
   onVideoElementChange,
+  onBitrateChange,
 }: {
   url: string;
   whepUrl?: string;
@@ -34,14 +35,18 @@ export function HlsPlayer({
   onPlaybackError?: (reason?: string) => void;
   onPlaybackStateChange?: (playing: boolean) => void;
   onVideoElementChange?: (videoElement: HTMLVideoElement | null) => void;
+  onBitrateChange?: (mbps: number | null) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const lastFrameRef = useRef<HTMLCanvasElement>(null);
   const playbackErrorRef = useRef(onPlaybackError);
   const playbackStateChangeRef = useRef(onPlaybackStateChange);
+  const bitrateChangeRef = useRef(onBitrateChange);
   const [status, setStatus] = useState<PlayerStatus>(url || whepUrl ? "loading" : "idle");
   const [error, setError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
   const [autoplayMuted, setAutoplayMuted] = useState(false);
+  const [hasLastFrame, setHasLastFrame] = useState(false);
 
   // Stream transport and display settings.
   const isEdgeRelay = Boolean((url && url.includes("/edge-media/")) || (whepUrl && whepUrl.includes("/edge-media/")));
@@ -56,6 +61,10 @@ export function HlsPlayer({
   useEffect(() => {
     playbackStateChangeRef.current = onPlaybackStateChange;
   }, [onPlaybackStateChange]);
+
+  useEffect(() => {
+    bitrateChangeRef.current = onBitrateChange;
+  }, [onBitrateChange]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -87,15 +96,37 @@ export function HlsPlayer({
     let disposed = false;
     let recoveryTimer: ReturnType<typeof setTimeout> | undefined;
     let watchdogTimer: ReturnType<typeof setInterval> | undefined;
+    let bitrateTimer: ReturnType<typeof setInterval> | undefined;
     let whepTimeoutTimer: ReturnType<typeof setTimeout> | undefined;
     let recoveryAttempts = 0;
     let lastProgressAt = Date.now();
     let playbackStarted = false;
     let failed = false;
-    const startupAt = Date.now();
+    let startupAt = Date.now();
     let lastMediaTime = -1;
     let reportedPlaying = false;
     let currentProtocol: "webrtc" | "ll-hls" = streamProtocol;
+    let downloadedBytes = 0;
+    let lastBitrateSampleAt = Date.now();
+    let lastRtcBytes: number | null = null;
+    let lastRtcSampleAt = 0;
+    let capturedFrame = false;
+
+    const captureLastFrame = () => {
+      if (capturedFrame) return;
+      const canvas = lastFrameRef.current;
+      const video = videoRef.current;
+      if (!canvas || !video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      try {
+        canvas.width = 320;
+        canvas.height = Math.max(1, Math.round(320 * (video.videoHeight || 9) / (video.videoWidth || 16)));
+        const context = canvas.getContext("2d");
+        if (!context) return;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        capturedFrame = true;
+        setHasLastFrame(true);
+      } catch { /* Cross-origin frames may not be copied. */ }
+    };
 
     const reportPlaying = (playing: boolean) => {
       if (reportedPlaying === playing) return;
@@ -134,6 +165,8 @@ export function HlsPlayer({
       failed = true;
       if (recoveryTimer) clearTimeout(recoveryTimer);
       if (watchdogTimer) clearInterval(watchdogTimer);
+      if (bitrateTimer) clearInterval(bitrateTimer);
+      bitrateChangeRef.current?.(null);
       setError(reason);
       setStatus("error");
       reportPlaying(false);
@@ -191,9 +224,15 @@ export function HlsPlayer({
       lastProgressAt = Date.now();
       if (!playbackStarted) {
         playbackStarted = true;
+        if (recoveryTimer) {
+          clearTimeout(recoveryTimer);
+          recoveryTimer = undefined;
+        }
         recoveryAttempts = 0;
         setError(null);
         setStatus("live");
+        setHasLastFrame(false);
+        capturedFrame = false;
         reportPlaying(true);
       }
       if (whepTimeoutTimer) {
@@ -281,6 +320,10 @@ export function HlsPlayer({
               try { video.currentTime = hls.liveSyncPosition; } catch {}
             }
             void playVideo();
+          });
+
+          hls.on(Hls.Events.FRAG_LOADED, (_event, data) => {
+            downloadedBytes += data.payload.byteLength;
           });
 
           hls.on(Hls.Events.ERROR, (_event, data) => {
@@ -466,6 +509,10 @@ export function HlsPlayer({
       }
 
       recoveryAttempts += 1;
+      captureLastFrame();
+      playbackStarted = false;
+      lastMediaTime = -1;
+      startupAt = Date.now();
       setStatus("reconnecting");
       reportPlaying(false);
       setError(`Stream stalled, reconnecting (${recoveryAttempts}/${MAX_RECOVERY_ATTEMPTS})`);
@@ -559,6 +606,33 @@ export function HlsPlayer({
       }
     }, 1_000);
 
+    bitrateTimer = setInterval(() => {
+      if (disposed || failed) return;
+      const now = Date.now();
+      if (currentProtocol === "webrtc" && peerConnection && typeof peerConnection.getStats === "function") {
+        void peerConnection.getStats().then((stats) => {
+          if (disposed || failed) return;
+          let bytes = 0;
+          stats.forEach((report) => {
+            if (report.type === "inbound-rtp" && !report.isRemote && (report.kind === "video" || report.mediaType === "video")) {
+              bytes += report.bytesReceived ?? 0;
+            }
+          });
+          if (lastRtcBytes !== null && lastRtcSampleAt && now > lastRtcSampleAt) {
+            bitrateChangeRef.current?.(Math.max(0, (bytes - lastRtcBytes) * 8 / ((now - lastRtcSampleAt) * 1000)));
+          }
+          lastRtcBytes = bytes;
+          lastRtcSampleAt = now;
+        }).catch(() => bitrateChangeRef.current?.(null));
+      } else if (hls && now > lastBitrateSampleAt) {
+        bitrateChangeRef.current?.(downloadedBytes * 8 / ((now - lastBitrateSampleAt) * 1000));
+        downloadedBytes = 0;
+        lastBitrateSampleAt = now;
+      } else {
+        bitrateChangeRef.current?.(null);
+      }
+    }, 2_000);
+
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible" && video && !video.paused) {
         if (hls && typeof hls.liveSyncPosition === "number" && !isNaN(hls.liveSyncPosition)) {
@@ -585,10 +659,12 @@ export function HlsPlayer({
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
+      if (playbackStarted) captureLastFrame();
       disposed = true;
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (recoveryTimer) clearTimeout(recoveryTimer);
       if (watchdogTimer) clearInterval(watchdogTimer);
+      if (bitrateTimer) clearInterval(bitrateTimer);
       if (whepTimeoutTimer) clearTimeout(whepTimeoutTimer);
       video.removeEventListener("playing", markProgress);
       video.removeEventListener("timeupdate", markProgress);
@@ -598,6 +674,7 @@ export function HlsPlayer({
       video.removeEventListener("stalled", handleWaiting);
       video.removeEventListener("error", handleVideoError);
       cleanupStreaming();
+      bitrateChangeRef.current?.(null);
       reportPlaying(false);
       video.pause();
       video.removeAttribute("src");
@@ -642,14 +719,14 @@ export function HlsPlayer({
           }}
         />
       ) : (
-        <video
+        <><canvas ref={lastFrameRef} aria-hidden="true" className={`live-video absolute inset-0 z-10 h-full w-full object-cover ${hasLastFrame && status !== "live" ? "opacity-100" : "opacity-0"}`} /><video
           ref={videoRef}
           className={`live-video absolute inset-0 z-10 h-full w-full object-cover transition-opacity duration-300 ${status === "live" ? "opacity-100" : "opacity-0 pointer-events-none"}`}
           aria-label={`Live video from ${cameraName}`}
           muted={muted || autoplayMuted}
           playsInline
           autoPlay
-        />
+        /></>
       )}
 
       {autoplayMuted && !muted && (

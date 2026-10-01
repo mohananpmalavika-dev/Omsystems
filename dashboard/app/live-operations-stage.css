@@ -500,6 +500,8 @@ html[data-theme] .app-shell .experience-surface .operations-stage-room .mode-fle
 .operations-stage-room .los-monitor-bar { position: sticky; top: 0; }
 .los-monitor-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; min-width: 0; }
 .los-monitor-actions>span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.los-monitor-actions .los-network-traffic { color: #a4ebd8; font-variant-numeric: tabular-nums; }
+@media (max-width: 530px) { .los-monitor-actions .los-network-traffic { display: inline; font-size: 8px; } }
 .operations-stage-room .los-monitor-actions button {
   display: inline-flex;
   align-items: center;

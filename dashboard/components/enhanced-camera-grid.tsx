@@ -67,6 +67,7 @@ export interface EnhancedCameraGridProps {
   maxConcurrentStreams?: number;
   priorityCameraIds?: string[];
   onActiveStreamsChange?: (count: number) => void;
+  onNetworkTrafficChange?: (mbps: number | null) => void;
   onMonitoredCamerasChange?: (cameraIds: string[]) => void;
   presentationMode?: PresentationMode;
   aiByCamera?: ReadonlyMap<string, { rules: AnalyticsRule[]; alerts: AnalyticsAlert[] }>;
@@ -102,6 +103,7 @@ interface GridTileProps {
   onVideoElementChange: (cameraId: string, videoElement: HTMLVideoElement | null) => void;
   onPlaybackStateChange: (cameraId: string, playing: boolean) => void;
   onPlaybackError: (cameraId: string, reason?: string) => void;
+  onBitrateChange?: (cameraId: string, mbps: number | null) => void;
   aiOverlay?: { rules: AnalyticsRule[]; alerts: AnalyticsAlert[] };
   showAiOverlay: boolean;
   onOpenAi?: (cameraId: string) => void;
@@ -130,6 +132,7 @@ const GridTile = memo(function GridTile({
   onVideoElementChange,
   onPlaybackStateChange,
   onPlaybackError,
+  onBitrateChange,
   aiOverlay,
   showAiOverlay,
   onOpenAi,
@@ -153,6 +156,9 @@ const GridTile = memo(function GridTile({
   const handlePlaybackStateChange = useCallback((playing: boolean) => {
     onPlaybackStateChange(camera.id, playing);
   }, [onPlaybackStateChange, camera.id]);
+  const handleBitrateChange = useCallback((mbps: number | null) => {
+    onBitrateChange?.(camera.id, mbps);
+  }, [onBitrateChange, camera.id]);
 
   return (
     <CameraTile
@@ -168,6 +174,7 @@ const GridTile = memo(function GridTile({
       onVideoElementChange={handleVideoElementChange}
       onPlaybackStateChange={handlePlaybackStateChange}
       onPlaybackError={handlePlaybackError}
+      onBitrateChange={handleBitrateChange}
       aiOverlay={aiOverlay}
       showAiOverlay={showAiOverlay}
       onOpenAi={onOpenAi ? () => onOpenAi(camera.id) : undefined}
@@ -195,6 +202,7 @@ export function EnhancedCameraGrid({
   maxConcurrentStreams = 36,
   priorityCameraIds = [],
   onActiveStreamsChange,
+  onNetworkTrafficChange,
   onMonitoredCamerasChange,
   presentationMode = "LIVE_MONITORING",
   aiByCamera,
@@ -227,6 +235,16 @@ export function EnhancedCameraGrid({
     new Map()
   );
   const [playingCameraIds, setPlayingCameraIds] = useState<Set<string>>(new Set());
+  const cameraBitratesRef = useRef(new Map<string, number>());
+  const onNetworkTrafficChangeRef = useRef(onNetworkTrafficChange);
+  useEffect(() => { onNetworkTrafficChangeRef.current = onNetworkTrafficChange; }, [onNetworkTrafficChange]);
+  const handleTileBitrateChange = useCallback((cameraId: string, mbps: number | null) => {
+    if (mbps === null) cameraBitratesRef.current.delete(cameraId);
+    else cameraBitratesRef.current.set(cameraId, mbps);
+    const values = [...cameraBitratesRef.current.values()];
+    onNetworkTrafficChangeRef.current?.(values.length ? values.reduce((sum, value) => sum + value, 0) : null);
+  }, []);
+  useEffect(() => () => onNetworkTrafficChangeRef.current?.(null), []);
   const [loading, setLoading] = useState<Set<string>>(new Set());
   const [liveErrors, setLiveErrors] = useState<Map<string, string>>(new Map());
   const [liveRetryTick, setLiveRetryTick] = useState(0);
@@ -2140,6 +2158,7 @@ export function EnhancedCameraGrid({
                   onVideoElementChange={handleTileVideoElementChange}
                   onPlaybackStateChange={handleTilePlaybackStateChange}
                   onPlaybackError={handleTilePlaybackError}
+                  onBitrateChange={handleTileBitrateChange}
                   aiOverlay={aiByCamera?.get(camera.id)}
                   showAiOverlay={showAiOverlay}
                   onOpenAi={onOpenCameraAi}

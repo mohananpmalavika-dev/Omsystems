@@ -15,7 +15,8 @@ beforeAll(async () => {
         window.mount = (props) => createRoot(document.getElementById('root')).render(<HlsPlayer {...props}
           cameraName="Test camera" bearerToken="test-token"
           onPlaybackError={reason => window.errors.push(reason)}
-          onPlaybackStateChange={playing => window.states.push(playing)} />);`,
+          onPlaybackStateChange={playing => window.states.push(playing)}
+          onBitrateChange={mbps => window.bitrates.push(mbps)} />);`,
       resolveDir: resolve("."), loader: "tsx",
     },
     bundle: true, write: false, format: "iife", jsx: "automatic",
@@ -24,10 +25,10 @@ beforeAll(async () => {
       builder.onResolve({ filter: /^hls\.js$/ }, () => ({ path: "mock-hls", namespace: "test" }));
       builder.onLoad({ filter: /.*/, namespace: "test" }, () => ({ contents: `
         export default class Hls {
-          static Events = {MANIFEST_PARSED:'manifest', ERROR:'error'};
+          static Events = {MANIFEST_PARSED:'manifest', FRAG_LOADED:'fragment', ERROR:'error'};
           static ErrorDetails = {}; static ErrorTypes = {}; static DefaultConfig = {loader:class {}};
           static isSupported() { return true; }
-          constructor() { this.handlers = {}; window.hlsStarts++; }
+          constructor() { this.handlers = {}; window.hlsStarts++; window.hls = this; }
           on(event, cb) {this.handlers[event] = cb;}
           loadSource(url) {window.sources.push(url);}
           attachMedia(video) {queueMicrotask(() => this.handlers.manifest?.());}
@@ -49,7 +50,7 @@ async function mount(mode: string, props: Record<string, unknown>) {
   await page.clock.install();
   await page.evaluate((mode) => {
     const w = window as any;
-    w.errors = []; w.states = []; w.hlsStarts = 0; w.hlsDestroys = 0; w.sources = []; w.playCalls = 0;
+    w.errors = []; w.states = []; w.bitrates = []; w.hlsStarts = 0; w.hlsDestroys = 0; w.sources = []; w.playCalls = 0;
     Object.defineProperty(HTMLMediaElement.prototype, "paused", { configurable: true, get() {return !(this as any)._playing;} });
     Object.defineProperty(HTMLMediaElement.prototype, "readyState", { configurable: true, get() {return (this as any)._ready ?? 0;} });
     HTMLMediaElement.prototype.load = function() {};
@@ -120,5 +121,20 @@ describe("live player in Chromium", () => {
     await page.locator("video").evaluate(video => (video as HTMLVideoElement).pause());
     await page.clock.fastForward(21_000);
     expect(await page.getByText("Reconnecting… Retry now").count()).toBe(1);
+    await page.locator("video").evaluate(video => {
+      (video as any)._playing = true;
+      (video as any)._ready = 2;
+      video.dispatchEvent(new Event("playing"));
+    });
+    expect(await page.evaluate(() => (window as any).states.at(-1))).toBe(true);
+    expect(await page.getByText("HLS LIVE").count()).toBe(1);
+  });
+
+  it("reports measured HLS video traffic", async () => {
+    await mount("healthy", {url: "https://media.example/hls/index.m3u8"});
+    await page.waitForFunction(() => (window as any).states.includes(true));
+    await page.evaluate(() => (window as any).hls.handlers.fragment(null, {payload: new ArrayBuffer(250_000)}));
+    await page.clock.fastForward(2_100);
+    expect(await page.evaluate(() => (window as any).bitrates.some((value: number) => value > 0))).toBe(true);
   });
 });

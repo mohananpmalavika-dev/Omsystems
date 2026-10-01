@@ -71,5 +71,12 @@ function decodeEd25519Signature(signature: string) {
 }
 
 function normalizePem(value: string) {
-  return value.replaceAll("\\n", "\n").trim();
+  let trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    trimmed = trimmed.slice(1, -1).trim();
+  }
+  return trimmed.replaceAll("\\n", "\n").trim();
 }

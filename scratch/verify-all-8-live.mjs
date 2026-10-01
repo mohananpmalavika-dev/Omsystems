@@ -13,7 +13,7 @@ const cameras = [
 ];
 
 const userId = '043561dc-a162-48ca-b7e4-290a9c4ad1ff';
-const agentId = '09181b97-0674-43ee-9d47-4b8c96f71a6b';
+const agentId = '0706c694-3c7c-4ac1-885c-fb6e34932b01';
 const relayBase = `https://34-14-220-41.sslip.io/v1/edge-media/${agentId}`;
 
 async function batchCreateTokens(cams, profile) {

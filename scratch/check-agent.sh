@@ -1,0 +1,1 @@
+sudo docker exec sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid -c "SELECT id, branch_node_id, name, status, version, device_uuid, (credential_hash IS NOT NULL) as has_cred FROM edge_agents WHERE id = 'de7731c7-03db-4db7-9925-8cdef8a33af9';"

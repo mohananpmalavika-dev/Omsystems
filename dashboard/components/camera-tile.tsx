@@ -304,6 +304,7 @@ function CameraTileComponent({
   onVideoElementChange,
   onPlaybackStateChange,
   onPlaybackError,
+  onBitrateChange,
   aiOverlay,
   showAiOverlay = true,
   onOpenAi,
@@ -338,6 +339,7 @@ function CameraTileComponent({
   onVideoElementChange?: (videoElement: HTMLVideoElement | null) => void;
   onPlaybackStateChange?: (playing: boolean) => void;
   onPlaybackError?: (reason?: string) => void;
+  onBitrateChange?: (mbps: number | null) => void;
   aiOverlay?: { rules: AnalyticsRule[]; alerts: AnalyticsAlert[] };
   showAiOverlay?: boolean;
   onOpenAi?: () => void;
@@ -1132,6 +1134,7 @@ function CameraTileComponent({
                 muted={effectiveMuted}
                 onPlaybackError={onPlaybackError}
                 onPlaybackStateChange={handlePlaybackStateChange}
+                onBitrateChange={onBitrateChange}
                 onVideoElementChange={handleVideoElementChange}
               />
               {showFisheyeDewarp && internalVideoElement && (
