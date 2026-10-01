@@ -30,4 +30,19 @@ describe("GatewayClient", () => {
       "https://dashboard.example.com/api/control/v1/edge-enrollment/activate",
     );
   });
+
+  it("surfaces an analytics frame rejected for missing AI configuration", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({
+      accepted: false,
+      reason: "analytics_engine_not_configured",
+    }, { status: 202 })));
+    const client = new GatewayClient("https://dashboard.example.com/api/control", undefined);
+    await expect(client.submitAnalyticsFrame("agent-1", {
+      cameraId: "camera-1",
+      capturedAt: "2026-10-01T10:00:00.000Z",
+      width: 640,
+      height: 360,
+      imageBase64: "frame",
+    })).rejects.toThrow("analytics_engine_not_configured");
+  });
 });

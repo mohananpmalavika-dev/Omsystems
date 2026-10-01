@@ -1435,7 +1435,12 @@ export async function buildApp(options?: {
         request.log.warn({ cameraId: camera.id, upstreamStatus: upstream.status }, "Analytics engine rejected edge frame");
         return reply.code(502).send({ error: "analytics_engine_rejected_frame", upstreamStatus: upstream.status });
       }
-      return reply.code(202).send({ accepted: true, analytics: result });
+      return reply.code(202).send({
+        accepted: true,
+        eventsGenerated: typeof result.eventsGenerated === "number" ? result.eventsGenerated : 0,
+        eventsAccepted: typeof result.accepted === "number" ? result.accepted : 0,
+        analytics: result,
+      });
     } catch (error) {
       request.log.warn({ error, cameraId: camera.id }, "Analytics engine frame delivery failed");
       return reply.code(502).send({ error: "analytics_engine_unavailable" });

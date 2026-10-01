@@ -212,8 +212,10 @@ export class CameraHeartbeatService {
   }
 
   private async captureAnalyticsFrame(camera: CameraConfig): Promise<void> {
-    const width = 320;
-    const height = 180;
+    // Helmet classification runs on a person's head crop. At 320x180 that
+    // crop can be only a few pixels, even when the operator sees a helmet.
+    const width = 640;
+    const height = 360;
     let captureUrl = camera.rtspUrl!;
     if (captureUrl.includes("subtype=0")) {
       captureUrl = captureUrl.replace("subtype=0", "subtype=1");

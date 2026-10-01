@@ -16,6 +16,7 @@ export interface HelmetDetection {
   personBoundingBox: { x: number; y: number; width: number; height: number };
   helmetBoundingBox?: { x: number; y: number; width: number; height: number };
   helmetDetected: boolean;
+  evidenceSource?: "observed-helmet" | "confirmed-head-classification";
   confidence: number | null;
   vehicleType?: "motorcycle" | "bicycle";
   riskLevel: "compliant" | "violation" | "uncertain";
@@ -27,11 +28,20 @@ export class HelmetDetector extends BaseDetector {
   private classifier: HelmetClassificationFrameInference | null;
   private modelLoadError: string | null = null;
   private readonly MIN_CONFIDENCE: number;
+  private readonly PERSON_CONFIDENCE = 0.65;
   private readonly HEAD_REGION_OVERLAP_THRESHOLD = 0.6;
   // PaddleClas recommends 0.9167 for the safety-helmet classifier when a
   // low false-positive rate is required. A helmet-worn security alert should
   // never use the generic detector's lower object-presence threshold.
   private readonly HELMET_WORN_ALERT_CONFIDENCE = 0.9167;
+  // A person crop is only an approximate helmet location. Require a second
+  // independent frame and a stricter score when no helmet box is supplied.
+  private readonly CLASSIFIED_HEAD_CONFIDENCE = 0.97;
+  private readonly pendingHeads = new Map<string, Array<{
+    personBox: HelmetDetection["personBoundingBox"];
+    lastSeenAt: number;
+    confirmations: number;
+  }>>();
 
   constructor(
     inference: ObjectFrameInference | null = null,
@@ -90,9 +100,8 @@ export class HelmetDetector extends BaseDetector {
     
     const results: DetectionResult[] = [];
 
-    // Only a localized helmet observation on an indoor person's head can
-    // raise this alert. A crop classifier alone cannot locate a helmet and
-    // can be confidently wrong on hair, caps, and background objects.
+    // An observed helmet box alerts immediately; classifier-only head crops
+    // must agree across two frames before they become helmet evidence.
     const helmetWearers = detections.filter(d => d.helmetDetected && !d.vehicleType);
     if (helmetWearers.length > 0) {
       const avgConf = this.calculateAverageConfidence(helmetWearers);
@@ -119,6 +128,8 @@ export class HelmetDetector extends BaseDetector {
         metadata: {
           compliantCount: helmetWearers.length,
           threatType: "helmet_worn_inside_facility",
+          evidenceSource: helmetWearers.some((detection) => detection.evidenceSource === "observed-helmet")
+            ? "observed-helmet" : "confirmed-head-classification",
         },
         executionMetadata: {
           status: "SUCCESS",
@@ -145,7 +156,7 @@ export class HelmetDetector extends BaseDetector {
       : [];
     const observations = [...getInferenceObjects(frame), ...local];
     const persons = observations.filter((item) => item.label === "person")
-      .filter((item) => (item.confidence ?? 0) >= this.MIN_CONFIDENCE);
+      .filter((item) => (item.confidence ?? 0) >= this.PERSON_CONFIDENCE);
     const vehicles = observations.filter((item) => item.label === "motorcycle" || item.label === "bicycle")
       .filter((item) => (item.confidence ?? 0) >= this.MIN_CONFIDENCE);
     const helmets = observations.filter((item) => item.label === "helmet")
@@ -170,21 +181,65 @@ export class HelmetDetector extends BaseDetector {
     const indoorHelmetDetections: HelmetDetection[] = [];
 
     for (const person of indoorPersons) {
-      // A person or a positive crop classification is not helmet evidence.
-      const presence = this.detectHelmetPresence(person, helmets);
-      if (!presence) continue;
+      let presence = this.detectHelmetPresence(person, helmets);
+      // An explicit helmet box elsewhere in the scene is contrary spatial
+      // evidence; do not override it with a crop classification.
+      if (!presence && (helmets.length > 0 || !runLocal || !this.classifier)) continue;
       if (this.classifier) {
         const { upperResult, standardResult } = await this.helmetClassifications(frame, person.boundingBox);
-        const alertThreshold = Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE);
+        const alertThreshold = presence
+          ? Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE)
+          : Math.max(this.MIN_CONFIDENCE, this.CLASSIFIED_HEAD_CONFIDENCE);
         if (!upperResult.wearingHelmet || !standardResult.wearingHelmet ||
             upperResult.wearingHelmetConfidence < alertThreshold ||
-            standardResult.wearingHelmetConfidence < alertThreshold) continue;
-        presence.confidence = Math.min(presence.confidence!, upperResult.wearingHelmetConfidence, standardResult.wearingHelmetConfidence);
+            standardResult.wearingHelmetConfidence < alertThreshold) {
+          this.clearPendingHead(frame.cameraId, person.boundingBox);
+          continue;
+        }
+        const confidence = Math.min(
+          presence?.confidence ?? 1,
+          upperResult.wearingHelmetConfidence,
+          standardResult.wearingHelmetConfidence,
+        );
+        if (!presence) {
+          if (!this.confirmClassifiedHead(frame.cameraId, person.boundingBox, frame.timestamp.getTime())) continue;
+          presence = {
+            personBoundingBox: person.boundingBox,
+            helmetBoundingBox: this.headRegion(person.boundingBox),
+            helmetDetected: true,
+            evidenceSource: "confirmed-head-classification",
+            confidence,
+            riskLevel: "violation",
+          };
+        } else {
+          presence.confidence = confidence;
+        }
       }
-      indoorHelmetDetections.push(presence);
+      if (presence) indoorHelmetDetections.push(presence);
     }
 
     return [...riderDetections, ...indoorHelmetDetections];
+  }
+
+  private confirmClassifiedHead(cameraId: string, personBox: HelmetDetection["personBoundingBox"], observedAt: number) {
+    const pending = (this.pendingHeads.get(cameraId) ?? [])
+      .filter((item) => observedAt - item.lastSeenAt <= 120_000 && observedAt >= item.lastSeenAt);
+    const previous = pending.find((item) => calculateIoU(item.personBox, personBox) >= 0.5);
+    if (previous) {
+      if (observedAt > previous.lastSeenAt) previous.confirmations += 1;
+      previous.personBox = personBox;
+      previous.lastSeenAt = observedAt;
+    } else {
+      pending.push({ personBox, lastSeenAt: observedAt, confirmations: 1 });
+    }
+    this.pendingHeads.set(cameraId, pending.slice(-20));
+    return (previous?.confirmations ?? 1) >= 2;
+  }
+
+  private clearPendingHead(cameraId: string, personBox: HelmetDetection["personBoundingBox"]) {
+    const pending = this.pendingHeads.get(cameraId);
+    if (!pending) return;
+    this.pendingHeads.set(cameraId, pending.filter((item) => calculateIoU(item.personBox, personBox) < 0.5));
   }
 
   /**
@@ -210,6 +265,7 @@ export class HelmetDetector extends BaseDetector {
       personBoundingBox: person.boundingBox,
       helmetBoundingBox: helmet.boundingBox,
       helmetDetected: true,
+      evidenceSource: "observed-helmet",
       confidence: helmet.confidence ?? null,
       riskLevel: "violation",
     };
@@ -373,6 +429,7 @@ export class HelmetDetector extends BaseDetector {
 
 
   async cleanup(): Promise<void> {
+    this.pendingHeads.clear();
     this.inference = null;
     this.classifier = null;
     this.isModelLoaded = false;

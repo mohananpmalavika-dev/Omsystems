@@ -161,7 +161,7 @@ describe("local specialty model adapters", () => {
     expect(results).toHaveLength(0);
   });
 
-  it("does not invent a helmet from positive crop classifications alone", async () => {
+  it("requires repeated high-confidence head classifications without a helmet box", async () => {
     const run = vi.fn(async () => ({
         wearingHelmet: true,
         confidence: 0.99,
@@ -170,10 +170,38 @@ describe("local specialty model adapters", () => {
     }));
     const detector = new HelmetDetector(null, 0.7, { run });
     await detector.initialize();
-    const results = await detector.detect(frame([object("person", 0.95)]));
+    const first = await detector.detect(frame([object("person", 0.95)]));
+    const secondFrame = frame([object("person", 0.95)]);
+    secondFrame.timestamp = new Date("2026-07-30T10:00:02.000Z");
+    const second = await detector.detect(secondFrame);
 
-    expect(results).toHaveLength(0);
-    expect(run).not.toHaveBeenCalled();
+    expect(first).toHaveLength(0);
+    expect(second).toEqual([expect.objectContaining({
+      detectionType: "helmet-worn",
+      requiresAlert: true,
+      metadata: expect.objectContaining({ evidenceSource: "confirmed-head-classification" }),
+    })]);
+    expect(run).toHaveBeenCalledTimes(4);
+  });
+
+  it("keeps classifier confirmation isolated by camera and resets on a negative frame", async () => {
+    let wearingHelmet = true;
+    const detector = new HelmetDetector(null, 0.7, {
+      run: async () => ({
+        wearingHelmet,
+        confidence: 0.99,
+        wearingHelmetConfidence: wearingHelmet ? 0.99 : 0.01,
+        unwearingHelmetConfidence: wearingHelmet ? 0.01 : 0.99,
+      }),
+    });
+    await detector.initialize();
+    const observation = frame([object("person", 0.95)]);
+    expect(await detector.detect(observation)).toHaveLength(0);
+    expect(await detector.detect({ ...observation, cameraId: "camera-2", timestamp: new Date("2026-07-30T10:00:01.000Z") })).toHaveLength(0);
+    wearingHelmet = false;
+    expect(await detector.detect({ ...observation, timestamp: new Date("2026-07-30T10:00:02.000Z") })).toHaveLength(0);
+    wearingHelmet = true;
+    expect(await detector.detect({ ...observation, timestamp: new Date("2026-07-30T10:00:03.000Z") })).toHaveLength(0);
   });
 
   it("does not alert when a helmet observation is away from every person's head", async () => {

@@ -279,10 +279,14 @@ export class GatewayClient {
   }
 
   async submitAnalyticsFrame(agentId: string, payload: AnalyticsFramePayload) {
-    return this.request<{ accepted: boolean; eventsGenerated?: number; reason?: string }>(
+    const result = await this.request<{ accepted: boolean; eventsGenerated?: number; reason?: string }>(
       `/v1/edge-agents/${encodeURIComponent(agentId)}/analytics/frames`,
       { method: "POST", body: JSON.stringify(payload) },
     );
+    if (!result.accepted) {
+      throw new Error(`Analytics frame rejected: ${result.reason ?? "unknown_reason"}`);
+    }
+    return result;
   }
 
   async submitSecureAreaFaceObservation(payload: SecureAreaFaceObservationPayload, ingestToken: string) {
