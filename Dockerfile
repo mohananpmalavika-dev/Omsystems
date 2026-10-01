@@ -11,6 +11,7 @@ COPY src/ ./src/
 COPY database/migrations/ ./database/migrations/
 COPY scripts/run-migrations.mjs ./scripts/run-migrations.mjs
 COPY scripts/build-communications.mjs ./scripts/build-communications.mjs
+COPY scripts/auto-fleet-rollout.mjs ./scripts/auto-fleet-rollout.mjs
 COPY packages/ ./packages/
 COPY config/ ./config/
 COPY root-cause-analysis-engine/ ./root-cause-analysis-engine/
