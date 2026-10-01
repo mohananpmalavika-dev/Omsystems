@@ -113,7 +113,12 @@ describe("local specialty model adapters", () => {
   });
 
   it("raises an alert when a helmeted person is detected without a vehicle", async () => {
-    const detector = new HelmetDetector();
+    const detector = new HelmetDetector(null, 0.7, {
+      run: async () => ({
+        wearingHelmet: true, confidence: 0.97,
+        wearingHelmetConfidence: 0.97, unwearingHelmetConfidence: 0.03,
+      }),
+    });
     await detector.initialize();
     const results = await detector.detect(frame([
       object("person", 0.95, { x: 0.1, y: 0.1, width: 0.4, height: 0.8 }),
@@ -156,21 +161,35 @@ describe("local specialty model adapters", () => {
     expect(results).toHaveLength(0);
   });
 
-  it("classifies a helmeted person without requiring a vehicle", async () => {
-    const detector = new HelmetDetector(null, 0.7, {
-      run: async () => ({
+  it("does not invent a helmet from positive crop classifications alone", async () => {
+    const run = vi.fn(async () => ({
         wearingHelmet: true,
-        confidence: 0.94,
-        wearingHelmetConfidence: 0.94,
-        unwearingHelmetConfidence: 0.06,
-      }),
-    });
+        confidence: 0.99,
+        wearingHelmetConfidence: 0.99,
+        unwearingHelmetConfidence: 0.01,
+    }));
+    const detector = new HelmetDetector(null, 0.7, { run });
     await detector.initialize();
     const results = await detector.detect(frame([object("person", 0.95)]));
 
-    expect(results).toEqual(expect.arrayContaining([
-      expect.objectContaining({ detectionType: "helmet-worn", requiresAlert: true }),
+    expect(results).toHaveLength(0);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("does not alert when a helmet observation is away from every person's head", async () => {
+    const run = vi.fn(async () => ({
+      wearingHelmet: true, confidence: 0.99,
+      wearingHelmetConfidence: 0.99, unwearingHelmetConfidence: 0.01,
+    }));
+    const detector = new HelmetDetector(null, 0.7, { run });
+    await detector.initialize();
+    const results = await detector.detect(frame([
+      object("person", 0.96, { x: 0.1, y: 0.1, width: 0.4, height: 0.8 }),
+      object("helmet", 0.99, { x: 0.7, y: 0.6, width: 0.15, height: 0.1 }),
     ]));
+
+    expect(results).toHaveLength(0);
+    expect(run).not.toHaveBeenCalled();
   });
 
   it("does not turn a rider without a helmet into a helmet-worn alert", async () => {
@@ -222,7 +241,10 @@ describe("local specialty model adapters", () => {
     });
     await detector.initialize();
 
-    const results = await detector.detect(frame([object("person", 0.95)]));
+    const results = await detector.detect(frame([
+      object("person", 0.95),
+      object("helmet", 0.98, { x: 0.16, y: 0.11, width: 0.2, height: 0.1 }),
+    ]));
 
     expect(results.filter((result) => result.detectionType === "helmet-worn")).toHaveLength(0);
   });
@@ -244,7 +266,10 @@ describe("local specialty model adapters", () => {
     const detector = new HelmetDetector(null, 0.7, { run });
     await detector.initialize();
 
-    const results = await detector.detect(frame([object("person", 0.95)]));
+    const results = await detector.detect(frame([
+      object("person", 0.95),
+      object("helmet", 0.99, { x: 0.16, y: 0.11, width: 0.2, height: 0.1 }),
+    ]));
 
     expect(results.filter((result) => result.detectionType === "helmet-worn")).toHaveLength(0);
   });

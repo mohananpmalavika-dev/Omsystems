@@ -90,19 +90,18 @@ export class HelmetDetector extends BaseDetector {
     
     const results: DetectionResult[] = [];
 
-    // Alert ONLY when helmet is detected / present (no-helmet alert disabled as requested)
-    // A helmeted motorcycle/bicycle rider is compliant, not a person wearing
-    // a helmet inside the facility. Only unmatched (indoor) persons can raise
-    // this alert.
+    // Only a localized helmet observation on an indoor person's head can
+    // raise this alert. A crop classifier alone cannot locate a helmet and
+    // can be confidently wrong on hair, caps, and background objects.
     const helmetWearers = detections.filter(d => d.helmetDetected && !d.vehicleType);
     if (helmetWearers.length > 0) {
       const avgConf = this.calculateAverageConfidence(helmetWearers);
-      const effectiveConf = avgConf ?? 0.85;
+      const effectiveConf = avgConf!;
       const compliantObjects = helmetWearers.flatMap(detection => [
         {
           label: "helmet",
           confidence: detection.confidence ?? effectiveConf,
-          boundingBox: detection.helmetBoundingBox ?? this.headRegion(detection.personBoundingBox),
+          boundingBox: detection.helmetBoundingBox!,
         },
         {
           label: "person",
@@ -171,19 +170,18 @@ export class HelmetDetector extends BaseDetector {
     const indoorHelmetDetections: HelmetDetection[] = [];
 
     for (const person of indoorPersons) {
-      // 1. Check if upstream inference already detected a helmet on this person
+      // A person or a positive crop classification is not helmet evidence.
       const presence = this.detectHelmetPresence(person, helmets);
-      if (presence) {
-        indoorHelmetDetections.push(presence);
-        continue;
+      if (!presence) continue;
+      if (this.classifier) {
+        const { upperResult, standardResult } = await this.helmetClassifications(frame, person.boundingBox);
+        const alertThreshold = Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE);
+        if (!upperResult.wearingHelmet || !standardResult.wearingHelmet ||
+            upperResult.wearingHelmetConfidence < alertThreshold ||
+            standardResult.wearingHelmetConfidence < alertThreshold) continue;
+        presence.confidence = Math.min(presence.confidence!, upperResult.wearingHelmetConfidence, standardResult.wearingHelmetConfidence);
       }
-      // 2. If classifier is available, run local safety-helmet model
-      if (runLocal && this.classifier) {
-        const classified = await this.classifyIndoorHelmetPresence(frame, person);
-        if (classified.helmetDetected) {
-          indoorHelmetDetections.push(classified);
-        }
-      }
+      indoorHelmetDetections.push(presence);
     }
 
     return [...riderDetections, ...indoorHelmetDetections];
@@ -319,33 +317,6 @@ export class HelmetDetector extends BaseDetector {
     };
   }
 
-  private async classifyIndoorHelmetPresence(
-    frame: DetectionFrame,
-    person: any,
-  ): Promise<HelmetDetection> {
-    const personBox = person.boundingBox;
-    const { upperResult, standardResult } = await this.helmetClassifications(frame, personBox);
-    const alertThreshold = Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE);
-
-    // Require two independently cropped views to agree. Previously the most
-    // optimistic crop won, so hair, caps, background objects, or a loose crop
-    // could create a helmet-worn alert on an unhelmeted person.
-    const helmetDetected = upperResult.wearingHelmet
-      && standardResult.wearingHelmet
-      && upperResult.wearingHelmetConfidence >= alertThreshold
-      && standardResult.wearingHelmetConfidence >= alertThreshold;
-    const confidence = helmetDetected
-      ? Math.min(upperResult.wearingHelmetConfidence, standardResult.wearingHelmetConfidence)
-      : Math.max(upperResult.unwearingHelmetConfidence, standardResult.unwearingHelmetConfidence);
-    return {
-      personBoundingBox: person.boundingBox,
-      helmetBoundingBox: this.headRegion(person.boundingBox),
-      helmetDetected,
-      confidence,
-      riskLevel: helmetDetected ? "violation" : "compliant",
-    };
-  }
-
   private async bestHelmetClassification(
     frame: DetectionFrame,
     personBox: { x: number; y: number; width: number; height: number },
@@ -412,7 +383,7 @@ export class HelmetDetector extends BaseDetector {
     return {
       status: this.isModelLoaded ? ("healthy" as const) : ("degraded" as const),
       details: this.isModelLoaded
-        ? "Local PaddleClas safety-helmet classifier active"
+        ? "Safety-helmet classifier active; helmet-worn alerts also require a localized helmet observation"
         : `Awaiting local safety-helmet classifier; normalized observations remain supported. ${this.modelLoadError ?? "Model unavailable"}`,
     };
   }
