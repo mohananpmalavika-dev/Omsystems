@@ -1366,7 +1366,7 @@ export async function buildApp(options?: {
         profiles: camera.profiles,
         connectionSecretRef: camera.connectionSecretRef,
         analyticsEnabled: analyticsEnabledByCamera.get(camera.id) === true,
-        ...(camera.ipAddress ? { ipAddress: camera.ipAddress } : {}),
+        ...(camera.ipAddress ? { ipAddress: camera.ipAddress.replace(/\/\d+$/, "").trim() } : {}),
         ...(camera.vendor ? { vendor: camera.vendor } : {}),
         ...(camera.sourceType && camera.sourceType !== "ip-camera" ? { sourceType: camera.sourceType } : {}),
         ...(camera.recorderId ? { recorderId: camera.recorderId } : {}),

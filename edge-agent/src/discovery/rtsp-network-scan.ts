@@ -359,7 +359,12 @@ export async function discoverRtspDevices(
     "/channel1",
     "/mjpeg",
   ];
-  const paths = options.paths.length ? options.paths : defaultPaths;
+  const rawPaths = options.paths.length ? options.paths : defaultPaths;
+  const paths = [...rawPaths].sort((a, b) => {
+    const aIsRecorder = Boolean(recorderFingerprintForRtspPath(a));
+    const bIsRecorder = Boolean(recorderFingerprintForRtspPath(b));
+    return Number(bIsRecorder) - Number(aIsRecorder);
+  });
   const ffprobePath = options.ffprobePath;
   const timeoutMs = Math.max(options.timeoutMs || 3000, 2500);
   const concurrency = Math.max(1, Math.min(options.concurrency || 4, 8));
@@ -539,7 +544,29 @@ export async function discoverRtspDevices(
               try {
                 const macAddress = await resolveNeighborMac(ip);
                 const hardwareId = createDeviceFingerprint(macAddress ? { macAddress } : {});
-                const pathRecorder = recorderFingerprint ?? recorderFingerprintForRtspPath(path);
+                let pathRecorder = recorderFingerprint ?? recorderFingerprintForRtspPath(path);
+                if (!pathRecorder) {
+                  const candidateProbe = await discoverRtspRecorderChannels({
+                    host: ip,
+                    ports: [port],
+                    vendor: "generic",
+                    username: cred.username,
+                    password: cred.password,
+                    maxChannels: 2,
+                    batchSize: 2,
+                    probe: (candidateUri) => probeRtsp(candidateUri, ffprobePath, timeoutMs),
+                  });
+                  if (candidateProbe.channels.length > 0) {
+                    const matchedUri = candidateProbe.channels[0]?.uri ?? "";
+                    const family = recorderProbeFamilyForRtspPath(matchedUri);
+                    pathRecorder = {
+                      vendor: family !== "generic" ? family : "generic",
+                      manufacturer: family === "cp-plus" ? "CP PLUS" : family === "hikvision" ? "Hikvision" : family === "tvt" ? "TVT" : "DVR",
+                      model: "Multi-channel DVR",
+                      sourceType: "analog-dvr-channel",
+                    };
+                  }
+                }
                 if (pathRecorder) {
                   const knownChannelCount = inferRecorderChannelCount(pathRecorder.model);
                   const recorder = await discoverRtspRecorderChannels({
@@ -550,7 +577,7 @@ export async function discoverRtspDevices(
                     username: cred.username,
                     password: cred.password,
                     maxChannels: Math.min(options.recorderMaxChannels ?? 64, knownChannelCount ?? 256),
-                    scanFullRange: knownChannelCount !== null || options.restrictToHosts === true,
+                    scanFullRange: knownChannelCount !== null,
                     includeUnverifiedChannels: knownChannelCount !== null,
                     probe: (candidateUri) => probeRtsp(candidateUri, ffprobePath, timeoutMs),
                   });
@@ -794,16 +821,24 @@ function rtspPortFromUri(uri: string | undefined) {
 export function recorderFingerprintForRtspPath(path: string): HttpRecorderFingerprint | undefined {
   if (/\/cam\/realmonitor\?[^#]*\bchannel=\d+/i.test(path)) {
     return {
-      vendor: "generic",
-      manufacturer: "RTSP",
+      vendor: "cp-plus",
+      manufacturer: "CP PLUS",
       model: "Multi-channel DVR",
       sourceType: "analog-dvr-channel",
     };
   }
-  if (/\/Streaming\/Channels\/\d+/i.test(path) || /\/ch\d+\/(?:main|sub)\/av_stream/i.test(path)) {
+  if (/\/Streaming\/Channels\/\d+/i.test(path)) {
     return {
-      vendor: "generic",
-      manufacturer: "RTSP",
+      vendor: "hikvision",
+      manufacturer: "Hikvision",
+      model: "Multi-channel recorder",
+      sourceType: "nvr-channel",
+    };
+  }
+  if (/\/ch\d+\/(?:main|sub)\/av_stream/i.test(path)) {
+    return {
+      vendor: "tvt",
+      manufacturer: "TVT",
       model: "Multi-channel recorder",
       sourceType: "nvr-channel",
     };

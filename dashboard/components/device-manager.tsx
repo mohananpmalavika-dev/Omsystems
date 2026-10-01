@@ -619,19 +619,23 @@ export function DeviceManager() {
         });
         const completed = await waitForCredentialCommand(command.commandId, 300_000);
         const discoveries = await cameraInventoryApi.listDiscovered(selectedBranch);
-        const verifiedChannels = (discoveries.data ?? []).filter((item: any) =>
-          item.edgeAgentId === gateway.id && item.ipAddress === ip &&
+        const hostDiscoveries = (discoveries.data ?? []).filter((item: any) =>
+          item.edgeAgentId === gateway.id && item.ipAddress === ip
+        );
+        const verifiedChannels = hostDiscoveries.filter((item: any) =>
           item.streamVerified === true && Number.isInteger(item.recorderChannel)
         );
         closeDirectProbe();
         setDiscoveredCameras(discoveries.data ?? []);
         updateDiscoveryReviewState(discoveries.data ?? []);
         setShowDiscoveredList(true);
-        setNotice(Number(completed.result?.rediscovered) === 0
+        setNotice(Number(completed.result?.rediscovered) === 0 && hostDiscoveries.length === 0
           ? `The branch scanner reached ${ip}, but did not discover a playable channel. Check the recorder login, RTSP service, and channel permissions.`
           : verifiedChannels.length > 0
-          ? `The branch scanner verified ${verifiedChannels.length} channel${verifiedChannels.length === 1 ? "" : "s"} at ${ip}. Review the results in Device discovery.`
-          : `The branch scanner finished probing ${ip}, but no DVR/NVR channels were verified. Check the recorder login, model, RTSP service, and channel permissions.`);
+          ? `✓ Discovered ${verifiedChannels.length} DVR channel${verifiedChannels.length === 1 ? "" : "s"} at ${ip}! Review and approve all channels below.`
+          : hostDiscoveries.some((item: any) => item.streamVerified)
+          ? `✓ Verified stream at ${ip}. Review and approve it below.`
+          : `The branch scanner finished probing ${ip}. Check the device credentials and port.`);
         await refreshBranch(selectedBranch);
         return;
       }
@@ -3028,12 +3032,26 @@ export function DeviceManager() {
                 <div className="device-empty"><Camera size={30} /><strong>{autoProvisionResults.length > 0 ? "Provisioning complete" : "No cameras discovered"}</strong><span>{autoProvisionResults.length > 0 ? "Verified cameras are now configured. Devices needing attention remain clearly identified above." : "Make sure the Edge Agent is online in the camera network, then scan again."}</span></div>
               ) : (
                 <>
-                  <p className="form-info-banner"><Network size={16} />Approve all stream-verified cameras in one step. Recording, AI rules, and alerts are enabled automatically.</p>
+                  <div className="flex items-center justify-between mb-3 gap-2">
+                    <p className="form-info-banner flex-1 mb-0"><Network size={16} />Approve all stream-verified cameras in one step. Recording, AI rules, and alerts are enabled automatically.</p>
+                    {approvableDiscoveryCount > 1 && (
+                      <button type="button" className="primary-button whitespace-nowrap" onClick={() => void approveAllDiscovered()} disabled={saving}>
+                        {saving ? "Provisioning…" : `⚡ Approve All (${approvableDiscoveryCount})`}
+                      </button>
+                    )}
+                  </div>
                   <div className="discovered-cameras-list">
                     {discoveredCameras.map((camera) => (
                       <div key={camera.id} className="discovered-camera-item">
                         <div className="camera-details">
-                          <strong>{camera.displayName || camera.model || "Detected device"}</strong>
+                          <strong>
+                            {camera.displayName || camera.model || "Detected device"}
+                            {Number.isInteger(camera.recorderChannel) ? (
+                              <span className="inline-block ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-600 text-white">
+                                CH {camera.recorderChannel}
+                              </span>
+                            ) : null}
+                          </strong>
                           <small>IP address: {camera.ipAddress} · Model: {discoveryModelLabel(camera)} · Type: {discoveryDeviceTypeLabel(camera)}</small>
                           <small>{camera.vendor} · {camera.discoveryMethod ?? "discovery"} · ONVIF port {camera.onvifPort}</small>
                           <small>{camera.serialNumber ? `SN ${camera.serialNumber}` : "Serial pending"} · {camera.macAddress ?? "MAC pending"}</small>
@@ -3225,8 +3243,8 @@ export function DeviceManager() {
               </button>
             </div>
             <div className="modal-body space-y-4">
-              <p className="text-xs text-slate-500">
-                A single branch LAN IP is scanned by the Branch Gateway for DVR/NVR channels. An IP range checks addresses and queues devices for gateway verification; it does not list channels immediately.
+              <p className="text-xs text-slate-400">
+                Enter your DVR, NVR, or camera local IP. The local branch scanner will probe the device, detect all active DVR channels (1-8, 16, 32), and list them ready for 1-click approval.
               </p>
               
               <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); void runDirectProbe(); }}>

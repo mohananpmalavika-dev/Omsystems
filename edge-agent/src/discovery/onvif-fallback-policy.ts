@@ -17,10 +17,12 @@ export function rtspOnvifExclusions(input: {
   handledOnvifHosts: ReadonlySet<string>;
   recorderFallbackHosts: ReadonlySet<string>;
 }) {
-  const candidates = input.targetIpAddress
-    ? (input.handledOnvifHosts.has(input.targetIpAddress) ? [input.targetIpAddress] : [])
-    : input.onvifHosts;
+  if (input.targetIpAddress) {
+    return [];
+  }
+
+  const candidates = input.onvifHosts;
 
   return [...new Set(candidates)]
-    .filter((host) => !input.recorderFallbackHosts.has(host));
+    .filter((host) => !input.recorderFallbackHosts.has(host) && input.handledOnvifHosts.has(host));
 }
