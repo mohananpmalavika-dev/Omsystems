@@ -59,7 +59,7 @@ export class QuickTunnelSupervisor {
   private consecutiveFailures = 0;
   private stopped = false;
 
-  constructor(private readonly options: QuickTunnelSupervisorOptions) {}
+  constructor(private readonly options: QuickTunnelSupervisorOptions) { }
 
   async start() {
     this.startLivenessLoop();
@@ -648,8 +648,8 @@ export function resolveMediaTunnelMode(config: Pick<EdgeConfig,
   "CLOUDFLARED_TUNNEL_TOKEN" | "PUBLIC_MEDIA_GATEWAY_URL"
 >) {
   if (config.MEDIA_TUNNEL_MODE === "named" &&
-      config.MEDIA_QUICK_TUNNEL_FALLBACK &&
-      (!config.CLOUDFLARED_TUNNEL_TOKEN || !config.PUBLIC_MEDIA_GATEWAY_URL)) {
+    config.MEDIA_QUICK_TUNNEL_FALLBACK &&
+    (!config.CLOUDFLARED_TUNNEL_TOKEN || !config.PUBLIC_MEDIA_GATEWAY_URL)) {
     return "quick" as const;
   }
   return config.MEDIA_TUNNEL_MODE;
@@ -732,7 +732,7 @@ function resolveFfmpegPath(configuredPath: string, runtimeDirectory: string): st
         if (existsSync(candidate2)) return candidate2;
       }
     }
-  } catch {}
+  } catch { }
   return configuredPath || undefined;
 }
 
@@ -743,7 +743,7 @@ export class MediaMtxRouter implements MediaRouter {
     private readonly apiUrl: string,
     private readonly ffmpegPath?: string,
     private readonly probeCodec?: (sourceUri: string) => Promise<string | null>,
-  ) {}
+  ) { }
   async ensurePath(path: string, sourceUri: string) {
     const encodedPath = encodeURIComponent(path);
     const isRtsp = /^rtsps?:\/\//i.test(sourceUri);
@@ -761,20 +761,20 @@ export class MediaMtxRouter implements MediaRouter {
       : "-vf \"scale='min(iw,960)':-2,fps=15\" -c:v libopenh264 -pix_fmt yuv420p -b:v 900k -g 30";
     const payload = (this.ffmpegPath && isRtsp)
       ? {
-          source: "publisher",
-          sourceOnDemand: false,
-          runOnDemand: `"${this.ffmpegPath}" -hide_banner -loglevel warning -analyzeduration 1000000 -probesize 1000000 -rtsp_transport tcp -fflags nobuffer+fastseek+genpts+discardcorrupt -i "${sourceUri}" -map 0:v:0 ${videoOptions} -avoid_negative_ts make_zero -max_interleave_delta 0 -map 0:a:0? -c:a aac -b:a 64k -ar 16000 -f rtsp -rtsp_transport tcp rtsp://127.0.0.1:8554/${path}`,
-          runOnDemandRestart: true,
-          runOnDemandStartTimeout: "30s",
-          runOnDemandCloseAfter: "300s",
-        }
+        source: "publisher",
+        sourceOnDemand: false,
+        runOnDemand: `"${this.ffmpegPath}" -hide_banner -loglevel warning -analyzeduration 1000000 -probesize 1000000 -rtsp_transport tcp -fflags nobuffer+fastseek+genpts+discardcorrupt -i "${sourceUri}" -map 0:v:0 ${videoOptions} -avoid_negative_ts make_zero -max_interleave_delta 0 -map 0:a:0? -c:a aac -b:a 64k -ar 16000 -f rtsp -rtsp_transport tcp rtsp://127.0.0.1:8554/${path}`,
+        runOnDemandRestart: true,
+        runOnDemandStartTimeout: "30s",
+        runOnDemandCloseAfter: "300s",
+      }
       : {
-          source: sourceUri,
-          rtspTransport: "tcp",
-          sourceOnDemand: true,
-          sourceOnDemandStartTimeout: "30s",
-          sourceOnDemandCloseAfter: "120s",
-        };
+        source: sourceUri,
+        rtspTransport: "tcp",
+        sourceOnDemand: true,
+        sourceOnDemandStartTimeout: "30s",
+        sourceOnDemandCloseAfter: "120s",
+      };
     // MediaMTX tears down an active path (including its HLS muxer) when it is
     // patched. A second viewer of the same camera must not interrupt the first.
     const matches = (current: { source?: string; runOnDemand?: string }) =>
@@ -815,7 +815,7 @@ export class MediaMtxRouter implements MediaRouter {
 
 class EdgeAccessRegistry {
   private readonly sessions = new Map<string, { id: string; path: string; token: string; expiresAt: number }>();
-  constructor(private readonly router: MediaRouter, private readonly ttlMs: number) {}
+  constructor(private readonly router: MediaRouter, private readonly ttlMs: number) { }
   issue(path: string) {
     const session = { id: randomUUID(), path, token: randomBytes(32).toString("base64url"), expiresAt: Date.now() + this.ttlMs };
     this.sessions.set(session.id, session);
@@ -860,9 +860,9 @@ hlsAddress: 127.0.0.1:8888
 # Fragmented MP4 supports both H.264 and H.265 (HEVC) streams across tunnels
 hlsVariant: fmp4
 hlsAllowOrigins: ['*']
-hlsSegmentCount: 3
-hlsSegmentDuration: 1s
-hlsPartDuration: 200ms
+hlsSegmentCount: 7
+hlsSegmentDuration: 2s
+hlsPartDuration: 500ms
 rtsp: yes
 rtspAddress: 127.0.0.1:8554
 protocols: [tcp]
@@ -904,8 +904,10 @@ function rewriteHlsPlaylist(playlist: string, token: string): string {
 }
 
 function startManagedProcess(name: string, executable: string, args: string[], cwd: string, environment?: NodeJS.ProcessEnv) {
-  const child = spawn(executable, args, { cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"],
-    env: environment ? { ...process.env, ...environment } : process.env });
+  const child = spawn(executable, args, {
+    cwd, windowsHide: true, stdio: ["pipe", "pipe", "pipe"],
+    env: environment ? { ...process.env, ...environment } : process.env
+  });
   child.stdin.end(); pipeProcessLogs(name, child);
   child.once("exit", (code, signal) => logger.error(`${name} exited`, { code, signal }));
   return child;
