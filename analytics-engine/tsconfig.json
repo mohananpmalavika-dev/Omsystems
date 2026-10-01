@@ -19,6 +19,8 @@
     "test/**/*.ts",
     "../backend/**/*",
     "src/analytics-integration-example.ts",
+    "src/journey/**/*.ts",
+    "src/routes/journey-api.ts",
     "src/detectors/enhanced-security-analytics.ts",
     "src/assistant/test-chatgpt.example.ts"
   ]
