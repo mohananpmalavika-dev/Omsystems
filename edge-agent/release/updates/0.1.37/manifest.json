@@ -5,7 +5,7 @@
   "sha256": "2292dfc5611fc331030a8b3f098d48eefd5aac6e1180a9237fa29d57a8303c2e",
   "sizeBytes": 712219,
   "type": "delta_bundle",
-  "releasedAt": "2026-09-30T20:52:58.703Z",
+  "releasedAt": "2026-09-30T20:56:18.697Z",
   "notes": "Sentinel Grid Edge Agent Delta Update v0.1.37",
   "signature": "mDEb-W0FrSljwnmxYaRxTwLb08v5whUGMnTQzHriWcoB91doblQC5p0DmbGrqzpYGfdv4_0FkbG1C7TaOJDXCA"
 }

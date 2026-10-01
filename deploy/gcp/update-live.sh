@@ -67,6 +67,10 @@ if [ -f /opt/sentinel-grid/scratch/patch_analytics.cjs ]; then
   docker restart sentinel-gcp-analytics-engine || true
 fi
 
+# Zero-touch fleet rollout for edge agents
+echo "--> Triggering Zero-Touch Fleet Rollout for Edge Agents..."
+docker exec sentinel-gcp-control-plane node scripts/auto-fleet-rollout.mjs || true
+
 echo "--> Reclaiming unused memory and cleaning up docker/system caches..."
 docker image prune -f || true
 docker builder prune -f --keep-storage 5GB || true

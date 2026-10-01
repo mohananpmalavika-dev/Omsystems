@@ -31,6 +31,7 @@ import { DeviceIdentityStore } from "./security/device-identity.js";
 import { EncryptedOutbox } from "./offline/encrypted-outbox.js";
 import {
   activateSignedUpdate,
+  compareVersions,
   confirmActiveSignedUpdate,
   rejectActiveSignedUpdate,
   resolveActiveSignedUpdate,
@@ -456,6 +457,7 @@ const presenceHeartbeat = startAgentPresenceHeartbeat({
 });
 
 let stopping = false;
+let lastAutoUpdateCheckAt = 0;
 process.once("SIGINT", () => { stopping = true; });
 process.once("SIGTERM", () => { stopping = true; });
 
@@ -507,6 +509,36 @@ while (!stopping) {
     if (!command && !job && config.AUTO_DISCOVERY_ENABLED &&
         Date.now() - lastDiscoveryAt >= config.AUTO_DISCOVERY_INTERVAL_MS) {
       await runAutomaticDiscovery();
+    }
+    if (config.EDGE_AUTO_UPDATE && Date.now() - lastAutoUpdateCheckAt >= config.EDGE_AUTO_UPDATE_INTERVAL_MS) {
+      lastAutoUpdateCheckAt = Date.now();
+      try {
+        const nextRelease = await control.getUpdate(agentId, config.EDGE_AGENT_VERSION);
+        if (nextRelease && compareVersions(nextRelease.version, config.EDGE_AGENT_VERSION) > 0) {
+          const publicKey = identity?.updatePublicKey ?? config.EDGE_UPDATE_PUBLIC_KEY;
+          if (publicKey) {
+            logger.info("Autonomous zero-touch OTA update detected. Staging release...", {
+              currentVersion: config.EDGE_AGENT_VERSION,
+              targetVersion: nextRelease.version,
+            });
+            const staged = await stageSignedUpdate(nextRelease, publicKey, config.EDGE_UPDATE_STAGING_PATH);
+            await activateSignedUpdate(
+              nextRelease,
+              staged,
+              config.EDGE_UPDATE_STAGING_PATH,
+              config.EDGE_AGENT_VERSION,
+            );
+            logger.info("Autonomous zero-touch OTA update activated. Restarting edge agent to apply patch...", {
+              version: nextRelease.version,
+            });
+            process.exit(75);
+          }
+        }
+      } catch (updateErr) {
+        logger.warn("Autonomous OTA update check failed", {
+          error: updateErr instanceof Error ? updateErr.message : String(updateErr),
+        });
+      }
     }
   } catch (error) {
     logger.error("Edge command poll failed", { error: error instanceof Error ? error.message : String(error) });

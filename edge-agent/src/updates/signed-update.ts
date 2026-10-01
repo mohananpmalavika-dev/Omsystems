@@ -278,7 +278,7 @@ async function quarantineMarker(markerPath: string, reason: string) {
   await rename(markerPath, `${markerPath}.${reason}.${suffix}`).catch(() => undefined);
 }
 
-function compareVersions(left: string, right: string) {
+export function compareVersions(left: string, right: string) {
   const parse = (value: string) => /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(value);
   const a = parse(left);
   const b = parse(right);

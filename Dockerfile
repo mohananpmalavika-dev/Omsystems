@@ -59,6 +59,7 @@ COPY --from=builder /app/config ./config
 
 COPY --from=builder /app/database/migrations ./database/migrations
 COPY --from=builder /app/scripts/run-migrations.mjs ./scripts/run-migrations.mjs
+COPY --from=builder /app/scripts/auto-fleet-rollout.mjs ./scripts/auto-fleet-rollout.mjs
 COPY --from=builder /app/edge-agent/build ./edge-agent/build
 COPY --from=builder /app/edge-agent/release ./edge-agent/release
 COPY --from=builder /app/edge-agent/installer ./edge-agent/installer

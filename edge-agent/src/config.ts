@@ -97,7 +97,14 @@ const schema = z.object({
   EDGE_OFFLINE_OUTBOX_MAX_ITEMS: z.coerce.number().int().min(100).max(100_000).default(10_000),
   EDGE_CAMERA_CREDENTIAL_VAULT_PATH: z.string().default("./data/camera-credentials.enc"),
   EDGE_CAMERA_CREDENTIAL_VAULT_KEY_PATH: z.string().default("./data/camera-credentials.key"),
-  EDGE_UPDATE_PUBLIC_KEY: z.preprocess((value) => value === "" ? undefined : value, z.string().min(64).optional()),
+  EDGE_UPDATE_PUBLIC_KEY: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().min(64).default(
+      "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAc0IA0sRW23MqjAgINv2dMCrV9WQiteYo4GobP89LKu0=\n-----END PUBLIC KEY-----\n",
+    ),
+  ),
+  EDGE_AUTO_UPDATE: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
+  EDGE_AUTO_UPDATE_INTERVAL_MS: z.coerce.number().int().min(30_000).max(86_400_000).default(300_000),
   EDGE_UPDATE_STAGING_PATH: z.string().default("./data/updates"),
   EDGE_MTLS_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   EDGE_CLIENT_CERT: z.preprocess((value) => value === "" ? undefined : value, z.string().optional()),
