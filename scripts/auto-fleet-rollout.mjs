@@ -122,7 +122,7 @@ async function main() {
       SELECT a.id, a.name, a.version, a.branch_node_id, b.tenant_id
       FROM edge_agents a
       JOIN resource_nodes b ON b.id = a.branch_node_id
-      WHERE a.status != 'revoked'
+      WHERE a.status::text != 'revoked'
     `);
 
     let queuedCount = 0;
