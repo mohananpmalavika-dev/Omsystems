@@ -164,9 +164,9 @@ describe("local specialty model adapters", () => {
   it("requires repeated high-confidence head classifications without a helmet box", async () => {
     const run = vi.fn(async () => ({
         wearingHelmet: true,
-        confidence: 0.99,
-        wearingHelmetConfidence: 0.99,
-        unwearingHelmetConfidence: 0.01,
+        confidence: 0.94,
+        wearingHelmetConfidence: 0.94,
+        unwearingHelmetConfidence: 0.06,
     }));
     const detector = new HelmetDetector(null, 0.7, { run });
     await detector.initialize();

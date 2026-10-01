@@ -35,8 +35,8 @@ export class HelmetDetector extends BaseDetector {
   // never use the generic detector's lower object-presence threshold.
   private readonly HELMET_WORN_ALERT_CONFIDENCE = 0.9167;
   // A person crop is only an approximate helmet location. Require a second
-  // independent frame and a stricter score when no helmet box is supplied.
-  private readonly CLASSIFIED_HEAD_CONFIDENCE = 0.97;
+  // independent frame when no helmet box is supplied.
+  private readonly CLASSIFIED_HEAD_CONFIDENCE = 0.9167;
   private readonly pendingHeads = new Map<string, Array<{
     personBox: HelmetDetection["personBoundingBox"];
     lastSeenAt: number;
@@ -440,7 +440,7 @@ export class HelmetDetector extends BaseDetector {
     return {
       status: this.isModelLoaded ? ("healthy" as const) : ("degraded" as const),
       details: this.isModelLoaded
-        ? "Safety-helmet classifier active; helmet-worn alerts also require a localized helmet observation"
+        ? "Safety-helmet classifier active; helmet-worn alerts require a localized observation or two confirmed head crops"
         : `Awaiting local safety-helmet classifier; normalized observations remain supported. ${this.modelLoadError ?? "Model unavailable"}`,
     };
   }

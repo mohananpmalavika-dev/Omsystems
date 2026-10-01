@@ -1435,6 +1435,10 @@ export async function buildApp(options?: {
         request.log.warn({ cameraId: camera.id, upstreamStatus: upstream.status }, "Analytics engine rejected edge frame");
         return reply.code(502).send({ error: "analytics_engine_rejected_frame", upstreamStatus: upstream.status });
       }
+      if (typeof result.failed === "number" && result.failed > 0) {
+        request.log.warn({ cameraId: camera.id, failed: result.failed }, "Analytics events were not accepted by the control plane");
+        return reply.code(502).send({ error: "analytics_event_delivery_failed", failed: result.failed });
+      }
       return reply.code(202).send({
         accepted: true,
         eventsGenerated: typeof result.eventsGenerated === "number" ? result.eventsGenerated : 0,
