@@ -322,6 +322,25 @@ export class EdgeLiveGateway {
           } else if (sourceUri.includes("/onvif1")) {
             sourceUri = sourceUri.replace("/onvif1", "/onvif2");
           }
+        } else if (requestedProfile === "main" && !sourceUri.includes("subtype=0")) {
+          if (sourceUri.includes("subtype=1")) {
+            sourceUri = sourceUri.replace("subtype=1", "subtype=0");
+          } else if (sourceUri.includes("/Streaming/Channels/102")) {
+            sourceUri = sourceUri.replace("/Streaming/Channels/102", "/Streaming/Channels/101");
+          } else if (sourceUri.includes("/onvif2")) {
+            sourceUri = sourceUri.replace("/onvif2", "/onvif1");
+          }
+        }
+        const targetChannel = consumed.recorderChannel ?? consumed.channel;
+        if (typeof targetChannel === "number" && targetChannel > 0) {
+          if (/([\?&]channel=)\d+/i.test(sourceUri)) {
+            sourceUri = sourceUri.replace(/([\?&]channel=)\d+/i, `$1${targetChannel}`);
+          } else if (/\/Streaming\/Channels\/\d+/i.test(sourceUri)) {
+            const streamSuffix = requestedProfile === "sub" ? "02" : "01";
+            sourceUri = sourceUri.replace(/\/Streaming\/Channels\/\d+/i, `/Streaming/Channels/${targetChannel}${streamSuffix}`);
+          } else if (/\/ch\d+\//i.test(sourceUri)) {
+            sourceUri = sourceUri.replace(/\/ch\d+\//i, `/ch${targetChannel}/`);
+          }
         }
         if (!isAllowedIngestSource(sourceUri, this.options.allowSrtIngest ?? false, this.options.allowMulticastIngest ?? false)) {
           return sendJson(response, 409, { error: "stream_transport_not_enabled" });
@@ -794,7 +813,7 @@ export class MediaMtxRouter implements MediaRouter {
       }
     }
     const videoOptions = codec?.toLowerCase() === "h264"
-      ? "-c:v copy"
+      ? "-c:v copy -bsf:v dump_extra=freq=keyframe"
       : "-vf \"scale='min(iw,960)':-2,fps=15\" -c:v libopenh264 -pix_fmt yuv420p -b:v 900k -g 30";
     const payload = (this.ffmpegPath && isRtsp)
       ? {

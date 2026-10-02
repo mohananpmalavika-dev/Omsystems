@@ -285,6 +285,43 @@ describe("all-in-one edge live gateway", () => {
     expect(mediaAuth.status).toBe(204);
   });
 
+  it("normalizes DVR channel and profile in the live ingest RTSP URI", async () => {
+    const paths: Array<{ path: string; source: string }> = [];
+    const bridgeKey = "b".repeat(43);
+    app = buildEdgeLiveGateway({
+      consumer: {
+        consume: async () => ({
+          id: "session-ch8", cameraId: "camera-dvr-ch8", cameraNodeId: "branch-1",
+          userId: "user-1", tenantId: "tenant-1", connectionSecretRef: "edge://agent-1/camera-ch8",
+          channel: 8,
+          profiles: [{ name: "sub", codec: "H264", width: 352, height: 288 }],
+        }),
+      },
+      router: {
+        ensurePath: async (path, source) => { paths.push({ path, source }); },
+        removePath: async () => undefined,
+      },
+      resolveSecret: async () => "rtsp://admin:secret@192.168.29.171:554/cam/realmonitor?channel=1&subtype=1",
+      edgeBridgeSharedKey: bridgeKey,
+      publicBaseUrl: () => "https://branch-media.example.com",
+      mediaMtxHlsUrl: "http://127.0.0.1:8888",
+      accessTtlMs: 30_000,
+    });
+    const address = await app.listen({ host: "127.0.0.1", port: 0 });
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+
+    const started = await fetch(`${baseUrl}/v1/live/start`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ controlPlaneToken: "t".repeat(43), profile: "sub" }),
+    });
+    expect(started.status).toBe(201);
+    expect(paths).toEqual([{
+      path: "camera-camera-dvr-ch8-sub",
+      source: "rtsp://admin:secret@192.168.29.171:554/cam/realmonitor?channel=8&subtype=1",
+    }]);
+  });
+
   it.each([
     { vendor: "hikvision", recorderChannel: 1, source: "rtsp://operator:secret@192.0.2.10:554/Streaming/Channels/101", expected: "/Streaming/tracks/101?starttime=20260924T100000Z&endtime=20260924T100200Z" },
     { vendor: "cp-plus", recorderChannel: 0, source: "rtsp://operator:secret@192.0.2.10:554/cam/realmonitor?channel=1&subtype=0", expected: "/cam/playback?channel=1&" },

@@ -1379,7 +1379,8 @@ export async function buildApp(options?: {
         ...(camera.vendor ? { vendor: camera.vendor } : {}),
         ...(camera.sourceType && camera.sourceType !== "ip-camera" ? { sourceType: camera.sourceType } : {}),
         ...(camera.recorderId ? { recorderId: camera.recorderId } : {}),
-        ...(camera.recorderChannel ? { recorderChannel: camera.recorderChannel } : {}),
+        ...(camera.channel ? { channel: camera.channel } : {}),
+        ...((camera.recorderChannel || camera.channel) ? { recorderChannel: camera.recorderChannel || camera.channel } : {}),
       })),
     };
   });

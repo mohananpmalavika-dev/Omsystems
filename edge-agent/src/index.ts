@@ -1610,7 +1610,24 @@ async function syncCameraHeartbeatConfig() {
     }
   });
   const heartbeatCameras = await Promise.all(cameras.map(async (camera) => {
-    const rtspUrl = await control.resolveStreamSecret(agentId, camera.connectionSecretRef);
+    let rtspUrl = await control.resolveStreamSecret(agentId, camera.connectionSecretRef);
+    const channelMatch = camera.name.match(/Channel\s*(\d+)/i);
+    const targetChannel = camera.recorderChannel ?? (camera as { channel?: number }).channel ?? (channelMatch ? Number(channelMatch[1]) : undefined);
+    if (rtspUrl && typeof targetChannel === "number" && targetChannel > 0) {
+      if (/([\?&]channel=)\d+/i.test(rtspUrl)) {
+        rtspUrl = rtspUrl.replace(/([\?&]channel=)\d+/i, `$1${targetChannel}`);
+      } else if (/\/Streaming\/Channels\/\d+/i.test(rtspUrl)) {
+        rtspUrl = rtspUrl.replace(/\/Streaming\/Channels\/\d+/i, `/Streaming/Channels/${targetChannel}02`);
+      } else if (/\/ch\d+\//i.test(rtspUrl)) {
+        rtspUrl = rtspUrl.replace(/\/ch\d+\//i, `/ch${targetChannel}/`);
+      }
+      if (!rtspUrl.includes("subtype=1") && rtspUrl.includes("subtype=0")) {
+        rtspUrl = rtspUrl.replace("subtype=0", "subtype=1");
+      }
+    }
+    if (targetChannel !== undefined && camera.recorderChannel === undefined) {
+      camera.recorderChannel = targetChannel;
+    }
     return {
       id: camera.id,
       name: camera.name,
