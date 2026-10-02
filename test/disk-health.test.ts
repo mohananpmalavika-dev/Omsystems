@@ -6,6 +6,10 @@ import {
 } from "../src/operational-health/disk-health.js";
 
 describe("recorder disk-health normalization", () => {
+  it('does not report an unavailable recorder placeholder as a detected disk', () => {
+    expect(normalizeRecorderHddStatus([{id: 'storage-telemetry', state: 'unknown', telemetryCapability: 'unavailable'}])[0])
+      .toMatchObject({detected: false, slotStatus: 'unknown', capacityBytes: 0});
+  });
   it("keeps slot, SMART, RAID, capacity, and write evidence independent", () => {
     const [disk] = normalizeRecorderHddStatus([{
       diskNo: 1,

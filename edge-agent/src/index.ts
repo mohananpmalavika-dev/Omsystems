@@ -20,6 +20,7 @@ import { NetworkCounterSampler, NetworkPathTracker, probeInternetLink } from "./
 import { EdgeResourceSampler } from "./monitoring/edge-resource-probe.js";
 import { looksLikeRecorder, probeCameraMemoryCard, probeRecorder, recorderPlaybackUri } from "./monitoring/recorder-probe.js";
 import { initializeCameraHeartbeat } from "./monitoring/camera-heartbeat.js";
+import { RecorderRegistry, recorderFromMonitoringCamera } from "./monitoring/recorder-registry.js";
 import { hasArgument, prepareEdgeRuntime } from "./runtime.js";
 import { logger } from "./utils/logger.js";
 import {
@@ -91,7 +92,7 @@ if (installEnvironmentFile && (
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.41\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.43\n");
   process.exit(0);
 }
 
@@ -343,6 +344,17 @@ const activeRecorders = new Map<string, RecorderConfig>(
     return [recorder.id, withoutCredentials] as const;
   }),
 );
+const recorderRegistry = new RecorderRegistry(join(runtime.homeDirectory, 'data', 'recorder-registry.json'), agentId, branchId);
+if (!scanOnce && !isDiagnostic) {
+  for (const recorder of await recorderRegistry.load()) {
+    if (!activeRecorders.has(recorder.id)) activeRecorders.set(recorder.id, recorder);
+  }
+}
+async function registerRecorder(recorder: RecorderConfig) {
+  const { username: _username, password: _password, ...safe } = recorder;
+  activeRecorders.set(recorder.id, safe);
+  if (!scanOnce && !isDiagnostic) await recorderRegistry.save(activeRecorders.values());
+}
 for (const recorder of config.RECORDERS_JSON) {
   delete recorder.username;
   delete recorder.password;
@@ -723,7 +735,7 @@ async function scanBranch(options: {
           probeStream: (uri) => probeRtsp(uri, config.FFPROBE_PATH, config.ONVIF_TIMEOUT_MS),
         });
         channels = mergeRecorderChannelCandidates(channels, vendorChannels, device.model);
-        activeRecorders.set(discoveredId, {
+        await registerRecorder({
           id: discoveredId,
           name: `${device.manufacturer} ${device.model}`,
           deviceType: recorderType,
@@ -1101,7 +1113,7 @@ async function scanBranch(options: {
             const recorderId = recorderIdForHost(endpoint.remoteAddress);
             const macAddress = await resolveNeighborMac(endpoint.remoteAddress);
 
-            activeRecorders.set(recorderId, {
+            await registerRecorder({
               id: recorderId,
               name: `${recorderManufacturer} ${recorderModel}`,
               deviceType: "dvr",
@@ -1295,7 +1307,7 @@ async function scanBranch(options: {
         recorderMaxChannels: config.RECORDER_DISCOVERY_MAX_CHANNELS,
         onRecorderDetected: async (recorder: RecorderConfig) => {
           const { username: _username, password: _password, ...withoutCredentials } = recorder;
-          activeRecorders.set(recorder.id, withoutCredentials);
+          await registerRecorder(withoutCredentials);
           const observedAt = new Date().toISOString();
           const source = recorder.vendor === "cp-plus" ? "cp-plus-adapter" as const : "system" as const;
           const probe = await probeRecorder(recorder, config.RECORDER_PROBE_TIMEOUT_MS);
@@ -1610,7 +1622,9 @@ async function syncCameraHeartbeatConfig() {
   cameraHeartbeat.replaceCameras(heartbeatCameras);
   const channelsByRecorder = new Map<string, Array<{ cameraId: string; channel: number }>>();
   for (const camera of cameras) {
-    if (!camera.recorderId || !camera.recorderChannel) continue;
+    const restored = recorderFromMonitoringCamera(camera);
+    if (restored && !activeRecorders.has(restored.id)) await registerRecorder(restored);
+    if (!camera.recorderId || camera.recorderChannel === undefined) continue;
     const channels = channelsByRecorder.get(camera.recorderId) ?? [];
     channels.push({ cameraId: camera.id, channel: camera.recorderChannel });
     channelsByRecorder.set(camera.recorderId, channels);

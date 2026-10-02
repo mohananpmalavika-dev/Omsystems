@@ -206,6 +206,7 @@ export interface GatewayMtlsOptions {
 
 export class GatewayClient {
   private edgeCredential?: string;
+  private runtimeVersion?: string;
 
   constructor(
     private readonly baseUrl: string,
@@ -250,6 +251,7 @@ export class GatewayClient {
   }
 
   async heartbeat(id: string, version: string, publicMediaUrl?: string, localMediaUrl?: string) {
+    this.runtimeVersion = version;
     return this.request(
       `/v1/edge-agents/${encodeURIComponent(id)}/heartbeat`,
       {
@@ -494,6 +496,7 @@ export class GatewayClient {
         signal: AbortSignal.timeout(this.timeoutMs),
         headers: {
           "content-type": "application/json",
+          ...(this.runtimeVersion ? { "x-edge-agent-version": this.runtimeVersion } : {}),
           ...(this.developmentUserId ? { "x-user-id": this.developmentUserId } : {}),
           ...(!skipAuth && this.edgeCredential ? { "x-edge-agent-token": this.edgeCredential } : {}),
           ...(!skipAuth && !this.edgeCredential && this.edgeBridgeSharedKey ? { "x-edge-bridge-key": this.edgeBridgeSharedKey } : {}),

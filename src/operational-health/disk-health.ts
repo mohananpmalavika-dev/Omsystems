@@ -227,7 +227,7 @@ function normalizeDisk(input: Record<string, unknown>, index: number): Normalize
   const readOnly = /read.?only|write.?protect/.test(state);
   const slotFailed = /fail|error|bad|fault|offline/.test(state) && !/smart/.test(state);
   const slotStatus: DiskSlotStatus = missing ? "missing" : uninitialized ? "uninitialized"
-    : readOnly ? "read_only" : slotFailed ? "failed" : state || detectedFlag === true ? "present" : "unknown";
+    : readOnly ? "read_only" : slotFailed ? "failed" : (state && !/^(unknown|unavailable|unsupported)$/.test(state)) || detectedFlag === true ? "present" : "unknown";
   const detected = !missing && (detectedFlag === true || slotStatus !== "unknown" || capacityBytes > 0 || isKnownSerial(textValue(input, aliases.serialNumber)));
 
   const reasons: string[] = [];

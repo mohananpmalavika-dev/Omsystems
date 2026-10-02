@@ -924,8 +924,9 @@ function parseHikvisionDisks(xml: string) {
     };
   });
 }
-function parseCgiDisks(text: string) {
+export function parseCgiDisks(text: string): Array<Record<string, unknown>> {
   const grouped = new Map<string, Record<string, unknown>>();
+  const partitions = new Map<string, Map<string, Record<string, unknown>>>();
   const sharedRaidStatus = firstKey(text, ["Raid.Status", "RAID.State", "Storage.RaidStatus"]);
   const sharedRaidLevel = firstKey(text, ["Raid.Level", "RAID.Level", "Storage.RaidLevel"]);
   for (const line of text.split(/\r?\n/)) {
@@ -933,13 +934,46 @@ function parseCgiDisks(text: string) {
     // OEM builds use Storage[0].* or HDD.0.*.  Treat all of these as a
     // physical disk; otherwise a perfectly healthy installed drive is
     // discarded before it reaches the storage dashboard.
-    const match = line.match(/(?:table\.)?(?:Storage|Disk|HDD|Drive)(?:\[|\.)(\d+)\]?\.([^=]+)=(.*)$/i);
+    const nested = line.match(/^\s*list\.info\[(\d+)\]\.(?:Detail\[(\d+)\]\.)?([^=]+)\s*=(.*)$/i);
+    if (nested) {
+      const diskKey = `list:${nested[1]}`;
+      const item = grouped.get(diskKey) ?? { diskNo: Number(nested[1]) + 1 };
+      if (nested[2] !== undefined) {
+        const details = partitions.get(diskKey) ?? new Map<string, Record<string, unknown>>();
+        const detail = details.get(nested[2]) ?? {};
+        detail[nested[3]!.trim()] = nested[4]!.trim();
+        details.set(nested[2], detail);
+        partitions.set(diskKey, details);
+      } else {
+        item[nested[3]!.trim()] = nested[4]!.trim();
+      }
+      grouped.set(diskKey, item);
+      continue;
+    }
+    const match = line.match(/^\s*(?:table\.|Storage\.)?(?:StorageDevice|Storage|Disk|HDD|DriveInfo|Drive)(?:\[|\.)(\d+)\]?\.([^=]+)\s*=(.*)$/i);
     if (!match) continue;
     const item = grouped.get(match[1]!) ?? { diskNo: Number(match[1]) + 1 };
     item[match[2]!] = match[3]!.trim();
     grouped.set(match[1]!, item);
   }
-  return [...grouped.values()].map((item) => ({ ...item, raidStatus: item.raidStatus ?? sharedRaidStatus, raidLevel: item.raidLevel ?? sharedRaidLevel }));
+  return [...grouped.entries()].map(([diskKey, item]) => {
+    const details = [...(partitions.get(diskKey)?.values() ?? [])];
+    // Detail entries are partitions of a single physical disk, not extra HDDs.
+    // Only sum complete device-reported counters, and prefer disk-level totals.
+    for (const field of ["TotalBytes", "UsedBytes", "FreeBytes"] as const) {
+      if (item[field] !== undefined || details.length === 0) continue;
+      const values = details.map((detail) => detail[field]);
+      if (values.every((value) => value !== undefined && String(value).trim() !== "" && Number.isFinite(Number(value)) && Number(value) >= 0)) {
+        item[field] = values.reduce<number>((sum, value) => sum + Number(value), 0);
+      }
+    }
+    if (item.FreeBytes === undefined && item.TotalBytes !== undefined && item.UsedBytes !== undefined) {
+      item.FreeBytes = Math.max(0, Number(item.TotalBytes) - Number(item.UsedBytes));
+    }
+    if (details.some((detail) => /^(true|1)$/i.test(String(detail.IsError)))) item.State = "error";
+    else if (details.some((detail) => /read.?only|write.?protect/i.test(String(detail.Type)))) item.State = "read-only";
+    return { ...item, raidStatus: item.raidStatus ?? sharedRaidStatus, raidLevel: item.raidLevel ?? sharedRaidLevel };
+  });
 }
 function tag(xml: string, name: string) { return xml.match(new RegExp(`<(?:[^:>]+:)?${name}>([^<]+)<\\/(?:[^:>]+:)?${name}>`, "i"))?.[1]; }
 function firstTag(xml: string, names: string[]) { return names.map((name) => tag(xml, name)).find((value): value is string => Boolean(value)); }
