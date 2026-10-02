@@ -1,4 +1,5 @@
 import { Tensor, type InferenceSession, type OnnxValue } from "onnxruntime-node";
+import sharp from "sharp";
 import type { DetectionFrame } from "../detectors/base-detector.js";
 import { resizeRgb24ToChw } from "./yolo-detection-inference.js";
 
@@ -150,10 +151,25 @@ export class HelmetClassificationInference {
     if (!inputName) throw new Error("Safety-helmet model has no input tensor");
     const mean = [0.485, 0.456, 0.406];
     const standardDeviation = [0.229, 0.224, 0.225];
+    // Match PaddleClas ResizeImage(resize_short=256) and centered 224x224
+    // CropImage. Stretching head crops changes the shape of helmet evidence.
+    const resizeShort = Math.round(Math.min(this.inputWidth, this.inputHeight) * 256 / 224);
+    const scale = Math.max(resizeShort / Math.min(crop.width, crop.height),
+      this.inputWidth / crop.width, this.inputHeight / crop.height);
+    const resizedWidth = Math.max(this.inputWidth, Math.floor(crop.width * scale));
+    const resizedHeight = Math.max(this.inputHeight, Math.floor(crop.height * scale));
+    const pixels = await sharp(crop.imageData, {
+      raw: { width: crop.width, height: crop.height, channels: 3 },
+    }).resize(resizedWidth, resizedHeight, { fit: "fill", kernel: "linear" })
+      .extract({
+        left: Math.floor((resizedWidth - this.inputWidth) / 2),
+        top: Math.floor((resizedHeight - this.inputHeight) / 2),
+        width: this.inputWidth, height: this.inputHeight,
+      }).raw().toBuffer();
     const chw = resizeRgb24ToChw(
-      crop.imageData,
-      crop.width,
-      crop.height,
+      pixels,
+      this.inputWidth,
+      this.inputHeight,
       this.inputWidth,
       this.inputHeight,
       (value, channel) => ((value / 255) - mean[channel]!) / standardDeviation[channel]!,

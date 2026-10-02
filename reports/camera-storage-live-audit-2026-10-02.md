@@ -1,5 +1,9 @@
 # Camera storage repair — 2 October 2026
 
+## Later permanent repair
+
+The Local Camera Pilot storage collection defect and restart-persistence gap are now fixed in installed gateway version **0.1.43**. The DVR reports one 1.97 TB physical disk, and automatic telemetry was verified both before and after a controlled restart. See [the permanent storage repair report](storage-permanent-fix-2026-10-02.md) for evidence and branch-specific limits. The unresolved inventory below records the earlier audit state.
+
 ## Applied and verified
 
 - Audited all 11 registered cameras in the live database.

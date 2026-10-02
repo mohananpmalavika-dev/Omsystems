@@ -52,5 +52,5 @@ export function recorderFromMonitoringCamera(camera: MonitoringCamera): Recorder
       camera.recorderChannel === undefined || !Number.isInteger(camera.recorderChannel) || camera.recorderChannel < 0) return undefined;
   return {id: camera.recorderId, name: `Recorder ${host}`, host, port: 80, rtspPort: 554,
     deviceType: camera.sourceType === 'nvr-channel' ? 'nvr' : 'dvr',
-    vendor: recorderAdapterVendor(camera.vendor ?? '')};
+    vendor: recorderAdapterVendor(`${camera.vendor ?? ''} ${camera.name}`)};
 }

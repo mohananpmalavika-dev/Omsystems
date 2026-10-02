@@ -6,6 +6,14 @@ afterEach(() => {
 });
 
 describe("GatewayClient", () => {
+  it('keeps the runtime version on subsequent authenticated requests, including live sessions', async () => {
+    const fetchMock = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => Response.json({}));
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new GatewayClient('https://control.example.com', undefined);
+    await client.heartbeat('agent', '0.1.43');
+    await client.consumeLiveSession('agent', 'a'.repeat(64));
+    expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get('x-edge-agent-version')).toBe('0.1.43');
+  });
   it("preserves a dashboard proxy path when building API requests", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL) => Response.json({
       agentId: "agent-1",

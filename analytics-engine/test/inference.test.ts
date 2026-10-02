@@ -219,4 +219,35 @@ describe("local analytics foundations", () => {
     expect(feed.input?.dims).toEqual([1, 3, 224, 224]);
     expect(result).toMatchObject({ wearingHelmet: false, confidence: expect.closeTo(0.92) });
   });
+
+  it.each([[80, 40], [40, 80]])("preserves helmet proportions and center-crops a %ix%i image", async (width, height) => {
+    // A blue central square surrounded by red on the long axis. The official
+    // resize-short/center-crop removes red; a stretched input retains it.
+    const imageData = Buffer.alloc(width * height * 3);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const central = width > height ? x >= 20 && x < 60 : y >= 20 && y < 60;
+        imageData[(y * width + x) * 3 + (central ? 2 : 0)] = 255;
+      }
+    }
+    const run = vi.fn(async (_feeds: Record<string, Tensor>) => ({
+      output: new Tensor("float32", new Float32Array([0.98, 0.02]), [1, 2]),
+    }));
+    const inference = new HelmetClassificationInference({ inputNames: ["input"], outputNames: ["output"], run } as never);
+    const result = await inference.run({
+      cameraId: "helmet-crop", tenantId: "tenant-1", timestamp: new Date(),
+      imageData, width, height,
+    }, { x: 0, y: 0, width: 1, height: 1 });
+
+    const tensor = run.mock.calls[0]![0].input!;
+    expect(tensor.dims).toEqual([1, 3, 224, 224]);
+    const pixels = tensor.data as Float32Array;
+    const plane = 224 * 224;
+    for (const offset of [0, 223, 223 * 224, plane - 1, 112 * 224 + 112]) {
+      expect(pixels[offset]).toBeCloseTo(-0.485 / 0.229, 4);
+      expect(pixels[plane + offset]).toBeCloseTo(-0.456 / 0.224, 4);
+      expect(pixels[2 * plane + offset]).toBeCloseTo((1 - 0.406) / 0.225, 4);
+    }
+    expect(result.wearingHelmet).toBe(true);
+  });
 });
