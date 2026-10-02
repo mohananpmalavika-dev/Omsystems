@@ -19,6 +19,11 @@ if exist "C:\Program Files\Sentinel Grid\Edge Agent\data\edge-agent.lock" (
     del /F /Q "C:\Program Files\Sentinel Grid\Edge Agent\data\edge-agent.lock" >nul 2>&1
 )
 
+if exist "%~dp0edge-agent\release\edge-agent.exe" (
+    echo [1.5/3] Updating edge-agent binary from release build...
+    copy /Y "%~dp0edge-agent\release\edge-agent.exe" "C:\Program Files\Sentinel Grid\Edge Agent\edge-agent.exe" >nul
+)
+
 echo [2/3] Configuring directory permissions...
 icacls "C:\Program Files\Sentinel Grid\Edge Agent\data" /grant Users:(OI)(CI)M /T /Q >nul 2>&1
 icacls "C:\Program Files\Sentinel Grid\Edge Agent\logs" /grant Users:(OI)(CI)M /T /Q >nul 2>&1
