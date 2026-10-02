@@ -314,8 +314,10 @@ export class CameraHeartbeatService {
     }
     this.consecutiveFailures.delete(camera.id);
 
-    const analyticsWidth = 320;
-    const analyticsHeight = 180;
+    // Health samples also feed helmet inference. Preserve the same head detail
+    // as scheduled analytics captures instead of mixing in 320x180 frames.
+    const analyticsWidth = 640;
+    const analyticsHeight = 360;
     const [packetLoss, frame] = await Promise.all([
       measureCameraPacketLoss(rtspUrl),
       captureRtspRgbFrame(rtspUrl, this.ffmpegPath, 10_000, analyticsWidth, analyticsHeight),

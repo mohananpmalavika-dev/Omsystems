@@ -50,19 +50,20 @@ export class LocalArchiveRecordingProbe implements RecordingProbe {
     } catch { return { ...result, status: 'FAILED', reason: 'Indexed archive file is unavailable' }; }
     const offset = Math.max(0, (+sampleAt - +new Date(segment.started_at)) / 1000);
     const decode = await decodeArchiveSample(this.ffmpeg, archivePath, offset);
+    if (decode.unavailable) return { ...result, reason: 'Playback decoder is unavailable' };
     return { ...result, ...decode, status: decode.framesDecoded >= 2 && decode.timestampProgressing ? 'VERIFIED' : 'FAILED',
       reason: decode.framesDecoded >= 2 && decode.timestampProgressing ? 'Archive sample decoded with progressing timestamps' : 'Archive sample could not be decoded with progressing timestamps' };
   }
 }
-export function decodeArchiveSample(ffmpeg: string, path: string, offset: number): Promise<{ framesDecoded: number; timestampProgressing: boolean }> {
+export function decodeArchiveSample(ffmpeg: string, path: string, offset: number): Promise<{ framesDecoded: number; timestampProgressing: boolean; unavailable?: boolean }> {
   return new Promise(resolve => {
-    const child = spawn(ffmpeg, ['-nostdin', '-hide_banner', '-loglevel', 'info', '-ss', String(offset), '-i', path,
+    const child = spawn(ffmpeg, ['-nostdin', '-hide_banner', '-loglevel', 'info', '-protocol_whitelist', 'file,pipe', '-ss', String(offset), '-i', path,
       '-map', '0:v:0', '-an', '-t', '2', '-vf', 'showinfo', '-frames:v', '30', '-f', 'null', '-'], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
     let output = '';
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, 20_000);
     child.stderr.on('data', chunk => { output = (output + chunk.toString()).slice(-131072); });
-    child.once('error', () => { clearTimeout(timer); resolve({ framesDecoded: 0, timestampProgressing: false }); });
+    child.once('error', () => { clearTimeout(timer); resolve({ framesDecoded: 0, timestampProgressing: false, unavailable: true }); });
     child.once('close', code => {
       clearTimeout(timer);
       const pts = [...output.matchAll(/\bpts_time:\s*(-?\d+(?:\.\d+)?)/g)].map(match => Number(match[1]));

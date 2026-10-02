@@ -66,7 +66,7 @@ export class BranchProtectionService {
   private readonly runs = new Set<string>();
   private readonly snapshots: BranchOperationalSnapshotService;
   constructor(private readonly store: ControlPlaneStore, readonly repository: ProtectionRepository, private readonly probe: RecordingProbe,
-    private readonly onIncident?: (incident: any, check: RecordingCheck) => Promise<void>) {
+    private readonly onIncident?: (incident: any, check: RecordingCheck, actor: User) => Promise<void>) {
     this.snapshots = new BranchOperationalSnapshotService(store);
   }
   async overview(user: User, branchId: string) {
@@ -144,7 +144,7 @@ export class BranchProtectionService {
         const referenceId = `${check.cameraId}:${check.checkedAt}`;
         if (!evidence.some(item => item.referenceId === referenceId || item.reference_id === referenceId)) await this.store.addIncidentEvidenceItem({ incidentId: incident.id,
           itemType: 'recording-assurance', title: 'Recording verification evidence', description: JSON.stringify(check), referenceId, addedBy: user.id });
-        await this.onIncident?.(incident, check);
+        await this.onIncident?.(incident, check, user);
       }
       return updated;
     } finally {

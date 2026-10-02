@@ -49,8 +49,10 @@ export function RecordingWorkspace() {
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [branchId, setBranchId] = useState("");
   const [cameraId, setCameraId] = useState("");
-  const [from, setFrom] = useState(toLocalInput(Date.now() - 24 * 60 * 60 * 1000));
-  const [to, setTo] = useState(toLocalInput(Date.now()));
+  const requestedFrom = Date.parse(searchParams?.get("from") ?? "");
+  const requestedTo = Date.parse(searchParams?.get("to") ?? "");
+  const [from, setFrom] = useState(toLocalInput(Number.isFinite(requestedFrom) ? requestedFrom : Date.now() - 24 * 60 * 60 * 1000));
+  const [to, setTo] = useState(toLocalInput(Number.isFinite(requestedTo) ? requestedTo : Date.now()));
   const [job, setJob] = useState<RecordingJob>();
   const [segments, setSegments] = useState<RecordingSegment[]>([]);
   const [health, setHealth] = useState<HealthEvent[]>([]);

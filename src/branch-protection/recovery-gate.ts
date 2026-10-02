@@ -11,7 +11,9 @@ export function assertRecovery(check: RecordingCheck | undefined, state: Protect
 /** Prevent the generic incident routes from bypassing the assurance recovery gate. */
 export async function enforceProtectionIncidentClosure(incident: { id: string; tenantId: string; branchId?: string; assignedTo?: string }): Promise<void> {
   if (!pool || !incident.branchId) return;
-  const result = await pool.query('SELECT state FROM branch_protection_state WHERE tenant_id=$1 AND branch_id=$2', [incident.tenantId, incident.branchId]);
+  let result;
+  try { result = await pool.query('SELECT state FROM branch_protection_state WHERE tenant_id=$1 AND branch_id=$2', [incident.tenantId, incident.branchId]); }
+  catch (error) { if ((error as { code?: string }).code === '42P01') return; throw error; }
   const state = result.rows[0]?.state as ProtectionState | undefined;
   if (!state) return;
   const check = Object.values(state.checks).find(check => check.incidentId === incident.id);

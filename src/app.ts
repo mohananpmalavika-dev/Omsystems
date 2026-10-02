@@ -115,6 +115,7 @@ import { registerOperationalHealthRoutes } from "./routes/operational-health.rou
 import { registerBranchCommandCenterRoutes } from "./routes/branch-command-center.routes.js";
 import { registerBranchProtectionRoutes } from "./branch-protection/routes.js";
 import { protectionStreamProfile } from "./branch-protection/stream-policy.js";
+import { ProtectionError } from "./branch-protection/types.js";
 import { registerEnterpriseInfrastructureRoutes } from "./routes/enterprise-infrastructure.routes.js";
 import { registerVideoWallRoutes } from "./routes/video-wall.routes.js";
 import { registerCameraAnnotationRoutes } from "./routes/camera-annotation.routes.js";
@@ -3748,6 +3749,9 @@ export async function buildApp(options?: {
     }
     if (error instanceof Error && error.message === "Assignee not found or not in same tenant") {
       return reply.code(400).send({ error: "invalid_assignee" });
+    }
+    if (error instanceof ProtectionError) {
+      return reply.code(error.statusCode).send({ error: 'protection_action_unavailable', message: error.message });
     }
     if (error instanceof z.ZodError) {
       return reply.code(400).send({

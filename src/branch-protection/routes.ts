@@ -22,7 +22,7 @@ const policySchema = z.object({
 
 export async function registerBranchProtectionRoutes(app: FastifyInstance, store: ControlPlaneStore,
   service = new BranchProtectionService(store, new PostgresProtectionRepository(() => pool), new LocalArchiveRecordingProbe(() => pool),
-    (incident, check) => enqueueProtectionIncidentNotifications(store, incident, check))) {
+    (incident, check, actor) => enqueueProtectionIncidentNotifications(store, incident, check, actor))) {
   async function authorize(request: FastifyRequest, reply: FastifyReply, action: Action = 'recording:view'): Promise<{ user: User; branchId: string } | null> {
     const { branchId } = paramsSchema.parse(request.params);
     const user = request.currentUser;
