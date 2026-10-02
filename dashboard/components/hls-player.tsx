@@ -15,6 +15,7 @@ type PlayerStatus = "idle" | "loading" | "live" | "reconnecting" | "error";
 export function HlsPlayer({
   url,
   whepUrl,
+  iceServers,
   bearerToken,
   cameraName,
   cameraId,
@@ -27,6 +28,7 @@ export function HlsPlayer({
 }: {
   url: string;
   whepUrl?: string;
+  iceServers?: RTCIceServer[];
   bearerToken: string;
   cameraName: string;
   cameraId?: string;
@@ -49,8 +51,7 @@ export function HlsPlayer({
   const [hasLastFrame, setHasLastFrame] = useState(false);
 
   // Stream transport and display settings.
-  const isEdgeRelay = Boolean((url && url.includes("/edge-media/")) || (whepUrl && whepUrl.includes("/edge-media/")));
-  const [streamProtocol, setStreamProtocol] = useState<"webrtc" | "ll-hls">(whepUrl && !isEdgeRelay ? "webrtc" : "ll-hls");
+  const [streamProtocol, setStreamProtocol] = useState<"webrtc" | "ll-hls">(whepUrl ? "webrtc" : "ll-hls");
   const [resolution, setResolution] = useState<"1080p" | "720p" | "480p" | "240p">("1080p");
   const [showSettings, setShowSettings] = useState(false);
 
@@ -389,7 +390,12 @@ export function HlsPlayer({
 
       try {
         const pc = new RTCPeerConnection({
-          iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }],
+          iceServers: (iceServers && iceServers.length > 0)
+            ? iceServers
+            : [
+                { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+                { urls: ["stun:stun.cloudflare.com:3478"] },
+              ],
           bundlePolicy: "max-bundle",
         });
         peerConnection = pc;
@@ -416,6 +422,16 @@ export function HlsPlayer({
               setStreamProtocol("ll-hls");
               startHls(url);
             }
+          }
+        };
+
+        pc.onconnectionstatechange = () => {
+          if (pc.connectionState === "failed" && !disposed && url) {
+            console.warn("[WebRTC] Peer connection failed, falling back to HLS");
+            cleanupStreaming();
+            currentProtocol = "ll-hls";
+            setStreamProtocol("ll-hls");
+            startHls(url);
           }
         };
 
@@ -779,8 +795,8 @@ export function HlsPlayer({
                     <div className="grid grid-cols-2 gap-1 text-[11px] font-mono">
                       <button
                         type="button"
-                        disabled={!whepUrl || isEdgeRelay}
-                        title={!whepUrl || isEdgeRelay ? "WebRTC is unavailable for this camera connection" : "Use WebRTC"}
+                        disabled={!whepUrl}
+                        title={!whepUrl ? "WebRTC is unavailable for this camera connection" : "Use WebRTC"}
                         onClick={() => {
                           setStreamProtocol("webrtc");
                           setShowSettings(false);

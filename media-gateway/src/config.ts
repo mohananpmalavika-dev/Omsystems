@@ -35,6 +35,7 @@ const schema = z.object({
     (value) => value === "" ? undefined : value,
     z.string().min(32).optional(),
   ),
+  WEBRTC_ICE_SERVERS_JSON: z.string().optional(),
 });
 
 export function loadMediaConfig(environment: NodeJS.ProcessEnv = process.env) {
@@ -52,10 +53,12 @@ export function loadMediaConfig(environment: NodeJS.ProcessEnv = process.env) {
   if (config.STREAM_SECRET_PROVIDER_URL && !config.STREAM_SECRET_PROVIDER_KEY) {
     throw new Error("STREAM_SECRET_PROVIDER_KEY is required with STREAM_SECRET_PROVIDER_URL");
   }
+  const iceServers = parseIceServers(config.WEBRTC_ICE_SERVERS_JSON);
   return {
     ...config,
     PUBLIC_HLS_BASE_URL: config.PUBLIC_HLS_BASE_URL ?? `http://localhost:${config.PORT}/hls`,
     PUBLIC_WEBRTC_BASE_URL: config.PUBLIC_WEBRTC_BASE_URL ?? `http://localhost:${config.PORT}/webrtc`,
+    ICE_SERVERS: iceServers,
   };
 }
 
@@ -70,6 +73,21 @@ function parseStreamSecrets(value: string): Record<string, string> {
     }
   }
   return parsed as Record<string, string>;
+}
+
+function parseIceServers(value?: string): Array<{ urls: string | string[]; username?: string; credential?: string }> {
+  const defaultServers = [
+    { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+    { urls: ["stun:stun.cloudflare.com:3478"] },
+  ];
+  if (!value) return defaultServers;
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+  } catch (err) {
+    console.warn("[media-gateway] Invalid WEBRTC_ICE_SERVERS_JSON, falling back to default STUN servers");
+  }
+  return defaultServers;
 }
 
 export type MediaConfig = ReturnType<typeof loadMediaConfig>;

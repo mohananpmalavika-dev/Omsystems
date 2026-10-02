@@ -142,33 +142,99 @@ function DisplayNodeContent() {
         </div>
       ) : (
         <div className={`grid ${layoutClass} w-full h-full gap-1 p-1`}>
-          {assigned.map((camId) => {
-            const cam = cameras[camId];
-            const streamSrc = cam?.hlsUrl || `/api/vms/cameras/${camId}/hls/live.m3u8`;
-
-            return (
-              <div
-                key={camId}
-                className="relative w-full h-full bg-neutral-950 border border-neutral-850 overflow-hidden flex flex-col"
-              >
-                <div className="absolute top-2 left-2 z-20 bg-black/70 backdrop-blur-md px-2 py-0.5 rounded text-[11px] font-semibold text-white">
-                  {cam?.name || `Camera ${camId}`}
-                </div>
-                <div className="relative flex-1 w-full h-full">
-                  <HlsPlayer
-                    url={streamSrc}
-                    bearerToken=""
-                    cameraName={cam?.name || `Camera ${camId}`}
-                    cameraId={camId}
-                    muted={true}
-                  />
-                </div>
-              </div>
-            );
-          })}
+          {assigned.map((camId) => (
+            <DisplayNodeTile key={camId} camId={camId} cam={cameras[camId]} />
+          ))}
         </div>
       )}
     </main>
+  );
+}
+
+function DisplayNodeTile({
+  camId,
+  cam,
+}: {
+  camId: string;
+  cam?: CameraMetadata;
+}) {
+  const [session, setSession] = useState<{
+    hlsUrl: string;
+    whepUrl?: string;
+    bearerToken: string;
+    iceServers?: RTCIceServer[];
+  }>({
+    hlsUrl: cam?.hlsUrl || `/api/vms/cameras/${camId}/hls/live.m3u8`,
+    bearerToken: "",
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+
+    async function startLiveSession() {
+      try {
+        const res = await fetch("/api/live", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cameraId: camId, profile: "sub" }),
+          signal: controller.signal,
+        });
+
+        if (res.ok) {
+          const liveData = await res.json();
+          if (isMounted) {
+            setSession({
+              hlsUrl: liveData.hls?.url || cam?.hlsUrl || `/api/vms/cameras/${camId}/hls/live.m3u8`,
+              whepUrl: liveData.webRtc?.whepUrl,
+              bearerToken: liveData.webRtc?.bearerToken ?? liveData.hls?.bearerToken ?? "",
+              iceServers: liveData.webRtc?.iceServers,
+            });
+          }
+        }
+      } catch {
+        // Fallback remains the initial HLS stream
+      }
+    }
+
+    void startLiveSession();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, [camId, cam?.hlsUrl]);
+
+  return (
+    <div
+      key={camId}
+      className="relative w-full h-full bg-neutral-950 border border-neutral-850 overflow-hidden flex flex-col group"
+    >
+      <div className="absolute top-2 left-2 z-20 flex items-center gap-2 bg-black/70 backdrop-blur-md px-2 py-0.5 rounded text-[11px] font-semibold text-white">
+        <span>{cam?.name || `Camera ${camId}`}</span>
+        {session.whepUrl ? (
+          <span className="flex items-center gap-1 text-[9px] font-mono text-emerald-400 bg-emerald-950/80 border border-emerald-500/40 px-1.5 py-0.5 rounded">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            WEBRTC
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-[9px] font-mono text-amber-400 bg-amber-950/80 border border-amber-500/40 px-1.5 py-0.5 rounded">
+            HLS
+          </span>
+        )}
+      </div>
+      <div className="relative flex-1 w-full h-full">
+        <HlsPlayer
+          url={session.hlsUrl}
+          whepUrl={session.whepUrl}
+          bearerToken={session.bearerToken}
+          iceServers={session.iceServers}
+          cameraName={cam?.name || `Camera ${camId}`}
+          cameraId={camId}
+          muted={true}
+        />
+      </div>
+    </div>
   );
 }
 

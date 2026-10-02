@@ -32,6 +32,7 @@ export async function buildMediaGateway(options: {
   accessTtlMs: number;
   edgeBridgeSharedKey?: string;
   controlPlaneSharedKey?: string;
+  iceServers?: Array<{ urls: string | string[]; username?: string; credential?: string }>;
   logger?: boolean;
 }) {
   const app = Fastify({ logger: options.logger ?? false });
@@ -232,6 +233,7 @@ export async function buildMediaGateway(options: {
       webRtc: {
         whepUrl: `${stripSlash(options.publicWebRtcBaseUrl)}/${path}/whep`,
         bearerToken: session.token,
+        ...(options.iceServers && options.iceServers.length > 0 ? { iceServers: options.iceServers } : {}),
       },
     });
 

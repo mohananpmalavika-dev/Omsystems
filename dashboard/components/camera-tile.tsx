@@ -1128,6 +1128,7 @@ function CameraTileComponent({
               <HlsPlayer
                 url={session.hls?.url ?? ""}
                 whepUrl={session.webRtc?.whepUrl}
+                iceServers={session.webRtc?.iceServers}
                 bearerToken={session.hls?.bearerToken ?? session.webRtc?.bearerToken ?? ""}
                 cameraName={camera.name}
                 cameraId={camera.id}

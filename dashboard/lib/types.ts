@@ -391,6 +391,7 @@ export interface LiveSessionResponse {
   webRtc?: {
     whepUrl: string;
     bearerToken: string;
+    iceServers?: RTCIceServer[];
   };
 }
 

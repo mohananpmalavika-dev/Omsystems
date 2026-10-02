@@ -23,6 +23,7 @@ const app = await buildMediaGateway({
   publicWebRtcBaseUrl: config.PUBLIC_WEBRTC_BASE_URL,
   accessTtlMs: config.MEDIA_ACCESS_TTL_SECONDS * 1000,
   controlPlaneSharedKey: config.MEDIA_GATEWAY_SHARED_KEY,
+  iceServers: config.ICE_SERVERS,
   ...(config.EDGE_BRIDGE_SHARED_KEY
     ? { edgeBridgeSharedKey: config.EDGE_BRIDGE_SHARED_KEY }
     : {}),
