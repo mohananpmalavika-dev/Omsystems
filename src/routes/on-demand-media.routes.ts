@@ -6,6 +6,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { Action, User } from "../domain/models.js";
 import type { ExportWorker } from "../recording/export-worker.js";
+import { protectionStreamProfile } from "../branch-protection/stream-policy.js";
 
 export async function registerOnDemandMediaRoutes(
   app: FastifyInstance,
@@ -62,7 +63,8 @@ export async function registerOnDemandMediaRoutes(
     // This is retained as a compatibility alias only.  The old in-process
     // service produced a URL that no edge or gateway consumed; use the same
     // durable, single-use grant as the dashboard's canonical live path.
-    const session = await store.createLiveSession(cameraId, user.id, "view");
+    const profile = await protectionStreamProfile(user.tenantId, branchId, "sub");
+    const session = await store.createLiveSession(cameraId, user.id, "view", profile);
     await store.writeAudit({
       tenantId: user.tenantId,
       actorUserId: user.id,

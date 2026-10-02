@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
+import { enforceProtectionIncidentClosure } from "../branch-protection/recovery-gate.js";
 
 // ============ VALIDATION SCHEMAS ============
 
@@ -358,6 +359,9 @@ export async function registerIncidentsRoutes(app: FastifyInstance, store: Contr
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     if (!await requireIncidentTenantAccess(request, reply, store, id)) return;
     const body = updateStatusSchema.parse(request.body);
+    if (/^(closed|resolved|completed)$/i.test(body.status)) {
+      await enforceProtectionIncidentClosure((await store.getIncident(id))!);
+    }
     
     const updated = await store.updateIncidentStatus(id, body.status, request.currentUser.id, body.notes);
     if (!updated) {
@@ -408,6 +412,7 @@ export async function registerIncidentsRoutes(app: FastifyInstance, store: Contr
     if (!await requireIncidentTenantAccess(request, reply, store, id)) return;
     const body = z.object({ notes: z.string().max(2000).optional() }).parse(request.body);
     
+    await enforceProtectionIncidentClosure((await store.getIncident(id))!);
     const updated = await store.closeIncident(id, request.currentUser.id, body.notes);
     if (!updated) {
       return reply.code(404).send({ error: 'incident_not_found' });

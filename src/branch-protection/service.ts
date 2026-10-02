@@ -5,6 +5,8 @@ import { BranchOperationalSnapshotService, type BranchOperationalSnapshot } from
 import type { ProtectionRepository } from './repository.js';
 import type { RecordingProbe } from './recording-probe.js';
 import type { ProtectionPolicy, ProtectionState, RecordingCheck, SopRule, SopReview, ProtectionStatus } from './types.js';
+import { ProtectionError } from './types.js';
+import { notificationOutbox } from '../notifications/infrastructure/outbox/notification-outbox.js';
 
 export function isFresh(timestamp: string | undefined, now: Date, minutes: number): boolean {
   const age = timestamp ? now.getTime() - Date.parse(timestamp) : NaN;
@@ -14,6 +16,7 @@ export function evaluateProtection(state: ProtectionState, cameraIds: string[], 
   const reasons: string[] = [];
   let unknown = !cameraIds.length;
   let risk = false;
+  if (!cameraIds.length) reasons.push('No authorized camera inventory available');
   const checks = cameraIds.map(id => state.checks[id]);
   for (const id of cameraIds) {
     const check = state.checks[id];
@@ -56,7 +59,8 @@ export function sopMatches(rule: SopRule, cameraId: string, occurredAt: string):
 export class BranchProtectionService {
   private readonly runs = new Set<string>();
   private readonly snapshots: BranchOperationalSnapshotService;
-  constructor(private readonly store: ControlPlaneStore, readonly repository: ProtectionRepository, private readonly probe: RecordingProbe) {
+  constructor(private readonly store: ControlPlaneStore, readonly repository: ProtectionRepository, private readonly probe: RecordingProbe,
+    private readonly onIncident?: (incident: any, check: RecordingCheck) => Promise<void>) {
     this.snapshots = new BranchOperationalSnapshotService(store);
   }
   async overview(user: User, branchId: string) {
@@ -66,7 +70,7 @@ export class BranchProtectionService {
       this.snapshots.getBranchSnapshot(user.tenantId, branchId, false, user),
     ]);
     const ids = cameras.map(camera => camera.id);
-    return { ...evaluateProtection(state, ids, snapshot), policy: state.policy,
+    return { ...evaluateProtection(state, ids, snapshot), verificationRunning: Boolean(state.verificationLease && Date.parse(state.verificationLease.expiresAt) > Date.now()), policy: state.policy,
       cameras: cameras.map(camera => ({ id: camera.id, name: camera.name, critical: state.policy.criticalCameraIds.includes(camera.id), check: state.checks[camera.id] ?? null })),
       reviews: state.reviews.filter(review => ids.includes(review.cameraId)),
       bandwidth: { mode: state.policy.bandwidthMode, streamProfile: state.policy.bandwidthMode === 'low' ? 'sub' : 'main',
@@ -75,46 +79,68 @@ export class BranchProtectionService {
   async configure(user: User, branchId: string, policy: ProtectionPolicy) {
     const cameras = await this.store.listCamerasByBranch(user, branchId, 'recording:view');
     const ids = new Set(cameras.map(camera => camera.id));
-    if ([...policy.criticalCameraIds, ...policy.sopRules.flatMap(rule => rule.cameraIds)].some(id => !ids.has(id))) throw new Error('Policy references an inaccessible camera');
-    if (new Set(policy.sopRules.map(rule => rule.id)).size !== policy.sopRules.length) throw new Error('Duplicate SOP rule identifiers');
+    if ([...policy.criticalCameraIds, ...policy.sopRules.flatMap(rule => rule.cameraIds)].some(id => !ids.has(id))) throw new ProtectionError('Policy references an inaccessible camera', 400);
+    if (new Set(policy.sopRules.map(rule => rule.id)).size !== policy.sopRules.length) throw new ProtectionError('Duplicate SOP rule identifiers', 400);
     return this.repository.mutate(user.tenantId, branchId, user.id, 'POLICY_UPDATED', async state => { state.policy = policy; return { policy }; });
   }
-  async verify(user: User, branchId: string) {
+  async verify(user: User, branchId: string, onStarted?: () => void) {
     const key = `${user.tenantId}:${branchId}`;
-    if (this.runs.has(key)) throw new Error('Verification already running');
+    if (this.runs.has(key)) throw new ProtectionError('Verification already running');
     this.runs.add(key);
     const leaseId = randomUUID();
     try {
       const cameras = await this.store.listCamerasByBranch(user, branchId, 'recording:view');
       const state = await this.repository.mutate(user.tenantId, branchId, user.id, 'VERIFICATION_STARTED', async current => {
-        if (current.verificationLease && Date.parse(current.verificationLease.expiresAt) > Date.now()) throw new Error('Verification already running');
-        current.verificationLease = { id: leaseId, expiresAt: new Date(Date.now() + Math.max(60_000, cameras.length * 25_000)).toISOString() };
+        if (current.verificationLease && Date.parse(current.verificationLease.expiresAt) > Date.now()) throw new ProtectionError('Verification already running');
+        current.verificationLease = { id: leaseId, expiresAt: new Date(Date.now() + Math.max(60_000, cameras.length * 120_000)).toISOString() };
         return { leaseId, cameraCount: cameras.length };
       });
+      onStarted?.();
       const now = new Date();
       // Sequential probes limit disk/decoder load and bound resource consumption.
       const checks: RecordingCheck[] = [];
-      for (const camera of cameras) checks.push(await this.probe.check(user.tenantId, camera.id, state.policy, now));
+      for (const camera of cameras) checks.push(await this.probe.check(user.tenantId, camera.id, state.policy, new Date()));
       const updated = await this.repository.mutate(user.tenantId, branchId, user.id, 'RECORDING_VERIFIED', async current => {
-        if (current.verificationLease?.id !== leaseId) throw new Error('Verification lease expired');
+        if (current.verificationLease?.id !== leaseId) throw new ProtectionError('Verification lease expired');
+        if (JSON.stringify(current.policy) !== JSON.stringify(state.policy)) throw new ProtectionError('Policy changed during verification; run verification again');
         for (const check of checks) {
           const previous = current.checks[check.cameraId];
           check.incidentId = previous?.incidentId;
-          const failed = check.status === 'FAILED' || check.gaps.length > 0 || (check.indexedRetentionDays !== null && check.indexedRetentionDays < current.policy.requiredRetentionDays);
+          const failed = check.status !== 'UNKNOWN' && (check.status === 'FAILED' || check.gaps.length > 0 || (check.indexedRetentionDays !== null && check.indexedRetentionDays < current.policy.requiredRetentionDays));
           if (failed && !check.incidentId) {
-            const incident = await this.store.createIncident({ tenantId: user.tenantId, branchId,
-              title: `Recording assurance: ${check.cameraId}`, description: `${check.reason}; ${check.gaps.length} gaps`,
-              incidentType: 'recording-assurance', severity: current.policy.criticalCameraIds.includes(check.cameraId) ? 'P1' : 'P2',
-              detectionSource: 'verified-branch-protection', occurredAt: now.toISOString(), reportedBy: user.id });
-            check.incidentId = incident.id;
-            await this.store.addIncidentCamera(incident.id, check.cameraId, true, user.id);
+            // Persist the incident intent before calling the canonical store. Retry uses
+            // the same ID after a crash or uncertain database acknowledgement.
+            check.incidentId = randomUUID();
           }
           current.checks[check.cameraId] = check;
         }
-        current.lastRunAt = now.toISOString();
+        current.lastRunAt = new Date().toISOString();
+        // A decoded sample in a configured SOP window supplies review evidence,
+        // never an automatic assertion that the procedure passed.
+        for (const rule of current.policy.sopRules) for (const check of checks) {
+          if (check.status !== 'VERIFIED' || !check.segmentId || !sopMatches(rule, check.cameraId, check.sampleAt)) continue;
+          const day = new Intl.DateTimeFormat('en-CA', { timeZone: rule.timeZone }).format(new Date(check.sampleAt));
+          if (current.reviews.some(review => review.ruleId === rule.id && review.cameraId === check.cameraId && new Intl.DateTimeFormat('en-CA', { timeZone: rule.timeZone }).format(new Date(review.occurredAt)) === day)) continue;
+          current.reviews.push({ id: randomUUID(), ruleId: rule.id, cameraId: check.cameraId, occurredAt: check.sampleAt, evidenceId: check.segmentId, outcome: 'PENDING' });
+        }
+        current.reviews = current.reviews.filter(review => Date.parse(review.occurredAt) >= Date.now() - 30 * 86400_000);
         delete current.verificationLease;
         return { checks };
       });
+      for (const check of Object.values(updated.checks).filter(check => check.incidentId && cameras.some(camera => camera.id === check.cameraId))) {
+        let incident = await this.store.getIncident(check.incidentId!);
+        if (!incident) incident = await this.store.createIncident({ id: check.incidentId!, tenantId: user.tenantId, branchId,
+          title: `Recording assurance: ${check.cameraId}`, description: `${check.reason}; ${check.gaps.length} gaps`,
+          incidentType: 'other', severity: updated.policy.criticalCameraIds.includes(check.cameraId) ? 'P1' : 'P2',
+          detectionSource: 'verified-branch-protection', occurredAt: check.checkedAt, reportedBy: user.id });
+        const linked = await this.store.listIncidentCameras(incident.id);
+        if (!linked.some(camera => camera.cameraId === check.cameraId || camera.camera_id === check.cameraId)) await this.store.addIncidentCamera(incident.id, check.cameraId, true, user.id);
+        const evidence = await this.store.listIncidentEvidenceItems(incident.id);
+        const referenceId = `${check.cameraId}:${check.checkedAt}`;
+        if (!evidence.some(item => item.referenceId === referenceId || item.reference_id === referenceId)) await this.store.addIncidentEvidenceItem({ incidentId: incident.id,
+          itemType: 'recording-assurance', title: 'Recording verification evidence', description: JSON.stringify(check), referenceId, addedBy: user.id });
+        await this.onIncident?.(incident, check);
+      }
       return updated;
     } finally {
       this.runs.delete(key);
@@ -128,11 +154,12 @@ export class BranchProtectionService {
     return this.repository.mutate(user.tenantId, branchId, user.id, 'RECOVERY_CONFIRMED', async state => {
       const check = state.checks[cameraId];
       const incident = check?.incidentId && await this.store.getIncident(check.incidentId);
-      if (!incident || incident.tenantId !== user.tenantId || incident.branchId !== branchId) throw new Error('Assurance incident unavailable');
+      if (!incident || incident.tenantId !== user.tenantId || incident.branchId !== branchId) throw new ProtectionError('Assurance incident unavailable');
       const recovered = check && check.status === 'VERIFIED' && check.gaps.length === 0 && check.indexedRetentionDays !== null && check.indexedRetentionDays >= state.policy.requiredRetentionDays;
-      if (!recovered || !isFresh(check.checkedAt, new Date(), state.policy.verificationFreshMinutes) || !check.timestampProgressing || check.framesDecoded < 2) throw new Error('Fresh successful playback, gap and retention verification required before closure');
-      if (!incident.assignedTo && !incident.assigned_to) throw new Error('Assign an operator before closing the incident');
+      if (!recovered || !isFresh(check.checkedAt, new Date(), state.policy.verificationFreshMinutes) || !check.timestampProgressing || check.framesDecoded < 2) throw new ProtectionError('Fresh successful playback, gap and retention verification required before closure');
+      if (!incident.assignedTo && !incident.assigned_to) throw new ProtectionError('Assign an operator before closing the incident');
       await this.store.closeIncident(incident.id, user.id, notes);
+      await notificationOutbox.cancelPendingForAlert(incident.id, 'RECORDING_RECOVERY_VERIFIED');
       const incidentId = check.incidentId;
       delete check.incidentId;
       return { incidentId, cameraId, notes, recoveryCheck: check };
@@ -141,7 +168,7 @@ export class BranchProtectionService {
   async submitReview(user: User, branchId: string, input: Omit<SopReview, 'id' | 'outcome'>) {
     return this.repository.mutate(user.tenantId, branchId, user.id, 'SOP_EVIDENCE_SUBMITTED', async state => {
       const rule = state.policy.sopRules.find(rule => rule.id === input.ruleId);
-      if (!rule || !sopMatches(rule, input.cameraId, input.occurredAt) || Date.parse(input.occurredAt) > Date.now()) throw new Error('Evidence does not match configured SOP camera/time window');
+      if (!rule || !sopMatches(rule, input.cameraId, input.occurredAt) || Date.parse(input.occurredAt) > Date.now()) throw new ProtectionError('Evidence does not match configured SOP camera/time window', 400);
       const duplicate = state.reviews.find(review => review.ruleId === input.ruleId && review.evidenceId === input.evidenceId);
       if (duplicate) return { reviewId: duplicate.id, duplicate: true };
       const review: SopReview = { id: randomUUID(), ruleId: input.ruleId, occurredAt: input.occurredAt, cameraId: input.cameraId, evidenceId: input.evidenceId, outcome: 'PENDING' };
@@ -153,7 +180,7 @@ export class BranchProtectionService {
   async review(user: User, branchId: string, reviewId: string, outcome: 'PASS' | 'FAIL', notes: string) {
     return this.repository.mutate(user.tenantId, branchId, user.id, 'SOP_REVIEWED', async state => {
       const review = state.reviews.find(item => item.id === reviewId);
-      if (!review) throw new Error('SOP review unavailable');
+      if (!review) throw new ProtectionError('SOP review unavailable', 404);
       review.outcome = outcome; review.notes = notes; review.reviewerId = user.id; review.reviewedAt = new Date().toISOString();
       return { review };
     });

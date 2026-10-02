@@ -229,8 +229,8 @@ describe("A. Explicitly Unimplemented Endpoints & Code Stubs Verification", () =
       });
 
       expect(result.delivered).toBe(2);
-      expect(delivered[1].payloadType).toBe("video_chunk");
-      expect(delivered[1].chunkMetadata?.segmentId).toBe("seg-vault-001");
+      expect(delivered[0].payloadType).toBe("video_chunk");
+      expect(delivered[0].chunkMetadata?.segmentId).toBe("seg-vault-001");
     });
   });
 

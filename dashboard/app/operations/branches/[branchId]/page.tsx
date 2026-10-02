@@ -24,6 +24,7 @@ import {
   Clock,
 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { BranchProtectionPanel } from "@/components/branch-protection-panel";
 
 export default function BranchWorkspacePage() {
   const params = useParams();
@@ -135,6 +136,7 @@ export default function BranchWorkspacePage() {
         <div className="flex items-center gap-1 border-b border-slate-800 overflow-x-auto pb-px">
           {[
             { id: "overview", label: "Overview", icon: Layers },
+            { id: "protection", label: "Verified Protection", icon: ShieldCheck },
             { id: "cameras", label: `Cameras (${workspace?.cameras?.length ?? 0})`, icon: Camera },
             { id: "recorders", label: "Recorders (NVR)", icon: Server },
             { id: "storage", label: "Storage & Retention", icon: Database },
@@ -161,6 +163,7 @@ export default function BranchWorkspacePage() {
         </div>
 
         {/* Tab 1: Overview */}
+        {activeTab === "protection" && <BranchProtectionPanel branchId={branchId} />}
         {activeTab === "overview" && (
           <div className="space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

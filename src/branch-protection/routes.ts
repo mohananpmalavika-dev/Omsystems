@@ -6,6 +6,7 @@ import { pool } from '../database/pool.js';
 import { PostgresProtectionRepository } from './repository.js';
 import { LocalArchiveRecordingProbe } from './recording-probe.js';
 import { BranchProtectionService, isFresh } from './service.js';
+import { enqueueProtectionIncidentNotifications } from './incident-notifications.js';
 
 const id = z.string().trim().min(1).max(200);
 const paramsSchema = z.object({ branchId: id });
@@ -20,7 +21,8 @@ const policySchema = z.object({
 }).refine(policy => policy.verificationFreshMinutes >= policy.verificationIntervalMinutes, { message: 'Freshness must cover the verification interval' });
 
 export async function registerBranchProtectionRoutes(app: FastifyInstance, store: ControlPlaneStore,
-  service = new BranchProtectionService(store, new PostgresProtectionRepository(() => pool), new LocalArchiveRecordingProbe(() => pool))) {
+  service = new BranchProtectionService(store, new PostgresProtectionRepository(() => pool), new LocalArchiveRecordingProbe(() => pool),
+    (incident, check) => enqueueProtectionIncidentNotifications(store, incident, check))) {
   async function authorize(request: FastifyRequest, reply: FastifyReply, action: Action = 'recording:view'): Promise<{ user: User; branchId: string } | null> {
     const { branchId } = paramsSchema.parse(request.params);
     const user = request.currentUser;
@@ -41,8 +43,14 @@ export async function registerBranchProtectionRoutes(app: FastifyInstance, store
   app.post(`${base}/verify`, async (request, reply) => {
     const auth = await authorize(request, reply, 'incident:create'); if (!auth) return;
     if (!(await store.checkAccess(auth.user, 'recording:view', auth.branchId))?.allowed) return reply.code(403).send({ error: 'Recording permission required' });
-    await service.verify(auth.user, auth.branchId);
-    return { success: true, data: await service.overview(auth.user, auth.branchId) };
+    // Do not hold a fleet request open while each camera is decoded. The durable
+    // lease is visible to polling clients before the accepted response returns.
+    await new Promise<void>((resolve, reject) => {
+      void service.verify(auth.user, auth.branchId, resolve).catch(error => {
+        app.log.error({ error, branchId: auth.branchId }, 'Requested branch verification failed'); reject(error);
+      });
+    });
+    return reply.code(202).send({ success: true, data: await service.overview(auth.user, auth.branchId) });
   });
   app.post(`${base}/cameras/:cameraId/resolve`, async (request, reply) => {
     const auth = await authorize(request, reply, 'incident:close'); if (!auth) return;
@@ -86,6 +94,15 @@ export async function registerBranchProtectionRoutes(app: FastifyInstance, store
     if (Date.parse(query.to) <= Date.parse(query.from) || Date.parse(query.to) - Date.parse(query.from) > 31 * 86400_000) return reply.code(400).send({ error: 'Report interval must be between zero and 31 days' });
     const events = await service.repository.audit(auth.user.tenantId, auth.branchId, query.from, query.to);
     return reply.header('Content-Disposition', 'attachment; filename="branch-protection-report.json"').send({ branchId: auth.branchId, ...query, generatedAt: new Date().toISOString(), events });
+  });
+  app.get(`${base}/incident-delivery`, async (request, reply) => {
+    const auth = await authorize(request, reply, 'incident:view'); if (!auth) return;
+    if (!pool) return reply.code(503).send({ error: 'Notification receipt database unavailable' });
+    const state = await service.repository.read(auth.user.tenantId, auth.branchId);
+    const incidentIds = Object.values(state.checks).map(check => check.incidentId).filter(Boolean);
+    const result = await pool.query(`SELECT alert_id AS incident_id,channel,status,attempts,provider,provider_message_id,sent_at,delivered_at,last_error
+      FROM notification_jobs WHERE tenant_id=$1 AND alert_id=ANY($2::varchar[]) ORDER BY created_at DESC`, [auth.user.tenantId, incidentIds]);
+    return { success: true, data: result.rows };
   });
   let running = false;
   let timer: ReturnType<typeof setInterval> | undefined;

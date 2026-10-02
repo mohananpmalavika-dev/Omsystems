@@ -114,6 +114,7 @@ import { registerEdgeMediaRelay } from "./services/edge-media-relay.js";
 import { registerOperationalHealthRoutes } from "./routes/operational-health.routes.js";
 import { registerBranchCommandCenterRoutes } from "./routes/branch-command-center.routes.js";
 import { registerBranchProtectionRoutes } from "./branch-protection/routes.js";
+import { protectionStreamProfile } from "./branch-protection/stream-policy.js";
 import { registerEnterpriseInfrastructureRoutes } from "./routes/enterprise-infrastructure.routes.js";
 import { registerVideoWallRoutes } from "./routes/video-wall.routes.js";
 import { registerCameraAnnotationRoutes } from "./routes/camera-annotation.routes.js";
@@ -1925,7 +1926,8 @@ export async function buildApp(options?: {
     }
     try {
       const { profile } = z.object({ profile: z.enum(["main", "sub"]).default("sub") }).parse(request.body ?? {});
-      const session = await store.createLiveSession(camera.id, request.currentUser.id, "view", profile);
+      const effectiveProfile = await protectionStreamProfile(request.currentUser.tenantId, camera.branchId, profile);
+      const session = await store.createLiveSession(camera.id, request.currentUser.id, "view", effectiveProfile);
       await audit(request, store, "live_session.created", camera.nodeId, "success", {
         sessionId: session.id,
       });

@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import { initialProtectionState, type ProtectionState } from './types.js';
+import { initialProtectionState, ProtectionError, type ProtectionState } from './types.js';
 
 export interface ProtectionRepository {
   read(tenantId: string, branchId: string): Promise<ProtectionState>;
@@ -12,7 +12,7 @@ export class PostgresProtectionRepository implements ProtectionRepository {
   constructor(private readonly getPool: () => Pool | null) {}
   private db(): Pool {
     const db = this.getPool();
-    if (!db) throw new Error('Protection database unavailable');
+    if (!db) throw new ProtectionError('Protection database unavailable', 503);
     return db;
   }
   async read(tenantId: string, branchId: string): Promise<ProtectionState> {

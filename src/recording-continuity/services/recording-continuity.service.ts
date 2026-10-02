@@ -44,15 +44,13 @@ export class RecordingContinuityService {
     );
 
     const result: PlaybackVerification = {
-      successful: found,
+      successful: false,
       requestedTimestamp,
       recordingFound: found,
-      playbackOpened: found,
-      framesDecoded: found,
-      timestampProgressing: found,
-      firstFrameAt: found ? requestedTimestamp : undefined,
-      latencyMs: found ? 165 : undefined,
-      failureReason: found ? undefined : "Archive segment missing at requested timestamp",
+      playbackOpened: false,
+      framesDecoded: false,
+      timestampProgressing: false,
+      failureReason: found ? "Archive index found; actual playback decode is not configured. Use branch protection verification." : "Archive segment missing at requested timestamp",
       verifiedAt: new Date(),
     };
 

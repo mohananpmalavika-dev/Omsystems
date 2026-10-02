@@ -1,4 +1,7 @@
 export type ProtectionStatus = 'PROTECTED' | 'AT_RISK' | 'UNKNOWN';
+export class ProtectionError extends Error {
+  constructor(message: string, readonly statusCode = 409) { super(message); }
+}
 export interface ProtectionPolicy {
   enabled: boolean;
   verificationIntervalMinutes: number;

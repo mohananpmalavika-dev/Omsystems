@@ -392,6 +392,23 @@ function ControlRoomContent() {
   const [selectedRegion, setSelectedRegion] = useState<string>("ALL");
   const [selectedArea, setSelectedArea] = useState<string>("ALL");
   const [selectedBranchId, setSelectedBranchId] = useState<string>(() => (urlBranchId ? urlBranchId.trim() : "ALL"));
+  const [protectionStreamBudget, setProtectionStreamBudget] = useState(CONTROL_ROOM_MAX_CONCURRENT_STREAMS);
+  useEffect(() => {
+    const controller = new AbortController();
+    setProtectionStreamBudget(CONTROL_ROOM_MAX_CONCURRENT_STREAMS);
+    if (!selectedBranchId || selectedBranchId === "ALL") return;
+    const token = localStorage.getItem("accessToken") || sessionStorage.getItem("accessToken");
+    fetch(`/v1/branches/${encodeURIComponent(selectedBranchId)}/protection`, {
+      signal: controller.signal, credentials: "include", cache: "no-store",
+      headers: token ? { Authorization: `Bearer ${token}`, "x-sentinel-session": token } : {},
+    }).then(async response => {
+      if (!response.ok) return;
+      const result = await response.json();
+      const limit = result.data?.policy?.maxConcurrentStreams;
+      if (!controller.signal.aborted && Number.isInteger(limit) && limit > 0) setProtectionStreamBudget(Math.min(limit, CONTROL_ROOM_MAX_CONCURRENT_STREAMS));
+    }).catch(() => undefined);
+    return () => controller.abort();
+  }, [selectedBranchId]);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ONLINE" | "OFFLINE" | "ALERT">("ALL");
 
@@ -1121,7 +1138,7 @@ function ControlRoomContent() {
 
       {/* Primary live camera stage */}
       <section className="control-room-content" aria-label="Camera wall">
-        {filteredCameras.length > 0 ? <LiveOperationsStage cameras={filteredCameras} alerts={liveAi.alerts} aiByCamera={aiByCamera} showAiOverlay={showAiOverlays} focusCameraId={focusCameraId} maxConcurrentStreams={CONTROL_ROOM_MAX_CONCURRENT_STREAMS} analyticsError={liveAi.error} analyticsLoading={liveAi.loading} onRefresh={liveAi.refresh} onActiveStreamsChange={setActiveStreams} onMonitoredCamerasChange={handleMonitoredCamerasChange} onOpenCameraAi={cameraId => { setSelectedAiCameraId(cameraId); setFocusCameraId(cameraId); setAiPanelOpen(true); }} /> : cameras.length > 0 ? (
+        {filteredCameras.length > 0 ? <LiveOperationsStage cameras={filteredCameras} alerts={liveAi.alerts} aiByCamera={aiByCamera} showAiOverlay={showAiOverlays} focusCameraId={focusCameraId} maxConcurrentStreams={protectionStreamBudget} analyticsError={liveAi.error} analyticsLoading={liveAi.loading} onRefresh={liveAi.refresh} onActiveStreamsChange={setActiveStreams} onMonitoredCamerasChange={handleMonitoredCamerasChange} onOpenCameraAi={cameraId => { setSelectedAiCameraId(cameraId); setFocusCameraId(cameraId); setAiPanelOpen(true); }} /> : cameras.length > 0 ? (
           <div className="empty-control-room-card">
             <div className="empty-icon-wrap">
               <Filter size={36} />
