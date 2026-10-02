@@ -149,7 +149,7 @@ export class OperationalHealthRepository {
          ON CONFLICT (tenant_id, branch_id, device_id)
          DO UPDATE SET retired_by = EXCLUDED.retired_by,
                        retired_at = EXCLUDED.retired_at,
-                       registry_lifecycle_state = EXCLUDED.registry_lifecycle_state`,
+                       registry_lifecycle_state = COALESCE(EXCLUDED.registry_lifecycle_state, retired_storage_inventory.registry_lifecycle_state)`,
         [tenantId, branchId, deviceId, retiredBy, registryState],
       );
       if (registry.rows.length) {

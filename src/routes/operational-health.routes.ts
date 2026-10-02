@@ -621,6 +621,21 @@ export async function registerOperationalHealthRoutes(
     return { success: true, data };
   });
 
+  app.delete("/v1/operations/health/disks/discovery", async (request, reply) => {
+    const { diskId, branchId } = z.object({
+      diskId: z.string().min(1).max(200),
+      branchId: z.string().min(1),
+    }).parse(request.query);
+    const branch = await requireStorageBranchAccess(request, reply, store, branchId);
+    if (!branch) return;
+    const retired = await store.listRetiredOperationalDisks(request.currentUser.tenantId, [branchId]);
+    if (!retired.some((item) => item.deviceId === diskId)) {
+      return reply.code(404).send({ error: "storage_discovery_not_found" });
+    }
+    await store.retireOperationalDisk(request.currentUser.tenantId, branchId, diskId, request.currentUser.id);
+    return { success: true, data: { branchId, diskId, deleted: true } };
+  });
+
   app.post("/v1/operations/health/disks/discovery/add", async (request, reply) => {
     const { diskId, branchId } = z.object({
       diskId: z.string().min(1).max(200),

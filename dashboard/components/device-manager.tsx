@@ -311,6 +311,7 @@ export function DeviceManager() {
   const [removingStorageId, setRemovingStorageId] = useState<string | null>(null);
   const [removingDiskId, setRemovingDiskId] = useState<string | null>(null);
   const [addingDiscoveredStorageId, setAddingDiscoveredStorageId] = useState<string | null>(null);
+  const [deletingDiscoveredStorageId, setDeletingDiscoveredStorageId] = useState<string | null>(null);
 
   // Portable Camera Subsystem State
   const portableRequestRef = useRef(0);
@@ -501,7 +502,7 @@ export function DeviceManager() {
   }
 
   async function addDiscoveredStorage(disk: BranchStorageDisk) {
-    if (!selectedBranch || addingDiscoveredStorageId) return;
+    if (!selectedBranch || addingDiscoveredStorageId || deletingDiscoveredStorageId) return;
     const label = disk.model && disk.model !== "Unknown disk" ? disk.model : disk.devicePath || disk.id;
     setAddingDiscoveredStorageId(disk.id);
     setError(undefined);
@@ -520,6 +521,32 @@ export function DeviceManager() {
       setError(messageOf(reason, `Failed to add storage device "${label}" to inventory.`));
     } finally {
       setAddingDiscoveredStorageId(null);
+    }
+  }
+
+  async function deleteDiscoveredStorage(disk: BranchStorageDisk) {
+    if (!selectedBranch || deletingDiscoveredStorageId || addingDiscoveredStorageId) return;
+    const branchId = selectedBranch;
+    const label = disk.model && disk.model !== "Unknown disk" ? disk.model : disk.devicePath || disk.id;
+    if (!window.confirm(`Delete "${label}" from Device discovery? Recordings will remain on the disk. Fresh telemetry may discover it again.`)) return;
+    setDeletingDiscoveredStorageId(disk.id);
+    setError(undefined);
+    try {
+      const response = await fetch(
+        `/api/control/v1/operations/health/disks/discovery?diskId=${encodeURIComponent(disk.id)}&branchId=${encodeURIComponent(branchId)}`,
+        { method: "DELETE", credentials: "include", headers: getPortableAuthHeaders() },
+      );
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.message || payload?.error || `Request failed (${response.status})`);
+      }
+      setDiscoveredStorageDisks((items) => items.filter((item) => item.id !== disk.id || item.branchId !== disk.branchId));
+      setNotice(`Storage device "${label}" was deleted from Device discovery. Fresh telemetry may discover it again.`);
+      await refreshBranch(branchId);
+    } catch (reason) {
+      setError(messageOf(reason, `Failed to delete discovered storage device "${label}".`));
+    } finally {
+      setDeletingDiscoveredStorageId(null);
     }
   }
 
@@ -2624,9 +2651,19 @@ export function DeviceManager() {
                       type="button"
                       className="primary-button"
                       onClick={() => void addDiscoveredStorage(disk)}
-                      disabled={addingDiscoveredStorageId !== null}
+                      disabled={addingDiscoveredStorageId !== null || deletingDiscoveredStorageId !== null}
                     >
                       <Plus size={14} /> {addingDiscoveredStorageId === disk.id ? "Adding…" : "Add to Inventory"}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => void deleteDiscoveredStorage(disk)}
+                      disabled={deletingDiscoveredStorageId !== null || addingDiscoveredStorageId !== null}
+                      title="Delete this storage discovery entry"
+                      style={{ color: "#ef4444", borderColor: "rgba(239, 68, 68, 0.4)", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                    >
+                      <Trash2 size={14} /> {deletingDiscoveredStorageId === disk.id ? "Deleting…" : "Delete"}
                     </button>
                   </div>
                 </article>

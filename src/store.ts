@@ -1964,7 +1964,7 @@ export class MemoryStore {
       && item.deviceType === "storage-device" && item.lifecycleState !== "decommissioned");
     this.retiredStorageInventory.set(`${tenant}:${branchId}:${deviceId.toLowerCase()}`, {
       retiredAt: new Date(retiredAt).toISOString(),
-      registryLifecycleState: registry?.lifecycleState,
+      registryLifecycleState: registry?.lifecycleState ?? this.retiredStorageInventory.get(`${tenant}:${branchId}:${deviceId.toLowerCase()}`)?.registryLifecycleState,
     });
     if (registry) {
       registry.lifecycleState = "decommissioned";

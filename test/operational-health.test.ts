@@ -298,6 +298,26 @@ describe("Phase 1 operational health", () => {
     expect((await app.inject({ method: "GET", url: discoveryUrl, headers: admin })).json().data)
       .toEqual([expect.objectContaining({ id: diskId, discoveryStatus: "pending" })]);
 
+    const deleteDiscoveryUrl = `${discoveryUrl}&diskId=${encodeURIComponent(diskId)}`;
+    const wrongBranch = await app.inject({
+      method: "DELETE", url: `/v1/operations/health/disks/discovery?branchId=missing-branch&diskId=${encodeURIComponent(diskId)}`, headers: admin,
+    });
+    expect(wrongBranch.statusCode).toBe(404);
+    expect((await app.inject({ method: "DELETE", url: deleteDiscoveryUrl, headers: admin })).statusCode).toBe(200);
+    expect((await app.inject({ method: "GET", url: discoveryUrl, headers: admin })).json().data).toEqual([]);
+    expect((await app.inject({ method: "GET", url, headers: admin })).json().data).toEqual([]);
+    expect((await app.inject({ method: "DELETE", url: deleteDiscoveryUrl, headers: admin })).statusCode).toBe(404);
+
+    await store.ingestOperationalTelemetry({
+      tenantId, branchId, edgeAgentId: agentId, deviceType: "disk", deviceId: diskId,
+      observedAt: new Date(Date.now() + 3_000).toISOString(),
+      receivedAt: new Date(Date.now() + 3_000).toISOString(),
+      source: "system", quality: "verified", idempotencyKey: "disk-review:rediscovered",
+      metrics: { model: "Disk", capacityBytes: 1_000_000 }, reasonCodes: [],
+    });
+    expect((await app.inject({ method: "GET", url: discoveryUrl, headers: admin })).json().data)
+      .toEqual([expect.objectContaining({ id: diskId, discoveryStatus: "pending" })]);
+
     const added = await app.inject({
       method: "POST", url: `/v1/operations/health/disks/discovery/add?branchId=${branchId}&diskId=${encodeURIComponent(diskId)}`,
       headers: admin,
