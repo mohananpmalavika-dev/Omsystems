@@ -1,9 +1,0 @@
-{
-  "version": "0.1.38",
-  "artifactName": "edge-agent.bundle",
-  "sha256": "3b80beff9c2fb8126f0481041ef7c531a7064652a60af392918139f90e377c89",
-  "sizeBytes": 716261,
-  "type": "delta_bundle",
-  "releasedAt": "2026-10-01T13:18:23.686Z",
-  "notes": "Sentinel Grid Edge Agent Delta Update v0.1.38"
-}
