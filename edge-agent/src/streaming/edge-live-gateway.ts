@@ -550,6 +550,9 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
       logger.warn("Reusing an already-running local MediaMTX instance", { apiUrl: config.MEDIAMTX_API_URL });
     }
     await waitForHttp(mediaMtxApi, mediaMtx, 30_000);
+    if (config.MEDIA_RUNTIME_MANAGED && reusableMediaMtx) {
+      await synchronizeMediaMtxWebRtc(config.MEDIAMTX_API_URL, config.EDGE_MEDIA_ENABLE_WEBRTC);
+    }
 
     const resolvedFfmpeg = resolveFfmpegPath(config.FFMPEG_PATH, runtimeDirectory);
     const ffprobePath = resolvedFfmpeg && existsSync(join(dirname(resolvedFfmpeg), "ffprobe.exe"))
@@ -701,6 +704,18 @@ export function resolvePrivateMediaGatewayUrl(
 
 export function shouldReuseExistingMediaMtx(mediaRuntimeManaged: boolean, mediaMtxApiReady: boolean) {
   return mediaRuntimeManaged && mediaMtxApiReady;
+}
+
+export async function synchronizeMediaMtxWebRtc(apiUrl: string, enabled: boolean): Promise<void> {
+  const response = await fetch(new URL("/v3/config/global/get", apiUrl), { signal: AbortSignal.timeout(5_000), redirect: "error" });
+  if (!response.ok) throw new Error(`MediaMTX configuration unavailable (${response.status})`);
+  const current = await response.json() as { webrtc?: boolean };
+  if (current.webrtc === enabled) return;
+  const updated = await fetch(new URL("/v3/config/global/patch", apiUrl), {
+    method: "PATCH", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ webrtc: enabled }), signal: AbortSignal.timeout(5_000), redirect: "error",
+  });
+  if (!updated.ok) throw new Error(`MediaMTX WebRTC configuration rejected (${updated.status})`);
 }
 
 export function resolvePrivateMediaGatewayUrlIfAvailable(

@@ -76,7 +76,7 @@ async function mount(mode: string, props: Record<string, unknown>) {
       close() {};
     };
     w.fetch = () => mode === "slow-webrtc"
-      ? new Promise(resolve => setTimeout(() => resolve(new Response("answer", {status:201})), 6000))
+      ? new Promise(resolve => setTimeout(() => resolve(new Response("answer", {status:201})), 12000))
       : Promise.resolve(new Response("answer", {status: 201}));
   }, mode);
   await page.addScriptTag({ content: bundle });
@@ -124,7 +124,7 @@ describe("live player in Chromium", () => {
     await mount("slow-webrtc", {url: "https://media.example/hls/index.m3u8", whepUrl: "https://media.example/whep"});
     await page.clock.fastForward(4_100);
     expect(await page.evaluate(() => (window as any).hlsStarts)).toBe(0);
-    await page.clock.fastForward(2_000);
+    await page.clock.fastForward(8_000);
     await page.waitForFunction(() => (window as any).states.includes(true));
     expect(await page.evaluate(() => (window as any).hlsStarts)).toBe(0);
   });

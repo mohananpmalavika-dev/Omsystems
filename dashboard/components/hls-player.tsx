@@ -609,7 +609,7 @@ export function HlsPlayer({
         setPlayerError("playback_start_timeout");
         return;
       }
-      if (Date.now() - lastProgressAt >= STALL_TIMEOUT_MS) {
+      if (playbackStarted && Date.now() - lastProgressAt >= STALL_TIMEOUT_MS) {
         recover("playback_stalled");
         return;
       }

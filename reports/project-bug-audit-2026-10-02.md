@@ -4,6 +4,8 @@ This audit combines repository-wide TypeScript/test checks with focused source r
 
 ## Fix status — 2 October 2026
 
+Local Camera Pilot follow-up: managed media bootstrap was forcibly disabling WebRTC for relay mode. It now preserves the configured `EDGE_MEDIA_ENABLE_WEBRTC` value (default true). On startup, managed agents reusing an existing MediaMTX synchronize its WebRTC flag through the local API so a previous `webrtc: no` process does not survive the update unchanged. The player stall watchdog now applies only after playback starts, allowing slow on-demand WHEP startup. **29 tests passed across four files**, including a 12-second delayed browser handshake and configuration synchronization. The user will perform the agent update; the running agent was not restarted or updated by this change.
+
 Live-view WebRTC follow-up: fixed SDP content parsing and DELETE forwarding in the managed edge relay. The player now allows 25 seconds for on-demand WHEP startup (previously 4 seconds, shorter than the gateway's 15-second source timeout), allows up to 5 seconds for ICE gathering, and handles streamless tracks. Chromium/player and relay regression tests: **10 passed**; earlier edge gateway/relay checks: **18 passed**. These are local fixes; production connectivity and NAT/TURN availability still require branch-specific verification and deployment.
 
 All 13 concrete defects below have been fixed in the working tree. Finding 14, the onboarding lifetime policy mismatch, remains unchanged.

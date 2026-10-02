@@ -1826,7 +1826,7 @@ function applyManagedMediaBootstrap(media: NonNullable<typeof identity>["media"]
     MEDIA_TUNNEL_MODE: media.mode,
     PUBLIC_MEDIA_GATEWAY_URL: media.publicUrl,
     CLOUDFLARED_TUNNEL_TOKEN: media.mode === "named" ? media.tunnelToken : undefined,
-    EDGE_MEDIA_ENABLE_WEBRTC: media.mode === "relay" ? false : installedMediaConfig.EDGE_MEDIA_ENABLE_WEBRTC,
+    EDGE_MEDIA_ENABLE_WEBRTC: installedMediaConfig.EDGE_MEDIA_ENABLE_WEBRTC,
     EDGE_LIVE_GATEWAY_HOST: media.mode === "relay" ? "127.0.0.1" : installedMediaConfig.EDGE_LIVE_GATEWAY_HOST,
   });
 }
