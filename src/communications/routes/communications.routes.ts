@@ -133,6 +133,22 @@ const directMessageSchema = z.object({
   body: z.string().trim().min(1).max(4000),
 });
 
+// One entry per active VMS user. Only a real branch assignment is exposed as
+// branch_id; company/region assignments belong to the central VMS directory.
+const vmsUserDirectorySql = `SELECT u.id::text, COALESCE(u.display_name, u.username) AS name,
+  u.role, assignment.branch_id
+  FROM users u
+  LEFT JOIN LATERAL (
+    SELECT branch.id::text AS branch_id
+    FROM user_organizational_assignments uoa
+    JOIN resource_nodes branch ON branch.id = uoa.scope_node_id
+      AND branch.tenant_id = u.tenant_id AND branch.node_type = 'branch'
+    WHERE uoa.user_id = u.id
+    ORDER BY branch.id LIMIT 1
+  ) assignment ON true
+  WHERE u.tenant_id = $1 AND (u.status = 'active' OR u.active = true)
+  ORDER BY name, u.id`;
+
 // ============================================================================
 // INTERFACES
 // ============================================================================
@@ -229,31 +245,41 @@ async function requirePermission(
       : 'incident:create';
   const body = (request.body && typeof request.body === 'object' ? request.body : {}) as Record<string, unknown>;
   const params = request.params as Record<string, unknown>;
+  const employeeId = typeof params.employeeId === 'string'
+    ? params.employeeId
+    : body.targetType === 'EMPLOYEE' && typeof body.targetId === 'string'
+      ? body.targetId
+      : undefined;
+
+  if (permission.startsWith('communication.employee.') && employeeId) {
+    // Organizational assignments may point to a company, zone, or region,
+    // and a user may have several assignments. Authorize against actual
+    // accessible branches within any target scope, rather than treating the
+    // first assignment as a branch. Unassigned central VMS users use the
+    // caller's existing communication access.
+    const employee = await ctx.pool.query<{ scope_node_id: string | null }>(
+      `SELECT uoa.scope_node_id::text FROM users u
+       LEFT JOIN user_organizational_assignments uoa ON uoa.user_id = u.id
+       WHERE u.id = $1 AND u.tenant_id = $2 AND (u.status = 'active' OR u.active = true)`,
+      [employeeId, user.tenantId]
+    );
+    if (!employee.rows.length) {
+      await reply.code(404).send({ error: 'employee_not_found' });
+      return false;
+    }
+    const scopeIds = employee.rows.map((row) => row.scope_node_id).filter((id): id is string => Boolean(id));
+    const scopes = await Promise.all(scopeIds.map((id) => ctx.store.getNode(id)));
+    const accessible = await ctx.store.listAccessibleNodes(user, action, 'branch');
+    const allowed = accessible.some((branch) => branch.tenantId === user.tenantId && branch.type === 'branch' &&
+      (!scopeIds.length || scopes.some((scope) => scope?.tenantId === user.tenantId &&
+        (branch.id === scope.id || branch.path.includes(scope.id) || scope.path.includes(branch.id)))));
+    if (!allowed) await reply.code(403).send({ error: 'forbidden' });
+    return allowed;
+  }
+
   let branchId = (body.branchId || body.targetBranchId || params.branchId) as string | undefined;
 
   if (!branchId && typeof body.targetId === 'string' && body.targetType === 'BRANCH') branchId = body.targetId;
-  if (!branchId && typeof body.targetId === 'string' && body.targetType === 'EMPLOYEE') {
-    const employee = await ctx.pool.query<{ branch_id: string }>(
-      `SELECT uoa.scope_node_id::text AS branch_id FROM users u
-       LEFT JOIN user_organizational_assignments uoa ON uoa.user_id = u.id
-       WHERE u.id = $1 AND u.tenant_id = $2 AND (u.status = 'active' OR u.active = true) LIMIT 1`,
-      [body.targetId, user.tenantId]
-    );
-    branchId = employee.rows[0]?.branch_id;
-  }
-  if (!branchId && typeof params.employeeId === 'string') {
-    const employee = await ctx.pool.query<{ branch_id: string }>(
-      `SELECT uoa.scope_node_id::text AS branch_id FROM users u
-       LEFT JOIN user_organizational_assignments uoa ON uoa.user_id = u.id
-       WHERE u.id = $1 AND u.tenant_id = $2 AND (u.status = 'active' OR u.active = true) LIMIT 1`,
-      [params.employeeId, user.tenantId]
-    );
-    branchId = employee.rows[0]?.branch_id;
-    if (!branchId && employee.rowCount) {
-      const accessible = await ctx.store.listAccessibleNodes(request.currentUser, action, 'branch');
-      branchId = accessible.find((node) => node.tenantId === user.tenantId)?.id;
-    }
-  }
   const deviceId = typeof params.deviceId === 'string' ? params.deviceId : typeof params.id === 'string' ? params.id : undefined;
   if (!branchId && deviceId) {
     branchId = (await ctx.enrollmentService.getDevice(deviceId))?.branchId;
@@ -546,7 +572,7 @@ export async function registerCommunicationsRoutes(
     if (targetType === 'BRANCH') {
       const branch = await ctx.pool.query(
         `SELECT 1 FROM resource_nodes
-         WHERE id = $1 AND tenant_id = $2 AND lower(node_type) = 'branch' LIMIT 1`,
+         WHERE id = $1 AND tenant_id = $2 AND node_type = 'branch' LIMIT 1`,
         [targetId, device.tenantId]
       );
       if (!branch.rowCount) {
@@ -1359,12 +1385,7 @@ export async function registerCommunicationsRoutes(
       const branches = Array.from(branchMap.values());
       const branchNames = new Map(branches.map((branch) => [branch.id, branch.name]));
       const users = await ctx.pool.query(
-        `SELECT DISTINCT u.id::text, COALESCE(u.display_name, u.username) AS name,
-                u.role, uoa.scope_node_id::text AS branch_id
-         FROM users u
-         LEFT JOIN user_organizational_assignments uoa ON uoa.user_id = u.id
-         WHERE u.tenant_id = $1 AND (u.status = 'active' OR u.active = true)
-         ORDER BY name`,
+        vmsUserDirectorySql,
         [currentUser.tenantId]
       );
       return { data: await Promise.all(users.rows.map(async (user: any) => ({
@@ -1404,18 +1425,13 @@ export async function registerCommunicationsRoutes(
         }
       }
       const branchIds = Array.from(branchMap.keys());
-      if (!branchIds.length) return { data: { branches: [], employees: [] } };
-      const branches = await ctx.pool.query(
+      const branches = branchIds.length ? await ctx.pool.query(
         `SELECT id::text, name, code FROM resource_nodes
-         WHERE tenant_id = $1 AND id::text = ANY($2::text[]) AND lower(node_type) = 'branch'
+         WHERE tenant_id = $1 AND id::text = ANY($2::text[]) AND node_type = 'branch'
          ORDER BY name`, [currentUser.tenantId, branchIds]
-      );
+      ) : { rows: [] };
       const users = await ctx.pool.query(
-        `SELECT DISTINCT u.id::text, COALESCE(u.display_name, u.username) AS name,
-                u.role, uoa.scope_node_id::text AS branch_id FROM users u
-         LEFT JOIN user_organizational_assignments uoa ON uoa.user_id = u.id
-         WHERE u.tenant_id = $1 AND (u.status = 'active' OR u.active = true)
-         ORDER BY name`, [currentUser.tenantId]
+        vmsUserDirectorySql, [currentUser.tenantId]
       );
       const matchingBranches = branches.rows.filter((branch: any) =>
         branch.name.toLowerCase().includes(query) || branch.code?.toLowerCase().includes(query)
@@ -1441,7 +1457,7 @@ export async function registerCommunicationsRoutes(
         ctx.pool.query(
           `SELECT id::text, name, code
            FROM resource_nodes
-           WHERE tenant_id = $1 AND lower(node_type) = 'branch'
+           WHERE tenant_id = $1 AND node_type = 'branch'
            ORDER BY name ASC`,
           [device.tenantId]
         ),
@@ -1562,8 +1578,13 @@ export async function registerCommunicationsRoutes(
   app.get('/v1/communications/presence/employee/:employeeId', async (request: AuthenticatedRequest, reply) => {
     try {
       const { employeeId } = request.params as { employeeId: string };
-      
-      const presence = await ctx.presenceService.getEmployeePresence(request.currentUser.tenantId, employeeId);
+      const employee = await ctx.pool.query(
+        `SELECT 1 FROM users WHERE id = $1 AND tenant_id = $2 AND (status = 'active' OR active = true) LIMIT 1`,
+        [employeeId, request.currentUser.tenantId]
+      );
+      if (!employee.rowCount) return reply.code(404).send({ error: 'employee_not_found' });
+
+      const presence = await ctx.presenceService.getOperatorPresence(request.currentUser.tenantId, employeeId);
       
       return presence;
     } catch (error) {
@@ -1689,7 +1710,7 @@ export async function registerCommunicationsRoutes(
       const { employeeId } = request.params as { employeeId: string };
       const body = request.body as { context?: any };
       const target = await ctx.pool.query(
-        `SELECT 1 FROM users WHERE id = $1 AND tenant_id = $2 AND active = true LIMIT 1`,
+        `SELECT 1 FROM users WHERE id = $1 AND tenant_id = $2 AND (status = 'active' OR active = true) LIMIT 1`,
         [employeeId, request.currentUser.tenantId]
       );
       if (!target.rowCount) return reply.code(404).send({ error: 'employee_not_found' });
@@ -2331,7 +2352,7 @@ export async function registerCommunicationsRoutes(
     } else {
       const target = await ctx.pool.query(
         `SELECT id FROM resource_nodes WHERE id = $1 AND tenant_id = $2
-         AND lower(node_type) = 'branch' LIMIT 1`, [recipientId, identity.tenantId]
+         AND node_type = 'branch' LIMIT 1`, [recipientId, identity.tenantId]
       );
       if (!target.rowCount) return reply.code(404).send({ error: 'recipient_not_found' });
       targetBranchId = recipientId;
