@@ -14,11 +14,11 @@ excluded from Git.
 | `face-embedding` | `face/face-embedding.onnx` | OpenCV Zoo SFace INT8, five-point aligned RGB `1x3x112x112` |
 | `anpr-detector` | `vehicle/license-plate-detector.onnx` | OpenCV Zoo LPD-YuNet, native corner decoder, BGR `1x3x240x320` |
 | `anpr-recognizer` | `vehicle/license-plate-recognizer.onnx` | OpenCV Zoo CRNN INT8, rectified grayscale `1x1x32x100` |
-| `helmet` | `safety/helmet.onnx` | PaddleClas PULC safety-helmet classifier, ImageNet-normalized RGB `1x3x224x224` |
+| `helmet` | `safety/helmet-motorcycle.onnx` | Motorcycle-helmet head classifier, ImageNet-normalized RGB stretch `1x3x224x224` |
 
 Fire/smoke, pose, attributes and re-identification models remain optional.
-The image build makes helmet classification required: it reproducibly converts
-the pinned official PaddleClas archive to its checksum-pinned ONNX artifact.
+The image build makes helmet classification required: it packages the pinned
+motorcycle-helmet ONNX graph and weights into one checksum-verified artifact.
 
 The YOLO adapter also supports `yolov5` objectness output and post-NMS `xyxy` rows when the manifest `decoder` is changed. Bounding boxes are normalized before they enter rules, alerts or tracking.
 
@@ -31,10 +31,19 @@ ANALYTICS_MODEL_LICENSES_ACCEPTED=true npm run models:download -- yolov8n face-d
 npm run models:verify
 ```
 
-The helmet model is built from its signed source archive only in the Docker
-conversion stage, then copied into the final image. It is intentionally not a
-generic `models:download` target because the audited upstream supplies Paddle
-inference files rather than a direct ONNX artifact.
+The helmet model is packaged in the Docker conversion stage, then copied into
+the final image. For standalone development, install `onnx==1.23.1` and
+`protobuf==7.36.2` in an isolated Python environment and run:
+
+```bash
+python scripts/package-motorcycle-helmet.py --output models/safety/helmet-motorcycle.onnx
+```
+
+The packaging script pins the upstream revision and verifies the graph,
+external weights, and resulting self-contained ONNX file. It refuses to
+overwrite a different artifact. The older PaddleClas adapter remains supported
+with `preprocessor: "paddleclas-imagenet"`; the motorcycle model requires
+`preprocessor: "imagenet-stretch"`.
 
 Provisioning uses HTTPS, downloads to a temporary file, verifies SHA-256, and only then moves the artifact into place. `models:verify` opens every required model with ONNX Runtime; it fails if a file is missing, corrupt, has the wrong checksum, or cannot be loaded.
 

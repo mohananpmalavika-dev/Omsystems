@@ -250,4 +250,33 @@ describe("local analytics foundations", () => {
     }
     expect(result.wearingHelmet).toBe(true);
   });
+
+  it.each([[6, -6], [0.98, 0.02]])("uses motorcycle model preprocessing and applies softmax to logits %j", async (helmetLogit, noHelmetLogit) => {
+    const imageData = Buffer.alloc(80 * 40 * 3);
+    for (let y = 0; y < 40; y += 1) {
+      for (let x = 0; x < 80; x += 1) {
+        imageData[(y * 80 + x) * 3 + (x >= 20 && x < 60 ? 2 : 0)] = 255;
+      }
+    }
+    const run = vi.fn(async (_feeds: Record<string, Tensor>) => ({
+      logits: new Tensor("float32", new Float32Array([helmetLogit, noHelmetLogit]), [1, 2]),
+    }));
+    const inference = new HelmetClassificationInference(
+      { inputNames: ["input"], outputNames: ["logits"], run } as never, 224, 224, "imagenet-stretch", true,
+    );
+    const result = await inference.run({
+      cameraId: "motorcycle-helmet", tenantId: "tenant-1", timestamp: new Date(),
+      imageData, width: 80, height: 40,
+    }, { x: 0, y: 0, width: 1, height: 1 });
+    const pixels = run.mock.calls[0]![0].input!.data as Float32Array;
+    // Unlike the Paddle model, the motorcycle classifier retains the crop's
+    // outer content. Applying center-crop to both models breaks this contract.
+    expect(pixels[0]).toBeCloseTo((1 - 0.485) / 0.229, 4);
+    expect(pixels[112 * 224 + 112]).toBeCloseTo(-0.485 / 0.229, 4);
+    expect(result.wearingHelmet).toBe(true);
+    expect(result.wearingHelmetConfidence).toBeCloseTo(1 / (1 + Math.exp(noHelmetLogit - helmetLogit)), 6);
+    // Positive logits that happen to sum to one are still logits, not 98%
+    // helmet probability. Otherwise this pair could incorrectly pass alerts.
+    if (helmetLogit < 1) expect(result.wearingHelmetConfidence).toBeLessThan(0.9167);
+  });
 });

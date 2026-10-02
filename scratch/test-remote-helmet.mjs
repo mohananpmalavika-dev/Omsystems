@@ -46,10 +46,27 @@ async function test() {
   const events = await pipeline.processFrame(frame, rules);
   console.log('Events generated:', JSON.stringify(events, null, 2));
 
-  // Let's also check the helmet detector directly
-  const helmetDet = pipeline.helmetDetector;
-  const helmetRes = await helmetDet.detect(frame);
-  console.log('Direct helmet detector results:', JSON.stringify(helmetRes, null, 2));
+  const sharp = (await import('sharp')).default;
+  const fullJpeg = await sharp(buf, { raw: { width, height, channels: 3 } }).jpeg().toBuffer();
+  const fs = (await import('fs')).default;
+  fs.writeFileSync('/tmp/current_frame.jpg', fullJpeg);
+  console.log('Saved /tmp/current_frame.jpg, length:', fullJpeg.length);
+
+  // Test pose estimator
+  try {
+    const manager = (await import('./dist/analytics-engine/src/model-manager.js')).getModelManager();
+    if (manager.isModelAvailable('pose-estimator')) {
+      const { YoloPoseInference } = await import('./dist/analytics-engine/src/inference/vision-specialty-inference.js');
+      const poseModel = await manager.getModel('pose-estimator');
+      const poseInference = new YoloPoseInference(poseModel, 0.25);
+      const poses = await poseInference.run(frame);
+      console.log('Pose detections:', JSON.stringify(poses, null, 2));
+    } else {
+      console.log('pose-estimator not available in manager');
+    }
+  } catch (err) {
+    console.log('Pose error:', err);
+  }
 
   const faceDetector = pipeline.faceDetector;
   const faceRes = await faceDetector.detect(frame);
@@ -109,5 +126,7 @@ fs.writeFileSync('scratch/remote_script.js', remoteScript);
 // Copy script into container and run it
 execSync('gcloud compute scp scratch/remote_script.js kryptovision-server:/tmp/remote_script.js --zone=asia-south1-b', { stdio: 'inherit' });
 execSync('gcloud compute ssh kryptovision-server --zone=asia-south1-b --command="sudo docker cp /tmp/remote_script.js sentinel-gcp-analytics-engine:/app/remote_script.js"', { stdio: 'inherit' });
-const res = execSync('gcloud compute ssh kryptovision-server --zone=asia-south1-b --command="sudo docker exec sentinel-gcp-analytics-engine node /app/remote_script.js"');
+const res = execSync('gcloud compute ssh kryptovision-server --zone=asia-south1-b --command="sudo docker exec sentinel-gcp-analytics-engine node /app/remote_script.js && sudo docker cp sentinel-gcp-analytics-engine:/tmp/current_frame.jpg /tmp/current_frame.jpg"');
 console.log(res.toString());
+execSync('gcloud compute scp kryptovision-server:/tmp/current_frame.jpg scratch/current_frame.jpg --zone=asia-south1-b', { stdio: 'inherit' });
+console.log('Downloaded scratch/current_frame.jpg');

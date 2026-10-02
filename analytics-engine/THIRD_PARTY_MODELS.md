@@ -51,15 +51,22 @@ trained on Chinese plates, so Indian-camera validation is mandatory.
 
 ## Helmet compliance
 
-- Classifier: PaddleClas PULC `safety_helmet_infer`
-- Upstream: https://github.com/PaddlePaddle/PaddleClas/blob/release/2.6/docs/en/PULC/PULC_safety_helmet_en.md
+- Classifier: EfficientNet-B0 motorcycle helmet head classifier, `helmet_v5e_head`
+- Upstream: https://huggingface.co/vivekvar/helmet-v5
+- Pinned revision: `4ea2eb67301722073555448b477178330e40f7d1`
 - License: Apache License 2.0
-- Source archive SHA-256: `6e7cff9c4e3f3966b1d964c7f27c47577d9b31d725a4c8b625e68cb9affdcaa7`
-- Converted ONNX SHA-256: `8c87834e2fde4eb29723483cdecedf78c231cf7e6da9913cf8227ba542b3f31f`
+- Source graph SHA-256: `410d439f78d7bd86e9e83763db30e5ba00a70b4642439d640c0df1d288bd5dc8`
+- Source weights SHA-256: `911a3ec0533276fc5bff11351ecadb23318d9ff8e8fcd76f939efdd0e9920346`
+- Self-contained ONNX SHA-256: `b50a2ec2354db804a2f4d14b726bec24d5de0966340fc66477f53f8ec3159e6e`
 
-The Docker build converts the pinned official Paddle inference archive with
-Paddle2ONNX 1.2.6, verifies both hashes, and runs the resulting classifier
-locally. It receives the upper-body/head crop of a YOLOX-detected rider and
-returns either `wearing_helmet` or `unwearing_helmet`; it does not use a paid
-cloud service. Production validation on representative cameras is still
-required before using violation alerts operationally.
+The Docker build uses ONNX 1.23.1 and Protobuf 7.36.2 to embed the external
+weights, verifying all three hashes. The model receives upper-body/head crops
+of a YOLOX-detected person with bilinear resize to 224x224 and ImageNet
+normalization. Logit order is `helmet`, then `no_helmet`.
+
+The prior PaddleClas safety-hardhat classifier rejected a clearly visible
+black motorcycle helmet in the pilot camera sample. The replacement recognizes
+that sample, while cap and partial-body controls stay below the alert threshold.
+Those checks cover the reported failure, not overall camera accuracy. The
+existing confidence floor, agreement between crops, and two-frame confirmation
+remain in effect. Wider field validation is still required.

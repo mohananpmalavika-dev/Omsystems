@@ -131,15 +131,17 @@ export interface HelmetClassification {
 }
 
 /**
- * Runs PaddleClas PULC's two-class safety-helmet model on a rider's upper
- * body/head crop. The official class order is wearing_helmet, then
- * unwearing_helmet; outputs may be logits or already-normalized scores.
+ * Runs a two-class helmet model on an upper-body/head crop. Class order is
+ * wearing helmet, then not wearing helmet; outputs may be logits or
+ * already-normalized scores. Preprocessing follows the selected model.
  */
 export class HelmetClassificationInference {
   constructor(
     private readonly session: InferenceSession,
     private readonly inputWidth = 224,
     private readonly inputHeight = 224,
+    private readonly preprocessor: "paddleclas-imagenet" | "imagenet-stretch" = "paddleclas-imagenet",
+    private readonly outputIsLogits = false,
   ) {}
 
   async run(
@@ -158,9 +160,12 @@ export class HelmetClassificationInference {
       this.inputWidth / crop.width, this.inputHeight / crop.height);
     const resizedWidth = Math.max(this.inputWidth, Math.floor(crop.width * scale));
     const resizedHeight = Math.max(this.inputHeight, Math.floor(crop.height * scale));
-    const pixels = await sharp(crop.imageData, {
+    const image = sharp(crop.imageData, {
       raw: { width: crop.width, height: crop.height, channels: 3 },
-    }).resize(resizedWidth, resizedHeight, { fit: "fill", kernel: "linear" })
+    });
+    const pixels = this.preprocessor === "imagenet-stretch"
+      ? await image.resize(this.inputWidth, this.inputHeight, { fit: "fill", kernel: "linear" }).raw().toBuffer()
+      : await image.resize(resizedWidth, resizedHeight, { fit: "fill", kernel: "linear" })
       .extract({
         left: Math.floor((resizedWidth - this.inputWidth) / 2),
         top: Math.floor((resizedHeight - this.inputHeight) / 2),
@@ -185,7 +190,7 @@ export class HelmetClassificationInference {
     if (scores.length !== 2) {
       throw new Error(`Safety-helmet model must produce two class scores; received ${scores.length}`);
     }
-    const [wearingHelmetConfidence, unwearingHelmetConfidence] = classifierProbabilities(scores);
+    const [wearingHelmetConfidence, unwearingHelmetConfidence] = classifierProbabilities(scores, this.outputIsLogits);
     const wearingHelmet = wearingHelmetConfidence >= unwearingHelmetConfidence;
     return {
       wearingHelmet,
@@ -438,9 +443,9 @@ function softmaxConfidence(scores: number[], selected: number) {
   return denominator > 0 ? exponentials[selected]! / denominator : 0;
 }
 
-function classifierProbabilities(scores: number[]): [number, number] {
+function classifierProbabilities(scores: number[], outputIsLogits = false): [number, number] {
   const total = scores.reduce((sum, score) => sum + score, 0);
-  if (scores.every((score) => score >= 0 && score <= 1) && Math.abs(total - 1) < 0.001) {
+  if (!outputIsLogits && scores.every((score) => score >= 0 && score <= 1) && Math.abs(total - 1) < 0.001) {
     return [scores[0]!, scores[1]!];
   }
   const maximum = Math.max(...scores);

@@ -43,10 +43,27 @@ async function test() {
   const events = await pipeline.processFrame(frame, rules);
   console.log('Events generated:', JSON.stringify(events, null, 2));
 
-  // Let's also check the helmet detector directly
-  const helmetDet = pipeline.helmetDetector;
-  const helmetRes = await helmetDet.detect(frame);
-  console.log('Direct helmet detector results:', JSON.stringify(helmetRes, null, 2));
+  const sharp = (await import('sharp')).default;
+  const fullJpeg = await sharp(buf, { raw: { width, height, channels: 3 } }).jpeg().toBuffer();
+  const fs = (await import('fs')).default;
+  fs.writeFileSync('/tmp/current_frame.jpg', fullJpeg);
+  console.log('Saved /tmp/current_frame.jpg, length:', fullJpeg.length);
+
+  // Test pose estimator
+  try {
+    const manager = (await import('./dist/analytics-engine/src/model-manager.js')).getModelManager();
+    if (manager.isModelAvailable('pose-estimator')) {
+      const { YoloPoseInference } = await import('./dist/analytics-engine/src/inference/vision-specialty-inference.js');
+      const poseModel = await manager.getModel('pose-estimator');
+      const poseInference = new YoloPoseInference(poseModel, 0.25);
+      const poses = await poseInference.run(frame);
+      console.log('Pose detections:', JSON.stringify(poses, null, 2));
+    } else {
+      console.log('pose-estimator not available in manager');
+    }
+  } catch (err) {
+    console.log('Pose error:', err);
+  }
 
   const faceDetector = pipeline.faceDetector;
   const faceRes = await faceDetector.detect(frame);

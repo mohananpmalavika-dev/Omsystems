@@ -30,9 +30,8 @@ export class HelmetDetector extends BaseDetector {
   private readonly MIN_CONFIDENCE: number;
   private readonly PERSON_CONFIDENCE = 0.65;
   private readonly HEAD_REGION_OVERLAP_THRESHOLD = 0.6;
-  // PaddleClas recommends 0.9167 for the safety-helmet classifier when a
-  // low false-positive rate is required. A helmet-worn security alert should
-  // never use the generic detector's lower object-presence threshold.
+  // Keep the existing alert confidence floor when selecting the motorcycle
+  // classifier; generic object-presence thresholds are too low for alerts.
   private readonly HELMET_WORN_ALERT_CONFIDENCE = 0.9167;
   // A person crop is only an approximate helmet location. Require a second
   // independent frame when no helmet box is supplied.
@@ -48,7 +47,7 @@ export class HelmetDetector extends BaseDetector {
     confidenceThreshold = 0.88,
     classifier: HelmetClassificationFrameInference | null = null,
   ) {
-    super("helmet", "1.0.0");
+    super("helmet", "1.1.0");
     this.inference = inference;
     this.classifier = classifier;
     this.MIN_CONFIDENCE = confidenceThreshold;
@@ -61,7 +60,7 @@ export class HelmetDetector extends BaseDetector {
       }
       this.isModelLoaded = true;
       this.modelLoadError = null;
-      console.log("Helmet detector loaded local ONNX safety-helmet classifier");
+      console.log("Helmet detector loaded local ONNX helmet classifier");
     } catch (error) {
       this.inference = null;
       this.isModelLoaded = false;
@@ -135,7 +134,7 @@ export class HelmetDetector extends BaseDetector {
           status: "SUCCESS",
           provenance: this.classifier ? "LIVE_INFERENCE" : "HEURISTIC_RULE_ENGINE",
           modelId: "helmet-classifier",
-          modelVersion: "1.0.0",
+          modelVersion: this.modelVersion,
           simulated: false,
           timestamp: new Date().toISOString(),
         },
@@ -440,8 +439,8 @@ export class HelmetDetector extends BaseDetector {
     return {
       status: this.isModelLoaded ? ("healthy" as const) : ("degraded" as const),
       details: this.isModelLoaded
-        ? "Safety-helmet classifier active; helmet-worn alerts require a localized observation or two confirmed head crops"
-        : `Awaiting local safety-helmet classifier; normalized observations remain supported. ${this.modelLoadError ?? "Model unavailable"}`,
+        ? "Helmet classifier active; helmet-worn alerts require a localized observation or two confirmed head crops"
+        : `Awaiting local helmet classifier; normalized observations remain supported. ${this.modelLoadError ?? "Model unavailable"}`,
     };
   }
 }

@@ -235,6 +235,8 @@ export async function loadHelmetClassificationInference(modelId: string): Promis
     await manager.getModel(modelId) as InferenceSession,
     dimensions.width,
     dimensions.height,
+    config.preprocessor === "imagenet-stretch" ? "imagenet-stretch" : "paddleclas-imagenet",
+    config.postprocessor === "softmax",
   );
 }
 
