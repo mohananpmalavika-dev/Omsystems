@@ -41,7 +41,7 @@ tasklist /FI "IMAGENAME eq edge-agent.exe" | find /i "edge-agent.exe" >nul
 if %errorLevel% equ 0 (
     echo.
     echo ================================================================
-    echo  SUCCESS: Sentinel Grid Edge Agent v0.1.39 is now RUNNING!
+    echo  SUCCESS: Sentinel Grid Edge Agent v0.1.40 is now RUNNING!
     echo ================================================================
 ) else (
     echo.
