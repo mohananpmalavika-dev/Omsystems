@@ -184,7 +184,7 @@ export class HelmetDetector extends BaseDetector {
       // An explicit helmet box elsewhere in the scene is contrary spatial
       // evidence; do not override it with a crop classification.
       if (!presence && (helmets.length > 0 || !runLocal || !this.classifier)) continue;
-      if (this.classifier) {
+      if (runLocal && this.classifier && frame.imageData && frame.imageData.length > 0) {
         const { upperResult, standardResult } = await this.helmetClassifications(frame, person.boundingBox);
         const alertThreshold = presence
           ? Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE)

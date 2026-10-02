@@ -83,11 +83,11 @@ export function BranchEdgeProductView() {
               Managed Edge Agent Installation
               </h3>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
-                Windows Installer (v0.1.43)
+                Windows Installer (v0.1.45)
               </span>
             </div>
             <p className="text-xs text-slate-300 max-w-2xl">
-              Installers are generated from the branch device manager with a one-time activation. Package: <strong>KryptonVision Edge Agent Installer v0.1.43</strong> (Windows x64). The ZIP includes the executable, branch configuration, and installation launcher.
+              Installers are generated from the branch device manager with a one-time activation. Package: <strong>KryptonVision Edge Agent Installer v0.1.45</strong> (Windows x64). The ZIP includes the executable, branch configuration, and installation launcher.
             </p>
           </div>
 
