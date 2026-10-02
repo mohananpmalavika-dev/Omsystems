@@ -58,7 +58,7 @@ async function mount(mode: string, props: Record<string, unknown>) {
     HTMLMediaElement.prototype.play = function() {
       w.playCalls++;
       if (mode === "autoplay" && !this.muted) return Promise.reject(new DOMException("Blocked", "NotAllowedError"));
-      if (mode === "autoplay" || mode === "healthy") {
+      if (mode === "autoplay" || mode === "healthy" || mode === "slow-webrtc" || mode === "streamless") {
         (this as any)._playing = true; (this as any)._ready = 2;
         queueMicrotask(() => this.dispatchEvent(new Event("playing")));
       }
@@ -69,10 +69,15 @@ async function mount(mode: string, props: Record<string, unknown>) {
       ontrack: any; oniceconnectionstatechange: any;
       addTransceiver() {} async createOffer() {return {type:"offer",sdp:"offer"};}
       async setLocalDescription(offer: any) {this.localDescription = offer;}
-      async setRemoteDescription() {this.ontrack?.({streams:[new MediaStream()]});}
+      async setRemoteDescription() {
+        if (mode === "streamless") this.ontrack?.({streams:[],track:undefined});
+        else this.ontrack?.({streams:[new MediaStream()]});
+      }
       close() {};
     };
-    w.fetch = () => Promise.resolve(new Response("answer", {status: 201}));
+    w.fetch = () => mode === "slow-webrtc"
+      ? new Promise(resolve => setTimeout(() => resolve(new Response("answer", {status:201})), 6000))
+      : Promise.resolve(new Response("answer", {status: 201}));
   }, mode);
   await page.addScriptTag({ content: bundle });
   await page.evaluate((props) => (window as any).mount(props), props);
@@ -104,15 +109,30 @@ describe("live player in Chromium", () => {
     await mount("silent", {url: "https://media.example/hls/index.m3u8", whepUrl: "https://media.example/whep"});
     await page.waitForFunction(() => document.querySelector("video")?.srcObject !== null);
     expect(await page.evaluate(() => (window as any).states.includes(true))).toBe(false);
-    await page.clock.fastForward(4_100);
+    await page.clock.fastForward(25_100);
     await page.waitForFunction(() => (window as any).hlsStarts === 1);
     expect(await page.evaluate(() => (window as any).hlsDestroys)).toBe(0);
   });
 
   it("reports an error for a WebRTC-only camera without frames", async () => {
     await mount("silent", {url: "", whepUrl: "https://media.example/whep"});
-    await page.clock.fastForward(4_100);
+    await page.clock.fastForward(25_100);
     expect(await page.evaluate(() => (window as any).errors)).toContain("playback_start_timeout");
+  });
+
+  it("allows a slow on-demand WHEP source to connect without switching to HLS", async () => {
+    await mount("slow-webrtc", {url: "https://media.example/hls/index.m3u8", whepUrl: "https://media.example/whep"});
+    await page.clock.fastForward(4_100);
+    expect(await page.evaluate(() => (window as any).hlsStarts)).toBe(0);
+    await page.clock.fastForward(2_000);
+    await page.waitForFunction(() => (window as any).states.includes(true));
+    expect(await page.evaluate(() => (window as any).hlsStarts)).toBe(0);
+  });
+
+  it("plays streamless WHEP tracks", async () => {
+    await mount("streamless", {url: "", whepUrl: "https://media.example/whep"});
+    await page.waitForFunction(() => (window as any).states.includes(true));
+    expect(await page.locator("video").evaluate(video => (video as HTMLVideoElement).srcObject instanceof MediaStream)).toBe(true);
   });
 
   it("recovers paused playback rather than leaving a frozen live tile", async () => {

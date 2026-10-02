@@ -9,6 +9,8 @@ const MAX_RECOVERY_ATTEMPTS = 25;
 const STALL_TIMEOUT_MS = 8_000;
 const RECOVERY_DELAY_MS = 1_200;
 const STARTUP_TIMEOUT_MS = 45_000;
+const WEBRTC_STARTUP_TIMEOUT_MS = 25_000;
+const ICE_GATHER_TIMEOUT_MS = 5_000;
 
 type PlayerStatus = "idle" | "loading" | "live" | "reconnecting" | "error";
 
@@ -405,8 +407,11 @@ export function HlsPlayer({
 
         pc.ontrack = (event) => {
           if (disposed || signal.aborted) return;
-          if (event.streams && event.streams[0]) {
-            video.srcObject = event.streams[0];
+          {
+            // WHEP tracks can be streamless when the answer omits msid.
+            const stream = event.streams?.[0] ?? (video.srcObject instanceof MediaStream ? video.srcObject : new MediaStream());
+            if (!event.streams?.[0] && event.track && !stream.getTracks().includes(event.track)) stream.addTrack(event.track);
+            video.srcObject = stream;
             void playVideo();
             currentProtocol = "webrtc";
             setStreamProtocol("webrtc");
@@ -435,7 +440,7 @@ export function HlsPlayer({
           }
         };
 
-        // Fallback timer: if WebRTC does not receive media within 4 seconds, fallback to HLS
+        // On-demand sources can take 15 seconds to connect, before ICE and decoding.
         whepTimeoutTimer = setTimeout(() => {
           if (!disposed && !playbackStarted) {
             if (!url) {
@@ -448,12 +453,12 @@ export function HlsPlayer({
             setStreamProtocol("ll-hls");
             startHls(url);
           }
-        }, 4_000);
+        }, WEBRTC_STARTUP_TIMEOUT_MS);
 
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
 
-        // Allow up to 600ms to gather local ICE candidates into the SDP
+        // This client sends one complete offer, so allow STUN/TURN candidates to gather.
         await new Promise<void>((resolve) => {
           if (pc.iceGatheringState === "complete") {
             resolve();
@@ -470,7 +475,7 @@ export function HlsPlayer({
             timeoutId = setTimeout(() => {
               pc.removeEventListener("icegatheringstatechange", onGatherChange);
               resolve();
-            }, 600);
+            }, ICE_GATHER_TIMEOUT_MS);
           }
         });
 
