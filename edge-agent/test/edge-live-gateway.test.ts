@@ -285,20 +285,24 @@ describe("all-in-one edge live gateway", () => {
     expect(mediaAuth.status).toBe(204);
   });
 
-  it("requires a recording grant before exposing device archive playback", async () => {
+  it.each([
+    { vendor: "hikvision", recorderChannel: 1, source: "rtsp://operator:secret@192.0.2.10:554/Streaming/Channels/101", expected: "/Streaming/tracks/101?starttime=20260924T100000Z&endtime=20260924T100200Z" },
+    { vendor: "cp-plus", recorderChannel: 0, source: "rtsp://operator:secret@192.0.2.10:554/cam/realmonitor?channel=1&subtype=0", expected: "/cam/playback?channel=1&" },
+    { vendor: "cp-plus", recorderChannel: 3, source: "rtsp://operator:secret@192.0.2.10:554/cam/realmonitor?channel=4&subtype=0", expected: "/cam/playback?channel=4&" },
+  ] as const)("requires a recording grant and uses the authorized $vendor stream channel $recorderChannel", async ({vendor, recorderChannel, source, expected}) => {
     const paths: Array<{ path: string; source: string }> = [];
     let purpose: "view" | "playback" = "view";
     app = buildEdgeLiveGateway({
       consumer: { consume: async () => ({
         id: "grant-1", cameraId: "camera-1", cameraNodeId: "node-1",
         userId: "user-1", tenantId: "tenant-1", connectionSecretRef: "edge://agent/camera-1",
-        profiles: [], purpose, vendor: "hikvision", channel: 1,
+        profiles: [], purpose, vendor, channel: 1, recorderChannel,
       }) },
       router: {
         ensurePath: async (path, source) => { paths.push({ path, source }); },
         removePath: async () => undefined,
       },
-      resolveSecret: async () => "rtsp://operator:secret@192.0.2.10:554/Streaming/Channels/101",
+      resolveSecret: async () => source,
       publicBaseUrl: () => "https://media.example.test",
       mediaMtxHlsUrl: "http://127.0.0.1:8888", accessTtlMs: 30_000,
     });
@@ -315,7 +319,7 @@ describe("all-in-one edge live gateway", () => {
     const result = await response.json() as any;
     expect(result.hls.url).toContain("/hls/camera-archive-camera-1-");
     expect(paths).toHaveLength(1);
-    expect(paths[0]!.source).toContain("starttime=20260924T100000Z&endtime=20260924T100200Z");
+    expect(paths[0]!.source).toContain(expected);
     expect(paths[0]!.source).toContain("operator:secret@192.0.2.10");
     expect(JSON.stringify(result)).not.toContain("secret");
   });

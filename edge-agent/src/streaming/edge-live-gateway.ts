@@ -271,7 +271,12 @@ export class EdgeLiveGateway {
         password: decodeURIComponent(source.password),
         vendor,
       } as const;
-      const channel = consumed.recorderChannel ?? consumed.channel ?? 1;
+      // Dahua inventory channels are zero-based, while CGI search and RTSP
+      // playback use the one-based channel in the saved, authorized stream URI.
+      const streamChannel = /^\/cam\/(?:realmonitor|playback)$/i.test(source.pathname)
+        ? Number(source.searchParams.get("channel")) : Number.NaN;
+      const channel = Number.isInteger(streamChannel) && streamChannel > 0
+        ? streamChannel : consumed.recorderChannel ?? consumed.channel ?? 1;
       if (!cameraConfig.username || !cameraConfig.password) {
         return sendJson(response, 409, { error: "camera_credentials_unavailable" });
       }

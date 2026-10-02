@@ -1,0 +1,21 @@
+{
+    "task":  {
+                 "actions":  [
+                                 {
+                                     "Execute":  "C:\\Program Files\\Sentinel Grid\\Edge Agent\\edge-agent.exe",
+                                     "Arguments":  "--run --config \"C:\\Program Files\\Sentinel Grid\\Edge Agent\\config\\edge-agent.env\"",
+                                     "WorkingDirectory":  "C:\\Program Files\\Sentinel Grid\\Edge Agent"
+                                 }
+                             ],
+                 "lastResult":  0,
+                 "lastRun":  "2026-10-02T22:26:36.0000000+05:30",
+                 "state":  "Queued"
+             },
+    "identity":  "MALAVIKA\\Dhanya",
+    "configVersion":  "EDGE_AGENT_VERSION=\"0.1.43\"",
+    "configCheck":  "{\r\n  \"valid\": true,\r\n  \"configPath\": \"C:/Program Files/Sentinel Grid/Edge Agent/config/edge-agent.env\",\r\n  \"homeDirectory\": \"C:\\\\Program Files\\\\Sentinel Grid\\\\Edge Agent\",\r\n  \"controlPlaneUrl\": \"https://34-14-220-41.sslip.io\",\r\n  \"edgeAgentId\": null,\r\n  \"edgeAgentName\": \"Local Camera Pilot Scanner\",\r\n  \"secureFaceAiEnabled\": false,\r\n  \"secureFaceModelManifest\": \"./models/secure-face/manifest.json\",\r\n  \"physicalSirenEnabled\": false,\r\n  \"onvifEndpointCount\": 0,\r\n  \"recorderCount\": 0\r\n}\r\n",
+    "configExit":  0,
+    "processes":  [
+
+                  ]
+}

@@ -418,7 +418,7 @@ async function getDahuaRecordingStatus(base: string, credentials: { username: st
   try {
     const factory = await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?action=factory.create`, { method: "GET" }, credentials, timeout);
     if (!factory.ok) return recordingUnavailable("dahua_archive_search_unavailable", channels);
-    object = key(await factory.text(), "object");
+    object = dahuaSearchHandle(await factory.text());
     if (!object) return recordingUnavailable("dahua_archive_search_handle_missing", channels);
 
     const now = new Date();
@@ -428,7 +428,7 @@ async function getDahuaRecordingStatus(base: string, credentials: { username: st
       "condition.EndTime": dahuaTime(now),
       "condition.Types[0]": "dav",
     });
-    const find = await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?${query}`, { method: "GET" }, credentials, timeout);
+    const find = await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?${dahuaQuery(query)}`, { method: "GET" }, credentials, timeout);
     if (!find.ok) return recordingUnavailable("dahua_archive_search_failed", channels);
 
     const matches: RecordingMatch[] = [];
@@ -516,7 +516,7 @@ async function searchDahuaArchive(base: string, credentials: { username: string;
   try {
     const factory = await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?action=factory.create`, { method: "GET" }, credentials, timeout);
     if (!factory.ok) throw new Error(`dahua_archive_factory_${factory.status}`);
-    object = key(await factory.text(), "object");
+    object = dahuaSearchHandle(await factory.text());
     if (!object) throw new Error("dahua_archive_handle_missing");
     const query = new URLSearchParams({
       action: "findFile", object,
@@ -525,7 +525,7 @@ async function searchDahuaArchive(base: string, credentials: { username: string;
       "condition.EndTime": dahuaTime(to),
       "condition.Types[0]": "dav",
     });
-    const find = await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?${query}`, { method: "GET" }, credentials, timeout);
+    const find = await authenticatedFetch(`${base}/cgi-bin/mediaFileFind.cgi?${dahuaQuery(query)}`, { method: "GET" }, credentials, timeout);
     if (!find.ok) throw new Error(`dahua_archive_find_${find.status}`);
 
     const pageSize = Math.min(1_000, maxResults);
@@ -811,6 +811,17 @@ function dahuaTime(value: Date) {
   // so send wall-clock time in the same timezone used to parse its reply.
   const pad = (part: number) => String(part).padStart(2, "0");
   return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`;
+}
+
+function dahuaSearchHandle(text: string) {
+  // OEM firmware returns the factory handle under result instead of object.
+  // Accept numeric handles only; result=false/OK is not a search handle.
+  return [key(text, "object"), key(text, "result")].find(value => value !== undefined && /^\d+$/.test(value));
+}
+
+function dahuaQuery(query: URLSearchParams) {
+  // The device CGI accepts percent-encoded spaces but rejects form-style '+'.
+  return query.toString().replace(/\+/g, "%20");
 }
 
 async function getOnvifSearchEndpoint(base: string, deviceServicePath: string, credentials: { username: string; password: string } | undefined, timeout: number) {

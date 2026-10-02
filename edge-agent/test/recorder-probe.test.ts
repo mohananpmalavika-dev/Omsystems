@@ -79,6 +79,28 @@ describe("vendor recorder probes", () => {
     expect(deviceArchivePlaybackUri({ ...config, apiFamily: clips[0]!.apiFamily }, from, to)).toContain("/cam/playback?channel=1");
   });
 
+  it("accepts CP PLUS result handles and percent-encodes archive wall-clock timestamps", async () => {
+    const from = new Date(2026, 9, 1, 22, 10);
+    const to = new Date(2026, 9, 1, 22, 15);
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      urls.push(url);
+      const query = new URL(url).searchParams;
+      switch (query.get("action")) {
+        case "factory.create": return new Response("result=3048732584\r\n");
+        case "findFile": return new Response(url.includes("+") ? "Bad Request" : "OK", { status: url.includes("+") ? 400 : 200 });
+        case "findNextFile": return new Response(urls.filter(item => item.includes("findNextFile")).length === 1
+          ? "found=1\r\nitems[0].Channel=0\r\nitems[0].StartTime=2026-10-01 22:10:00\r\nitems[0].EndTime=2026-10-01 22:15:00\r\n" : "found=0\r\n");
+        default: return new Response("OK");
+      }
+    }));
+    expect(await searchDeviceArchive({host: "192.0.2.22", port: 80, vendor: "cp-plus"}, from, to, 1000, 1))
+      .toEqual([{startTime: from.toISOString(), endTime: to.toISOString()}]);
+    expect(urls[1]).toContain("object=3048732584");
+    expect(urls[1]).toContain("2026-10-01%2022%3A10%3A00");
+    expect(urls.at(-1)).toContain("action=close&object=3048732584");
+  });
+
   it("falls back to Hikvision archive search on a CP PLUS OEM recorder", async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response("not found", { status: 404 }))

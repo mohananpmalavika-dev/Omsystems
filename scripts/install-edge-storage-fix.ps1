@@ -50,8 +50,8 @@ function Copy-GatewayExecutable([string]$from) {
     }
   }
 }
-function Test-GatewayReady {
-  $deadline = [DateTime]::UtcNow.AddSeconds(90)
+function Test-GatewayReady([int]$timeoutSeconds = 90) {
+  $deadline = [DateTime]::UtcNow.AddSeconds($timeoutSeconds)
   do {
     Start-Sleep -Seconds 3
     try {
@@ -60,6 +60,20 @@ function Test-GatewayReady {
     } catch { }
   } while ([DateTime]::UtcNow -lt $deadline)
   return $false
+}
+function Start-InstalledAgent {
+  Enable-ScheduledTask -TaskName $taskName | Out-Null
+  Start-ScheduledTask -TaskName $taskName
+  if (Test-GatewayReady 15) { return 'scheduled-task' }
+  # Task Scheduler can queue a manual start while its launch conditions block
+  # execution. Start the same installation directly only if no agent exists.
+  $instances = @(Get-CimInstance Win32_Process -Filter "Name='edge-agent.exe'")
+  if ($instances.Count -eq 0) {
+    Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    Start-Process -FilePath $exe -ArgumentList @('--run', '--config', "`"$config`"") -WorkingDirectory $install -WindowStyle Hidden | Out-Null
+    if (Test-GatewayReady) { return 'direct-start' }
+  }
+  throw 'Gateway health check failed after restart'
 }
 try {
   Disable-ScheduledTask -TaskName $taskName | Out-Null
@@ -72,10 +86,8 @@ try {
     $content = [regex]::Replace($content, '(?m)^EDGE_AGENT_VERSION=.*$', "EDGE_AGENT_VERSION=`"$TargetVersion`"")
   } else { $content += "`r`nEDGE_AGENT_VERSION=`"$TargetVersion`"`r`n" }
   [IO.File]::WriteAllText($config, $content, [Text.UTF8Encoding]::new($false))
-  Enable-ScheduledTask -TaskName $taskName | Out-Null
-  Start-ScheduledTask -TaskName $taskName
-  if (-not (Test-GatewayReady)) { throw 'Gateway health check failed after update' }
-  @{updated=$true; version=$TargetVersion; backupExe=$backupExe; backupConfig=$backupConfig} |
+  $startMethod = Start-InstalledAgent
+  @{updated=$true; version=$TargetVersion; startMethod=$startMethod; backupExe=$backupExe; backupConfig=$backupConfig} |
     ConvertTo-Json | Set-Content -LiteralPath $resultPath
 } catch {
   $failure = $_.Exception.Message
@@ -84,9 +96,8 @@ try {
     Stop-InstalledAgent
     Copy-GatewayExecutable $backupExe
     Copy-Item -LiteralPath $backupConfig -Destination $config -Force
-    Enable-ScheduledTask -TaskName $taskName | Out-Null
-    Start-ScheduledTask -TaskName $taskName
-    $healthy = Test-GatewayReady
+    $startMethod = Start-InstalledAgent
+    $healthy = $true
     @{updated=$false; rolledBack=$true; healthy=$healthy; error=$failure; backupExe=$backupExe} |
       ConvertTo-Json | Set-Content -LiteralPath $resultPath
   } catch {

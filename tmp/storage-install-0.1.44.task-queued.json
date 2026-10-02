@@ -1,0 +1,7 @@
+{
+    "healthy":  false,
+    "error":  "Gateway health check failed after update",
+    "rolledBack":  true,
+    "backupExe":  "C:\\Program Files\\Sentinel Grid\\Edge Agent\\edge-agent.exe.before-storage-0.1.44.20261002T165446Z.bak",
+    "updated":  false
+}
