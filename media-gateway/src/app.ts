@@ -4,6 +4,7 @@ import { Readable } from "node:stream";
 import { z } from "zod";
 import { AccessRegistry } from "./access-registry.js";
 import { GatewayError } from "./control-plane-client.js";
+import { signTalkBridgeGrant } from "./talk-bridge-grant.js";
 import type {
   ControlPlaneClient,
   MediaRouter,
@@ -215,8 +216,9 @@ export async function buildMediaGateway(options: {
     if (body.profile && consumed.profile && body.profile !== consumed.profile) {
       throw new GatewayError(403, "live_session_profile_mismatch");
     }
-    const path = `camera-${safeIdentifier(consumed.cameraId)}`;
     const portableSource = isPortableSource(consumed.sourceType);
+    const profile = consumed.profile ?? "sub";
+    const path = `camera-${safeIdentifier(consumed.cameraId)}${!portableSource && consumed.profiles.length > 1 ? `-${profile}` : ""}`;
     const session = portableSource
       ? access.issue(path, "read")
       : await startCameraSource(path, consumed.connectionSecretRef, consumed.profile ?? "sub");
@@ -293,6 +295,16 @@ export async function buildMediaGateway(options: {
   }
   const gatewayTalkSessions = new Map<string, GatewayTalkSession>();
   const gatewayTalkLeases = new Map<string, string>();
+  app.addHook("onClose", async () => {
+    await Promise.allSettled([...gatewayTalkSessions.values()].map(async (session) => {
+      clearTimeout(session.timer);
+      if (session.edgeEndUrl && session.edgeBearerToken) {
+        await fetch(session.edgeEndUrl, { method: "DELETE", headers: { authorization: `Bearer ${session.edgeBearerToken}` }, signal: AbortSignal.timeout(5_000) });
+      }
+    }));
+    gatewayTalkSessions.clear();
+    gatewayTalkLeases.clear();
+  });
 
   app.post("/v1/talk/start", async (request, reply) => {
     setCorsHeaders(request.headers.origin, undefined, reply);
@@ -311,7 +323,7 @@ export async function buildMediaGateway(options: {
     const existingLeaseSessionId = gatewayTalkLeases.get(consumed.cameraId);
     if (existingLeaseSessionId) {
       const existing = gatewayTalkSessions.get(existingLeaseSessionId);
-      if (existing && existing.expiresAt > now) {
+      if (!existing || existing.expiresAt > now) {
         throw new GatewayError(409, "talkback_busy");
       }
       // Expired lease cleanup
@@ -322,81 +334,102 @@ export async function buildMediaGateway(options: {
       }
     }
 
-    const sourceUri = await options.secrets.resolve(consumed.connectionSecretRef);
-    if (!sourceUri) throw new GatewayError(503, "stream_secret_unavailable");
-
-    // Forward talk session to edge agent if camera has an edge node
-    let edgeSession: { sessionId: string; audio: { url: string; bearerToken: string; endUrl: string }; adapter: string; codec: string; sampleRate: number } | undefined;
-    if (consumed.cameraNodeId) {
-      const edgeAgent = await options.controlPlane.getEdgeAgentMediaUrl?.(consumed.cameraNodeId);
-      if (edgeAgent?.localMediaUrl) {
-        try {
-          const edgeResponse = await fetch(new URL("/v1/talk/start", edgeAgent.localMediaUrl), {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              ...(options.edgeBridgeSharedKey ? { "x-edge-bridge-key": options.edgeBridgeSharedKey } : {}),
-            },
-            body: JSON.stringify({ controlPlaneToken: body.controlPlaneToken }),
-            signal: AbortSignal.timeout(15_000),
-          });
-          if (edgeResponse.ok) {
-            edgeSession = await edgeResponse.json() as typeof edgeSession;
+    // Reserve before any asynchronous work. A failed startup releases the reservation.
+    gatewayTalkLeases.set(consumed.cameraId, consumed.id);
+    try {
+      if (!options.edgeBridgeSharedKey || !consumed.cameraNodeId) throw new GatewayError(503, "talkback_unavailable");
+      let edgeSession: { sessionId: string; audio: { url: string; bearerToken: string; endUrl: string }; adapter: string; codec: string; sampleRate: number } | undefined;
+      if (consumed.cameraNodeId) {
+        const edgeAgent = await options.controlPlane.getEdgeAgentMediaUrl?.(consumed.cameraNodeId);
+        if (edgeAgent?.localMediaUrl) {
+          try {
+            const edgeResponse = await fetch(new URL("/v1/talk/start", edgeAgent.localMediaUrl), {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                ...(options.edgeBridgeSharedKey ? { "x-edge-bridge-key": options.edgeBridgeSharedKey } : {}),
+              },
+              body: JSON.stringify({ bridgeGrant: signTalkBridgeGrant(consumed, options.edgeBridgeSharedKey) }),
+              signal: AbortSignal.timeout(15_000),
+              redirect: "error",
+            });
+            if (edgeResponse.ok) {
+              const started = z.object({
+                sessionId: z.string().min(1), adapter: z.string(), codec: z.string().optional(), sampleRate: z.number().positive().optional(),
+                audio: z.object({ url: z.string().url(), endUrl: z.string().url(), bearerToken: z.string().min(1),
+                  codec: z.string().optional(), sampleRate: z.number().positive().optional() }),
+              }).parse(await edgeResponse.json());
+              const codec = started.audio.codec ?? started.codec;
+              const sampleRate = started.audio.sampleRate ?? started.sampleRate;
+              if (!codec || sampleRate === undefined) throw new GatewayError(502, "invalid_edge_talk_session");
+              edgeSession = { ...started, codec, sampleRate };
+            } else {
+              throw new GatewayError(edgeResponse.status === 409 ? 409 : 502, edgeResponse.status === 409 ? "talkback_busy" : "edge_talk_start_failed");
+            }
+          } catch (error) {
+            app.log.warn({
+              error: error instanceof Error ? error.message : String(error),
+            }, "Edge agent talk session unavailable");
+            if (error instanceof GatewayError) throw error;
+            throw new GatewayError(502, "edge_talk_start_failed");
           }
-        } catch (error) {
-          app.log.warn({
-            error: error instanceof Error ? error.message : String(error),
-          }, "Edge agent talk session unavailable; continuing without edge forwarding");
         }
       }
+      if (!edgeSession) throw new GatewayError(503, "talkback_unavailable");
+
+      const sessionId = consumed.id;
+      const token = randomBytes(32).toString("base64url");
+      const expiresAt = Date.now() + options.accessTtlMs;
+
+      const session: GatewayTalkSession = {
+        id: sessionId,
+        cameraId: consumed.cameraId,
+        ...(consumed.cameraNodeId ? { cameraNodeId: consumed.cameraNodeId } : {}),
+        token,
+        expiresAt,
+        adapter: edgeSession?.adapter ?? "onvif-rtsp-backchannel",
+        codec: edgeSession?.codec ?? "PCMA",
+        sampleRate: edgeSession?.sampleRate ?? 8000,
+        bytesSent: 0,
+        startedAt: now,
+        timer: setTimeout(() => {
+          gatewayTalkSessions.delete(sessionId);
+          if (gatewayTalkLeases.get(consumed.cameraId) === sessionId) gatewayTalkLeases.delete(consumed.cameraId);
+          void fetch(edgeSession!.audio.endUrl, {
+            method: "DELETE", headers: { authorization: `Bearer ${edgeSession!.audio.bearerToken}` }, signal: AbortSignal.timeout(5_000),
+          }).catch(() => undefined);
+        }, options.accessTtlMs),
+        ...(edgeSession ? {
+          edgeAudioUrl: edgeSession.audio.url,
+          edgeBearerToken: edgeSession.audio.bearerToken,
+          edgeEndUrl: edgeSession.audio.endUrl,
+        } : {}),
+      };
+      session.timer.unref();
+
+      gatewayTalkSessions.set(sessionId, session);
+      gatewayTalkLeases.set(consumed.cameraId, sessionId);
+
+      reply.header("cache-control", "no-store");
+      const base = stripSlash(options.publicWebRtcBaseUrl.replace(/\/webrtc\/?$/, ""));
+      return reply.code(201).send({
+        sessionId: session.id,
+        cameraId: session.cameraId,
+        expiresAt: new Date(expiresAt).toISOString(),
+        adapter: session.adapter,
+        audio: {
+          url: `${base}/v1/talk/${encodeURIComponent(session.id)}/audio`,
+          endUrl: `${base}/v1/talk/${encodeURIComponent(session.id)}`,
+          bearerToken: session.token,
+          contentType: "audio/L16;rate=8000;channels=1",
+          codec: session.codec,
+          sampleRate: session.sampleRate,
+        },
+      });
+    } catch (error) {
+      if (gatewayTalkLeases.get(consumed.cameraId) === consumed.id) gatewayTalkLeases.delete(consumed.cameraId);
+      throw error;
     }
-
-    const sessionId = consumed.id;
-    const token = randomBytes(32).toString("base64url");
-    const expiresAt = now + options.accessTtlMs;
-
-    const session: GatewayTalkSession = {
-      id: sessionId,
-      cameraId: consumed.cameraId,
-      ...(consumed.cameraNodeId ? { cameraNodeId: consumed.cameraNodeId } : {}),
-      token,
-      expiresAt,
-      adapter: edgeSession?.adapter ?? "onvif-rtsp-backchannel",
-      codec: edgeSession?.codec ?? "PCMA",
-      sampleRate: edgeSession?.sampleRate ?? 8000,
-      bytesSent: 0,
-      startedAt: now,
-      timer: setTimeout(() => {
-        gatewayTalkSessions.delete(sessionId);
-        gatewayTalkLeases.delete(consumed.cameraId);
-      }, options.accessTtlMs),
-      ...(edgeSession ? {
-        edgeAudioUrl: edgeSession.audio.url,
-        edgeBearerToken: edgeSession.audio.bearerToken,
-        edgeEndUrl: edgeSession.audio.endUrl,
-      } : {}),
-    };
-    session.timer.unref();
-
-    gatewayTalkSessions.set(sessionId, session);
-    gatewayTalkLeases.set(consumed.cameraId, sessionId);
-
-    reply.header("cache-control", "no-store");
-    const base = stripSlash(options.publicWebRtcBaseUrl.replace(/\/webrtc\/?$/, ""));
-    return reply.code(201).send({
-      sessionId: session.id,
-      cameraId: session.cameraId,
-      expiresAt: new Date(expiresAt).toISOString(),
-      adapter: session.adapter,
-      audio: {
-        url: `${base}/v1/talk/${encodeURIComponent(session.id)}/audio`,
-        endUrl: `${base}/v1/talk/${encodeURIComponent(session.id)}`,
-        bearerToken: session.token,
-        contentType: "audio/L16;rate=8000;channels=1",
-        codec: session.codec,
-        sampleRate: session.sampleRate,
-      },
-    });
   });
 
   app.route({
@@ -420,6 +453,7 @@ export async function buildMediaGateway(options: {
       }
 
       // Forward audio to edge agent if available
+      if (!session.edgeAudioUrl || !session.edgeBearerToken) throw new GatewayError(503, "talkback_unavailable");
       if (session.edgeAudioUrl && session.edgeBearerToken) {
         try {
           const edgeResponse = await fetch(session.edgeAudioUrl, {

@@ -1,0 +1,359 @@
+{
+  "version": "1.0",
+  "generatedAt": "2026-10-02T07:59:54.313Z",
+  "run": {
+    "id": "int-test-1790927964849",
+    "targetUrl": "http://127.0.0.1:56921",
+    "userRole": "Admin",
+    "browser": "chromium"
+  },
+  "score": {
+    "overall": 55,
+    "breakdown": {
+      "availabilityNavigation": 75,
+      "functionalUi": 44,
+      "apiReliability": 90,
+      "consoleStability": 85,
+      "performance": 100,
+      "accessibility": 100,
+      "responsiveUi": 100,
+      "coverage": 85
+    }
+  },
+  "summary": {
+    "pagesDiscovered": 3,
+    "pagesTested": 3,
+    "pageCoveragePct": 100,
+    "interactiveDiscovered": 8,
+    "interactiveTested": 5,
+    "interactionCoveragePct": 62.5,
+    "criticalIssues": 2,
+    "majorIssues": 2,
+    "minorIssues": 3,
+    "consoleErrors": 3,
+    "apiFailures": 1,
+    "brokenNavigation": 1,
+    "blankPages": 0,
+    "accessibilityIssues": 0,
+    "totalDurationMs": 0
+  },
+  "issues": [
+    {
+      "runId": "int-test-1790927964849",
+      "severity": "CRITICAL",
+      "category": "DESTRUCTIVE_BLOCKED",
+      "title": "Safety Engine blocked execution of destructive action: \"Delete Camera\"",
+      "pageUrl": "http://127.0.0.1:56921/dashboard",
+      "actionDescription": "Attempted action: \"Delete Camera\"",
+      "expected": "Action blocked by automated safety policy",
+      "actual": "Element text contains destructive keyword: \"delete\"",
+      "id": "QA-ISSUE-001",
+      "occurrences": 1,
+      "firstSeenAt": "2026-10-02T07:59:41.315Z",
+      "createdAt": "2026-10-02T07:59:41.315Z"
+    },
+    {
+      "runId": "int-test-1790927964849",
+      "severity": "MAJOR",
+      "category": "BROKEN_NAVIGATION",
+      "title": "Broken Navigation to http://127.0.0.1:56921/error-page",
+      "pageUrl": "http://127.0.0.1:56921/error-page",
+      "actionDescription": "Action on Previous Page: Navigation",
+      "expected": "Destination page loads successfully without error screens",
+      "actual": "Heading indicates \"404 not found\"",
+      "details": {
+        "fromPage": "Previous Page",
+        "action": "Navigation",
+        "destination": "http://127.0.0.1:56921/error-page"
+      },
+      "id": "QA-ISSUE-002",
+      "occurrences": 1,
+      "firstSeenAt": "2026-10-02T07:59:49.180Z",
+      "createdAt": "2026-10-02T07:59:49.180Z"
+    },
+    {
+      "runId": "int-test-1790927964849",
+      "severity": "CRITICAL",
+      "category": "API_FAILURE",
+      "title": "API returned HTTP 500 for http://127.0.0.1:56921/api/cameras",
+      "pageUrl": "http://127.0.0.1:56921/dashboard",
+      "expected": "HTTP 200 OK with valid JSON response",
+      "actual": "HTTP 500 failure in 55ms",
+      "details": {
+        "endpoint": "http://127.0.0.1:56921/api/cameras",
+        "status": 500,
+        "durationMs": 55
+      },
+      "id": "QA-ISSUE-003",
+      "occurrences": 1,
+      "firstSeenAt": "2026-10-02T07:59:54.279Z",
+      "createdAt": "2026-10-02T07:59:54.279Z"
+    },
+    {
+      "runId": "int-test-1790927964849",
+      "severity": "MAJOR",
+      "category": "API_FAILURE",
+      "title": "API returned HTTP 404 for http://127.0.0.1:56921/error-page",
+      "pageUrl": "http://127.0.0.1:56921/cameras",
+      "expected": "HTTP 200 OK with valid JSON response",
+      "actual": "HTTP 404 failure in 1ms",
+      "details": {
+        "endpoint": "http://127.0.0.1:56921/error-page",
+        "status": 404,
+        "durationMs": 1
+      },
+      "id": "QA-ISSUE-004",
+      "occurrences": 1,
+      "firstSeenAt": "2026-10-02T07:59:54.279Z",
+      "createdAt": "2026-10-02T07:59:54.279Z"
+    },
+    {
+      "runId": "int-test-1790927964849",
+      "severity": "MINOR",
+      "category": "CONSOLE_ERROR",
+      "title": "JavaScript exception: Test console error from dashboard script",
+      "pageUrl": "http://127.0.0.1:56921/dashboard",
+      "expected": "Clean console execution without uncaught exceptions",
+      "actual": "Test console error from dashboard script",
+      "details": {},
+      "id": "QA-ISSUE-005",
+      "occurrences": 1,
+      "firstSeenAt": "2026-10-02T07:59:54.288Z",
+      "createdAt": "2026-10-02T07:59:54.288Z"
+    },
+    {
+      "runId": "int-test-1790927964849",
+      "severity": "MINOR",
+      "category": "CONSOLE_ERROR",
+      "title": "JavaScript exception: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "pageUrl": "http://127.0.0.1:56921/dashboard",
+      "expected": "Clean console execution without uncaught exceptions",
+      "actual": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "details": {},
+      "id": "QA-ISSUE-006",
+      "occurrences": 1,
+      "firstSeenAt": "2026-10-02T07:59:54.289Z",
+      "createdAt": "2026-10-02T07:59:54.289Z"
+    },
+    {
+      "runId": "int-test-1790927964849",
+      "severity": "MINOR",
+      "category": "CONSOLE_ERROR",
+      "title": "JavaScript exception: Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "pageUrl": "http://127.0.0.1:56921/cameras",
+      "expected": "Clean console execution without uncaught exceptions",
+      "actual": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "details": {},
+      "id": "QA-ISSUE-007",
+      "occurrences": 1,
+      "firstSeenAt": "2026-10-02T07:59:54.289Z",
+      "createdAt": "2026-10-02T07:59:54.289Z"
+    }
+  ],
+  "pages": [
+    {
+      "id": "page-1",
+      "runId": "int-test-1790927964849",
+      "url": "http://127.0.0.1:56921/dashboard",
+      "path": "/dashboard",
+      "title": "Dashboard - Sentinel Grid",
+      "pageHash": "b9eac0c227adc990",
+      "depth": 0,
+      "status": "TESTED",
+      "loadTimeMs": 61,
+      "domContentLoadedMs": 60,
+      "networkIdleMs": 261,
+      "isBlank": false,
+      "screenshotPath": "screenshots/003-dashboard_-_sentinel_grid.png",
+      "elementCount": 9,
+      "interactiveCount": 5,
+      "testedInteractiveCount": 1,
+      "discoveredAt": "2026-10-02T07:59:41.239Z",
+      "crawledAt": "2026-10-02T07:59:41.239Z"
+    },
+    {
+      "id": "page-2",
+      "runId": "int-test-1790927964849",
+      "url": "http://127.0.0.1:56921/cameras",
+      "path": "/cameras",
+      "title": "Cameras - Sentinel Grid",
+      "pageHash": "f77528cd419168e3",
+      "depth": 1,
+      "status": "TESTED",
+      "loadTimeMs": 35,
+      "domContentLoadedMs": 35,
+      "networkIdleMs": 235,
+      "isBlank": false,
+      "screenshotPath": "screenshots/004-cameras_-_sentinel_grid.png",
+      "elementCount": 4,
+      "interactiveCount": 3,
+      "testedInteractiveCount": 1,
+      "discoveredAt": "2026-10-02T07:59:46.785Z",
+      "crawledAt": "2026-10-02T07:59:46.785Z"
+    },
+    {
+      "id": "page-3",
+      "runId": "int-test-1790927964849",
+      "url": "http://127.0.0.1:56921/error-page",
+      "path": "/error-page",
+      "title": "",
+      "pageHash": "0862beaa98606541",
+      "depth": 1,
+      "status": "FAILED",
+      "loadTimeMs": 38,
+      "domContentLoadedMs": 38,
+      "networkIdleMs": 238,
+      "isBlank": false,
+      "screenshotPath": "screenshots/005-_error-page.png",
+      "elementCount": 2,
+      "interactiveCount": 0,
+      "testedInteractiveCount": 3,
+      "discoveredAt": "2026-10-02T07:59:49.555Z",
+      "crawledAt": "2026-10-02T07:59:49.555Z"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-1",
+      "runId": "int-test-1790927964849",
+      "fromPageId": "page-1",
+      "toPageId": "page-2",
+      "label": "Camera Management",
+      "edgeType": "navigation",
+      "createdAt": "2026-10-02T07:59:46.787Z"
+    },
+    {
+      "id": "edge-2",
+      "runId": "int-test-1790927964849",
+      "fromPageId": "page-2",
+      "toPageId": "page-3",
+      "label": "Broken Link",
+      "edgeType": "navigation",
+      "createdAt": "2026-10-02T07:59:49.555Z"
+    }
+  ],
+  "consoleEvents": [
+    {
+      "id": "console-1790927977730-ueds9",
+      "runId": "int-test-1790927964849",
+      "pageUrl": "http://127.0.0.1:56921/dashboard",
+      "severity": "error",
+      "message": "Test console error from dashboard script",
+      "occurrences": 1,
+      "timestamp": "2026-10-02T07:59:37.730Z"
+    },
+    {
+      "id": "console-1790927982194-n6jsc",
+      "runId": "int-test-1790927964849",
+      "pageUrl": "http://127.0.0.1:56921/dashboard",
+      "severity": "error",
+      "message": "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "occurrences": 1,
+      "timestamp": "2026-10-02T07:59:42.194Z"
+    },
+    {
+      "id": "console-1790927987260-yoyv6",
+      "runId": "int-test-1790927964849",
+      "pageUrl": "http://127.0.0.1:56921/cameras",
+      "severity": "error",
+      "message": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "occurrences": 1,
+      "timestamp": "2026-10-02T07:59:47.260Z"
+    }
+  ],
+  "networkEvents": [
+    {
+      "id": "net-1790927982194-74wq7",
+      "runId": "int-test-1790927964849",
+      "pageUrl": "http://127.0.0.1:56921/dashboard",
+      "method": "GET",
+      "url": "http://127.0.0.1:56921/api/cameras",
+      "status": 500,
+      "durationMs": 55,
+      "resourceType": "fetch",
+      "failureReason": "HTTP 500 Internal Server Error",
+      "occurrences": 1,
+      "timestamp": "2026-10-02T07:59:42.194Z"
+    },
+    {
+      "id": "net-1790927987260-qmy0c",
+      "runId": "int-test-1790927964849",
+      "pageUrl": "http://127.0.0.1:56921/cameras",
+      "method": "GET",
+      "url": "http://127.0.0.1:56921/error-page",
+      "status": 404,
+      "durationMs": 1,
+      "resourceType": "document",
+      "failureReason": "HTTP 404 Not Found",
+      "occurrences": 1,
+      "timestamp": "2026-10-02T07:59:47.260Z"
+    }
+  ],
+  "accessibility": [],
+  "performance": [
+    {
+      "id": "perf-1790927978178-3aco7",
+      "runId": "int-test-1790927964849",
+      "pageUrl": "http://127.0.0.1:56921/dashboard",
+      "domContentLoadedMs": 60,
+      "loadMs": 61,
+      "networkIdleMs": 261,
+      "firstMeaningfulPaintMs": 46,
+      "rating": "Good",
+      "createdAt": "2026-10-02T07:59:38.178Z"
+    },
+    {
+      "id": "perf-1790927982914-ggwju",
+      "runId": "int-test-1790927964849",
+      "pageUrl": "http://127.0.0.1:56921/cameras",
+      "domContentLoadedMs": 35,
+      "loadMs": 35,
+      "networkIdleMs": 235,
+      "firstMeaningfulPaintMs": 19,
+      "rating": "Good",
+      "createdAt": "2026-10-02T07:59:42.914Z"
+    },
+    {
+      "id": "perf-1790927987589-qr1mp",
+      "runId": "int-test-1790927964849",
+      "pageUrl": "http://127.0.0.1:56921/error-page",
+      "domContentLoadedMs": 38,
+      "loadMs": 38,
+      "networkIdleMs": 238,
+      "firstMeaningfulPaintMs": 23,
+      "rating": "Good",
+      "createdAt": "2026-10-02T07:59:47.589Z"
+    }
+  ],
+  "artifacts": {
+    "video": "artifacts/video/full-session.webm",
+    "trace": "artifacts/trace.zip",
+    "screenshots": [
+      {
+        "label": "initial-landing",
+        "filePath": "C:\\Omsystems\\Omsystems\\qa-artifacts\\run-int-test-1790927964849\\screenshots\\001-initial-landing.png",
+        "relativePath": "screenshots/001-initial-landing.png"
+      },
+      {
+        "label": "dashboard-authenticated",
+        "filePath": "C:\\Omsystems\\Omsystems\\qa-artifacts\\run-int-test-1790927964849\\screenshots\\002-dashboard-authenticated.png",
+        "relativePath": "screenshots/002-dashboard-authenticated.png"
+      },
+      {
+        "label": "Dashboard - Sentinel Grid",
+        "filePath": "C:\\Omsystems\\Omsystems\\qa-artifacts\\run-int-test-1790927964849\\screenshots\\003-dashboard_-_sentinel_grid.png",
+        "relativePath": "screenshots/003-dashboard_-_sentinel_grid.png"
+      },
+      {
+        "label": "Cameras - Sentinel Grid",
+        "filePath": "C:\\Omsystems\\Omsystems\\qa-artifacts\\run-int-test-1790927964849\\screenshots\\004-cameras_-_sentinel_grid.png",
+        "relativePath": "screenshots/004-cameras_-_sentinel_grid.png"
+      },
+      {
+        "label": "/error-page",
+        "filePath": "C:\\Omsystems\\Omsystems\\qa-artifacts\\run-int-test-1790927964849\\screenshots\\005-_error-page.png",
+        "relativePath": "screenshots/005-_error-page.png"
+      }
+    ]
+  }
+}

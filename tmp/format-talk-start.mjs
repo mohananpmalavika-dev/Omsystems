@@ -1,0 +1,11 @@
+import { readFile, writeFile } from 'node:fs/promises';
+const path = 'media-gateway/src/app.ts';
+let source = (await readFile(path, 'utf8')).replaceAll('\r\n', '\n');
+const marker = '    try {\n    if (!options.edgeBridgeSharedKey';
+const start = source.indexOf(marker);
+if (start < 0) throw new Error('talk startup block not found');
+const contentStart = start + '    try {\n'.length;
+const end = source.indexOf('    } catch (error) {\n      if (gatewayTalkLeases', contentStart);
+if (end < 0) throw new Error('talk startup catch not found');
+source = source.slice(0, contentStart) + source.slice(contentStart, end).split('\n').map(line => line ? '  ' + line : line).join('\n') + source.slice(end);
+await writeFile(path, source);

@@ -24,7 +24,7 @@ export class FfmpegStreamIngest extends EventEmitter implements IStreamIngest {
   }
 
   isRunning(): boolean {
-    return this.process !== undefined && !this.process.killed;
+    return this.process !== undefined && this.process.exitCode === null && this.process.signalCode === null;
   }
 
   async start(): Promise<void> {
@@ -46,10 +46,10 @@ export class FfmpegStreamIngest extends EventEmitter implements IStreamIngest {
       "-map", "0:a?",
       "-c", "copy",
       "-f", "segment",
+      "-segment_format", this.config.containerFormat === "mkv" ? "matroska" : "mp4",
       "-segment_time", String(this.config.segmentDurationSeconds),
       "-segment_atclocktime", "1",
       "-reset_timestamps", "1",
-      "-strftime", "1",
       "-segment_list", "pipe:1",
       "-segment_list_type", "csv",
       this.config.outputPattern,
@@ -71,16 +71,10 @@ export class FfmpegStreamIngest extends EventEmitter implements IStreamIngest {
       this.handleStderr(chunk);
     });
 
-    child.once("spawn", () => {
-      this.emit("started");
-    });
-
-    child.once("error", (err) => {
-      this.emit("error", err);
-    });
-
-    child.once("exit", (code, signal) => {
-      this.process = undefined;
+    child.once("close", (code, signal) => {
+      // close runs after the final CSV bytes have been delivered on stdout.
+      if (this.stdoutBuffer.trim()) this.handleStdout("\n");
+      if (this.process === child) this.process = undefined;
       if (!this.intentionallyStopping) {
         this.emit("unexpected_exit", {
           code,
@@ -91,6 +85,15 @@ export class FfmpegStreamIngest extends EventEmitter implements IStreamIngest {
         this.emit("stopped");
       }
     });
+    await new Promise<void>((resolve, reject) => {
+      child.once("spawn", () => { this.emit("started"); resolve(); });
+      child.on("error", (error) => {
+        if (child.pid === undefined && this.process === child) this.process = undefined;
+        reject(error);
+        // Later process errors are reported only to registered listeners.
+        if (this.listenerCount("error") > 0) this.emit("error", error);
+      });
+    });
   }
 
   async stop(): Promise<void> {
@@ -99,18 +102,25 @@ export class FfmpegStreamIngest extends EventEmitter implements IStreamIngest {
     this.intentionallyStopping = true;
     const proc = this.process;
 
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const forceKillTimer = setTimeout(() => {
-        if (!proc.killed) proc.kill("SIGKILL");
-        resolve();
+        if (proc.exitCode === null && proc.signalCode === null) proc.kill("SIGKILL");
       }, 5000);
       forceKillTimer.unref();
 
-      proc.once("exit", () => {
+      const onError = (error: Error) => {
         clearTimeout(forceKillTimer);
-        this.process = undefined;
+        proc.off("close", onClose);
+        reject(error);
+      };
+      const onClose = () => {
+        proc.off("error", onError);
+        clearTimeout(forceKillTimer);
+        if (this.process === proc) this.process = undefined;
         resolve();
-      });
+      };
+      proc.once("error", onError);
+      proc.once("close", onClose);
 
       proc.kill("SIGTERM");
     });

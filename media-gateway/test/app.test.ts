@@ -12,6 +12,7 @@ describe("authorized media startup", () => {
 
   afterEach(async () => {
     await app?.close();
+    vi.restoreAllMocks();
   });
 
   it("consumes a control-plane token and restricts MediaMTX to its path", async () => {
@@ -127,7 +128,7 @@ describe("authorized media startup", () => {
     const response = await app.inject({ method: "POST", url: "/v1/live/start", payload: { controlPlaneToken: "a".repeat(43), profile: "sub" } });
     expect(response.statusCode).toBe(201);
     expect(secrets.resolve).toHaveBeenCalledWith("vault://camera#sub");
-    expect(router.ensurePath).toHaveBeenCalledWith("camera-cam-001", "rtsp://camera/sub");
+    expect(router.ensurePath).toHaveBeenCalledWith("camera-cam-001-sub", "rtsp://camera/sub");
   });
 
   it("protects live startup with the edge bridge identity", async () => {
@@ -308,9 +309,16 @@ describe("authorized media startup", () => {
   });
 
   it("handles push-to-talk backchannel startup, audio streaming, and single-talker locking", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      if (init?.method === "POST" && String(_input).endsWith("/v1/talk/start")) {
+        return Response.json({ sessionId: "edge-session", adapter: "onvif-rtsp-backchannel", codec: "PCMA", sampleRate: 8000,
+          audio: { url: "http://edge.example/audio", endUrl: "http://edge.example/end", bearerToken: "edge-token" } });
+      }
+      return new Response(null, { status: 204 });
+    });
     const controlPlane: ControlPlaneClient = {
       consumeLiveSession: vi.fn(async (token: string) => {
-        if (token === "talk-token-busy") {
+        if (token.startsWith("talk-token-busy")) {
           return {
             id: "talk-session-2",
             cameraId: "cam-talk-01",
@@ -333,6 +341,7 @@ describe("authorized media startup", () => {
           profiles: [],
         };
       }),
+      getEdgeAgentMediaUrl: async () => ({ localMediaUrl: "http://edge.example" }),
     };
     const secrets: StreamSecretProvider = {
       resolve: vi.fn(async () => "rtsp://camera:554/live"),
@@ -349,6 +358,7 @@ describe("authorized media startup", () => {
       publicHlsBaseUrl: "https://media.example/hls",
       publicWebRtcBaseUrl: "https://media.example/webrtc",
       accessTtlMs: 30_000,
+      edgeBridgeSharedKey: "test-bridge-key",
     });
 
     // 1. Start talkback session

@@ -138,6 +138,12 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
       const user = await store.getUser(userId);
       if (user && user.status === "active") {
         request.currentUser = sanitizeCurrentUser(user);
+        if (requiresPasswordChangeOnly(request, user)) {
+          return reply.code(403).send({
+            error: "password_change_required",
+            message: "Change your password before continuing.",
+          });
+        }
         return;
       }
     }

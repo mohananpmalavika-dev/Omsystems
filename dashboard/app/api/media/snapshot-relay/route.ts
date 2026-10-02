@@ -17,6 +17,11 @@ if (!globalFrames.__realCctvFrames) {
 }
 const frameStore = globalFrames.__realCctvFrames;
 const FRAME_DIR = join(tmpdir(), "sentinel_cctv_frames");
+const FRAME_MAX_AGE_MS = 30_000;
+
+function isFreshFrame(updatedAt: number, now: number) {
+  return Number.isFinite(updatedAt) && updatedAt <= now && now - updatedAt <= FRAME_MAX_AGE_MS;
+}
 
 function frameFileName(cameraId: string): string {
   return `${createHash("sha256").update(cameraId).digest("hex")}.jpg`;
@@ -73,7 +78,7 @@ export async function GET(request: NextRequest) {
   // Try memory first
   const cached = frameStore.get(targetKey);
 
-  if (cached && cached.buffer.length > 0) {
+  if (cached && cached.buffer.length > 0 && isFreshFrame(cached.updatedAt, now)) {
     return new NextResponse(new Uint8Array(cached.buffer), {
       status: 200,
       headers: {
@@ -88,7 +93,19 @@ export async function GET(request: NextRequest) {
   // Fallback to disk cache
   try {
     const diskPath = join(FRAME_DIR, frameFileName(targetKey));
-    const fileBuf = await fs.readFile(diskPath);
+    const handle = await fs.open(diskPath, "r");
+    let fileBuf: Buffer;
+    let updatedAt: number;
+    try {
+      const metadata = await handle.stat();
+      updatedAt = metadata.mtimeMs;
+      if (!isFreshFrame(updatedAt, now)) {
+        return new NextResponse(null, { status: 204, headers: { "Cache-Control": "no-store", "X-Frame-Stale": "true" } });
+      }
+      fileBuf = await handle.readFile();
+    } finally {
+      await handle.close();
+    }
     if (fileBuf && fileBuf.length > 0) {
       return new NextResponse(new Uint8Array(fileBuf), {
         status: 200,
@@ -96,7 +113,7 @@ export async function GET(request: NextRequest) {
           "Content-Type": "image/jpeg",
           "Cache-Control": "no-store, no-cache, must-revalidate",
           "X-Camera-Id": targetKey,
-          "X-Frame-Updated": String(now),
+          "X-Frame-Updated": String(updatedAt),
         },
       });
     }
@@ -104,7 +121,7 @@ export async function GET(request: NextRequest) {
     // Disk file not found
   }
 
-  return new NextResponse(null, { status: 204, headers: { "Cache-Control": "no-store" } });
+  return new NextResponse(null, { status: 204, headers: { "Cache-Control": "no-store", ...(cached ? { "X-Frame-Stale": "true" } : {}) } });
 }
 
 export async function POST() {

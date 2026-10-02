@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { mkdir, writeFile, unlink, stat } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 import { SegmentChecksum } from "../segments/segment-checksum.js";
 
 export interface SegmentCoverageItem {
@@ -37,7 +38,14 @@ export class RangeExporter {
     request: RangeExportRequest,
     matchingSegments: SegmentCoverageItem[],
   ): Promise<RangeExportResult> {
-    if (matchingSegments.length === 0) {
+    const fromMs = request.fromTime.getTime();
+    const toMs = request.toTime.getTime();
+    if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs) {
+      return { success: false, outputPath: request.outputPath, sizeBytes: 0, segmentsUsed: 0, durationSeconds: 0, error: "invalid_export_range" };
+    }
+    const sorted = matchingSegments.filter((segment) => segment.startedAt.getTime() < toMs && segment.endedAt.getTime() > fromMs)
+      .sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
+    if (sorted.length === 0) {
       return {
         success: false,
         outputPath: request.outputPath,
@@ -48,16 +56,25 @@ export class RangeExporter {
       };
     }
 
+    // Reject gaps/overlaps rather than silently compressing or duplicating the evidence timeline.
+    let coveredUntil = fromMs;
+    for (let index = 0; index < sorted.length; index++) {
+      const segment = sorted[index]!;
+      const start = segment.startedAt.getTime();
+      const end = segment.endedAt.getTime();
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || start > coveredUntil || (index > 0 && start < coveredUntil)) {
+        return { success: false, outputPath: request.outputPath, sizeBytes: 0, segmentsUsed: 0, durationSeconds: 0, error: "incomplete_or_overlapping_segment_coverage" };
+      }
+      coveredUntil = end;
+    }
+    if (coveredUntil < toMs) return { success: false, outputPath: request.outputPath, sizeBytes: 0, segmentsUsed: 0, durationSeconds: 0, error: "incomplete_segment_coverage" };
     await mkdir(dirname(request.outputPath), { recursive: true });
 
-    // Sort segments by startedAt
-    const sorted = [...matchingSegments].sort((a, b) => a.startedAt.getTime() - b.startedAt.getTime());
-
-    // Single segment export optimization: direct stream copy / trim
+    // Decode and re-encode so trim boundaries do not leak pre-roll keyframes.
     if (sorted.length === 1 && sorted[0]) {
       const seg = sorted[0];
       const startOffsetSeconds = Math.max(0, (request.fromTime.getTime() - seg.startedAt.getTime()) / 1000);
-      const totalDurationSeconds = Math.max(1, (request.toTime.getTime() - request.fromTime.getTime()) / 1000);
+      const totalDurationSeconds = (toMs - fromMs) / 1000;
 
       const success = await this.trimSegment(
         seg.storagePath,
@@ -67,6 +84,8 @@ export class RangeExporter {
       );
 
       if (success) {
+        const actualDuration = await this.probeDuration(request.outputPath);
+        if (actualDuration === undefined) return { success: false, outputPath: request.outputPath, sizeBytes: 0, segmentsUsed: 1, durationSeconds: 0, error: "export_duration_unavailable" };
         const stats = await stat(request.outputPath);
         const sha256 = await SegmentChecksum.computeSha256(request.outputPath);
         return {
@@ -75,19 +94,21 @@ export class RangeExporter {
           sizeBytes: stats.size,
           sha256,
           segmentsUsed: 1,
-          durationSeconds: totalDurationSeconds,
+          durationSeconds: actualDuration,
         };
       }
+      return { success: false, outputPath: request.outputPath, sizeBytes: 0, segmentsUsed: 1, durationSeconds: 0, error: "ffmpeg_trim_failed" };
     }
 
     // Multi-segment export: Concatenate segments via FFmpeg concat demuxer
-    const concatListPath = `${request.outputPath}.concat.txt`;
-    const concatContent = sorted.map((s) => `file '${s.storagePath.replaceAll("'", "'\\''")}'`).join("\n");
+    const concatListPath = `${request.outputPath}.${randomUUID()}.concat.txt`;
+    const concatContent = sorted.map((s) => `file '${resolve(s.storagePath).replaceAll("\\", "/").replaceAll("'", "'\\''")}'`).join("\n");
     await writeFile(concatListPath, concatContent, "utf8");
 
     try {
       const durationSeconds = (request.toTime.getTime() - request.fromTime.getTime()) / 1000;
-      const success = await this.concatSegments(concatListPath, request.outputPath);
+      const offsetSeconds = (fromMs - sorted[0]!.startedAt.getTime()) / 1000;
+      const success = await this.concatSegments(concatListPath, request.outputPath, offsetSeconds, durationSeconds);
 
       if (!success) {
         return {
@@ -99,6 +120,8 @@ export class RangeExporter {
           error: "ffmpeg_concat_failed",
         };
       }
+      const actualDuration = await this.probeDuration(request.outputPath);
+      if (actualDuration === undefined) return { success: false, outputPath: request.outputPath, sizeBytes: 0, segmentsUsed: sorted.length, durationSeconds: 0, error: "export_duration_unavailable" };
 
       const stats = await stat(request.outputPath);
       const sha256 = await SegmentChecksum.computeSha256(request.outputPath);
@@ -109,7 +132,7 @@ export class RangeExporter {
         sizeBytes: stats.size,
         sha256,
         segmentsUsed: sorted.length,
-        durationSeconds,
+        durationSeconds: actualDuration,
       };
     } finally {
       try {
@@ -130,20 +153,21 @@ export class RangeExporter {
       const args = [
         "-v", "error",
         "-y",
-        "-ss", String(startOffset),
         "-i", inputPath,
+        "-ss", String(startOffset),
         "-t", String(duration),
-        "-c", "copy",
+        "-c:v", this.videoEncoder(), "-c:a", "aac",
         outputPath,
       ];
 
       const child = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
       child.once("error", () => resolve(false));
-      child.once("exit", (code) => resolve(code === 0));
+      child.stdout?.resume(); child.stderr?.resume();
+      child.once("close", (code) => resolve(code === 0));
     });
   }
 
-  private static async concatSegments(concatListPath: string, outputPath: string): Promise<boolean> {
+  private static async concatSegments(concatListPath: string, outputPath: string, offsetSeconds: number, durationSeconds: number): Promise<boolean> {
     return new Promise((resolve) => {
       const args = [
         "-v", "error",
@@ -151,13 +175,37 @@ export class RangeExporter {
         "-f", "concat",
         "-safe", "0",
         "-i", concatListPath,
-        "-c", "copy",
+        "-ss", String(offsetSeconds),
+        "-t", String(durationSeconds),
+        "-c:v", this.videoEncoder(), "-c:a", "aac",
         outputPath,
       ];
 
       const child = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
       child.once("error", () => resolve(false));
-      child.once("exit", (code) => resolve(code === 0));
+      child.stdout?.resume(); child.stderr?.resume();
+      child.once("close", (code) => resolve(code === 0));
     });
+  }
+
+  private static async probeDuration(outputPath: string): Promise<number | undefined> {
+    return new Promise((resolveDuration) => {
+      const child = spawn("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "json", outputPath], { stdio: ["ignore", "pipe", "pipe"] });
+      let output = "";
+      child.stdout?.on("data", (chunk: Buffer) => { output += chunk.toString(); });
+      child.stderr?.resume();
+      child.once("error", () => resolveDuration(undefined));
+      child.once("close", (code) => {
+        try {
+          const duration = Number(JSON.parse(output).format?.duration);
+          resolveDuration(code === 0 && Number.isFinite(duration) && duration > 0 ? duration : undefined);
+        } catch { resolveDuration(undefined); }
+      });
+    });
+  }
+
+  private static videoEncoder(): string {
+    // The bundled Windows FFmpeg is LGPL and supplies OpenH264 rather than x264.
+    return process.env.RECORDING_EXPORT_VIDEO_ENCODER || (process.platform === "win32" ? "libopenh264" : "libx264");
   }
 }

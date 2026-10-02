@@ -31,7 +31,12 @@ export class RecordingWorkerPool {
     };
 
     this.workers.set(config.cameraId, worker);
-    await session.start();
+    try { await session.start(); }
+    catch (error) {
+      if (this.workers.get(config.cameraId) === worker) this.workers.delete(config.cameraId);
+      await session.stop();
+      throw error;
+    }
     return worker;
   }
 

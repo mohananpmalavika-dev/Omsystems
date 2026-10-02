@@ -160,7 +160,16 @@ export async function registerCameraDiscoveryRoutes(
       }
 
       const manufacturer = isPresent(item.manufacturer) ? item.manufacturer : undefined;
-      const profiles = Array.isArray(item.profiles) ? item.profiles : Array.isArray(item.mediaProfiles) ? item.mediaProfiles : [];
+      const rawProfiles = Array.isArray(item.profiles) ? item.profiles : Array.isArray(item.mediaProfiles) ? item.mediaProfiles : [];
+      const profiles = rawProfiles.filter((profile: any) => profile && typeof profile === "object").map((profile: any) => {
+        const codec = String(profile.codec ?? "").trim().replace(/[.\s_-]/g, "").toUpperCase();
+        return {
+          ...profile,
+          codec: ["H265", "HEVC", "HEV1", "HVC1"].includes(codec) ? "H265"
+            : ["H264", "AVC", "AVC1"].includes(codec) ? "H264"
+            : ["MJPEG", "MJPG", "JPEG"].includes(codec) ? "MJPEG" : "unknown",
+        };
+      });
       const capabilities = item.capabilities && typeof item.capabilities === "object"
         ? item.capabilities
         : { ptz: false, audio: false, events: false };

@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { writeAtomic } from "../staging/atomic-write-helper.js";
 
@@ -48,6 +48,10 @@ export class DurableRetryQueue {
     try {
       const data = await readFile(this.queueFile, "utf8");
       const list: RetryQueueEntry[] = JSON.parse(data);
+      if (!Array.isArray(list) || list.some((item) => !item || typeof item.jobId !== "string" ||
+        !["PENDING", "RUNNING", "SUCCEEDED", "FAILED", "DEAD_LETTER"].includes(item.state))) {
+        throw new Error("Invalid storage retry queue format");
+      }
       for (const item of list) {
         // Reset running jobs from crashed process back to PENDING
         if (item.state === "RUNNING") {
@@ -55,8 +59,9 @@ export class DurableRetryQueue {
         }
         this.entries.set(item.jobId, item);
       }
-    } catch {
-      // File doesn't exist yet -> start clean
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      // Only a missing file represents a new queue.
       this.entries.clear();
     }
 

@@ -14,6 +14,7 @@ import { TalkbackTransportError } from "../talkback/rtsp-backchannel.js";
 import { startManagedMediaRelay } from "./managed-media-relay.js";
 import { deviceArchivePlaybackUri, searchDeviceArchive } from "../monitoring/recorder-probe.js";
 import { probeRtsp } from "./rtsp-probe.js";
+import { verifyTalkBridgeGrant } from "./talk-bridge-grant.js";
 
 interface MediaRouter {
   ensurePath(path: string, sourceUri: string): Promise<void>;
@@ -173,6 +174,7 @@ interface LiveGatewayOptions {
 }
 
 export class EdgeLiveGateway {
+  private readonly usedTalkGrants = new Map<string, number>();
   private readonly access: EdgeAccessRegistry;
   private readonly talk: TalkSessionRegistry;
   private readonly server: Server;
@@ -351,10 +353,25 @@ export class EdgeLiveGateway {
     }
     if (request.method === "POST" && url.pathname === "/v1/talk/start") {
       const body = await readJsonBody(request);
-      if (typeof body.controlPlaneToken !== "string" || body.controlPlaneToken.length < 32) {
-        return sendJson(response, 400, { error: "invalid_request" });
+      let consumed: ConsumedLiveSession;
+      if (typeof body.bridgeGrant === "string") {
+        try {
+          const grant = verifyTalkBridgeGrant(body.bridgeGrant, this.options.edgeBridgeSharedKey ?? "");
+          for (const [id, expiresAt] of this.usedTalkGrants) {
+            if (expiresAt <= Date.now()) this.usedTalkGrants.delete(id);
+          }
+          if (this.usedTalkGrants.has(grant.session.id)) throw new Error("replayed_talk_bridge_grant");
+          this.usedTalkGrants.set(grant.session.id, grant.expiresAt);
+          consumed = grant.session;
+        } catch {
+          return sendJson(response, 401, { error: "invalid_talk_bridge_grant" });
+        }
+      } else {
+        if (typeof body.controlPlaneToken !== "string" || body.controlPlaneToken.length < 32) {
+          return sendJson(response, 400, { error: "invalid_request" });
+        }
+        consumed = await this.options.consumer.consume(body.controlPlaneToken);
       }
-      const consumed = await this.options.consumer.consume(body.controlPlaneToken);
       if (consumed.purpose !== "talk") return sendJson(response, 403, { error: "invalid_talk_session" });
       const sourceUri = await this.options.resolveSecret(consumed.connectionSecretRef);
       if (!sourceUri) return sendJson(response, 503, { error: "stream_secret_unavailable" });

@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import { join } from "node:path";
+import { stat } from "node:fs/promises";
 import { SegmentWriter, type ActiveSegment } from "../segments/segment-writer.js";
 import { SegmentFinalizer } from "../segments/segment-finalizer.js";
 import { StreamSupervisor } from "../supervision/stream-supervisor.js";
@@ -34,6 +35,11 @@ export class RecordingSession extends EventEmitter {
   private ingest?: FfmpegStreamIngest;
   private currentActiveSegment?: ActiveSegment;
   private isRunning = false;
+  private segmentOperations: Promise<void> = Promise.resolve();
+  private restartOperation?: Promise<void>;
+  private segmentPattern = "";
+  private segmentIndex = 0;
+  private runStartedAt = new Date();
 
   constructor(
     config: RecordingSessionConfig,
@@ -81,11 +87,11 @@ export class RecordingSession extends EventEmitter {
         branchId: this.config.branchId,
         detail: { packetAgeMs },
       });
-      await this.restartIngest("packet_timeout");
+      await this.restartIngest("packet_timeout").catch(() => undefined);
     });
 
     this.supervisor.on("watchdog:finalization_delayed", async ({ cameraId, finalizationAgeMs }) => {
-      await this.restartIngest(`finalization_delayed_${finalizationAgeMs}ms`);
+      await this.restartIngest(`finalization_delayed_${finalizationAgeMs}ms`).catch(() => undefined);
     });
   }
 
@@ -94,7 +100,14 @@ export class RecordingSession extends EventEmitter {
     this.isRunning = true;
 
     this.supervisor.startSupervision();
-    await this.startIngestProcess();
+    try {
+      await this.startIngestProcess();
+    } catch (error) {
+      this.isRunning = false;
+      this.supervisor.stopSupervision();
+      this.discardActiveMetadata();
+      throw error;
+    }
   }
 
   async stop(): Promise<void> {
@@ -102,15 +115,14 @@ export class RecordingSession extends EventEmitter {
     this.isRunning = false;
 
     this.supervisor.stopSupervision();
+    await this.restartOperation?.catch(() => undefined);
     if (this.ingest) {
       await this.ingest.stop();
       this.ingest = undefined;
     }
 
-    // Finalize any in-flight active segment
-    if (this.currentActiveSegment) {
-      await this.finalizeCurrentSegment();
-    }
+    await this.segmentOperations;
+    await this.finalizeRemainingSegment();
   }
 
   private async startIngestProcess(): Promise<void> {
@@ -130,17 +142,20 @@ export class RecordingSession extends EventEmitter {
     this.supervisor.recordSegmentStarted(this.currentActiveSegment.segmentId, activeNode.nodeId);
     this.storageManager.protectSegment(this.currentActiveSegment.segmentId);
 
-    const stagingPattern = join(
+    this.segmentIndex = 0;
+    this.runStartedAt = this.currentActiveSegment.startTime;
+    this.segmentPattern = join(
       this.config.stagingRoot,
       this.config.cameraId,
-      "%Y%m%d-%H%M%S.mkv.partial",
+      `${this.currentActiveSegment.segmentId}-%06d.mkv.partial`,
     );
+    this.currentActiveSegment.stagingPartialPath = this.segmentPath(0);
 
     this.ingest = new FfmpegStreamIngest({
       cameraId: this.config.cameraId,
       sourceUri: this.config.sourceUri,
       segmentDurationSeconds: this.config.segmentDurationSeconds,
-      outputPattern: stagingPattern,
+      outputPattern: this.segmentPattern,
       containerFormat: "mkv",
     });
 
@@ -149,8 +164,14 @@ export class RecordingSession extends EventEmitter {
       this.gapTracker.resolveGap(this.config.cameraId);
     });
 
-    this.ingest.on("segment_completed", async (event) => {
-      await this.handleSegmentCompleted(event.rawPath);
+    this.ingest.on("segment_completed", (event) => {
+      this.segmentOperations = this.segmentOperations.then(() => this.handleSegmentCompleted(event.rawPath, event.startOffset, event.endOffset)).catch((error) => {
+        this.supervisor.setRecordingHealth("STORAGE_FAILURE");
+        this.gapTracker.startGap(this.config.cameraId, "STORAGE_UNAVAILABLE", {
+          tenantId: this.config.tenantId, branchId: this.config.branchId,
+          detail: { reason: error instanceof Error ? error.message : String(error) },
+        });
+      });
     });
 
     this.ingest.on("unexpected_exit", async (info) => {
@@ -167,25 +188,40 @@ export class RecordingSession extends EventEmitter {
       if (this.isRunning) {
         const delay = this.supervisor.getReconnectDelayMs();
         setTimeout(() => {
-          if (this.isRunning) void this.startIngestProcess();
+          if (this.isRunning) void this.restartIngest("unexpected_exit").catch(() => undefined);
         }, delay).unref();
       }
     });
 
-    await this.ingest.start();
+    try {
+      await this.ingest.start();
+    } catch (error) {
+      this.supervisor.setRecordingHealth("GAPPED");
+      this.gapTracker.startGap(this.config.cameraId, "RTSP_FAILURE", {
+        tenantId: this.config.tenantId, branchId: this.config.branchId,
+        detail: { reason: error instanceof Error ? error.message : String(error) },
+      });
+      throw error;
+    }
   }
 
-  private async handleSegmentCompleted(rawPath: string): Promise<void> {
-    if (!this.currentActiveSegment) return;
+  private async handleSegmentCompleted(rawPath: string, startOffset?: number, endOffset?: number): Promise<void> {
+    const startedAt = Number.isFinite(startOffset) ? new Date(this.runStartedAt.getTime() + startOffset! * 1000) : undefined;
+    // Several completion records can be buffered at close. Each must be finalized,
+    // even after stop has disabled preparation of the next active segment.
+    if (!this.currentActiveSegment) this.currentActiveSegment = await this.writer.createNewSegment(startedAt);
 
     const segment = this.currentActiveSegment;
     // Set actual partial path from ingest
     segment.stagingPartialPath = rawPath;
+    if (startedAt) segment.startTime = startedAt;
 
-    await this.finalizeCurrentSegment();
+    await this.finalizeCurrentSegment(Number.isFinite(endOffset) ? new Date(this.runStartedAt.getTime() + endOffset! * 1000) : undefined);
 
-    // Prepare next segment for continuous recording
+    // Track the exact next filename even during shutdown: a forced exit may
+    // leave that file without a completion record. Missing placeholders are discarded.
     this.currentActiveSegment = await this.writer.createNewSegment();
+    this.currentActiveSegment.stagingPartialPath = this.segmentPath(++this.segmentIndex);
     const activeNode = this.storageManager.selectActiveNode(this.config.preferredStorageNode);
     if (activeNode) {
       this.supervisor.recordSegmentStarted(this.currentActiveSegment.segmentId, activeNode.nodeId);
@@ -193,10 +229,11 @@ export class RecordingSession extends EventEmitter {
     }
   }
 
-  private async finalizeCurrentSegment(): Promise<SegmentManifest | undefined> {
+  private async finalizeCurrentSegment(endTime: Date = new Date()): Promise<SegmentManifest | undefined> {
     if (!this.currentActiveSegment) return undefined;
 
     const segment = this.currentActiveSegment;
+    this.currentActiveSegment = undefined;
     const activeNode = this.storageManager.selectActiveNode(this.config.preferredStorageNode);
     const storageNodeId = activeNode?.nodeId ?? this.config.preferredStorageNode;
 
@@ -211,6 +248,7 @@ export class RecordingSession extends EventEmitter {
         storageNode: storageNodeId,
         storageRelativePath: join(this.config.cameraId, `${segment.segmentId}.mkv`),
       },
+      endTime,
     );
 
     this.storageManager.unprotectSegment(segment.segmentId);
@@ -232,13 +270,38 @@ export class RecordingSession extends EventEmitter {
   }
 
   private async restartIngest(reason: string): Promise<void> {
-    if (this.ingest) {
-      await this.ingest.stop();
-      this.ingest = undefined;
+    if (this.restartOperation) return this.restartOperation;
+    this.restartOperation = (async () => {
+      if (this.ingest) {
+        await this.ingest.stop();
+        this.ingest = undefined;
+      }
+      await this.segmentOperations;
+      await this.finalizeRemainingSegment();
+      if (this.isRunning) await this.startIngestProcess();
+    })();
+    try { await this.restartOperation; }
+    finally { this.restartOperation = undefined; }
+  }
+
+  private segmentPath(index: number): string {
+    return this.segmentPattern.replace("%06d", String(index).padStart(6, "0"));
+  }
+
+  private discardActiveMetadata(): void {
+    if (this.currentActiveSegment) this.storageManager.unprotectSegment(this.currentActiveSegment.segmentId);
+    this.currentActiveSegment = undefined;
+  }
+
+  private async finalizeRemainingSegment(): Promise<void> {
+    if (!this.currentActiveSegment) return;
+    try { await stat(this.currentActiveSegment.stagingPartialPath); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      this.discardActiveMetadata();
+      return;
     }
-    if (this.isRunning) {
-      await this.startIngestProcess();
-    }
+    await this.finalizeCurrentSegment();
   }
 
   getSupervisor(): StreamSupervisor {

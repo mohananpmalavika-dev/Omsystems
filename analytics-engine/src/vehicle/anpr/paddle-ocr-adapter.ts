@@ -54,11 +54,15 @@ export class PaddlePlateRecognizer implements PlateRecognizer {
    * Preprocess image for OCR
    */
   private preprocess(image: ImageMatrix): Buffer {
+    if (![1, 3, 4].includes(image.channels) || !Number.isInteger(image.width) || !Number.isInteger(image.height)
+      || image.width <= 0 || image.height <= 0 || image.data.length !== image.width * image.height * image.channels) {
+      throw new Error('Invalid OCR image dimensions or channel count');
+    }
     // Convert to grayscale if not already
     const gray = new Uint8Array(image.width * image.height);
     
     for (let i = 0, j = 0; i < image.data.length; i += image.channels, j++) {
-      gray[j] = Math.round(
+      gray[j] = image.channels === 1 ? image.data[i] : Math.round(
         0.299 * image.data[i] +
         0.587 * image.data[i + 1] +
         0.114 * image.data[i + 2]
