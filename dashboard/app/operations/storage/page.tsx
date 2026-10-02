@@ -35,6 +35,11 @@ interface CameraStorageMapping {
   storageDetails: string;
   capacity: string;
   used: string;
+  storageDiagnosis?: string;
+  storageMedia?: {
+    deviceId: string; medium: string; model: string; capacity: string;
+    used: string; free: string; access: string; health: string; observedAt: string;
+  }[];
   retentionDays: number | null;
 }
 
@@ -231,14 +236,14 @@ export default function StoragePage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-slate-800 bg-slate-950 overflow-hidden">
+          <div className="rounded-xl border border-slate-800 bg-slate-950 overflow-x-auto">
             {loadError && <p role="alert" className="px-4 py-3 text-sm text-amber-300">{loadError}</p>}
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-900/90 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
                 <tr>
                   <th className="px-4 py-3">Camera & IP</th>
                   <th className="px-4 py-3">Available Storage Medium</th>
-                  <th className="px-4 py-3">Storage Specifications</th>
+                  <th className="px-4 py-3">All Storage Models & Access</th>
                   <th className="px-4 py-3">Capacity / Usage</th>
                   <th className="px-4 py-3">Retention</th>
                   <th className="px-4 py-3 text-right">Actions</th>
@@ -294,7 +299,21 @@ export default function StoragePage() {
                       </td>
 
                       <td className="px-4 py-3 text-slate-300 font-mono text-[11px]">
-                        {cam.storageDetails}
+                        {cam.storageMedia?.length ? (
+                          <div className="space-y-3 min-w-64">
+                            {cam.storageMedia.map((medium) => (
+                              <div key={medium.deviceId}>
+                                <div className="font-semibold">{medium.medium}: {medium.model}</div>
+                                <div className="text-slate-400">Total {medium.capacity} · Used {medium.used} · Free {medium.free}</div>
+                                <div className={medium.access === "Write verified" ? "text-emerald-300" : "text-amber-300"}>
+                                  {medium.access} · Health: {medium.health}
+                                </div>
+                                <div className="text-slate-500">{medium.observedAt ? `Last reported: ${new Date(medium.observedAt).toLocaleString()}` : "Report time unavailable"}</div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : cam.storageDetails}
+                        {cam.storageDiagnosis && <div className="mt-1 text-amber-300 font-sans">{cam.storageDiagnosis}</div>}
                       </td>
 
                       <td className="px-4 py-3">

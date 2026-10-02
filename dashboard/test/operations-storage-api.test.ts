@@ -26,6 +26,49 @@ afterEach(() => {
 });
 
 describe("Storage operations inventory", () => {
+  it("does not present a recorder telemetry placeholder as a disk model or empty disk", async () => {
+    mockInventory([{ id: "camera-1", recorderId: "recorder-1" }], [{
+      id: "recorder-1:disk:storage-telemetry", model: "CP PLUS DVR", capacityBytes: 0,
+      usedBytes: 0, availableBytes: 0, operationalStatus: "unknown", lastCheck: now,
+    }]);
+    const data = await (await GET(request())).json();
+    expect(data.cameras[0].storageMedia[0]).toMatchObject({
+      model: "Disk model unavailable", capacity: "Unavailable", used: "Unavailable", free: "Unavailable", access: "Storage telemetry unavailable",
+    });
+  });
+
+  it("shows every recorder disk and selects a healthy disk after a failed disk", async () => {
+    mockInventory([{ id: "camera-1", recorderId: "recorder-1" }], [
+      { id: "recorder-1:disk:1", model: "Failed HDD", operationalStatus: "critical", capacityBytes: 2e12, writeVerification: "failed", lastCheck: now },
+      { id: "recorder-1:disk:2", model: "Healthy HDD", operationalStatus: "healthy", capacityBytes: 4e12, usedBytes: 0, availableBytes: 4e12, writeVerification: "verified", lastCheck: now },
+    ]);
+    const data = await (await GET(request())).json();
+    expect(data.cameras[0].activeStorageTier).toBe("dvr_hdd");
+    expect(data.cameras[0].storageDetails).toBe("Healthy HDD");
+    expect(data.cameras[0].storageMedia).toHaveLength(2);
+    expect(data.cameras[0].storageMedia[0].access).toBe("Write failed");
+    expect(data.cameras[0].storageMedia[1]).toMatchObject({ used: "0 B", free: "4.0 TB", access: "Write verified" });
+  });
+
+  it("keeps read-only card specifications visible without offering it as a target", async () => {
+    mockInventory([{ id: "camera-1" }], [{
+      id: "camera-1:sdcard", model: "Camera card", operationalStatus: "healthy", slotStatus: "read_only",
+      capacityBytes: 128e9, lastCheck: now,
+    }]);
+    const data = await (await GET(request())).json();
+    expect(data.cameras[0].activeStorageTier).toBe("unavailable");
+    expect(data.cameras[0].storageMedia[0]).toMatchObject({ model: "Camera card", capacity: "128.0 GB", used: "Unavailable", free: "Unavailable", access: "Read only" });
+  });
+
+  it("does not associate storage with a camera in another branch", async () => {
+    mockInventory([{ id: "camera-1", branchId: "branch-a", recorderId: "recorder-1" }], [{
+      id: "recorder-1:disk:1", branchId: "branch-b", operationalStatus: "healthy", capacityBytes: 4e12, lastCheck: now,
+    }]);
+    const data = await (await GET(request())).json();
+    expect(data.cameras[0].storageMedia).toEqual([]);
+    expect(data.cameras[0].activeStorageTier).toBe("unavailable");
+  });
+
   it("uses the local control plane when no upstream URL is configured", async () => {
     vi.stubEnv("CONTROL_PLANE_INTERNAL_URL", "");
     vi.stubEnv("CONTROL_PLANE_PUBLIC_URL", "");

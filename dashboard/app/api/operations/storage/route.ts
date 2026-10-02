@@ -35,6 +35,42 @@ function formatBytes(value: unknown): string {
   return `${number} B`;
 }
 
+function formatKnownBytes(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "Unavailable";
+  return Number(value) === 0 ? "0 B" : formatBytes(value);
+}
+
+function accessStatus(disk: Disk): string {
+  if (!recent(disk)) return "Stale telemetry";
+  if (diskId(disk).endsWith(":disk:storage-telemetry")) return "Storage telemetry unavailable";
+  const slot = string(disk.slotStatus).toLowerCase();
+  if (disk.isReadOnly === true || disk.readOnly === true || slot === "read_only") return "Read only";
+  if (slot === "uninitialized") return "Not formatted";
+  if (disk.detected === false || ["missing", "failed"].includes(slot)) return "Unavailable";
+  if (disk.writeVerification === "failed") return "Write failed";
+  if (disk.writeVerification === "verified") return "Write verified";
+  return "Write access unverified";
+}
+
+function describeDisk(disk: Disk) {
+  const placeholder = diskId(disk).endsWith(":disk:storage-telemetry");
+  const capacity = bytes(disk.capacityBytes ?? disk.totalBytes);
+  const used = disk.usedBytes;
+  const reportedFree = disk.availableBytes ?? disk.freeBytes;
+  const free = reportedFree ?? (capacity && used != null ? Math.max(0, capacity - bytes(used)) : undefined);
+  return {
+    deviceId: diskId(disk),
+    medium: isSdCard(disk) ? "Camera SD card" : "Recorder HDD",
+    model: placeholder ? "Disk model unavailable" : string(disk.model) || "Model unavailable",
+    capacity: formatBytes(capacity),
+    used: placeholder || !capacity ? "Unavailable" : formatKnownBytes(used),
+    free: placeholder || !capacity ? "Unavailable" : formatKnownBytes(free),
+    access: accessStatus(disk),
+    health: recent(disk) ? string(disk.operationalStatus) || "unknown" : "unknown",
+    observedAt: string(disk.observedAt ?? disk.lastCheck),
+  };
+}
+
 function observedAt(item: Disk): number {
   const value = item.observedAt ?? item.lastCheck ?? item.last_seen_at ?? item.lastSeenAt;
   return value ? Date.parse(String(value)) || 0 : 0;
@@ -61,7 +97,9 @@ function healthy(disk: Disk): boolean {
   return recent(disk) && bytes(disk.capacityBytes ?? disk.totalBytes) > 0
     && ["healthy", "ok", "online"].includes(status)
     && !["failed", "critical", "warning", "degraded", "missing"].includes(smart)
-    && disk.isReadOnly !== true && disk.readOnly !== true;
+    && disk.isReadOnly !== true && disk.readOnly !== true
+    && !["read_only", "uninitialized", "missing", "failed"].includes(string(disk.slotStatus).toLowerCase())
+    && disk.detected !== false && disk.writeVerification !== "failed";
 }
 
 function uniqueDisks(items: Disk[]): Disk[] {
@@ -99,6 +137,8 @@ function cameraId(camera: Disk): string {
 
 function matchesSd(disk: Disk, camera: Disk): boolean {
   if (!isSdCard(disk)) return false;
+  if (string(disk.branchId) && string(camera.branch_id ?? camera.branchId)
+    && string(disk.branchId) !== string(camera.branch_id ?? camera.branchId)) return false;
   const id = diskId(disk);
   const camId = cameraId(camera);
   const discoveryId = string(camera.storageDiscoveryId);
@@ -107,6 +147,8 @@ function matchesSd(disk: Disk, camera: Disk): boolean {
 }
 
 function matchesRecorder(disk: Disk, camera: Disk): boolean {
+  if (string(disk.branchId) && string(camera.branch_id ?? camera.branchId)
+    && string(disk.branchId) !== string(camera.branch_id ?? camera.branchId)) return false;
   const recorderId = string(camera.recorder_id ?? camera.recorderId);
   return Boolean(recorderId) && !isSdCard(disk) && diskId(disk).startsWith(`${recorderId}:disk:`);
 }
@@ -164,8 +206,10 @@ export async function GET(request: NextRequest) {
     const sdCards = disks.filter(isSdCard);
     const recorderDisks = disks.filter((disk) => !isSdCard(disk));
     const mappings = cameras.map((camera) => {
-      const sd = sdCards.find((disk) => matchesSd(disk, camera));
-      const hdd = recorderDisks.find((disk) => matchesRecorder(disk, camera));
+      const cameraCards = sdCards.filter((disk) => matchesSd(disk, camera));
+      const cameraHdds = recorderDisks.filter((disk) => matchesRecorder(disk, camera));
+      const sd = cameraCards.find(healthy) ?? cameraCards[0];
+      const hdd = cameraHdds.find(healthy) ?? cameraHdds[0];
       const tier = sd && healthy(sd) ? "sd_card"
         : hdd && healthy(hdd) ? "dvr_hdd"
           : cloud ? "online_cloud" : "unavailable";
@@ -180,6 +224,10 @@ export async function GET(request: NextRequest) {
         // A candidate medium is not proof that the camera is recording to it.
         activeStorageTier: tier,
         recordingVerified: false,
+        storageMedia: [...cameraCards, ...cameraHdds].map(describeDisk),
+        storageDiagnosis: cameraCards.length || cameraHdds.length ? ""
+          : string(camera.recorder_id ?? camera.recorderId) ? "No disk report received from the recorder. Check gateway connectivity and recorder storage API access."
+            : "No camera memory-card report or recorder mapping. Check camera storage support and recorder channel setup.",
         sdCardStatus: sd ? healthy(sd) ? "detected"
           : string(sd.slotStatus).toLowerCase() === "uninitialized" ? "unformatted" : "unavailable"
           : "not_present",
