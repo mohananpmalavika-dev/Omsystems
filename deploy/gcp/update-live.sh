@@ -48,11 +48,11 @@ for migration in $(ls -1v /opt/sentinel-grid/database/migrations/*.sql 2>/dev/nu
 done
 
 cd /opt/sentinel-grid/deploy/gcp
-echo "--> Building control-plane, dashboard, and analytics-engine images..."
-docker compose -f docker-compose.gcp.yml build control-plane dashboard analytics-engine
+echo "--> Building control-plane, dashboard, media-gateway, and analytics-engine images..."
+docker compose -f docker-compose.gcp.yml build control-plane dashboard media-gateway analytics-engine
 
 echo "--> Recreating containers..."
-docker compose -f docker-compose.gcp.yml up -d --force-recreate caddy control-plane dashboard analytics-engine
+docker compose -f docker-compose.gcp.yml up -d --force-recreate caddy control-plane dashboard media-gateway analytics-engine
 
 # Update media-gateway configuration (low-latency HLS)
 if [ -f /opt/sentinel-grid/media-gateway/mediamtx.yml ]; then
