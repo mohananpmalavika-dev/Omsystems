@@ -39,6 +39,14 @@ describe("self-hosted edge media relay", () => {
         response.end(JSON.stringify({ action: request.url?.split("/").at(-1), token: JSON.parse(body).controlPlaneToken }));
         return;
       }
+      if (request.url?.startsWith("/webrtc/camera-1/whep")) {
+        let body = "";
+        for await (const chunk of request) body += chunk;
+        if (request.method === "DELETE") { response.writeHead(204).end(); return; }
+        response.setHeader("content-type", request.headers["content-type"] ?? "application/sdp");
+        response.end(body);
+        return;
+      }
       response.statusCode = 401;
       response.end('{"error":"media_access_denied"}');
     });
@@ -75,6 +83,15 @@ describe("self-hosted edge media relay", () => {
     });
     expect(authorized.status).toBe(200);
     expect(await authorized.text()).toContain("#EXTM3U");
+    for (const [method, contentType] of [["POST", "application/sdp"], ["PATCH", "application/trickle-ice-sdpfrag"]]) {
+      const sdp = "v=0\r\na=ice-ufrag:browser\r\n";
+      const result = await fetch(`${publicUrl}/webrtc/camera-1/whep`, {
+        method, headers: { "content-type": contentType!, authorization: "Bearer session-token" }, body: sdp,
+      });
+      expect(result.status).toBe(200);
+      expect(await result.text()).toBe(sdp);
+    }
+    expect((await fetch(`${publicUrl}/webrtc/camera-1/whep/session`, { method: "DELETE" })).status).toBe(204);
     for (const action of ["search", "play"]) {
       const preflight = await fetch(`${publicUrl}/v1/storage/${action}`, { method: "OPTIONS" });
       expect(preflight.status).toBe(204);

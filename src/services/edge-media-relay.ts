@@ -19,6 +19,8 @@ export function registerEdgeMediaRelay(app: FastifyInstance, store: ControlPlane
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 12 * 1024 * 1024 });
   const connections = new Map<string, Connection>();
   app.addContentTypeParser(/^audio\/L16(?:;.*)?$/i, { parseAs: "buffer", bodyLimit: 32_000 }, (_request, body, done) => done(null, body));
+  app.addContentTypeParser(/^application\/(?:sdp|trickle-ice-sdpfrag)(?:;.*)?$/i,
+    { parseAs: "buffer", bodyLimit: 256 * 1024 }, (_request, body, done) => done(null, body));
 
   app.server.on("upgrade", (request, socket, head) => {
     const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
@@ -97,7 +99,7 @@ export function registerEdgeMediaRelay(app: FastifyInstance, store: ControlPlane
       || path === "/v1/talk/start" && method === "POST"
       || /^\/v1\/talk\/[a-zA-Z0-9_-]+(?:\/audio)?$/.test(path) && ["POST", "DELETE"].includes(method)
       || /^\/hls\/[a-zA-Z0-9_-]+\/.+$/.test(path) && ["GET", "HEAD", "OPTIONS"].includes(method)
-      || /^\/webrtc\/[a-zA-Z0-9_-]+(?:\/.+)?$/.test(path) && ["GET", "POST", "PATCH", "OPTIONS"].includes(method);
+      || /^\/webrtc\/[a-zA-Z0-9_-]+(?:\/.+)?$/.test(path) && ["GET", "POST", "PATCH", "DELETE", "OPTIONS"].includes(method);
     if (!allowed || !/^[0-9a-f-]{36}$/.test(agentId)) return reply.code(404).send({ error: "not_found" });
     const connection = connections.get(agentId);
     if (!connection || connection.socket.readyState !== WebSocket.OPEN) return reply.code(503).send({ error: "edge_media_offline" });

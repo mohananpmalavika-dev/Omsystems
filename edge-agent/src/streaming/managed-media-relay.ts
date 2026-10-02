@@ -140,7 +140,7 @@ async function handleRequest(frame: RelayRequest, localPort: number) {
     || pathname === "/v1/talk/start" && method === "POST"
     || /^\/v1\/talk\/[a-zA-Z0-9_-]+(?:\/audio)?$/.test(pathname) && ["POST", "DELETE"].includes(method)
     || /^\/hls\/[a-zA-Z0-9_-]+\/.+$/.test(pathname) && ["GET", "HEAD", "OPTIONS"].includes(method)
-    || /^\/webrtc\/[a-zA-Z0-9_-]+(?:\/.+)?$/.test(pathname) && ["GET", "POST", "PATCH", "OPTIONS"].includes(method);
+    || /^\/webrtc\/[a-zA-Z0-9_-]+(?:\/.+)?$/.test(pathname) && ["GET", "POST", "PATCH", "DELETE", "OPTIONS"].includes(method);
   if (!allowed) return { status: 404, body: Buffer.from('{"error":"not_found"}').toString("base64") };
   const headers: Record<string, string> = {};
   for (const name of ["authorization", "content-type", "range", "accept"]) {
