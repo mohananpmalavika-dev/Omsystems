@@ -113,6 +113,7 @@ import { registerEdgeGatewayOperationsRoutes } from "./routes/edge-gateway-opera
 import { registerEdgeMediaRelay } from "./services/edge-media-relay.js";
 import { registerOperationalHealthRoutes } from "./routes/operational-health.routes.js";
 import { registerBranchCommandCenterRoutes } from "./routes/branch-command-center.routes.js";
+import { registerBranchProtectionRoutes } from "./branch-protection/routes.js";
 import { registerEnterpriseInfrastructureRoutes } from "./routes/enterprise-infrastructure.routes.js";
 import { registerVideoWallRoutes } from "./routes/video-wall.routes.js";
 import { registerCameraAnnotationRoutes } from "./routes/camera-annotation.routes.js";
@@ -2734,6 +2735,7 @@ export async function buildApp(options?: {
   await registerSlaReportRoutes(app, store);
   await registerOperationalHealthRoutes(app, store);
   await registerBranchCommandCenterRoutes(app, store);
+  await registerBranchProtectionRoutes(app, store);
   await registerEnterpriseInfrastructureRoutes(app, store);
   await registerVideoWallRoutes(app, store);
   await registerCameraAnnotationRoutes(app);
