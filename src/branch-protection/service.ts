@@ -39,9 +39,8 @@ export function evaluateProtection(state: ProtectionState, cameraIds: string[], 
     }
     if (dimensions.includes('UNKNOWN')) { unknown = true; reasons.push('One or more branch health dimensions are unknown'); }
   }
-  const currentReviews = state.reviews.filter(review => now.getTime() - Date.parse(review.occurredAt) <= 86400_000 && Date.parse(review.occurredAt) <= now.getTime());
   for (const rule of state.policy.sopRules.filter(rule => rule.mandatory)) {
-    const reviews = currentReviews.filter(review => review.ruleId === rule.id);
+    const reviews = state.reviews.filter(review => review.ruleId === rule.id && Date.parse(review.occurredAt) <= now.getTime() && sopCycle(rule, review.occurredAt) === sopCycle(rule, now.toISOString()));
     if (reviews.some(review => review.outcome === 'FAIL')) { risk = true; reasons.push(`SOP failed: ${rule.title}`); }
     if (!reviews.length || reviews.some(review => review.outcome === 'PENDING')) { unknown = true; reasons.push(`SOP review required: ${rule.title}`); }
   }
@@ -55,6 +54,13 @@ export function sopMatches(rule: SopRule, cameraId: string, occurredAt: string):
   const parts = new Intl.DateTimeFormat('en-GB', { timeZone: rule.timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(occurredAt));
   const minute = Number(parts.find(part => part.type === 'hour')!.value) * 60 + Number(parts.find(part => part.type === 'minute')!.value);
   return rule.startMinute <= rule.endMinute ? minute >= rule.startMinute && minute <= rule.endMinute : minute >= rule.startMinute || minute <= rule.endMinute;
+}
+export function sopCycle(rule: SopRule, timestamp: string): string {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: rule.timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(timestamp));
+  const part = (name: string) => Number(parts.find(item => item.type === name)!.value);
+  const midnight = Date.UTC(part('year'), part('month') - 1, part('day'));
+  const minute = part('hour') * 60 + part('minute');
+  return new Date(midnight - (rule.startMinute > rule.endMinute && minute <= rule.endMinute ? 86400_000 : 0)).toISOString().slice(0, 10);
 }
 export class BranchProtectionService {
   private readonly runs = new Set<string>();
@@ -119,12 +125,11 @@ export class BranchProtectionService {
         // never an automatic assertion that the procedure passed.
         for (const rule of current.policy.sopRules) for (const check of checks) {
           if (check.status !== 'VERIFIED' || !check.segmentId || !sopMatches(rule, check.cameraId, check.sampleAt)) continue;
-          const day = new Intl.DateTimeFormat('en-CA', { timeZone: rule.timeZone }).format(new Date(check.sampleAt));
-          if (current.reviews.some(review => review.ruleId === rule.id && review.cameraId === check.cameraId && new Intl.DateTimeFormat('en-CA', { timeZone: rule.timeZone }).format(new Date(review.occurredAt)) === day)) continue;
+          const day = sopCycle(rule, check.sampleAt);
+          if (current.reviews.some(review => review.ruleId === rule.id && review.cameraId === check.cameraId && sopCycle(rule, review.occurredAt) === day)) continue;
           current.reviews.push({ id: randomUUID(), ruleId: rule.id, cameraId: check.cameraId, occurredAt: check.sampleAt, evidenceId: check.segmentId, outcome: 'PENDING' });
         }
         current.reviews = current.reviews.filter(review => Date.parse(review.occurredAt) >= Date.now() - 30 * 86400_000);
-        delete current.verificationLease;
         return { checks };
       });
       for (const check of Object.values(updated.checks).filter(check => check.incidentId && cameras.some(camera => camera.id === check.cameraId))) {

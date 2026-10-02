@@ -147,7 +147,25 @@ describe("A. Explicitly Unimplemented Endpoints & Code Stubs Verification", () =
 
   describe("3. Remote Device Firmware Upgrade Execution", () => {
     it("should execute firmware update and transition status to completed with inventory updates", async () => {
-      const firmwareManager = new FirmwareManager(mockStore);
+      const mockExecutor = {
+        deploy: async (input: any) => ({
+          assetId: input.assetId,
+          previousVersion: "v1.0.0",
+          installedVersion: input.firmware.version,
+          deviceReportedVersion: input.firmware.version,
+          packageSha256: input.firmware.fileHash,
+          verifiedAt: new Date(),
+        }),
+        rollback: async (input: any) => ({
+          assetId: input.assetId,
+          previousVersion: "v2.5.0",
+          installedVersion: input.rollbackVersion,
+          deviceReportedVersion: input.rollbackVersion,
+          packageSha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          verifiedAt: new Date(),
+        }),
+      };
+      const firmwareManager = new FirmwareManager(mockStore, undefined, mockExecutor);
 
       const version = await firmwareManager.registerFirmwareVersion({
         tenantId: "tenant-001",
@@ -157,7 +175,7 @@ describe("A. Explicitly Unimplemented Endpoints & Code Stubs Verification", () =
         version: "v2.5.0",
         releaseDate: new Date(),
         fileUrl: "https://firmware.example.com/snv-6084r-v2.5.0.bin",
-        fileHash: "sha256:abc123def456",
+        fileHash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         fileSize: 10_485_760,
         releaseNotes: "Critical vulnerability CVE-2026-9901 patch",
         criticality: "critical",
