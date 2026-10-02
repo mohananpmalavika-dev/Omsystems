@@ -3,6 +3,7 @@ import { notificationOutbox } from '../notifications/infrastructure/outbox/notif
 import { CHANNEL_RETRY_POLICIES } from '../notifications/infrastructure/worker/notification-worker.js';
 import type { RecordingCheck } from './types.js';
 import type { User } from '../domain/models.js';
+import { createHash } from 'node:crypto';
 
 /** Actual configured tenant recipients; the existing durable worker owns delivery. */
 export async function enqueueProtectionIncidentNotifications(store: ControlPlaneStore,
@@ -29,6 +30,6 @@ export async function enqueueProtectionIncidentNotifications(store: ControlPlane
     const text = `Recording assurance requires attention at branch ${incident.branchId}, camera ${check.cameraId}. ${check.reason}. ${check.gaps.length} recording gaps. Incident ${incident.id}.`;
     await notificationOutbox.enqueue({ tenantId: incident.tenantId, alertId: incident.id, channel, priority,
       destination, payload: { subject: 'Branch recording assurance', text, voiceText: text, data: { incidentId: incident.id, branchId: incident.branchId, cameraId: check.cameraId } },
-      maxAttempts: CHANNEL_RETRY_POLICIES[channel].maxAttempts, idempotencyKey: `protection:${incident.id}:${incident.status === 'escalated' ? 'escalation' : 'initial'}:${channel}:${destination}` });
+      maxAttempts: CHANNEL_RETRY_POLICIES[channel].maxAttempts, idempotencyKey: `protection:${incident.id}:${incident.status === 'escalated' ? 'escalation' : 'initial'}:${channel}:${createHash('sha256').update(destination).digest('hex')}` });
   }
 }

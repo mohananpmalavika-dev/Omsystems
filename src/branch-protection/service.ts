@@ -16,6 +16,7 @@ export function evaluateProtection(state: ProtectionState, cameraIds: string[], 
   const reasons: string[] = [];
   let unknown = !cameraIds.length;
   let risk = false;
+  if (state.lastRunError) { unknown = true; reasons.push(state.lastRunError); }
   if (!cameraIds.length) reasons.push('No authorized camera inventory available');
   const checks = cameraIds.map(id => state.checks[id]);
   for (const id of cameraIds) {
@@ -87,7 +88,13 @@ export class BranchProtectionService {
     const ids = new Set(cameras.map(camera => camera.id));
     if ([...policy.criticalCameraIds, ...policy.sopRules.flatMap(rule => rule.cameraIds)].some(id => !ids.has(id))) throw new ProtectionError('Policy references an inaccessible camera', 400);
     if (new Set(policy.sopRules.map(rule => rule.id)).size !== policy.sopRules.length) throw new ProtectionError('Duplicate SOP rule identifiers', 400);
-    return this.repository.mutate(user.tenantId, branchId, user.id, 'POLICY_UPDATED', async state => { state.policy = policy; return { policy }; });
+    return this.repository.mutate(user.tenantId, branchId, user.id, 'POLICY_UPDATED', async state => {
+      if (state.policy.maxGapSeconds !== policy.maxGapSeconds || state.policy.requiredRetentionDays !== policy.requiredRetentionDays) {
+        for (const check of Object.values(state.checks)) { check.status = 'UNKNOWN'; check.reason = 'Recording policy changed; fresh verification required'; }
+      }
+      state.reviews = state.reviews.filter(review => JSON.stringify(state.policy.sopRules.find(rule => rule.id === review.ruleId)) === JSON.stringify(policy.sopRules.find(rule => rule.id === review.ruleId)));
+      state.policy = policy; return { policy };
+    });
   }
   async verify(user: User, branchId: string, onStarted?: () => void) {
     const key = `${user.tenantId}:${branchId}`;
@@ -99,6 +106,7 @@ export class BranchProtectionService {
       const state = await this.repository.mutate(user.tenantId, branchId, user.id, 'VERIFICATION_STARTED', async current => {
         if (current.verificationLease && Date.parse(current.verificationLease.expiresAt) > Date.now()) throw new ProtectionError('Verification already running');
         current.verificationLease = { id: leaseId, expiresAt: new Date(Date.now() + Math.max(60_000, cameras.length * 120_000)).toISOString() };
+        delete current.lastRunError;
         return { leaseId, cameraCount: cameras.length };
       });
       onStarted?.();
@@ -147,6 +155,12 @@ export class BranchProtectionService {
         await this.onIncident?.(incident, check, user);
       }
       return updated;
+    } catch (error) {
+      await this.repository.mutate(user.tenantId, branchId, user.id, 'VERIFICATION_FAILED', async current => {
+        if (current.verificationLease?.id === leaseId) current.lastRunError = error instanceof ProtectionError ? error.message : 'Recording verification could not complete; inspect service logs';
+        return { leaseId, message: current.lastRunError ?? 'Verification request rejected' };
+      });
+      throw error;
     } finally {
       this.runs.delete(key);
       await this.repository.mutate(user.tenantId, branchId, user.id, 'VERIFICATION_FINISHED', async current => {
@@ -158,6 +172,7 @@ export class BranchProtectionService {
   async resolve(user: User, branchId: string, cameraId: string, notes: string) {
     return this.repository.mutate(user.tenantId, branchId, user.id, 'RECOVERY_CONFIRMED', async state => {
       const check = state.checks[cameraId];
+      if (state.verificationLease && Date.parse(state.verificationLease.expiresAt) > Date.now()) throw new ProtectionError('Wait for the active recording verification to finish before confirming recovery');
       const incident = check?.incidentId && await this.store.getIncident(check.incidentId);
       if (!incident || incident.tenantId !== user.tenantId || incident.branchId !== branchId) throw new ProtectionError('Assurance incident unavailable');
       const recovered = check && check.status === 'VERIFIED' && check.gaps.length === 0 && check.indexedRetentionDays !== null && check.indexedRetentionDays >= state.policy.requiredRetentionDays;

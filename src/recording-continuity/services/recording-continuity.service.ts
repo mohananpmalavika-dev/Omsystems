@@ -44,6 +44,7 @@ export class RecordingContinuityService {
     );
 
     const result: PlaybackVerification = {
+      status: found ? 'UNKNOWN' : 'FAILED',
       successful: false,
       requestedTimestamp,
       recordingFound: found,
@@ -128,12 +129,16 @@ export class RecordingContinuityService {
     if (recordingNow === null || segments.length === 0) {
       state = "UNKNOWN";
       evidenceConfidence = "UNKNOWN";
-    } else if (!recordingNow || (secondsSinceLastRecording ?? 0) > 60 || continuity24hPct < 99.0 || playback?.successful === false) {
+    } else if (!recordingNow || (secondsSinceLastRecording ?? 0) > 60 || continuity24hPct < 99.0 || (playback?.successful === false && playback.status !== 'UNKNOWN')) {
       state = "CRITICAL";
     } else if (continuity24hPct < 99.95 || largestGapSec > 15 || (secondsSinceLastRecording ?? 0) > 10) {
       state = "WARNING";
     } else {
       state = "HEALTHY";
+    }
+    if (playback?.status === 'UNKNOWN') {
+      evidenceConfidence = 'UNKNOWN';
+      if (state === 'HEALTHY') state = 'UNKNOWN';
     }
 
     const lastGap = gaps.length > 0 ? {

@@ -52,6 +52,7 @@ export interface ProtectionState {
   checks: Record<string, RecordingCheck>;
   reviews: SopReview[];
   lastRunAt?: string;
+  lastRunError?: string;
   verificationLease?: { id: string; expiresAt: string };
 }
 export const defaultProtectionPolicy: ProtectionPolicy = {

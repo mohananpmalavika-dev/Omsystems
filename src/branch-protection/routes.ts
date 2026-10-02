@@ -72,9 +72,22 @@ export async function registerBranchProtectionRoutes(app: FastifyInstance, store
     await service.submitReview(auth.user, auth.branchId, input);
     return { success: true };
   });
+  app.get(`${base}/sop/recordings`, async (request, reply) => {
+    const auth = await authorize(request, reply); if (!auth) return;
+    const query = z.object({ cameraId: id, at: z.string().datetime() }).parse(request.query);
+    const camera = await store.getCamera(query.cameraId);
+    if (!camera || camera.branchId !== auth.branchId || (camera.tenantId && camera.tenantId !== auth.user.tenantId) || !(await store.checkAccess(auth.user, 'recording:view', camera.nodeId))?.allowed) return reply.code(404).send({ error: 'Camera unavailable' });
+    if (!pool) return reply.code(503).send({ error: 'Recording evidence database unavailable' });
+    const result = await pool.query("SELECT id,started_at,ended_at FROM recording_segments WHERE tenant_id=$1 AND camera_id=$2 AND status='ready' AND started_at<=$3 AND ended_at>$3 ORDER BY started_at DESC LIMIT 20", [auth.user.tenantId, query.cameraId, query.at]);
+    return { success: true, data: result.rows };
+  });
   app.post(`${base}/sop/:reviewId/review`, async (request, reply) => {
     const auth = await authorize(request, reply, 'incident:close'); if (!auth) return;
     const { reviewId } = z.object({ reviewId: z.string().uuid() }).parse(request.params);
+    const state = await service.repository.read(auth.user.tenantId, auth.branchId);
+    const review = state.reviews.find(item => item.id === reviewId);
+    const camera = review && await store.getCamera(review.cameraId);
+    if (!camera || camera.branchId !== auth.branchId || (camera.tenantId && camera.tenantId !== auth.user.tenantId) || !(await store.checkAccess(auth.user, 'recording:view', camera.nodeId))?.allowed) return reply.code(404).send({ error: 'Review evidence unavailable' });
     const body = z.object({ outcome: z.enum(['PASS', 'FAIL']), notes: z.string().trim().min(5).max(2000) }).parse(request.body);
     await service.review(auth.user, auth.branchId, reviewId, body.outcome, body.notes);
     return { success: true };
@@ -99,7 +112,9 @@ export async function registerBranchProtectionRoutes(app: FastifyInstance, store
     const auth = await authorize(request, reply, 'incident:view'); if (!auth) return;
     if (!pool) return reply.code(503).send({ error: 'Notification receipt database unavailable' });
     const state = await service.repository.read(auth.user.tenantId, auth.branchId);
-    const incidentIds = Object.values(state.checks).map(check => check.incidentId).filter(Boolean);
+    const cameras = await store.listCamerasByBranch(auth.user, auth.branchId, 'recording:view');
+    const allowed = new Set(cameras.map(camera => camera.id));
+    const incidentIds = Object.values(state.checks).filter(check => allowed.has(check.cameraId)).map(check => check.incidentId).filter(Boolean);
     const result = await pool.query(`SELECT alert_id AS incident_id,channel,status,attempts,provider,provider_message_id,sent_at,delivered_at,last_error
       FROM notification_jobs WHERE tenant_id=$1 AND alert_id=ANY($2::varchar[]) ORDER BY created_at DESC`, [auth.user.tenantId, incidentIds]);
     return { success: true, data: result.rows };

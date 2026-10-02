@@ -30,6 +30,15 @@ async function runRecordingContinuityTests() {
     }
   }
 
+  // Explicit index fixtures: the runtime service must never seed imaginary cameras.
+  const fixtureNow = Date.now();
+  recordingContinuityService.ingestSegments('cam-178-01', [
+    { start: new Date(fixtureNow - 86400_000), end: new Date(fixtureNow - 3600_000), type: 'CONTINUOUS', source: 'TEST_FIXTURE' },
+    { start: new Date(fixtureNow - 3588_000), end: new Date(fixtureNow), type: 'CONTINUOUS', source: 'TEST_FIXTURE' },
+  ]);
+  for (const [cameraId, age] of [['cam-178-07', 7200_000], ['cam-178-08', 14400_000]] as const) {
+    recordingContinuityService.ingestSegments(cameraId, [{ start: new Date(fixtureNow - 86400_000), end: new Date(fixtureNow - age), type: 'CONTINUOUS', source: 'TEST_FIXTURE' }]);
+  }
   // Suite 1: Timeline Segment Merging & Gap Detection
   console.log("Suite 1: Timeline Segment Merging & Gap Detection");
   const base = new Date("2026-08-16T10:00:00Z");
@@ -60,9 +69,9 @@ async function runRecordingContinuityTests() {
   // Suite 3: Multi-Evidence Recording Confidence & Playback Verification
   console.log("\nSuite 3: Multi-Evidence Recording Confidence & Playback Verification");
   const pbSuccess = await recordingContinuityService.verifyPlayback("cam-178-01", new Date(Date.now() - 600_000));
-  assert(pbSuccess.successful === true, "Playback verification succeeds when archive is present");
-  assert(pbSuccess.framesDecoded === true, "Sample frames decoded from playback stream");
-  assert(pbSuccess.timestampProgressing === true, "Verified timestamp progression in video stream");
+  assert(pbSuccess.recordingFound === true, "Archive index identifies the requested recording");
+  assert(pbSuccess.status === 'UNKNOWN' && pbSuccess.successful === false, "Index presence alone does not verify playback");
+  assert(pbSuccess.framesDecoded === false && pbSuccess.timestampProgressing === false, "Decoder evidence stays unverified until real playback is exercised");
 
   const pbFailure = await recordingContinuityService.verifyPlayback("cam-178-08", new Date(Date.now() - 600_000));
   assert(pbFailure.successful === false, "Playback verification fails when recording is missing");
@@ -106,8 +115,8 @@ async function runRecordingContinuityTests() {
   });
   assert(vaultContinuity.recordingNow === true, "Vault CAM01 is actively recording");
   assert(vaultContinuity.continuity24hPct > 99.9, "Vault CAM01 has >99.9% 24h continuity");
-  assert(vaultContinuity.playbackVerified === true, "Vault CAM01 playback is verified");
-  assert(vaultContinuity.state === "HEALTHY", "Vault CAM01 evaluates to HEALTHY state");
+  assert(vaultContinuity.playbackVerified === false, "Vault CAM01 index does not certify decoded playback");
+  assert(vaultContinuity.state === "UNKNOWN", "Vault CAM01 evidence health remains UNKNOWN without decoder evidence");
 
   const atmContinuity = recordingContinuityService.getContinuity("cam-178-08", {
     cameraName: "CAM08-ATM-Back",
@@ -167,7 +176,7 @@ async function runRecordingContinuityTests() {
   });
   assert(pbResp.statusCode === 201, "POST /api/v1/cameras/:id/playback-verification returns 201 Created");
   const pbData = JSON.parse(pbResp.body).data;
-  assert(pbData.successful === true, "Playback verification returns successful true");
+  assert(pbData.successful === false && pbData.status === 'UNKNOWN', "Playback API distinguishes indexed footage from verified decode");
 
   const branchResp = await app.inject({
     method: "GET",
@@ -176,6 +185,7 @@ async function runRecordingContinuityTests() {
   assert(branchResp.statusCode === 200, "GET /api/v1/branches/:id/recording-health returns 200 OK");
   const branchData = JSON.parse(branchResp.body).data;
   assert(branchData.branchContinuityPct > 0, "API returns branch overall continuity percentage");
+  await app.close();
 
   console.log("\n================================================================================");
   console.log(`  RESULTS: ${passed} passed, ${failed} failed`);

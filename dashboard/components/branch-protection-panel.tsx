@@ -24,6 +24,8 @@ export function BranchProtectionPanel({ branchId }: { branchId: string }) {
   const [offline, setOffline] = useState('No authoritative sync telemetry received');
   const [delivery, setDelivery] = useState<Array<{ incident_id: string; channel: string; status: string; delivered_at: string | null; last_error: string | null }>>([]);
   const [evidence, setEvidence] = useState({ ruleId: '', cameraId: '', evidenceId: '', occurredAt: '' });
+  const [recordings, setRecordings] = useState<Array<{ id: string; started_at: string; ended_at: string }>>([]);
+  const [recordingError, setRecordingError] = useState('');
   const [notes, setNotes] = useState<Record<string, string>>({});
   const request = useCallback(async (suffix: string, method = 'GET', body?: unknown) => {
     const response = await fetch(`/v1/branches/${encodeURIComponent(branchId)}/protection${suffix}`, {
@@ -42,8 +44,17 @@ export function BranchProtectionPanel({ branchId }: { branchId: string }) {
     } catch { setOffline('Offline sync telemetry unavailable'); }
   }, [request]);
   useEffect(() => {
+    let active = true; setRecordings([]); setRecordingError('');
+    setEvidence(previous => ({ ...previous, evidenceId: '' }));
+    if (!evidence.cameraId || !Number.isFinite(Date.parse(evidence.occurredAt))) return;
+    request(`/sop/recordings?cameraId=${encodeURIComponent(evidence.cameraId)}&at=${encodeURIComponent(new Date(evidence.occurredAt).toISOString())}`)
+      .then(result => { if (active) { setRecordings(result.data); setEvidence(previous => ({ ...previous, evidenceId: result.data[0]?.id ?? '' })); } })
+      .catch(cause => { if (active) setRecordingError(cause.message); });
+    return () => { active = false; };
+  }, [evidence.cameraId, evidence.occurredAt, request]);
+  useEffect(() => {
     if (!data?.verificationRunning) return;
-    const timer = setInterval(() => { request('').then(result => setData(result.data)).catch(cause => setError(cause.message)); }, 5000);
+    const timer = setInterval(() => { request('').then(async result => { setData(result.data); const receipts = await request('/incident-delivery'); setDelivery(receipts.data); }).catch(cause => setError(cause.message)); }, 5000);
     return () => clearInterval(timer);
   }, [data?.verificationRunning, request]);
   useEffect(() => { let active = true; setData(null); setPolicy(null); setError('');
@@ -84,7 +95,7 @@ export function BranchProtectionPanel({ branchId }: { branchId: string }) {
             <input aria-label={`Recovery notes for ${camera.name}`} className={field} placeholder="Recovery notes" value={notes[camera.id] ?? ''} onChange={event => setNotes({ ...notes, [camera.id]: event.target.value })} />
             {delivery.filter(receipt => receipt.incident_id === camera.check?.incidentId).map((receipt, index) => <p key={index} className="text-xs text-slate-400">{receipt.channel}: {receipt.status}{receipt.delivered_at ? ` · ${new Date(receipt.delivered_at).toLocaleString()}` : ''}{receipt.last_error ? ` · ${receipt.last_error}` : ''}</p>)}
             {!delivery.some(receipt => receipt.incident_id === camera.check?.incidentId) && <p className="text-xs text-slate-400">No external delivery receipt available</p>}
-            <button className={button} disabled={busy || camera.check.status !== 'VERIFIED' || camera.check.gaps.length > 0} onClick={() => act(() => request(`/cameras/${encodeURIComponent(camera.id)}/resolve`, 'POST', { notes: notes[camera.id] ?? '' }), 'Recovery verified and incident closed')}>Confirm recovery</button></div> : '—'}</td></tr>)}</tbody></table></div>
+            <button className={button} disabled={busy || data.verificationRunning || camera.check.status !== 'VERIFIED' || camera.check.gaps.length > 0} onClick={() => act(() => request(`/cameras/${encodeURIComponent(camera.id)}/resolve`, 'POST', { notes: notes[camera.id] ?? '' }), 'Recovery verified and incident closed')}>Confirm recovery</button></div> : '—'}</td></tr>)}</tbody></table></div>
       <div className="rounded-xl border border-slate-700 bg-slate-900 p-5"><h3 className="font-semibold">Connectivity and priority replay</h3><p className="mt-2 text-sm">Cloud streaming: {data.policy.bandwidthMode === 'low' ? 'Low bandwidth · substream' : 'Normal'} · Viewer budget: {data.policy.maxConcurrentStreams}</p>
         <p className="mt-1 text-sm text-slate-400">Local recording continues independently. Offline requests replay critical incidents and evidence before routine telemetry.</p><p className="mt-2 text-sm">{offline}</p></div></>}
     {policy && <details className="rounded-xl border border-slate-700 bg-slate-900 p-5"><summary className="cursor-pointer font-semibold">Protection policy and SOP rules</summary>
@@ -111,7 +122,8 @@ export function BranchProtectionPanel({ branchId }: { branchId: string }) {
       <form className="mt-3 grid gap-3 sm:grid-cols-2" onSubmit={event => { event.preventDefault(); void act(() => request('/sop/evidence', 'POST', { ...evidence, occurredAt: new Date(evidence.occurredAt).toISOString() }), 'Evidence added for review'); }}>
         <label className="text-sm">Procedure<select required className={field} value={evidence.ruleId} onChange={event => setEvidence({ ...evidence, ruleId: event.target.value })}><option value="">Select procedure</option>{data.policy.sopRules.map(rule => <option key={rule.id} value={rule.id}>{rule.title}</option>)}</select></label>
         <label className="text-sm">Camera<select required className={field} value={evidence.cameraId} onChange={event => setEvidence({ ...evidence, cameraId: event.target.value })}><option value="">Select camera</option>{data.cameras.map(camera => <option key={camera.id} value={camera.id}>{camera.name}</option>)}</select></label>
-        <label className="text-sm">Recording segment ID<input required className={field} value={evidence.evidenceId} onChange={event => setEvidence({ ...evidence, evidenceId: event.target.value })} /></label><label className="text-sm">Event time<input required className={field} type="datetime-local" value={evidence.occurredAt} onChange={event => setEvidence({ ...evidence, occurredAt: event.target.value })} /></label><button className={button} disabled={busy}>Submit evidence</button></form>
+        <label className="text-sm">Event time<input required className={field} type="datetime-local" value={evidence.occurredAt} onChange={event => setEvidence({ ...evidence, occurredAt: event.target.value })} /></label>
+        <label className="text-sm">Recording evidence<select required className={field} value={evidence.evidenceId} onChange={event => setEvidence({ ...evidence, evidenceId: event.target.value })}><option value="">Select camera and event time</option>{recordings.map(recording => <option key={recording.id} value={recording.id}>{new Date(recording.started_at).toLocaleString()} – {new Date(recording.ended_at).toLocaleTimeString()}</option>)}</select>{recordingError && <span className="text-xs text-amber-300">{recordingError}</span>}{evidence.cameraId && evidence.occurredAt && !recordings.length && !recordingError && <span className="text-xs text-slate-400">No indexed recording is available at this event time.</span>}</label><button className={button} disabled={busy || !evidence.evidenceId}>Submit evidence</button></form>
       <div className="mt-4 space-y-3">{data.reviews.map(review => <div key={review.id} className="rounded border border-slate-700 p-3"><p className="text-sm">{data.policy.sopRules.find(rule => rule.id === review.ruleId)?.title ?? review.ruleId} · {review.outcome} · {new Date(review.occurredAt).toLocaleString()}</p>
         <Link className="text-xs text-blue-300 underline" href={`/recordings?branchId=${encodeURIComponent(branchId)}&cameraId=${encodeURIComponent(review.cameraId)}&from=${encodeURIComponent(review.occurredAt)}&to=${encodeURIComponent(new Date(Date.parse(review.occurredAt) + 60_000).toISOString())}`}>Review recording</Link>
         <label className="mt-2 block text-sm">Review notes<input className={field} value={notes[review.id] ?? ''} onChange={event => setNotes({ ...notes, [review.id]: event.target.value })} /></label><div className="mt-2 flex gap-2">{(['PASS', 'FAIL'] as const).map(outcome => <button key={outcome} className={button} disabled={busy} onClick={() => act(() => request(`/sop/${review.id}/review`, 'POST', { outcome, notes: notes[review.id] ?? '' }), 'SOP review recorded')}>{outcome === 'PASS' ? 'Confirm pass' : 'Flag failure'}</button>)}</div></div>)}</div></div>}

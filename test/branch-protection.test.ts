@@ -15,9 +15,11 @@ import { decodeArchiveSample, LocalArchiveRecordingProbe, recordingGaps } from '
 import { registerBranchProtectionRoutes } from '../src/branch-protection/routes.js';
 import { RecordingContinuityService } from '../src/recording-continuity/services/recording-continuity.service.js';
 import { EncryptedOutbox } from '../edge-agent/src/offline/encrypted-outbox.js';
+import { enqueueProtectionIncidentNotifications } from '../src/branch-protection/incident-notifications.js';
+import { notificationOutbox } from '../src/notifications/infrastructure/outbox/notification-outbox.js';
 
 const directories: string[] = [];
-afterEach(async () => { for (const directory of directories.splice(0)) await rm(directory, { recursive: true, force: true }); });
+afterEach(async () => { vi.restoreAllMocks(); for (const directory of directories.splice(0)) await rm(directory, { recursive: true, force: true }); });
 const user: User = { id: 'operator', displayName: 'Operator', tenantId: 'tenant-a', role: 'company_admin' };
 const now = new Date('2026-10-02T04:00:00Z');
 const check = (patch: Partial<RecordingCheck> = {}): RecordingCheck => ({ cameraId: 'camera-a', status: 'VERIFIED', checkedAt: now.toISOString(), sampleAt: now.toISOString(), framesDecoded: 30, timestampProgressing: true, reason: 'Decoded', gaps: [], indexedRetentionDays: 100, ...patch });
@@ -135,6 +137,28 @@ describe('Branch protection truth and recovery', () => {
     expect(evaluateProtection(state, ['camera-a'], snapshot, now).status).toBe('UNKNOWN');
     state.reviews = [{ id: 'review', ruleId: 'opening', cameraId: 'camera-a', occurredAt: now.toISOString(), evidenceId: 'segment', outcome: 'FAIL' }];
     expect(evaluateProtection(state, ['camera-a'], snapshot, now).status).toBe('AT_RISK');
+  });
+  it('does not reuse a previous local day SOP pass for today', () => {
+    const state = initialProtectionState(); state.checks['camera-a'] = check();
+    state.policy.sopRules = [{ id: 'opening', title: 'Opening', kind: 'OPENING', cameraIds: ['camera-a'], timeZone: 'Asia/Kolkata', startMinute: 540, endMinute: 600, mandatory: true }];
+    state.reviews = [{ id: 'review', ruleId: 'opening', cameraId: 'camera-a', occurredAt: new Date(+now - 23 * 3600_000).toISOString(), evidenceId: 'segment', outcome: 'PASS' }];
+    expect(evaluateProtection(state, ['camera-a'], snapshot, now).status).toBe('UNKNOWN');
+  });
+  it('enqueues configured P1 channels without claiming delivery and escalates overdue unassigned incidents', async () => {
+    const enqueue = vi.spyOn(notificationOutbox, 'enqueue').mockResolvedValue({ status: 'PENDING' } as any);
+    const policy = { recipientGroups: { email: ['ops@example.test'], sms: ['+919999999999'], voice: ['+919999999999'] }, escalationAfterSeconds: { P1: 120 } };
+    const store = { getAlertNotificationPolicy: vi.fn(async () => policy), checkAccess: vi.fn(async () => ({ allowed: true })), escalateIncident: vi.fn(async () => undefined),
+      listAnalyticsAlerts: vi.fn(async () => [{ id: 'related-alert', severity: 'P1' }]), linkAnalyticsAlertIncident: vi.fn(async () => undefined) } as unknown as ControlPlaneStore;
+    await enqueueProtectionIncidentNotifications(store, { id: 'incident', tenantId: user.tenantId, branchId: 'branch-a', severity: 'P1', occurredAt: new Date(Date.now() - 180_000).toISOString() }, check({ checkedAt: new Date().toISOString() }), user);
+    expect(store.escalateIncident).toHaveBeenCalledOnce(); expect(store.linkAnalyticsAlertIncident).toHaveBeenCalledOnce();
+    expect(enqueue.mock.calls.map(call => call[0].channel)).toEqual(['email', 'sms', 'voice']);
+    expect(enqueue.mock.calls.every(call => call[0].idempotencyKey.includes(':escalation:'))).toBe(true);
+  });
+  it('does not invent recipients or escalation permissions', async () => {
+    const enqueue = vi.spyOn(notificationOutbox, 'enqueue').mockResolvedValue({} as any);
+    const store = { getAlertNotificationPolicy: vi.fn(async () => ({ recipientGroups: {}, escalationAfterSeconds: {} })), checkAccess: vi.fn(async () => ({ allowed: false })), escalateIncident: vi.fn() } as unknown as ControlPlaneStore;
+    await enqueueProtectionIncidentNotifications(store, { id: 'incident', tenantId: user.tenantId, branchId: 'branch-a', severity: 'P2' }, check(), user);
+    expect(enqueue).not.toHaveBeenCalled(); expect(store.escalateIncident).not.toHaveBeenCalled();
   });
 });
 

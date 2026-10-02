@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 
 const output = resolve('qa-artifacts/branch-protection');
 await mkdir(output, { recursive: true });
-const bundle = await build({ stdin: { contents: `import React from 'react'; import {createRoot} from 'react-dom/client'; import {BranchProtectionPanel} from './dashboard/components/branch-protection-panel'; createRoot(document.getElementById('root')).render(<BranchProtectionPanel branchId="branch-a" />);`, resolveDir: process.cwd(), loader: 'tsx' }, bundle: true, write: false, format: 'iife', platform: 'browser', jsx: 'automatic', define: { 'process.env.NODE_ENV': '"production"' } });
+const bundle = await build({ stdin: { contents: `import React from 'react'; import {createRoot} from 'react-dom/client'; import {BranchProtectionPanel} from './dashboard/components/branch-protection-panel'; createRoot(document.getElementById('root')).render(<BranchProtectionPanel branchId="branch-a" />);`, resolveDir: process.cwd(), loader: 'tsx' }, bundle: true, write: false, format: 'iife', platform: 'browser', jsx: 'automatic', define: { 'process.env': '{"NODE_ENV":"production"}' } });
 const css = await postcss([tailwindcss({ content: ['./dashboard/components/branch-protection-panel.tsx'], theme: { extend: {} } })]).process('@tailwind base; @tailwind components; @tailwind utilities;', { from: undefined });
 let verifying = false;
 let savedPolicy;

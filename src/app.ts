@@ -3799,6 +3799,9 @@ export async function buildApp(options?: {
       return reply.code(409).send({ error: "invalid_alert_transition" });
     }
     const databaseCode = (error as { code?: string }).code;
+    if (databaseCode === '42P01' && _request.url.includes('/protection')) {
+      return reply.code(503).send({ error: 'protection_migration_required', message: 'Apply the branch protection and offline sync database migrations before enabling this feature' });
+    }
     if (databaseCode === "23505") {
       return reply.code(409).send({ error: "resource_conflict" });
     }

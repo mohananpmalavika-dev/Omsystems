@@ -58,6 +58,7 @@ export interface RecordingGap {
 }
 
 export interface PlaybackVerification {
+  status?: 'VERIFIED' | 'FAILED' | 'UNKNOWN';
   successful: boolean;
   requestedTimestamp: Date;
   recordingFound: boolean;

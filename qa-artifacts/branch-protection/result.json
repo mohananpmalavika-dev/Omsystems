@@ -1,0 +1,76 @@
+{
+  "passed": true,
+  "errors": [],
+  "apiRequests": [
+    {
+      "method": "GET",
+      "path": "/v1/branches/branch-a/protection"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/branches/branch-a/protection/offline"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/branches/branch-a/protection/incident-delivery"
+    },
+    {
+      "method": "PUT",
+      "path": "/v1/branches/branch-a/protection/policy"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/branches/branch-a/protection"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/branches/branch-a/protection/incident-delivery"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/branches/branch-a/protection/offline"
+    },
+    {
+      "method": "POST",
+      "path": "/v1/branches/branch-a/protection/verify"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/branches/branch-a/protection"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/branches/branch-a/protection/incident-delivery"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/branches/branch-a/protection/offline"
+    }
+  ],
+  "policySaved": {
+    "enabled": false,
+    "verificationIntervalMinutes": 15,
+    "verificationFreshMinutes": 30,
+    "maxGapSeconds": 60,
+    "requiredRetentionDays": 90,
+    "criticalCameraIds": [
+      "camera-a"
+    ],
+    "bandwidthMode": "normal",
+    "maxConcurrentStreams": 2,
+    "sopRules": [
+      {
+        "id": "66facd7b-51b1-43df-ab17-94cb042d870e",
+        "title": "Branch opening review",
+        "kind": "OPENING",
+        "cameraIds": [
+          "camera-a"
+        ],
+        "timeZone": "Asia/Kolkata",
+        "startMinute": 540,
+        "endMinute": 600,
+        "mandatory": true
+      }
+    ]
+  }
+}
