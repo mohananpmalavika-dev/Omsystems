@@ -91,7 +91,7 @@ export async function registerStaleHealthRoutes(app: FastifyInstance, store: Con
     const { entityType, entityId } = request.params as { entityType: EntityType; entityId: string };
     const { branchId } = z.object({ branchId: z.string().min(1) }).parse(request.query);
     if (!await authorizeBranch(request, reply, branchId, "live:view")) return;
-    const obs = telemetryQualityService.getObservation(entityType, entityId);
+    const obs = telemetryQualityService.getObservation(entityType, entityId, { tenantId: request.currentUser.tenantId, branchId });
     if (!obs) {
       return reply.code(404).send({ error: "observation_not_found", message: `No observation for ${entityType}:${entityId}` });
     }
@@ -103,7 +103,7 @@ export async function registerStaleHealthRoutes(app: FastifyInstance, store: Con
     const { entityType, entityId } = request.params as { entityType: EntityType; entityId: string };
     const { branchId } = z.object({ branchId: z.string().min(1) }).parse(request.query);
     if (!await authorizeBranch(request, reply, branchId, "live:view")) return;
-    const evaluated = telemetryQualityService.getEffectiveHealth(entityType, entityId);
+    const evaluated = telemetryQualityService.getEffectiveHealth(entityType, entityId, new Date(), { tenantId: request.currentUser.tenantId, branchId });
     return reply.code(200).send({ success: true, data: evaluated });
   });
 
@@ -119,7 +119,7 @@ export async function registerStaleHealthRoutes(app: FastifyInstance, store: Con
   app.get("/v1/health/telemetry/quality-report", async (request, reply) => {
     const { branchId } = z.object({ branchId: z.string().min(1) }).parse(request.query);
     if (!await authorizeBranch(request, reply, branchId, "live:view")) return;
-    const report = telemetryQualityService.generateQualityReport();
+    const report = telemetryQualityService.generateQualityReport(new Date(), { tenantId: request.currentUser.tenantId, branchId });
     return reply.code(200).send({ success: true, data: report });
   });
 }

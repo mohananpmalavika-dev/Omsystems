@@ -33,6 +33,10 @@ export interface StepOverrideInput {
 }
 
 export class StepExecutorService {
+  constructor(private readonly automatedCheck?: (
+    definition: PlaybookStepDefinition,
+    context: Record<string, unknown>,
+  ) => Promise<{ verified: boolean; evidenceIds: string[]; data: Record<string, unknown> }>) {}
   /**
    * Complete an SOP step with strict domain validation.
    */
@@ -122,28 +126,15 @@ export class StepExecutorService {
   async executeAutomatedCheck(
     definition: PlaybookStepDefinition,
     currentStep: StepInstance,
+    context: Record<string, unknown> = {},
   ): Promise<StepInstance> {
     const now = new Date().toISOString();
-    let result: Record<string, any> = { executedAt: now };
-
-    if (definition.automatedAction?.service === "branchOperations") {
-      result = {
-        branchStatus: "CLOSED",
-        isBusinessHours: false,
-        scheduledOpenTime: "09:00:00",
-        scheduledCloseTime: "18:00:00",
-        holidayToday: false,
-        managerContact: "+91-9876543210",
-        verifiedAt: now,
-      };
-    } else if (definition.automatedAction?.service === "accessControl") {
-      result = {
-        recentDoorEventsCount: 0,
-        lastBadgeEntry: null,
-        vaultDoorLocked: true,
-        alarmSensorArmed: true,
-        verifiedAt: now,
-      };
+    if (!this.automatedCheck) return { ...currentStep, resultJson: { verified: false, reason: "AUTOMATED_CHECK_NOT_CONFIGURED", checkedAt: now } };
+    let probe;
+    try { probe = await this.automatedCheck(definition, context); }
+    catch { return { ...currentStep, resultJson: { verified: false, reason: "AUTOMATED_CHECK_FAILED", checkedAt: now } }; }
+    if (!probe.verified || !probe.evidenceIds?.length || probe.evidenceIds.some(id => !id.trim())) {
+      return { ...currentStep, resultJson: { verified: false, reason: "AUTOMATED_CHECK_EVIDENCE_MISSING", checkedAt: now } };
     }
 
     return {
@@ -154,7 +145,7 @@ export class StepExecutorService {
         userId: "system",
         userName: "Automated Context Collector",
       },
-      resultJson: result,
+      resultJson: { ...probe.data, verified: true, evidenceIds: probe.evidenceIds, verifiedAt: now },
     };
   }
 }

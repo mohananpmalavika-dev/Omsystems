@@ -49,6 +49,8 @@ export function RecordingRecoveryWorkspace() {
   const [refreshing, setRefreshing] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [lastLoadedAt, setLastLoadedAt] = useState<string | null>(null);
 
   // Scan modal state
   const [scanModalOpen, setScanModalOpen] = useState(false);
@@ -78,10 +80,10 @@ export function RecordingRecoveryWorkspace() {
     try {
       setRefreshing(true);
       const [statsRes, gapsRes, jobsRes, auditRes] = await Promise.all([
-        recordingRecoveryApi.getStats().catch(() => ({ data: null })),
-        recordingRecoveryApi.listGaps({ limit: 100 }).catch(() => ({ data: [] as RecordingGapItem[], meta: { total: 0, limit: 100, offset: 0 } })),
-        recordingRecoveryApi.listJobs({ limit: 50 }).catch(() => ({ data: [] as BackfillJobItem[], meta: { total: 0, limit: 50, offset: 0 } })),
-        recordingRecoveryApi.getAuditLogs({ limit: 50 }).catch(() => ({ data: [] as EdgeBackfillAuditEntry[], meta: { total: 0, limit: 50, offset: 0 } })),
+        recordingRecoveryApi.getStats(),
+        recordingRecoveryApi.listGaps({ limit: 100 }),
+        recordingRecoveryApi.listJobs({ limit: 50 }),
+        recordingRecoveryApi.getAuditLogs({ limit: 50 }),
       ]);
 
       if (statsRes?.data) setStats(statsRes.data);
@@ -93,8 +95,11 @@ export function RecordingRecoveryWorkspace() {
 
       if (Array.isArray(auditRes?.data)) setAuditLogs(auditRes.data);
       else if ((auditRes as any)?.data?.data) setAuditLogs((auditRes as any).data.data);
+      setLoadError(null);
+      setLastLoadedAt(new Date().toISOString());
     } catch (err: any) {
       console.error("Failed to load recording recovery data:", err);
+      setLoadError("Recording recovery could not be verified. Previous results, if present, may be outdated.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -264,6 +269,7 @@ export function RecordingRecoveryWorkspace() {
       <FieldVisual /></div>
 
       {/* Notifications */}
+      {loadError && <div role="alert" className="p-4 rounded-xl border border-amber-700 text-amber-300">{loadError} {lastLoadedAt ? `Last loaded: ${lastLoadedAt}` : "No recovery data has been loaded."}</div>}
       {actionError && (
         <div className="p-4 rounded-xl bg-red-950/40 border border-red-800/60 text-red-300 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -298,7 +304,7 @@ export function RecordingRecoveryWorkspace() {
             <div className="text-xs font-semibold uppercase tracking-wider text-gray-400">WAN Auto-Recovery</div>
             <div className="text-sm font-medium text-emerald-400 flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              Active Link Probing & Listeners
+              Check branch connectivity for current status
             </div>
           </div>
         </div>
@@ -310,7 +316,7 @@ export function RecordingRecoveryWorkspace() {
           <div>
             <div className="text-xs font-semibold uppercase tracking-wider text-gray-400">Edge Store-and-Forward</div>
             <div className="text-sm font-medium text-gray-200">
-              Autonomous 30-Day FIFO Buffering
+              Buffer capacity depends on branch storage policy
             </div>
           </div>
         </div>
@@ -322,7 +328,7 @@ export function RecordingRecoveryWorkspace() {
           <div>
             <div className="text-xs font-semibold uppercase tracking-wider text-gray-400">Deduplication Engine</div>
             <div className="text-sm font-medium text-purple-300">
-              Zero Duplicate Frames Guaranteed
+              Checksum-based segment deduplication
             </div>
           </div>
         </div>
@@ -333,7 +339,7 @@ export function RecordingRecoveryWorkspace() {
         <div className="p-4 rounded-xl bg-gray-900/60 border border-gray-800 shadow-sm">
           <div className="text-xs font-medium text-gray-400">Total Detected Gaps</div>
           <div className="text-2xl font-bold text-white mt-1">
-            {stats?.totalGaps ?? gaps.length}
+            {loadError ? "Unknown" : stats?.totalGaps ?? "Unknown"}
           </div>
           <div className="text-xs text-gray-500 mt-1 flex items-center gap-1">
             <Clock className="h-3 w-3" />
@@ -344,7 +350,7 @@ export function RecordingRecoveryWorkspace() {
         <div className="p-4 rounded-xl bg-gray-900/60 border border-gray-800 shadow-sm">
           <div className="text-xs font-medium text-gray-400">Healed Gaps</div>
           <div className="text-2xl font-bold text-emerald-400 mt-1">
-            {stats?.healedGaps ?? gaps.filter((g) => g.status === "HEALED").length}
+            {loadError ? "Unknown" : stats?.healedGaps ?? "Unknown"}
           </div>
           <div className="text-xs text-emerald-500/80 mt-1 flex items-center gap-1">
             <CheckCircle2 className="h-3 w-3" />
@@ -355,7 +361,7 @@ export function RecordingRecoveryWorkspace() {
         <div className="p-4 rounded-xl bg-gray-900/60 border border-gray-800 shadow-sm">
           <div className="text-xs font-medium text-gray-400">Recovery Success</div>
           <div className="text-2xl font-bold text-cyan-400 mt-1">
-            {stats?.healingSuccessRate !== undefined ? `${stats.healingSuccessRate}%` : "100%"}
+            {!loadError && stats?.healingSuccessRate != null ? `${stats.healingSuccessRate}%` : "Unknown"}
           </div>
           <div className="text-xs text-gray-500 mt-1">
             {stats?.openGaps ?? gaps.filter((g) => g.status === "OPEN").length} open gaps pending
@@ -365,7 +371,7 @@ export function RecordingRecoveryWorkspace() {
         <div className="p-4 rounded-xl bg-gray-900/60 border border-gray-800 shadow-sm">
           <div className="text-xs font-medium text-gray-400">Backfilled Footage</div>
           <div className="text-2xl font-bold text-indigo-400 mt-1">
-            {stats ? formatBytes(stats.totalBackfilledBytes) : "0 B"}
+            {!loadError && stats ? formatBytes(stats.totalBackfilledBytes) : "Unknown"}
           </div>
           <div className="text-xs text-gray-500 mt-1">
             {stats?.totalRecoveredSegments ?? 0} segments committed
@@ -375,7 +381,7 @@ export function RecordingRecoveryWorkspace() {
         <div className="p-4 rounded-xl bg-gray-900/60 border border-gray-800 shadow-sm col-span-2 md:col-span-1">
           <div className="text-xs font-medium text-gray-400">Active Sync Jobs</div>
           <div className="text-2xl font-bold text-amber-400 mt-1">
-            {stats?.activeJobsCount ?? jobs.filter((j) => j.status === "IN_PROGRESS").length}
+            {loadError ? "Unknown" : stats?.activeJobsCount ?? "Unknown"}
           </div>
           <div className="text-xs text-gray-500 mt-1">
             {stats?.totalSkippedDuplicates ?? 0} duplicates omitted

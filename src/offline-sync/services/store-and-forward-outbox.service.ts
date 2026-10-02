@@ -4,6 +4,8 @@
  */
 
 import { createHash, randomUUID } from 'node:crypto';
+import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import {
   SyncBacklogType,
   QueuedBacklogItem,
@@ -15,8 +17,37 @@ export class StoreAndForwardOutboxService {
   private queues = new Map<string, QueuedBacklogItem[]>(); // branchId -> items
   private maxItemsPerBranch: number;
 
-  constructor(maxItemsPerBranch = 10_000) {
+  constructor(maxItemsPerBranch = 10_000, private readonly journalPath?: string) {
+    if (!Number.isInteger(maxItemsPerBranch) || maxItemsPerBranch < 1) throw new Error('invalid_outbox_quota');
     this.maxItemsPerBranch = maxItemsPerBranch;
+    if (journalPath && existsSync(journalPath)) {
+      const snapshot = JSON.parse(readFileSync(journalPath, 'utf8'));
+      if (snapshot.version !== 1 || !Array.isArray(snapshot.branches)) throw new Error('invalid_outbox_journal');
+      this.queues = new Map(snapshot.branches);
+      for (const queue of this.queues.values()) {
+        for (const item of queue) {
+          const expected = createHash('sha256').update(JSON.stringify({ branchId: item.branchId, type: item.type, payload: item.payload, timestamp: item.timestamp })).digest('hex');
+          if (item.checksum !== expected) throw new Error('outbox_journal_checksum_mismatch');
+          if (item.status === 'SYNCING') item.status = 'QUEUED';
+        }
+      }
+    }
+  }
+
+  private commit(queues: Map<string, QueuedBacklogItem[]>): void {
+    if (this.journalPath) {
+      mkdirSync(dirname(this.journalPath), { recursive: true });
+      const temporaryPath = `${this.journalPath}.${randomUUID()}.tmp`;
+      writeFileSync(temporaryPath, JSON.stringify({ version: 1, branches: [...queues] }), { encoding: 'utf8', mode: 0o600, flush: true });
+      renameSync(temporaryPath, this.journalPath);
+    }
+    this.queues = queues;
+  }
+
+  private updateBranch(branchId: string, queue: QueuedBacklogItem[]): void {
+    const queues = new Map(this.queues);
+    queues.set(branchId, queue);
+    this.commit(queues);
   }
 
   /**
@@ -28,7 +59,7 @@ export class StoreAndForwardOutboxService {
     payload: Record<string, unknown>,
     timestamp?: string
   ): QueuedBacklogItem {
-    const queue = this.queues.get(branchId) || [];
+    const queue = structuredClone(this.queues.get(branchId) || []);
     const itemTimestamp = timestamp || new Date().toISOString();
     const priority = BACKLOG_PRIORITIES[type];
     const itemId = `item-${Date.now()}-${randomUUID().slice(0, 8)}`;
@@ -56,7 +87,7 @@ export class StoreAndForwardOutboxService {
 
       for (let i = 0; i < queue.length; i++) {
         const q = queue[i]!;
-        if (q.priority < lowestPriority && q.priority < 60) {
+        if (q.status !== 'SYNCING' && q.priority <= priority && q.priority < lowestPriority && q.priority < 60) {
           lowestPriority = q.priority;
           lowestIndex = i;
         }
@@ -64,22 +95,23 @@ export class StoreAndForwardOutboxService {
 
       if (lowestIndex >= 0) {
         queue.splice(lowestIndex, 1); // Evict lowest priority telemetry item
-      }
+      } else throw new Error('outbox_quota_exceeded');
     }
 
     queue.push(item);
     // Keep queue sorted by priority descending, then timestamp ascending
     queue.sort((a, b) => b.priority - a.priority || new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-    this.queues.set(branchId, queue);
-    return item;
+    this.updateBranch(branchId, queue);
+    return structuredClone(item);
   }
 
   /**
    * Generates the next batch of items to sync to the Cloud, ordered by priority (P1 first).
    */
   nextBatch(branchId: string, maxBatchSize = 50): SyncBatchPayload | null {
-    const queue = this.queues.get(branchId) || [];
+    if (!Number.isInteger(maxBatchSize) || maxBatchSize < 1) throw new Error('invalid_sync_batch_size');
+    const queue = structuredClone(this.queues.get(branchId) || []);
     const pendingItems = queue.filter((i) => i.status === 'QUEUED' || i.status === 'FAILED');
 
     if (pendingItems.length === 0) return null;
@@ -88,6 +120,7 @@ export class StoreAndForwardOutboxService {
     for (const item of batchItems) {
       item.status = 'SYNCING';
     }
+    this.updateBranch(branchId, queue);
 
     const batchId = `batch-${Date.now()}-${randomUUID().slice(0, 6)}`;
     const batchChecksum = createHash('sha256')
@@ -99,7 +132,7 @@ export class StoreAndForwardOutboxService {
       branchId,
       generatedAt: new Date().toISOString(),
       itemCount: batchItems.length,
-      items: batchItems,
+      items: structuredClone(batchItems),
       checksum: batchChecksum,
     };
   }
@@ -114,7 +147,7 @@ export class StoreAndForwardOutboxService {
     const remaining = queue.filter((i) => !idSet.has(i.id));
     const removedCount = queue.length - remaining.length;
 
-    this.queues.set(branchId, remaining);
+    this.updateBranch(branchId, remaining);
     return removedCount;
   }
 
@@ -122,7 +155,7 @@ export class StoreAndForwardOutboxService {
    * Marks batch items as failed with retry increment.
    */
   failBatch(branchId: string, itemIds: string[], errorMessage?: string): void {
-    const queue = this.queues.get(branchId) || [];
+    const queue = structuredClone(this.queues.get(branchId) || []);
     const idSet = new Set(itemIds);
 
     for (const item of queue) {
@@ -132,10 +165,11 @@ export class StoreAndForwardOutboxService {
         item.errorMessage = errorMessage;
       }
     }
+    this.updateBranch(branchId, queue);
   }
 
   getQueue(branchId: string): QueuedBacklogItem[] {
-    return this.queues.get(branchId) || [];
+    return structuredClone(this.queues.get(branchId) || []);
   }
 
   getBacklogCounts(branchId: string): Record<SyncBacklogType, number> {
@@ -156,4 +190,4 @@ export class StoreAndForwardOutboxService {
   }
 }
 
-export const storeAndForwardOutbox = new StoreAndForwardOutboxService();
+export const storeAndForwardOutbox = new StoreAndForwardOutboxService(10_000, process.env.OFFLINE_OUTBOX_JOURNAL_PATH);

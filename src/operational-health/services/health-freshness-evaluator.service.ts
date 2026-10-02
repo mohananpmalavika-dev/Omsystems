@@ -57,6 +57,20 @@ export class HealthFreshnessEvaluatorService {
           ? new Date(observation.receivedAt)
           : observedAtDate;
 
+    if (![observedAtDate, expiresAtDate, receivedAtDate].every(date => Number.isFinite(date.getTime())) || observedAtDate.getTime() > now.getTime() + 5000) {
+      return {
+        entityId: observation.entityId,
+        entityType: observation.entityType,
+        branchId: observation.branchId,
+        state: "UNKNOWN",
+        freshness: "NEVER_OBSERVED",
+        ageSeconds: 0,
+        source: observation.source,
+        reasonCode: "CLOCK_DRIFT_EXCESSIVE",
+        reason: "Health observation timestamps are invalid or ahead of the verification clock",
+      };
+    }
+
     const ageSeconds = Math.max(0, Math.floor((now.getTime() - observedAtDate.getTime()) / 1000));
     const isExpired = now.getTime() > expiresAtDate.getTime();
     const staleForSeconds = isExpired
@@ -76,7 +90,9 @@ export class HealthFreshnessEvaluatorService {
     let reasonCode: HealthReasonCode | undefined = observation.reasonCode;
     let reason: string | undefined = observation.reason;
 
-    if (dependencyContext?.isBranchNetworkOffline) {
+    if (observation.reasonCode === "CLOCK_DRIFT_EXCESSIVE") {
+      state = "UNKNOWN";
+    } else if (dependencyContext?.isBranchNetworkOffline) {
       state = "UNKNOWN";
       reasonCode = "BRANCH_OFFLINE";
       reason = HEALTH_REASON_LABELS.BRANCH_OFFLINE;

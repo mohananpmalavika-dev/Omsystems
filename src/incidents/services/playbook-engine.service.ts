@@ -35,6 +35,7 @@ export class PlaybookEngineService {
     instances?: PlaybookInstRepo,
     audit?: IncidentAuditRepo,
     pool?: Pool,
+    stepExecutor?: StepExecutorService,
   ) {
     this.pool = pool;
     if (this.pool) {
@@ -49,7 +50,7 @@ export class PlaybookEngineService {
       this.instances = instances || new PlaybookInstanceRepository();
       this.audit = audit || new IncidentAuditRepository();
     }
-    this.stepExecutor = new StepExecutorService();
+    this.stepExecutor = stepExecutor ?? new StepExecutorService();
     this.resolutionService = new IncidentResolutionService(this.definitions as any, this.audit as any);
   }
 
@@ -509,9 +510,10 @@ export class PlaybookEngineService {
       if (stepDef.type === "AUTOMATED_CHECK") {
         const stepInst = instance.stepInstances[stepDef.id];
         if (stepInst && stepInst.status === "PENDING") {
-          const executed = await this.stepExecutor.executeAutomatedCheck(stepDef, stepInst);
+          if (stepDef.dependsOn?.some(id => !["COMPLETED", "OVERRIDDEN"].includes(instance.stepInstances[id]?.status ?? ""))) continue;
+          const executed = await this.stepExecutor.executeAutomatedCheck(stepDef, stepInst, { ...instance.contextData, tenantId: instance.tenantId, incidentId: instance.incidentId });
           instance.stepInstances[stepDef.id] = executed;
-          if (!instance.completedStepIds.includes(stepDef.id)) {
+          if (executed.status === "COMPLETED" && !instance.completedStepIds.includes(stepDef.id)) {
             instance.completedStepIds.push(stepDef.id);
           }
           await this.instances.save(instance);

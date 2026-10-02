@@ -106,6 +106,9 @@ export class FreshnessPolicyService {
       observation.observedAt instanceof Date
         ? observation.observedAt
         : new Date(observation.observedAt);
+    if (!Number.isFinite(rawObservedAt.getTime()) || !Number.isFinite(receivedAt.getTime())) {
+      throw new Error("invalid_health_observation_timestamp");
+    }
 
     // Clock drift guard: if edge timestamp is far in future compared to receivedAt, cap it
     const effectiveObservedAt =
@@ -123,6 +126,10 @@ export class FreshnessPolicyService {
       observedAt: effectiveObservedAt,
       receivedAt,
       expiresAt,
+      ...(rawObservedAt.getTime() > receivedAt.getTime() + MAX_ACCEPTABLE_FUTURE_DRIFT_MS ? {
+        reasonCode: "CLOCK_DRIFT_EXCESSIVE" as const,
+        reason: "Edge observation clock is ahead of the receiving clock",
+      } : {}),
     };
   }
 }

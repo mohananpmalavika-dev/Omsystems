@@ -5418,7 +5418,7 @@ export interface RecoveryStats {
   unrecoverableGaps: number;
   largestGapSeconds: number;
   totalLostSeconds: number;
-  healingSuccessRate: number;
+  healingSuccessRate: number | null;
   activeJobsCount: number;
   completedJobsCount: number;
   totalBackfilledBytes: number;

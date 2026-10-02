@@ -13,9 +13,11 @@ export class TelemetryQualityService {
   /**
    * Records or updates a health observation in the current-state projection.
    */
-  ingestObservation<T>(observation: HealthObservation<T>, receivedAt: Date = new Date()): HealthObservation<T> {
-    const key = `${observation.entityType}:${observation.entityId}`;
+  ingestObservation<T>(observation: HealthObservation<T>, receivedAt: Date = new Date()): HealthObservation {
+    const key = JSON.stringify([observation.tenantId ?? "", observation.branchId ?? "", observation.entityType, observation.entityId]);
     const enriched = freshnessPolicyService.enrichObservationWithTimestamps(observation, receivedAt);
+    const previous = this.observationStore.get(key);
+    if (previous && new Date(previous.observedAt).getTime() > new Date(enriched.observedAt).getTime()) return previous;
     this.observationStore.set(key, enriched);
     return enriched;
   }
@@ -30,22 +32,23 @@ export class TelemetryQualityService {
   /**
    * Retrieves the raw current observation.
    */
-  getObservation(entityType: EntityType, entityId: string): HealthObservation | undefined {
-    return this.observationStore.get(`${entityType}:${entityId}`);
+  getObservation(entityType: EntityType, entityId: string, scope?: { tenantId: string; branchId: string }): HealthObservation | undefined {
+    if (scope) return this.observationStore.get(JSON.stringify([scope.tenantId, scope.branchId, entityType, entityId]));
+    return [...this.observationStore.values()].find(obs => !obs.tenantId && obs.entityType === entityType && obs.entityId === entityId);
   }
 
   /**
    * Evaluates and returns the effective health for a specific entity on read.
    */
-  getEffectiveHealth(entityType: EntityType, entityId: string, now: Date = new Date()): OperationalHealth {
-    const obs = this.getObservation(entityType, entityId);
-    return healthFreshnessEvaluator.evaluateFreshness(obs, now);
+  getEffectiveHealth(entityType: EntityType, entityId: string, now: Date = new Date(), scope?: { tenantId: string; branchId: string }): OperationalHealth {
+    const obs = this.getObservation(entityType, entityId, scope);
+    return { ...healthFreshnessEvaluator.evaluateFreshness(obs, now), entityType, entityId };
   }
 
   /**
    * Generates a platform-wide Telemetry Quality Report across all observed entities.
    */
-  generateQualityReport(now: Date = new Date()): TelemetryQualityReport {
+  generateQualityReport(now: Date = new Date(), scope?: { tenantId: string; branchId: string }): TelemetryQualityReport {
     const branches = new Set<string>();
     const branchesWithStale = new Set<string>();
     const gaps: TelemetryQualityReport["telemetryGaps"] = [];
@@ -61,6 +64,7 @@ export class TelemetryQualityService {
     let oldestGapSeconds = 0;
 
     for (const obs of this.observationStore.values()) {
+      if (scope ? obs.tenantId !== scope.tenantId || obs.branchId !== scope.branchId : !!obs.tenantId) continue;
       if (obs.branchId) branches.add(obs.branchId);
 
       const evaluated = healthFreshnessEvaluator.evaluateFreshness(obs, now);

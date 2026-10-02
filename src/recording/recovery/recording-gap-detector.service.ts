@@ -47,7 +47,7 @@ export interface GapSummaryMetrics {
   unrecoverableGaps: number;
   largestGapSeconds: number;
   totalLostSeconds: number;
-  healingSuccessRate: number; // percentage 0-100
+  healingSuccessRate: number | null; // percentage 0-100; null without recovery samples
 }
 
 export class RecordingGapDetectorService {
@@ -61,7 +61,7 @@ export class RecordingGapDetectorService {
     const startMs = new Date(options.startTime).getTime();
     const endMs = new Date(options.endTime).getTime();
 
-    if (endMs <= startMs) {
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs || !Number.isFinite(toleranceMs) || toleranceMs < 0) {
       throw new Error("Invalid time window: endTime must be greater than startTime");
     }
 
@@ -70,6 +70,7 @@ export class RecordingGapDetectorService {
       SELECT id, camera_id, started_at, ended_at, duration_seconds, status
       FROM recording_segments
       WHERE camera_id = $1
+        AND tenant_id = $4
         AND status <> 'deleted'
         AND ended_at >= $2::timestamptz
         AND started_at <= $3::timestamptz
@@ -80,6 +81,7 @@ export class RecordingGapDetectorService {
       options.cameraId,
       options.startTime,
       options.endTime,
+      options.tenantId,
     ]);
 
     const segments = res.rows.map((r: any) => ({
@@ -89,6 +91,9 @@ export class RecordingGapDetectorService {
       endedAt: new Date(r.ended_at).getTime(),
       durationSeconds: Number(r.duration_seconds || 0),
     }));
+    if (segments.some(segment => !Number.isFinite(segment.startedAt) || !Number.isFinite(segment.endedAt) || segment.endedAt <= segment.startedAt)) {
+      throw new Error("Invalid recording segment timestamps: coverage cannot be verified");
+    }
 
     const detectedGaps: Array<{
       start: number;
@@ -116,10 +121,12 @@ export class RecordingGapDetectorService {
         });
       }
 
-      // Check gaps between consecutive segments
+      // Merge overlapping intervals before detecting gaps: a short nested
+      // segment must never hide coverage provided by a longer segment.
+      let coveredUntil = Math.min(endMs, segments[0]!.endedAt);
       for (let i = 0; i < segments.length - 1; i++) {
-        const currentEnd = segments[i]!.endedAt;
-        const nextStart = segments[i + 1]!.startedAt;
+        const currentEnd = coveredUntil;
+        const nextStart = Math.max(startMs, segments[i + 1]!.startedAt);
         const delta = nextStart - currentEnd;
 
         if (delta > toleranceMs) {
@@ -130,15 +137,15 @@ export class RecordingGapDetectorService {
             reason: "NETWORK_DISCONNECTION",
           });
         }
+        coveredUntil = Math.max(coveredUntil, Math.min(endMs, segments[i + 1]!.endedAt));
       }
 
       // Check trailing gap after last segment
-      const lastSegment = segments[segments.length - 1]!;
-      if (endMs - lastSegment.endedAt > toleranceMs) {
+      if (endMs - coveredUntil > toleranceMs) {
         detectedGaps.push({
-          start: lastSegment.endedAt,
+          start: coveredUntil,
           end: endMs,
-          durationSec: Math.round((endMs - lastSegment.endedAt) / 1000),
+          durationSec: Math.round((endMs - coveredUntil) / 1000),
           reason: "STREAM_DROPOUT",
         });
       }
@@ -159,6 +166,7 @@ export class RecordingGapDetectorService {
                detected_at, resolved_at
         FROM recording_gaps
         WHERE camera_id = $1
+          AND tenant_id = $4
           AND ABS(EXTRACT(EPOCH FROM (start_time - $2::timestamptz))) < 2
           AND ABS(EXTRACT(EPOCH FROM (end_time - $3::timestamptz))) < 2
         LIMIT 1
@@ -168,6 +176,7 @@ export class RecordingGapDetectorService {
         options.cameraId,
         startTimeStr,
         endTimeStr,
+        options.tenantId,
       ]);
 
       if (checkRes.rows.length > 0) {
@@ -366,7 +375,7 @@ export class RecordingGapDetectorService {
 
     const total = Number(row.total_gaps || 0);
     const healed = Number(row.healed_gaps || 0);
-    const successRate = total > 0 ? Number(((healed / total) * 100).toFixed(1)) : 100;
+    const successRate = total > 0 ? Number(((healed / total) * 100).toFixed(1)) : null;
 
     return {
       totalGaps: total,

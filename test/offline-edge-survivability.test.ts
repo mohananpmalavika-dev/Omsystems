@@ -196,12 +196,12 @@ describe('Offline Edge Survivability & Store-and-Forward Synchronization Subsyst
     };
 
     // First ingest -> Success
-    const ack1 = replayer.ingestSyncBatch(duplicateBatch);
+    const ack1 = await replayer.ingestSyncBatch(duplicateBatch);
     expect(ack1.processedCount).toBe(1);
     expect(ack1.duplicateCount).toBe(0);
 
     // Second ingest of same batch -> Detected as Duplicate, 0 double-processing
-    const ack2 = replayer.ingestSyncBatch(duplicateBatch);
+    const ack2 = await replayer.ingestSyncBatch(duplicateBatch);
     expect(ack2.processedCount).toBe(0);
     expect(ack2.duplicateCount).toBe(1);
     expect(ack2.status).toBe('SUCCESS');
