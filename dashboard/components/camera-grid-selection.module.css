@@ -16,6 +16,7 @@
 }
 
 .slot[data-controls-selected="false"] :global(.slot-controls),
+.slot[data-controls-selected="false"] :global(.tile-actions),
 .slot[data-controls-selected="false"] :global(.tile-topline),
 .slot[data-controls-selected="false"] :global(.camera-meta),
 .slot[data-controls-selected="false"] :global(.zoom-stage) button,
