@@ -204,7 +204,7 @@ export class CameraRepository {
        WHERE EXISTS (
          SELECT 1 FROM edge_agents agent
          WHERE agent.id = $1::uuid AND agent.credential_revoked_at IS NULL
-           AND agent.tenant_id = cameras.tenant_id
+           AND agent.tenant_id = camera_node.tenant_id
            AND (cameras.edge_agent_id = agent.id OR
                 (cameras.edge_agent_id IS NULL AND cameras.branch_node_id = agent.branch_node_id))
            AND (cameras.branch_node_id = agent.branch_node_id OR EXISTS (
