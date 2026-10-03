@@ -1,0 +1,32 @@
+/* Selection owns the controls, including in fullscreen and touch layouts.
+   Keep the video player mounted when a different position is selected. */
+.slot {
+  cursor: pointer;
+}
+
+.slot[data-controls-selected="true"] {
+  outline: 2px solid #38bdf8;
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.slot:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: -2px;
+}
+
+.slot[data-controls-selected="false"] :global(.slot-controls),
+.slot[data-controls-selected="false"] :global(.tile-topline),
+.slot[data-controls-selected="false"] :global(.camera-meta),
+.slot[data-controls-selected="false"] :global(.zoom-stage) button,
+.slot[data-controls-selected="false"] :global(.live-player-stage) > :not(video):not(img):not(canvas):not(:global(.live-player-state)),
+.slot[data-controls-selected="false"] :global(.feed-stage) > :not(:global(.zoom-stage)) {
+  display: none !important;
+}
+
+.slot[data-controls-selected="true"] :global(.slot-controls),
+.slot[data-controls-selected="true"] :global(.tile-actions),
+.slot[data-controls-selected="true"] :global(.camera-connect-overlay) {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}

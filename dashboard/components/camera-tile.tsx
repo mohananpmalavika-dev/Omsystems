@@ -285,6 +285,7 @@ const CameraTileAudioBadge = memo(function CameraTileAudioBadge({
 
 function CameraTileComponent({
   camera,
+  controlsVisible = true,
   session,
   loading,
   onStart,
@@ -320,6 +321,7 @@ function CameraTileComponent({
   showFlashbackPip,
 }: {
   camera: Camera;
+  controlsVisible?: boolean;
   session?: LiveSessionResponse;
   loading: boolean;
   onStart: () => void;
@@ -454,6 +456,14 @@ function CameraTileComponent({
   const [ptzReticle, setPtzReticle] = useState<{ x: number; y: number; time: number } | null>(null);
   const [ptzStatusMsg, setPtzStatusMsg] = useState<string | null>(null);
   const ptzStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    if (controlsVisible) return;
+    setIsPtzTargetMode(false);
+    setIsPtzBoxDragging(false);
+    setShowPtzControl(false);
+    setShowDvrScrubber(false);
+    setShowAnnotationPanel(false);
+  }, [controlsVisible]);
 
   const showPtzFeedback = useCallback((msg: string) => {
     setPtzStatusMsg(msg);
@@ -877,6 +887,7 @@ function CameraTileComponent({
       className={`camera-tile ${alertRingClass}`}
       ref={tileRef}
       data-camera-id={camera.id}
+      data-controls-visible={controlsVisible}
       onMouseEnter={() => setIsTileHovered(true)}
       onMouseLeave={() => setIsTileHovered(false)}
     >
@@ -945,6 +956,7 @@ function CameraTileComponent({
         className="feed-stage"
         style={{ cursor: isPtzTargetMode ? "crosshair" : zoom > 1 ? "grab" : undefined }}
         onDoubleClick={(event) => {
+          if (!controlsVisible) return;
           if ((event.target as HTMLElement).closest("button, a, input, select")) return;
           if (isPtzTargetMode) {
             void dispatchPtzHome();
@@ -953,6 +965,7 @@ function CameraTileComponent({
           }
         }}
         onMouseDown={(event) => {
+          if (!controlsVisible) return;
           if (event.button !== 0) return;
           if ((event.target as HTMLElement).closest("button, a, input, select")) return;
 
@@ -1071,6 +1084,7 @@ function CameraTileComponent({
           }
         }}
         onWheel={(event) => {
+          if (!controlsVisible) return;
           event.preventDefault();
           const delta = event.deltaY < 0 ? 0.35 : -0.35;
           setZoom((value) => {
@@ -1138,14 +1152,14 @@ function CameraTileComponent({
                 onBitrateChange={onBitrateChange}
                 onVideoElementChange={handleVideoElementChange}
               />
-              {showFisheyeDewarp && internalVideoElement && (
+              {controlsVisible && showFisheyeDewarp && internalVideoElement && (
                 <FisheyeDewarpCanvas
                   videoElement={internalVideoElement}
                   className="absolute inset-0 z-20"
                   onClose={() => setShowFisheyeDewarp(false)}
                 />
               )}
-              {showAiOverlay && hasLiveFrame && (
+              {controlsVisible && showAiOverlay && hasLiveFrame && (
                 <LiveAiOverlay
                   rules={aiOverlay?.rules}
                   alerts={aiOverlay?.alerts}
@@ -1164,7 +1178,7 @@ function CameraTileComponent({
                 className="live-video"
                 onError={() => setFailedSnapshotUrl(snapshotUrl)}
               />
-              {showAiOverlay && hasLiveFrame && (
+              {controlsVisible && showAiOverlay && hasLiveFrame && (
                 <LiveAiOverlay
                   rules={aiOverlay?.rules}
                   alerts={aiOverlay?.alerts}
@@ -1337,7 +1351,7 @@ function CameraTileComponent({
         )}
 
         {/* Instant Hover Mini Timeline & Time Scrubbing Bar */}
-        {(showDvrScrubber || isTileHovered || dvrOffset > 0) && (
+        {controlsVisible && (showDvrScrubber || isTileHovered || dvrOffset > 0) && (
           <div
             className="absolute bottom-11 left-2 right-2 z-20 flex flex-col gap-1.5 p-2 rounded-lg bg-zinc-950/95 border border-zinc-700/80 backdrop-blur shadow-2xl text-xs transition-opacity duration-200"
             onClick={(e) => e.stopPropagation()}
@@ -1527,7 +1541,7 @@ function CameraTileComponent({
         )}
 
         {!session?.hls && !session?.webRtc && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 opacity-0 transition-opacity hover:opacity-100">
+          <div className="camera-connect-overlay absolute inset-0 z-10 flex items-center justify-center bg-black/30 opacity-0 transition-opacity hover:opacity-100">
             <button type="button" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-600/90 hover:bg-indigo-500 text-xs font-semibold text-white shadow-lg backdrop-blur" onClick={onStart} disabled={loading || !isActive}>
               {loading ? (
                 <LoaderCircle size={15} className="spin" />

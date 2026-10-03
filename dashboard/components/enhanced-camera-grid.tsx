@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { InteractiveEMapRadar } from "./interactive-e-map-radar";
 import { CameraTile } from "./camera-tile";
+import selectionStyles from "./camera-grid-selection.module.css";
 import {
   clampDecoderLimit,
   createDefaultGridAssignments,
@@ -91,6 +92,7 @@ const SAVED_LAYOUTS_STORAGE_KEY = "sentinel.video-wall.layouts.v1";
 
 interface GridTileProps {
   camera: Camera;
+  controlsVisible: boolean;
   session?: LiveSessionResponse;
   loading: boolean;
   playbackMode?: CameraPlaybackMode;
@@ -120,6 +122,7 @@ interface GridTileProps {
 
 const GridTile = memo(function GridTile({
   camera,
+  controlsVisible,
   session,
   loading,
   playbackMode,
@@ -163,6 +166,7 @@ const GridTile = memo(function GridTile({
   return (
     <CameraTile
       camera={camera}
+      controlsVisible={controlsVisible}
       session={session}
       loading={loading}
       onStart={handleStart}
@@ -255,6 +259,8 @@ export function EnhancedCameraGrid({
   const [visibleRange, setVisibleRange] = useState<VisibleRange>({ start: 0, end: 50 });
   const [sequencing, setSequencing] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
+  const [selectedSlot, setSelectedSlot] = useState<{ index: number; cameraId: string } | null>(null);
+  useEffect(() => { setSelectedSlot(null); }, [currentPage, gridSize]);
   const [tourInterval, setTourInterval] = useState(15);
   const [isGridHovered, setIsGridHovered] = useState(false);
   const [soloAudioCameraId, setSoloAudioCameraId] = useState<string | null>(null);
@@ -814,6 +820,21 @@ export function EnhancedCameraGrid({
 
   const wallRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!selectedSlot) return;
+    const clearOutsideSelection = (event: PointerEvent) => {
+      if (event.target instanceof Node && !containerRef.current?.contains(event.target)) setSelectedSlot(null);
+    };
+    const clearOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedSlot(null);
+    };
+    document.addEventListener("pointerdown", clearOutsideSelection);
+    document.addEventListener("keydown", clearOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", clearOutsideSelection);
+      document.removeEventListener("keydown", clearOnEscape);
+    };
+  }, [selectedSlot]);
   const initialLayoutApplied = useRef(false);
   const activeStreamTypesRef = useRef(new Map<string, "main" | "sub">());
   const pendingLiveStartsRef = useRef(new Map<string, "main" | "sub">());
@@ -2104,6 +2125,7 @@ export function EnhancedCameraGrid({
                   ? "PAUSED"
                   : tileStates.get(camera.id)?.streamState || "METADATA_ONLY";
           const viewerReason = playbackState?.degradationReason;
+          const controlsSelected = selectedSlot?.index === i && selectedSlot.cameraId === camera.id;
 
           return (
             <VisibilityTracker
@@ -2112,7 +2134,18 @@ export function EnhancedCameraGrid({
               onVisibilityChange={setTileVisibility}
             >
               <div 
-                className={`grid-camera-slot slot-index-${i}`}
+                className={`grid-camera-slot slot-index-${i} ${selectionStyles.slot}`}
+                data-controls-selected={controlsSelected}
+                role="group"
+                aria-label={`Camera grid position ${i + 1}: ${camera.name}`}
+                tabIndex={0}
+                onClick={() => setSelectedSlot({ index: i, cameraId: camera.id })}
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget || !["Enter", " "].includes(event.key)) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setSelectedSlot({ index: i, cameraId: camera.id });
+                }}
                 data-activity-camera-id={camera.id}
                 data-activity-branch-id={camera.branchId}
                 data-activity-branch-name={camera.branchName}
@@ -2147,6 +2180,7 @@ export function EnhancedCameraGrid({
                 </div>
                 <GridTile
                   camera={camera}
+                  controlsVisible={controlsSelected}
                   session={sessions.get(camera.id)}
                   loading={loading.has(camera.id)}
                   playbackMode={playbackState?.actualMode}
