@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
-import { projectProvisioningRun } from "../src/provisioning/provisioning-status.js";
+import { buildProvisioningRunView, projectProvisioningRun } from "../src/provisioning/provisioning-status.js";
 import { MemoryStore } from "../src/store.js";
 
 const headers = { "x-user-id": "user-global-admin" };
@@ -38,6 +38,108 @@ function addTestBranch(store: MemoryStore) {
 }
 
 describe("zero-touch provisioning integration", () => {
+  it.each(["single", "all"])("refreshes counts after deleting %s pending discoveries without changing scan history", async (mode) => {
+    const store = new MemoryStore();
+    addTestBranch(store);
+    const agent = await store.registerEdgeAgent("branch-blr-001", "Provisioning edge", "0.1.6");
+    await store.heartbeatEdgeAgent(agent.id, "0.1.6");
+    const job = await store.createEdgeScanJob("branch-blr-001", agent.id);
+    await store.claimEdgeScanJob(agent.id);
+    const pending = await store.createDiscovery("branch-blr-001", discovery(agent.id, "192.168.50.21", {
+      credentialsRequired: true, streamVerified: false, recorderId: "recorder-1",
+    }));
+    const completed = await store.completeEdgeScanJob(agent.id, job.id, {
+      status: "completed", resultCount: 1, credentialsRequiredCount: 1, recorderCount: 1,
+    });
+    const app = await buildApp({ logger: false, store });
+    try {
+      const url = `/v1/branches/branch-blr-001/provisioning/${job.id}`;
+      const before = (await app.inject({ method: "GET", url, headers })).json().run;
+      expect(before.summary).toMatchObject({ discoveredDevices: 1, recorders: 1, credentialsRequired: 1 });
+
+      const deleted = await app.inject({
+        method: "DELETE", headers,
+        url: `/v1/branches/branch-blr-001/cameras/discovered${mode === "single" ? `/${pending.id}` : ""}`,
+      });
+      expect(deleted.statusCode).toBe(200);
+      const after = (await app.inject({ method: "GET", url, headers })).json().run;
+      expect(after.summary).toMatchObject({
+        discoveredDevices: 0, recorders: 0, importedChannels: 0, verifiedStreams: 0, credentialsRequired: 0,
+      });
+      expect(after.issues.map((issue: any) => issue.code)).not.toContain("DEVICE_CREDENTIAL_REQUIRED");
+      expect(after.steps.find((stage: any) => stage.id === "device-discovery").completedUnits).toBe(0);
+      expect(after.completedUnits).toBeLessThan(before.completedUnits);
+      expect(await store.getEdgeScanJob("branch-blr-001", job.id)).toEqual(completed);
+    } finally {
+      await app.close();
+    }
+  }, 45_000);
+
+  it("rebuilds imported counts from remaining canonical cameras after deletion", async () => {
+    const store = new MemoryStore();
+    addTestBranch(store);
+    const branchId = "branch-blr-001";
+    const agent = await store.registerEdgeAgent(branchId, "Provisioning edge", "0.1.6");
+    await store.heartbeatEdgeAgent(agent.id, "0.1.6");
+    const job = await store.createEdgeScanJob(branchId, agent.id);
+    await store.claimEdgeScanJob(agent.id);
+    const pending = await store.createDiscovery(branchId, discovery(agent.id, "192.168.50.20", {
+      streamVerified: true, recorderId: "recorder-1", recorderChannel: 1,
+    }));
+    const camera = await store.approveCamera(branchId, {
+      discoveryId: pending.id, name: "Imported camera", channel: 1, protocol: "rtsp",
+      connectionSecretRef: `edge://${agent.id}/${pending.id}`,
+    });
+    expect(camera).toBeDefined();
+    const completed = await store.completeEdgeScanJob(agent.id, job.id, {
+      status: "completed", resultCount: 1, provisionedCount: 1, verifiedCount: 1, recorderCount: 1,
+    });
+    const user = store.users.get("user-global-admin")!;
+    const before = await buildProvisioningRunView(store, branchId, user, completed);
+    expect(before.summary).toMatchObject({ discoveredDevices: 1, importedChannels: 1, verifiedStreams: 1, recorders: 1 });
+    store.cameras.delete(camera!.id);
+    const after = await buildProvisioningRunView(store, branchId, user, completed);
+    expect(after.summary).toMatchObject({ discoveredDevices: 0, importedChannels: 0, verifiedStreams: 0, recorders: 0 });
+    expect(after.readyForActivation).toBe(false);
+  });
+
+  it("excludes deleted channels and counts each surviving recording only once", () => {
+    const now = new Date().toISOString();
+    const job = {
+      id: "run-1", branchId: "branch-1", edgeAgentId: "agent-1", status: "completed" as const,
+      requestedAt: now, startedAt: now, completedAt: now, resultCount: 5,
+      provisionedCount: 3, verifiedCount: 4, recorderCount: 2, credentialsRequiredCount: 1,
+      pendingVerificationCount: 1, duplicateCount: 1, timeSynchronizedCount: 3, timeDriftCount: 1,
+      analyticsCompatibleCount: 3, credentialsSkippedAt: null, error: null,
+    };
+    const telemetry = ["cam-1", "cam-deleted"].map((cameraId, index) => ({
+      tenantId: "tenant-1", branchId: "branch-1", edgeAgentId: "agent-1", deviceType: "archive" as const,
+      deviceId: `recorder-1:archive:${index + 1}`, observedAt: now, receivedAt: now,
+      source: "vendor-api" as const, quality: "verified" as const, idempotencyKey: cameraId,
+      metrics: { recorderId: "recorder-1", cameraId, archiveStatus: "available", playbackVerified: true },
+      reasonCodes: [],
+    }));
+    const input = {
+      branchId: "branch-1", job, agents: [], pendingDiscoveries: [],
+      importedCameraIds: ["cam-1"], importedCameras: [{ id: "cam-1", recorderId: "recorder-1" }],
+      recordingJobs: [], storageNodes: [], analyticsCameraIds: ["cam-1", "cam-deleted"],
+      recentPlatformRecordingCameraIds: ["cam-1", "cam-deleted"], telemetry,
+    };
+    const remaining = projectProvisioningRun(input);
+    expect(remaining.summary).toMatchObject({
+      discoveredDevices: 1, recorders: 1, importedChannels: 1, verifiedStreams: 1,
+      recordingsVerified: 1, analyticsAssigned: 1, credentialsRequired: 0,
+    });
+    expect(remaining.steps.find((stage) => stage.id === "recording-verification")).toMatchObject({ completedUnits: 1, totalUnits: 1 });
+    const empty = projectProvisioningRun({ ...input, importedCameraIds: [], importedCameras: [] });
+    expect(empty.summary).toMatchObject({
+      discoveredDevices: 0, recorders: 0, importedChannels: 0, verifiedStreams: 0,
+      recordingsVerified: 0, analyticsAssigned: 0, credentialsRequired: 0,
+      timeSynchronized: 0, timeDrifted: 0, analyticsCompatible: 0,
+    });
+    expect(empty.readyForActivation).toBe(false);
+  });
+
   it("creates a durable edge run and reports actionable credential blockers", async () => {
     const store = new MemoryStore();
     addTestBranch(store);

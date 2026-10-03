@@ -1,5 +1,6 @@
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type {
+  Camera,
   DiscoveredCamera,
   EdgeAgent,
   EdgeScanJob,
@@ -141,6 +142,7 @@ export async function buildProvisioningRunView(
     agents,
     pendingDiscoveries: runDiscoveries,
     importedCameraIds: runCameras.map((camera) => camera.id),
+    importedCameras: runCameras,
     connectedCameraCount: cameras.filter((camera) => camera.status === "online").length,
     recordingJobs,
     storageNodes,
@@ -158,6 +160,7 @@ export function projectProvisioningRun(input: {
   agents: EdgeAgent[];
   pendingDiscoveries: DiscoveredCamera[];
   importedCameraIds: string[];
+  importedCameras?: Pick<Camera, "id" | "recorderId" | "recorderChannel">[];
   /** Existing approved cameras that are currently reporting a usable stream. */
   connectedCameraCount?: number;
   recordingJobs: RecordingJob[];
@@ -168,21 +171,15 @@ export function projectProvisioningRun(input: {
 }): ProvisioningRunView {
   const onlineAgents = input.agents.filter((agent) => agent.status === "online");
   const connectedCameraCount = input.connectedCameraCount ?? 0;
-  const credentialsRequired = Math.max(
-    input.job?.credentialsRequiredCount ?? 0,
-    input.pendingDiscoveries.filter((device) => device.credentialsRequired === true).length,
-  );
-  const pendingVerification = Math.max(
-    input.job?.pendingVerificationCount ?? 0,
-    input.pendingDiscoveries.filter((device) => !device.credentialsRequired && !device.streamVerified).length,
-  );
+  // Scan counters describe the original result, not the inventory remaining after deletion.
+  const importedCameraIds = new Set(input.importedCameraIds);
+  const importedChannels = importedCameraIds.size;
+  const discoveredDevices = input.pendingDiscoveries.length + importedChannels;
+  const credentialsRequired = input.pendingDiscoveries.filter((device) => device.credentialsRequired === true).length;
+  const pendingVerification = input.pendingDiscoveries.filter((device) => !device.credentialsRequired && !device.streamVerified).length;
   const verifiedStreams = Math.max(
-    input.job?.verifiedCount ?? 0,
-    input.job?.provisionedCount ?? 0,
-    input.pendingDiscoveries.filter((device) => device.streamVerified === true).length,
+    importedChannels + input.pendingDiscoveries.filter((device) => device.streamVerified === true).length,
     connectedCameraCount,
-    // Always show at least 1 verified stream if we have any cameras imported
-    input.importedCameraIds.length > 0 ? input.importedCameraIds.length : 0,
   );
   const credentialsSkipped = Boolean(
     input.job?.credentialsSkippedAt ?? input.job?.skippedStages?.["credential-resolution"],
@@ -194,10 +191,18 @@ export function projectProvisioningRun(input: {
       : {}),
   };
   const canSkipCredentialResolution = credentialsRequired > 0 && !credentialsSkipped && verifiedStreams > 0;
-  const recorderTelemetry = input.telemetry.filter((item) => item.deviceType === "recorder");
+  const recorderIds = new Set([
+    ...(input.importedCameras ?? []).map((camera) => camera.recorderId),
+    ...input.pendingDiscoveries.map((device) => device.recorderId),
+  ].filter((id): id is string => Boolean(id)));
+  const recorderTelemetry = input.telemetry.filter((item) =>
+    item.deviceType === "recorder" && recorderIds.has(item.deviceId)
+  );
   const diskTelemetry = input.telemetry.filter((item) => item.deviceType === "disk");
-  const archiveTelemetry = input.telemetry.filter((item) => item.deviceType === "archive");
-  const recorderCount = Math.max(input.job?.recorderCount ?? 0, recorderTelemetry.length);
+  const archiveTelemetry = input.telemetry.filter((item) =>
+    item.deviceType === "archive" && importedCameraIds.has(String(item.metrics.cameraId ?? item.deviceId))
+  );
+  const recorderCount = recorderIds.size;
   const healthyRecorderStorage = diskTelemetry.filter((item) =>
     item.metrics.operationalStatus === "healthy" && item.metrics.writeVerification === "verified"
   ).length;
@@ -205,38 +210,29 @@ export function projectProvisioningRun(input: {
     node.status === "healthy" && (node.lastWriteProbe?.status === "passed" || !node.lastWriteProbe)
   ).length;
   const storageHealthy = healthyRecorderStorage + healthyPlatformStorage;
-  const recordingsVerified = archiveTelemetry.filter((item) =>
-    item.metrics.archiveStatus === "available" && item.metrics.playbackVerified === true
-  ).length + new Set(input.recentPlatformRecordingCameraIds).size;
-  
-  const importedChannels = input.job
-    ? Math.max(input.job.provisionedCount, input.importedCameraIds.length)
-    : input.importedCameraIds.length;
-
-  // If we have imported cameras but no recording verification yet, assume they're recording
-  const estimatedRecordings = recordingsVerified > 0 ? recordingsVerified : 
-    (importedChannels > 0 ? importedChannels : 0);
-  const duplicateDevices = Math.max(
-    input.job?.duplicateCount ?? 0,
-    input.pendingDiscoveries.filter((device) => device.duplicateStatus === "duplicate").length,
-  );
-  const timeSynchronized = Math.max(
+  const recordingsVerified = new Set([
+    ...archiveTelemetry.filter((item) =>
+      item.metrics.archiveStatus === "available" && item.metrics.playbackVerified === true
+    ).map((item) => String(item.metrics.cameraId ?? item.deviceId)),
+    ...input.recentPlatformRecordingCameraIds.filter((id) => importedCameraIds.has(id)),
+  ]).size;
+  const duplicateDevices = input.pendingDiscoveries.filter((device) => device.duplicateStatus === "duplicate").length;
+  const timeSynchronized = Math.min(discoveredDevices, Math.max(
     input.job?.timeSynchronizedCount ?? 0,
     input.pendingDiscoveries.filter((device) => device.timeSynchronization === "synchronized").length,
-  );
-  const timeDrifted = Math.max(
+  ));
+  const timeDrifted = Math.min(discoveredDevices, Math.max(
     input.job?.timeDriftCount ?? 0,
     input.pendingDiscoveries.filter((device) => device.timeSynchronization === "drifted").length,
-  );
-  const analyticsCompatible = Math.max(
+  ));
+  const analyticsCompatible = Math.min(discoveredDevices, Math.max(
     input.job?.analyticsCompatibleCount ?? 0,
     input.pendingDiscoveries.filter(isAnalyticsCompatible).length,
-  );
-  const analyticsAssigned = Math.min(input.analyticsCameraIds.length, importedChannels);
-  const discoveredDevices = input.job
-    ? Math.max(input.job.resultCount, input.pendingDiscoveries.length + importedChannels)
-    : Math.max(input.pendingDiscoveries.length + importedChannels, input.importedCameraIds.length);
-  const recordingsConfigured = input.recordingJobs.filter((recording) => recording.enabled).length;
+  ));
+  const analyticsAssigned = new Set(input.analyticsCameraIds.filter((id) => importedCameraIds.has(id))).size;
+  const recordingsConfigured = input.recordingJobs.filter((recording) =>
+    recording.enabled && importedCameraIds.has(recording.cameraId)
+  ).length;
   const networkTelemetry = input.telemetry.filter((item) => item.deviceType === "network");
   const networkVerified = networkTelemetry.some((item) => item.metrics.connectivity === true || item.metrics.status === "online") || 
     onlineAgents.length > 0; // If we have online agents, network is verified
@@ -333,9 +329,9 @@ export function projectProvisioningRun(input: {
     ),
     step(
       "recording-verification", "Recording verification",
-      mandatoryRecordingFailure || recordingEvidenceMissing ? "blocked" : estimatedRecordings > 0 ? "completed" : recordingsConfigured > 0 ? "warning" : "pending",
-      estimatedRecordings, Math.max(1, importedChannels),
-      mandatoryRecordingFailure ? "Recorder reports stopped recording" : estimatedRecordings > 0 ? `${estimatedRecordings} recent recording(s) passed playback verification` : `${recordingsConfigured} recording policy assignment(s); live archive evidence pending`,
+      mandatoryRecordingFailure || recordingEvidenceMissing ? "blocked" : recordingsVerified > 0 ? "completed" : recordingsConfigured > 0 ? "warning" : "pending",
+      recordingsVerified, Math.max(1, importedChannels),
+      mandatoryRecordingFailure ? "Recorder reports stopped recording" : recordingsVerified > 0 ? `${recordingsVerified} recent recording(s) passed playback verification` : `${recordingsConfigured} recording policy assignment(s); live archive evidence pending`,
       mandatoryRecordingFailure ? "NO_RECENT_RECORDING" : recordingEvidenceMissing ? "RECORDING_EVIDENCE_REQUIRED" : undefined,
     ),
     step(
@@ -360,7 +356,7 @@ export function projectProvisioningRun(input: {
 
   const blockers = issues.filter((issue) => issue.severity === "blocker");
   const recordingConfigured = recordingsConfigured >= importedChannels && importedChannels > 0;
-  const recordingEvidenceReady = estimatedRecordings >= importedChannels || importedChannels === 0 || Boolean(skippedStages["recording-verification"]);
+  const recordingEvidenceReady = recordingsVerified >= importedChannels || importedChannels === 0 || Boolean(skippedStages["recording-verification"]);
   const storageEvidenceReady = storageHealthy >= 0 || Boolean(skippedStages["storage-verification"]);
   const evidenceReady = scanCompleted && onlineAgents.length > 0 && importedChannels > 0 &&
     verifiedStreams > 0 && recordingConfigured && storageEvidenceReady && recordingEvidenceReady;

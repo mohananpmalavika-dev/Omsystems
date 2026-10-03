@@ -306,6 +306,7 @@ export function DeviceManager() {
   const credentialDeepLinkHandledRef = useRef(false);
   const selectedBranchRef = useRef("");
   const refreshRequestRef = useRef(0);
+  const [inventoryRevision, setInventoryRevision] = useState(0);
   const [cameraToDelete, setCameraToDelete] = useState<CameraRecord | null>(null);
   const [deletingCamera, setDeletingCamera] = useState(false);
   const [removingStorageId, setRemovingStorageId] = useState<string | null>(null);
@@ -1149,6 +1150,7 @@ export function DeviceManager() {
         loadStorageDiscoveries(branchId),
       ]);
       if (selectedBranchRef.current !== branchId || requestId !== refreshRequestRef.current) return [];
+      setInventoryRevision((revision) => revision + 1);
       if (gatewayResult.status === "fulfilled") setGateways(gatewayResult.value.data);
       if (cameraResult.status === "fulfilled") setCameras(cameraResult.value.data);
       if (inventoryResult.status === "fulfilled") setInventoryRecords(inventoryResult.value.data);
@@ -2148,6 +2150,7 @@ export function DeviceManager() {
         onStop={stopScanning}
         branchId={selectedBranch}
         refreshing={scanning}
+        inventoryRevision={inventoryRevision}
         hasEnrolledAgent={gateways.length > 0}
         onStart={() => void scanCameras()}
         onInstallAgent={openScannerInstaller}

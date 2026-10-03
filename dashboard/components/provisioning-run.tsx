@@ -22,6 +22,7 @@ const edgeActivationTimeoutMs = 15_000;
 export function ProvisioningRun({
   branchId,
   refreshing = false,
+  inventoryRevision = 0,
   onStart,
   onStop,
   onInstallAgent,
@@ -31,6 +32,7 @@ export function ProvisioningRun({
 }: {
   branchId: string;
   refreshing?: boolean;
+  inventoryRevision?: number;
   onStart: () => void;
   onStop?: () => void;
   onInstallAgent: () => void;
@@ -85,7 +87,7 @@ export function ProvisioningRun({
       cancelledRef.current = true;
       if (timer) window.clearTimeout(timer);
     };
-  }, [branchId, refreshing]);
+  }, [branchId, refreshing, inventoryRevision]);
 
   async function activateEdgeOnline() {
     setActivatingEdge(true);
