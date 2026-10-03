@@ -1,0 +1,78 @@
+{
+  "mode": "local replay; no production events submitted",
+  "detectorVersion": "1.1.1",
+  "evidence": [
+    {
+      "sample": "original-bare-head",
+      "expectedAlert": false,
+      "personConfidence": [
+        0.8304352195095532,
+        0.824952200180654,
+        0.7900854207195209,
+        0.521032451021
+      ],
+      "alertsPerFrame": [
+        0,
+        0,
+        0
+      ],
+      "helmetConfidence": null
+    },
+    {
+      "sample": "original-empty-chair",
+      "expectedAlert": false,
+      "personConfidence": [
+        0.8020668443699321,
+        0.6717315197474107
+      ],
+      "alertsPerFrame": [
+        0,
+        0,
+        0
+      ],
+      "helmetConfidence": null
+    },
+    {
+      "sample": "attached-bare-head",
+      "expectedAlert": false,
+      "personConfidence": [
+        0.8262904324814997,
+        0.791451852914804,
+        0.5803896684179577,
+        0.5385363097776832
+      ],
+      "alertsPerFrame": [
+        0,
+        0,
+        0
+      ],
+      "helmetConfidence": null
+    },
+    {
+      "sample": "attached-empty-chair",
+      "expectedAlert": false,
+      "personConfidence": [
+        0.8140980952619543
+      ],
+      "alertsPerFrame": [
+        0,
+        0,
+        0
+      ],
+      "helmetConfidence": null
+    },
+    {
+      "sample": "known-motorcycle-helmet",
+      "expectedAlert": true,
+      "personConfidence": [
+        0.9165022142924926
+      ],
+      "alertsPerFrame": [
+        0,
+        1,
+        1
+      ],
+      "helmetConfidence": 0.9999414895023762
+    }
+  ]
+}

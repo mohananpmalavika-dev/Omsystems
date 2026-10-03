@@ -18,6 +18,7 @@ export interface HelmetDetection {
   helmetDetected: boolean;
   evidenceSource?: "observed-helmet" | "confirmed-head-classification";
   confidence: number | null;
+  personConfidence?: number;
   vehicleType?: "motorcycle" | "bicycle";
   riskLevel: "compliant" | "violation" | "uncertain";
 }
@@ -29,6 +30,10 @@ export class HelmetDetector extends BaseDetector {
   private modelLoadError: string | null = null;
   private readonly MIN_CONFIDENCE: number;
   private readonly PERSON_CONFIDENCE = 0.65;
+  // Crop classification cannot distinguish a helmet from every dark object.
+  // Without a localized helmet observation, require strong independent person
+  // evidence; the Hajipur empty-chair and bare-head alarms scored 0.67/0.83.
+  private readonly CLASSIFIED_PERSON_CONFIDENCE = 0.9;
   private readonly HEAD_REGION_OVERLAP_THRESHOLD = 0.6;
   // Keep the existing alert confidence floor when selecting the motorcycle
   // classifier; generic object-presence thresholds are too low for alerts.
@@ -47,7 +52,7 @@ export class HelmetDetector extends BaseDetector {
     confidenceThreshold = 0.88,
     classifier: HelmetClassificationFrameInference | null = null,
   ) {
-    super("helmet", "1.1.0");
+    super("helmet", "1.1.1");
     this.inference = inference;
     this.classifier = classifier;
     this.MIN_CONFIDENCE = confidenceThreshold;
@@ -113,7 +118,7 @@ export class HelmetDetector extends BaseDetector {
         },
         {
           label: "person",
-          confidence: detection.confidence ?? effectiveConf,
+          confidence: detection.personConfidence ?? detection.confidence ?? effectiveConf,
           boundingBox: detection.personBoundingBox,
         },
       ]);
@@ -179,8 +184,21 @@ export class HelmetDetector extends BaseDetector {
     const indoorPersons = persons.filter((person) => !riderPersonIds.has(this.getPersonIdentifier(person)));
     const indoorHelmetDetections: HelmetDetection[] = [];
 
+    // A missing/weak person observation breaks consecutive confirmation. Do
+    // not combine an old positive with a later reappearance or another object.
+    const pending = this.pendingHeads.get(frame.cameraId);
+    if (pending) {
+      this.pendingHeads.set(frame.cameraId, pending.filter((item) => indoorPersons.some((person) =>
+        (person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE &&
+        calculateIoU(item.personBox, person.boundingBox) >= 0.5)));
+    }
+
     for (const person of indoorPersons) {
       let presence = this.detectHelmetPresence(person, helmets);
+      if (!presence && (person.confidence ?? 0) < this.CLASSIFIED_PERSON_CONFIDENCE) {
+        this.clearPendingHead(frame.cameraId, person.boundingBox);
+        continue;
+      }
       // An explicit helmet box elsewhere in the scene is contrary spatial
       // evidence; do not override it with a crop classification.
       if (!presence && (helmets.length > 0 || !runLocal || !this.classifier)) continue;
@@ -208,6 +226,7 @@ export class HelmetDetector extends BaseDetector {
             helmetDetected: true,
             evidenceSource: "confirmed-head-classification",
             confidence,
+            personConfidence: person.confidence ?? 0,
             riskLevel: "violation",
           };
         } else {
@@ -266,6 +285,7 @@ export class HelmetDetector extends BaseDetector {
       helmetDetected: true,
       evidenceSource: "observed-helmet",
       confidence: helmet.confidence ?? null,
+      personConfidence: person.confidence ?? 0,
       riskLevel: "violation",
     };
   }
@@ -439,7 +459,7 @@ export class HelmetDetector extends BaseDetector {
     return {
       status: this.isModelLoaded ? ("healthy" as const) : ("degraded" as const),
       details: this.isModelLoaded
-        ? "Helmet classifier active; helmet-worn alerts require a localized observation or two confirmed head crops"
+        ? "Helmet classifier active; helmet-worn alerts require a localized observation or strong person evidence with consecutive confirmed head crops"
         : `Awaiting local helmet classifier; normalized observations remain supported. ${this.modelLoadError ?? "Model unavailable"}`,
     };
   }
