@@ -12,6 +12,8 @@ import { sealEdgeCommandPayload } from "../security/edge-command-envelope.js";
 import { ensureCameraAiBundle } from "../analytics/camera-ai-bundle.js";
 import { AutoStorageTelemetryService } from "../services/auto-storage-telemetry.service.js";
 import { randomUUID } from "node:crypto";
+import { edgeAgentServesBranch } from "../edge-agent/branch-assignments.js";
+import { hostInNetworks } from "../../edge-agent/src/discovery/branch-network-scope.js";
 import { encryptCameraPassword } from "../security/vault/camera-credential-codec.js";
 
 const branchParams = z.object({ branchId: z.string().min(1) });
@@ -156,6 +158,15 @@ export async function registerCameraDiscoveryRoutes(
       const rtspPort = Number(item.rtspPort ?? item.port);
       if (!model || !ipAddress || !Number.isInteger(onvifPort) || !Number.isInteger(rtspPort)) {
         results.push({ status: "error", error: "discovery_identity_and_ports_required" });
+        continue;
+      }
+
+      const reportingAgent = branchAgents.find(agent => agent.id === itemAgentId)!;
+      const assignment = reportingAgent.branchAssignments?.find(a => a.branchId === branchId);
+      const wrongNetwork = assignment ? !hostInNetworks(ipAddress, assignment.vpnNetworks)
+        : reportingAgent.branchAssignments?.some(a => hostInNetworks(ipAddress, a.vpnNetworks));
+      if (wrongNetwork) {
+        results.push({ status: "error", error: "discovery_outside_branch_networks" });
         continue;
       }
 
@@ -425,7 +436,7 @@ export async function registerCameraDiscoveryRoutes(
       return reply.code(404).send({ error: "discovery_not_found" });
     }
     const agent = await store.getEdgeAgent(discovered.edgeAgentId);
-    if (!agent || agent.branchId !== branchId) {
+    if (!agent || !edgeAgentServesBranch(agent, branchId)) {
       return reply.code(409).send({ error: "discovery_edge_agent_unavailable" });
     }
     if (agent.status !== "online") {
@@ -498,7 +509,7 @@ export async function registerCameraDiscoveryRoutes(
     const envelope = sealEdgeCommandPayload({
       username: body.username,
       password: body.password,
-      scope: { host: discovered.ipAddress },
+      scope: { host: discovered.ipAddress, branchId },
       issuedAt: new Date().toISOString(),
     }, commandPublicKey);
     const command = await store.createEdgeCommand({
@@ -506,6 +517,7 @@ export async function registerCameraDiscoveryRoutes(
       type: "update-credentials",
       payload: {
         envelope,
+        branchId,
         target: { discoveryId: discovered.id, ipAddress: discovered.ipAddress },
       },
       requestedBy: request.currentUser.id,

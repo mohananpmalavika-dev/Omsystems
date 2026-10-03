@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { edgeAgentServesBranch } from "../edge-agent/branch-assignments.js";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { EdgeUpdateRelease } from "../domain/models.js";
 import { edgeUpdatePublicKey, signEdgeUpdateManifest } from "../security/edge-update-signing.js";
@@ -167,11 +168,12 @@ export async function registerEdgeGatewayOperationsRoutes(
     if (!(await requireDeviceAccess(request, reply, store, branchId))) return;
     const agent = (await store.listEdgeAgentsByBranch(branchId)).find((item) => item.id === id);
     if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
+    if (!(await requireDeviceAccess(request, reply, store, agent.branchId))) return;
     const revoked = await store.revokeEdgeAgentCredential(id);
-    const tunnel = await store.getEdgeManagedTunnel(branchId);
+    const tunnel = await store.getEdgeManagedTunnel(agent.branchId);
     if (!options.relayEnabled && tunnel && options.tunnelProvider) {
       await options.tunnelProvider.revoke(tunnel.providerTunnelId, tunnel.hostname);
-      await store.updateEdgeManagedTunnelStatus(branchId, "revoked");
+      await store.updateEdgeManagedTunnelStatus(agent.branchId, "revoked");
     }
     await writeGatewayAudit(request, store, branchId, "edge_gateway.credential_revoked", { edgeAgentId: id });
     return revoked;
@@ -346,18 +348,18 @@ export async function registerEdgeGatewayOperationsRoutes(
         host: body.cameraIp,
         username: body.username,
         password: body.password,
-      }]);
+      }], true, branchId);
     }
     const envelope = sealEdgeCommandPayload({
       username: body.username,
       password: body.password,
-      scope: { host: body.cameraIp },
+      scope: { host: body.cameraIp, branchId },
       issuedAt: new Date().toISOString(),
     }, commandPublicKey);
     const command = await store.createEdgeCommand({
       edgeAgentId: id,
       type: "update-credentials",
-      payload: { envelope, target: {
+      payload: { envelope, branchId, target: {
         ipAddress: body.cameraIp,
         ...(body.cameraId ? { cameraId: body.cameraId } : {}),
         ...(body.channel ? { channel: body.channel } : {}),
@@ -387,6 +389,15 @@ export async function registerEdgeGatewayOperationsRoutes(
       type: z.enum(commandTypes),
       payload: z.record(z.unknown()).default({}),
     }).parse(request.body);
+    if (!["rediscover", "probe-camera", "recover-camera"].includes(body.type) &&
+        !(await requireDeviceAccess(request, reply, store, agent.branchId))) return;
+    body.payload = { ...body.payload, branchId };
+    if (["probe-camera", "recover-camera"].includes(body.type)) {
+      const camera = typeof body.payload.cameraId === "string" ? await store.getCamera(body.payload.cameraId) : undefined;
+      if (!camera || camera.branchId !== branchId || (camera.edgeAgentId && camera.edgeAgentId !== id)) {
+        return reply.code(404).send({ error: "camera_not_found" });
+      }
+    }
     const sensitiveKey = sensitiveCommandPayloadKey(body.payload);
     if (sensitiveKey) return reply.code(400).send({ error: "sensitive_command_payload_forbidden", key: sensitiveKey });
     if (Buffer.byteLength(JSON.stringify(body.payload)) > 16_384) {
@@ -437,7 +448,7 @@ export async function registerEdgeGatewayOperationsRoutes(
       });
     }
     const agent = await store.getEdgeAgent(camera.edgeAgentId);
-    if (!agent || agent.branchId !== branchId || agent.status !== "online") {
+    if (!agent || !edgeAgentServesBranch(agent,branchId) || agent.status !== "online") {
       return reply.code(409).send({
         error: "edge_agent_not_connected",
         message: "The Branch Gateway that can reach this camera is not online.",
@@ -446,7 +457,7 @@ export async function registerEdgeGatewayOperationsRoutes(
     const command = await store.createEdgeCommand({
       edgeAgentId: agent.id,
       type: "recover-camera",
-      payload: { cameraId },
+      payload: { cameraId, branchId },
       requestedBy: request.currentUser.id,
     });
     await writeGatewayAudit(request, store, branchId, "edge_gateway.camera_recovery_requested", {

@@ -167,14 +167,16 @@ export class PostgresStore
     return encrypted ? new CentralStreamVault().decrypt(reference, encrypted) : undefined;
   }
 
-  async upsertDeviceCredentials(edgeAgentId: string, credentials: Array<{ host: string; username: string; password: string }>, overwrite = true): Promise<number> {
+  async upsertDeviceCredentials(edgeAgentId: string, credentials: Array<{ host: string; username: string; password: string }>, overwrite = true, requestedBranchId?: string): Promise<number> {
     const vault = new CentralStreamVault();
     const agent = await this.pool.query<{ branch_node_id: string }>(
       `SELECT branch_node_id::text FROM edge_agents WHERE id = $1 AND credential_revoked_at IS NULL`,
       [edgeAgentId],
     );
-    const branchId = agent.rows[0]?.branch_node_id;
-    if (!branchId) throw new Error("edge_agent_not_found");
+    const homeBranchId = agent.rows[0]?.branch_node_id;
+    if (!homeBranchId) throw new Error("edge_agent_not_found");
+    const branchId = requestedBranchId ?? homeBranchId;
+    if (branchId !== homeBranchId && !(await this.agents.listByBranch(branchId)).some(a => a.id === edgeAgentId)) throw new Error("edge_agent_branch_mismatch");
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -456,6 +458,13 @@ export class PostgresStore
 
   async listEdgeAgents(tenantId: string) {
     return this.agents.listByTenant(tenantId);
+  }
+
+  async assignEdgeAgentBranches(id: string, assignments: import("../domain/models.js").EdgeBranchAssignment[]) {
+    return this.agents.assignBranches(id, assignments);
+  }
+  async unassignEdgeAgentBranch(id: string, branchId: string) {
+    return this.agents.unassignBranch(id, branchId);
   }
 
   async getEdgeAgent(id: string) {

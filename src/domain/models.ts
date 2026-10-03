@@ -722,6 +722,14 @@ export interface EdgeAgent {
   credentialStatus?: "not-enrolled" | "active" | "revoked";
   credentialIssuedAt?: string;
   credentialRevokedAt?: string;
+  /** Additional VPN branches served by this installation; branchId remains its home. */
+  branchAssignments?: EdgeBranchAssignment[];
+}
+
+export interface EdgeBranchAssignment {
+  branchId: string;
+  scopeNodeId: string;
+  vpnNetworks: string[];
 }
 
 export interface EdgeActivation {

@@ -1292,8 +1292,15 @@ async function loadAccessibleProjections(
     const analyticsRules = (await Promise.all(
       cameras.map((camera) => store.listAnalyticsRules(camera.id)),
     )).flat();
-    return { branch, policy, cameras, archiveByCamera, agents, managedTunnel, analyticsRules };
+    const sharedGateways = await Promise.all(agents.filter(agent => agent.branchId !== branch.id).map(async agent => ({
+      agent,
+      tunnel: await store.getEdgeManagedTunnel(agent.branchId),
+    })));
+    return { branch, policy, cameras, archiveByCamera, agents, managedTunnel, analyticsRules, sharedGateways };
   }));
+  const homeBranches = [...new Set(branchContexts.flatMap(({ sharedGateways }) => sharedGateways.map(({ agent }) => agent.branchId)))];
+  const sharedTelemetry = homeBranches.length
+    ? await store.listLatestOperationalTelemetry(request.currentUser.tenantId, homeBranches) : [];
   const retentionInputs = await loadBatchedRetentionInputs(store, branchContexts.flatMap(({ cameras, policy }) =>
     cameras.map((camera) => ({
       cameraId: camera.id,
@@ -1301,7 +1308,7 @@ async function loadAccessibleProjections(
       maxRecordingGapSeconds: policy.maxRecordingGapSeconds,
     }))), calculatedAt);
 
-  return branchContexts.map(({ branch, policy, cameras, archiveByCamera, agents, managedTunnel, analyticsRules }) => {
+  return branchContexts.map(({ branch, policy, cameras, archiveByCamera, agents, managedTunnel: branchTunnel, analyticsRules, sharedGateways }) => {
     const retentions: RetentionVerification[] = cameras.map((camera) => {
       const input = retentionInputs.get(camera.id);
       return verifyContinuousRetention(camera.id, input?.segments ?? [], {
@@ -1324,8 +1331,13 @@ async function loadAccessibleProjections(
       .filter((item) => item.branchId === branch.id && item.deviceType === "edge-agent")
       .sort((left, right) => right.observedAt.localeCompare(left.observedAt))[0];
     const mediaRuntimeReady = edgeTelemetry?.metrics.mediaRuntimeReady === true;
+    const sharedReady = sharedGateways.find(({ agent, tunnel }) => agent.status === "online" &&
+      Boolean(agent.publicMediaUrl) && tunnel?.status === "healthy" &&
+      sharedTelemetry.some(item => item.branchId === agent.branchId && item.edgeAgentId === agent.id &&
+        item.deviceType === "edge-agent" && item.metrics.mediaRuntimeReady === true));
+    const managedTunnel = sharedReady?.tunnel ?? branchTunnel;
     const tunnelReady = onlineAgents.some((agent) => Boolean(agent.publicMediaUrl)) &&
-      mediaRuntimeReady && managedTunnel?.status === "healthy";
+      ((mediaRuntimeReady && branchTunnel?.status === "healthy") || Boolean(sharedReady));
     const recorderReady = projection.totalRecorders > 0 && projection.onlineRecorders > 0;
     const camerasReady = projection.totalCameras > 0 && projection.onlineCameras > 0;
     const liveReady = tunnelReady && camerasReady && projection.cameras.some((camera) => camera.streamAvailable);

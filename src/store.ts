@@ -1,5 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { isFreshEdgeAgent } from "./edge-agent/presence.js";
+import { edgeAgentServesBranch } from "./edge-agent/branch-assignments.js";
+import { assertNonOverlappingBranches } from "../edge-agent/src/discovery/branch-network-scope.js";
 import type { ProvisioningStageId } from "./provisioning/stages.js";
 import type {
   AccessGrant,
@@ -1626,8 +1628,9 @@ export class MemoryStore {
   }
 
   async listCamerasByEdgeAgent(edgeAgentId: string) {
+    const agent = this.edgeAgents.get(edgeAgentId);
     return [...this.cameras.values()].filter((camera) => camera.edgeAgentId === edgeAgentId
-      && this.isActiveNode(camera.branchId));
+      && agent && edgeAgentServesBranch(agent, camera.branchId) && this.isActiveNode(camera.branchId));
   }
 
   async createBranch(tenant: string, parentNodeId: string, name: string) {
@@ -1652,7 +1655,7 @@ export class MemoryStore {
 
   async listEdgeAgentsByBranch(branchId: string) {
     return [...this.edgeAgents.values()].filter(
-      (agent) => agent.branchId === branchId && agent.credentialStatus !== "revoked" && this.isActiveNode(branchId),
+      (agent) => edgeAgentServesBranch(agent, branchId) && this.isActiveNode(branchId) && this.isActiveNode(agent.branchId),
     ).map((agent) => ({
       ...agent,
       status: agent.credentialStatus === "revoked"
@@ -1692,6 +1695,43 @@ export class MemoryStore {
           && this.isActiveNode(agent.branchId);
       })
       .map(agent => structuredClone(agent));
+  }
+
+  async assignEdgeAgentBranches(id: string, assignments: import("./domain/models.js").EdgeBranchAssignment[]) {
+    const agent = this.edgeAgents.get(id);
+    if (!agent || agent.credentialStatus === "revoked") throw new Error("edge_agent_not_found");
+    const home = this.nodes.get(agent.branchId)!;
+    const merged = new Map((agent.branchAssignments ?? []).map(a => [a.branchId, a]));
+    for (const assignment of assignments) {
+      const branch = this.nodes.get(assignment.branchId), scope = this.nodes.get(assignment.scopeNodeId);
+      if (!branch || branch.type !== "branch" || branch.tenantId !== home.tenantId ||
+          !scope || scope.tenantId !== home.tenantId || !branch.path.includes(scope.id) ||
+          !["branch", "zone", "region"].includes(scope.type) || !this.isActiveNode(branch.id)) throw new Error("invalid_branch_assignment");
+      if (branch.id === agent.branchId) throw new Error("home_branch_already_assigned");
+      merged.set(branch.id, structuredClone(assignment));
+    }
+    const homeNetworks = this.branchConnectivityProfiles.get(agent.branchId)?.vpnRemoteNetworks ?? [];
+    assertNonOverlappingBranches([{branchId: agent.branchId, vpnNetworks: homeNetworks}, ...merged.values()]);
+    agent.branchAssignments = [...merged.values()];
+    return structuredClone(agent);
+  }
+
+  async unassignEdgeAgentBranch(id: string, branchId: string) {
+    const agent = this.edgeAgents.get(id);
+    if (!agent || !edgeAgentServesBranch(agent, branchId)) throw new Error("edge_agent_not_found");
+    if (agent.branchId === branchId) throw new Error("cannot_unassign_home_branch");
+    if ([...this.cameras.values()].some(c => c.edgeAgentId === id && c.branchId === branchId)) throw new Error("branch_has_agent_cameras");
+    agent.branchAssignments = (agent.branchAssignments ?? []).filter(a => a.branchId !== branchId);
+    for (const command of this.edgeCommands.values()) {
+      if (command.edgeAgentId === id && command.branchId === branchId && ["queued", "running"].includes(command.status)) {
+        Object.assign(command, { status: "failed", error: "branch_unassigned", completedAt: new Date().toISOString() });
+      }
+    }
+    for (const job of this.edgeScanJobs.values()) {
+      if (job.edgeAgentId === id && job.branchId === branchId && ["queued", "running"].includes(job.status)) {
+        Object.assign(job, {status:"failed", error:"branch_unassigned", completedAt:new Date().toISOString()});
+      }
+    }
   }
 
   async createEdgeActivation(input: {
@@ -1837,8 +1877,10 @@ export class MemoryStore {
     edgeAgentId: string; type: EdgeCommand["type"]; payload: Record<string, unknown>; requestedBy: string;
   }) {
     const agent = this.edgeAgents.get(input.edgeAgentId);
-    const branch = agent ? this.nodes.get(agent.branchId) : undefined;
+    const branchId = typeof input.payload.branchId === "string" ? input.payload.branchId : agent?.branchId;
+    const branch = branchId ? this.nodes.get(branchId) : undefined;
     if (!agent || !branch || agent.credentialStatus === "revoked") throw new Error("edge_agent_not_found_or_revoked");
+    if (!edgeAgentServesBranch(agent, branch.id)) throw new Error("edge_agent_branch_mismatch");
     const command: EdgeCommand = {
       id: randomUUID(), tenantId: branch.tenantId, branchId: branch.id, edgeAgentId: agent.id,
       type: input.type, payload: structuredClone(input.payload), status: "queued",
@@ -2023,8 +2065,8 @@ export class MemoryStore {
   async createEdgeScanJob(branchId: string, edgeAgentId?: string, target?: import("./control-plane-store.js").EdgeScanTarget) {
     const agent = edgeAgentId
       ? this.edgeAgents.get(edgeAgentId)
-      : [...this.edgeAgents.values()].find((item) => item.branchId === branchId && item.status === "online");
-    if (!agent || agent.branchId !== branchId || agent.status !== "online") throw new Error("edge_agent_not_connected");
+      : [...this.edgeAgents.values()].find((item) => edgeAgentServesBranch(item, branchId) && item.status === "online");
+    if (!agent || !edgeAgentServesBranch(agent, branchId) || agent.status !== "online") throw new Error("edge_agent_not_connected");
     const job: EdgeScanJob = {
       id: randomUUID(), branchId, edgeAgentId: agent.id, status: "queued",
       scope: target ? "device" : "branch",
@@ -2078,8 +2120,10 @@ export class MemoryStore {
   }
 
   async claimEdgeScanJob(edgeAgentId: string) {
+    const agent = this.edgeAgents.get(edgeAgentId);
     const job = [...this.edgeScanJobs.values()]
-      .filter((item) => item.edgeAgentId === edgeAgentId && item.status === "queued")
+      .filter((item) => item.edgeAgentId === edgeAgentId && item.status === "queued"
+        && agent && edgeAgentServesBranch(agent, item.branchId))
       .sort((a, b) => a.requestedAt.localeCompare(b.requestedAt))[0];
     if (!job) return undefined;
     Object.assign(job, { status: "running" as const, startedAt: new Date().toISOString() });
@@ -2236,7 +2280,7 @@ export class MemoryStore {
 
   async createDiscovery(branchId: string, input: CameraDiscoveryInput) {
     const agent = this.edgeAgents.get(input.edgeAgentId);
-    if (!agent || agent.branchId !== branchId) throw new Error("invalid_edge_agent");
+    if (!agent || !edgeAgentServesBranch(agent, branchId)) throw new Error("invalid_edge_agent");
 
     const normalized = structuredClone(input);
     normalized.discoveryLayers = [

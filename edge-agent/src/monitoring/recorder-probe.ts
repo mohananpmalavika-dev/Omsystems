@@ -2,6 +2,7 @@ import { authenticatedFetch } from "./http-auth.js";
 import { inferRecorderChannelCount } from "../recorders/dvr-adapter.js";
 
 export interface RecorderConfig {
+  branchId?: string;
   id: string; name: string; deviceType: "dvr" | "nvr";
   vendor: "hikvision" | "dahua" | "cp-plus" | "uniview" | "tvt" | "prama" |
     "honeywell" | "matrix" | "secureye" | "tiandy" | "onvif" | "generic";

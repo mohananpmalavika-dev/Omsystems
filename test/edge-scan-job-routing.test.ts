@@ -13,7 +13,8 @@ describe("PostgreSQL edge scan job routing", () => {
 
     const sql = String(query.mock.calls[0]?.[0]);
     expect(sql).toContain("job.edge_agent_id = agent.id");
-    expect(sql).not.toContain("job.branch_node_id = agent.branch_node_id");
+    expect(sql).toContain("job.branch_node_id=agent.branch_node_id");
+    expect(sql).toContain("edge_agent_branch_assignments");
   });
 
   it("never falls back to an agent from another branch when creating a scan", async () => {
@@ -29,7 +30,8 @@ describe("PostgreSQL edge scan job routing", () => {
     )).rejects.toThrow("edge_agent_not_found");
 
     const sql = String(query.mock.calls[0]?.[0]);
-    expect(sql).toContain("WHERE branch_node_id = branch.id");
+    expect(sql).toContain("branch_node_id = branch.id OR EXISTS");
+    expect(sql).toContain("edge_agent_branch_assignments");
     expect(sql).not.toContain("OR true");
   });
 });

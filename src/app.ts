@@ -107,6 +107,8 @@ import { registerDeviceHealthRoutes } from "./routes/device-health.routes.js";
 import type { DeviceConfigurationService } from "./services/device-configuration.service.js";
 import { registerDVRNVRMonitorRoutes } from "./routes/dvr-nvr-monitor.routes.js";
 import { registerEdgeAgentPackageRoutes } from "./routes/edge-agent-package.routes.js";
+import { registerEdgeAgentBranchRoutes } from "./routes/edge-agent-branches.routes.js";
+import { edgeAgentBranchIds, edgeAgentServesBranch } from "./edge-agent/branch-assignments.js";
 import { registerEdgeDiscoveryBootstrapRoutes } from "./routes/edge-discovery-bootstrap.routes.js";
 import { registerEdgeLifecycleRoutes } from "./routes/edge-lifecycle.routes.js";
 import { registerEdgeGatewayOperationsRoutes } from "./routes/edge-gateway-operations.routes.js";
@@ -1371,6 +1373,7 @@ export async function buildApp(options?: {
     return {
       data: cameras.map((camera) => ({
         id: camera.id,
+        branchId: camera.branchId,
         name: camera.name,
         profiles: camera.profiles,
         connectionSecretRef: camera.connectionSecretRef,
@@ -1411,7 +1414,7 @@ export async function buildApp(options?: {
       JSON.stringify({ imageBase64: input.imageBase64, capturedAt: input.capturedAt }),
       { EX: 90 },
     );
-    const branch = await store.getNode(agent.branchId);
+    const branch = await store.getNode(camera.branchId);
     if (!branch) return reply.code(404).send({ error: "branch_not_found" });
     const rules = (await store.listAnalyticsRules(camera.id)).filter((rule) => rule.enabled);
     if (rules.length === 0) {
@@ -1611,7 +1614,7 @@ export async function buildApp(options?: {
     }).parse(request.body);
     const agent = await store.getEdgeAgent(id);
     if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
-    const existingJob = await store.getEdgeScanJob(agent.branchId, jobId);
+    const existingJob = (await Promise.all(edgeAgentBranchIds(agent).map(branchId => store.getEdgeScanJob(branchId, jobId)))).find(Boolean);
     if (!existingJob || existingJob.edgeAgentId !== id) {
       return reply.code(404).send({ error: "scan_job_not_found" });
     }
@@ -1631,7 +1634,7 @@ export async function buildApp(options?: {
     let duplicateCount = 0;
     if (result.status === "completed") {
       const runStartedAt = Date.parse(existingJob.startedAt ?? existingJob.requestedAt);
-      const discoveries = (await store.listDiscoveredCameras(agent.branchId))
+      const discoveries = (await store.listDiscoveredCameras(existingJob.branchId))
         .filter((item) => item.edgeAgentId === id &&
           (!Number.isFinite(runStartedAt) || Date.parse(item.discoveredAt) >= runStartedAt) &&
           (existingJob.scope !== "device" || !existingJob.targetIpAddress ||
@@ -1643,7 +1646,7 @@ export async function buildApp(options?: {
       analyticsCompatibleCount = discoveries.filter((item) => item.streamVerified === true &&
         item.profiles.some((profile) => ["H264", "H265", "MJPEG"].includes(profile.codec))).length;
       duplicateCount = discoveries.filter((item) => item.duplicateStatus === "duplicate").length;
-      const activation = await autoProvisionVerifiedCameras(store, agent.branchId, {
+      const activation = await autoProvisionVerifiedCameras(store, existingJob.branchId, {
         edgeAgentId: id,
         ...(existingJob.scope === "device" && existingJob.targetIpAddress
           ? { ipAddresses: [existingJob.targetIpAddress] }
@@ -1670,13 +1673,13 @@ export async function buildApp(options?: {
       ...(result.error ? { error: result.error } : {}),
     });
     if (job) {
-      const branch = await store.getNode(agent.branchId);
+      const branch = await store.getNode(existingJob.branchId);
       if (branch) {
         await store.writeAudit({
           tenantId: branch.tenantId,
           actorUserId: null,
           action: "camera.scan_auto_activation",
-          resourceNodeId: agent.branchId,
+          resourceNodeId: existingJob.branchId,
           outcome: activationFailedCount > 0 ? "failure" : "success",
           sourceIp: request.ip,
           details: {
@@ -2595,9 +2598,11 @@ export async function buildApp(options?: {
     if (!store.upsertDeviceCredentials) return reply.code(503).send({ error: "device_vault_unavailable" });
     const body = z.object({ credentials: z.array(z.object({
       host: z.string().ip({ version: "v4" }), username: z.string().min(1).max(128), password: z.string().max(1_024),
-    })).min(1).max(100), overwrite: z.boolean().optional() }).parse(request.body);
+    })).min(1).max(100), overwrite: z.boolean().optional(), branchId:z.string().min(1).optional() }).parse(request.body);
+    const credentialAgent = await store.getEdgeAgent(id);
+    if (!credentialAgent || !edgeAgentServesBranch(credentialAgent,body.branchId ?? credentialAgent.branchId)) return reply.code(403).send({error:"edge_agent_branch_mismatch"});
     try {
-      const stored = await store.upsertDeviceCredentials(id, body.credentials, body.overwrite ?? true);
+      const stored = await store.upsertDeviceCredentials(id, body.credentials, body.overwrite ?? true, body.branchId);
       return reply.header("cache-control", "no-store").send({ stored });
     } catch (error) {
       request.log.error({ err: error instanceof Error ? error.message : "device credential sync failed" }, "Device credential sync failed");
@@ -2644,6 +2649,7 @@ export async function buildApp(options?: {
       : undefined,
   });
   await registerEdgeDiscoveryBootstrapRoutes(app, store, pool);
+  await registerEdgeAgentBranchRoutes(app, store);
   await registerProvisioningRoutes(app, store);
 
   app.post("/v1/edge-agents/:id/live-sessions/consume", async (request, reply) => {
@@ -4155,7 +4161,7 @@ async function buildLiveSecurityOperationsPosture(
   // monitored. Count only branches that have an enrolled edge agent or a
   // current telemetry observation in the live security operations summary.
   const observedBranchIds = new Set([
-    ...edgeAgents.map((agent) => agent.branchId),
+    ...edgeAgents.flatMap(edgeAgentBranchIds),
     ...telemetry.map((item) => item.branchId),
   ].filter((branchId) => branchIds.includes(branchId)));
   const now = new Date().toISOString();

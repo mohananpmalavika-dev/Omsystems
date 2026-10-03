@@ -201,9 +201,18 @@ export class CameraRepository {
   async listByEdgeAgent(edgeAgentId: string) {
     const result = await this.pool.query<CameraRow>(
       `${selectCamera}
-       WHERE (
-         cameras.edge_agent_id = $1::uuid
-         OR cameras.branch_node_id = (SELECT branch_node_id FROM edge_agents WHERE id = $1::uuid)
+       WHERE EXISTS (
+         SELECT 1 FROM edge_agents agent
+         WHERE agent.id = $1::uuid AND agent.credential_revoked_at IS NULL
+           AND agent.tenant_id = cameras.tenant_id
+           AND (cameras.edge_agent_id = agent.id OR
+                (cameras.edge_agent_id IS NULL AND cameras.branch_node_id = agent.branch_node_id))
+           AND (cameras.branch_node_id = agent.branch_node_id OR EXISTS (
+             SELECT 1 FROM edge_agent_branch_assignments assignment
+             WHERE assignment.edge_agent_id = agent.id
+               AND assignment.branch_node_id = cameras.branch_node_id
+               AND assignment.tenant_id = agent.tenant_id
+           ))
        )
        ORDER BY camera_node.name`,
       [edgeAgentId],

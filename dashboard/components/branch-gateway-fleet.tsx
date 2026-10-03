@@ -104,7 +104,7 @@ export function BranchGatewayFleet() {
           </div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Branch gateway fleet</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
-            One unattended appliance per branch keeps camera discovery, DVR verification, live video and analytics connectivity online—without any staff laptop or inbound firewall port.
+            Use branch appliances or one shared agent at HO, a zone office or a regional office to discover, verify and monitor cameras across your VPN.
           </p>
           <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-xs text-slate-300">
             <span className="inline-flex items-center gap-1.5"><Cloud size={14} className="text-blue-300"/> Stable named Cloudflare tunnel</span>
@@ -151,7 +151,7 @@ export function BranchGatewayFleet() {
           <select aria-label="Filter gateway region" className="input" value={region} onChange={(event) => setRegion(event.target.value)}>
             <option value="all">All regions</option>{regions.map((item) => <option key={item}>{item}</option>)}
           </select>
-          <Link href="/admin/branch-onboarding" className="btn-primary inline-flex items-center justify-center gap-2"><Cpu size={15}/> Enroll gateway</Link>
+          <Link href="/admin/edge-agent-branches" className="btn-primary inline-flex items-center justify-center gap-2"><Cpu size={15}/> Connect branches to agent</Link>
         </div>
       </div>
 

@@ -6,6 +6,8 @@ import type { ProvisioningStageId } from "../provisioning/stages.js";
 import { EDGE_AGENT_HEARTBEAT_TTL_MS } from "../edge-agent/presence.js";
 import { normalizeMacAddress, normalizeOnvifUuid } from "../device-identity.js";
 import { activeResourceNode } from "./active-resource.js";
+import type { EdgeBranchAssignment } from "../domain/models.js";
+import { assertNonOverlappingBranches } from "../../edge-agent/src/discovery/branch-network-scope.js";
 
 type AgentRow = {
   id: string;
@@ -112,6 +114,78 @@ export class EdgeAgentRepository {
     private readonly deviceIdentities: DeviceIdentityRepository,
   ) {}
 
+  private async withAssignments(agents: EdgeAgent[]) {
+    if (!agents.length) return agents;
+    const result = await this.pool.query<{edge_agent_id:string; branch_node_id:string; scope_node_id:string; vpn_networks:string[]}>(
+      `SELECT a.edge_agent_id::text, a.branch_node_id::text, a.scope_node_id::text, a.vpn_networks
+       FROM edge_agent_branch_assignments a
+       JOIN edge_agents owner ON owner.id=a.edge_agent_id AND owner.tenant_id=a.tenant_id
+       JOIN resource_nodes branch ON branch.id = a.branch_node_id AND branch.tenant_id = a.tenant_id
+       WHERE a.edge_agent_id = ANY($1::uuid[]) AND ${activeResourceNode("branch")}`,
+      [agents.map(a => a.id)],
+    );
+    return agents.map(agent => ({...agent, branchAssignments:result.rows.filter(a=>a.edge_agent_id===agent.id).map(a=>({
+      branchId:a.branch_node_id, scopeNodeId:a.scope_node_id, vpnNetworks:a.vpn_networks,
+    }))}));
+  }
+
+  async assignBranches(id: string, assignments: EdgeBranchAssignment[]) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const locked = await client.query<{tenant_id:string;branch_node_id:string}>(
+        `SELECT tenant_id::text, branch_node_id::text FROM edge_agents WHERE id=$1 AND credential_revoked_at IS NULL FOR UPDATE`, [id]);
+      const agent = locked.rows[0];
+      if (!agent) throw new Error("edge_agent_not_found");
+      const previous = await client.query<{branch_node_id:string;vpn_networks:string[]}>(
+        `SELECT branch_node_id::text, vpn_networks FROM edge_agent_branch_assignments WHERE edge_agent_id=$1`, [id]);
+      const merged = new Map(previous.rows.map(a=>[a.branch_node_id,{branchId:a.branch_node_id,vpnNetworks:a.vpn_networks}]));
+      for (const assignment of assignments) {
+        if (assignment.branchId === agent.branch_node_id) throw new Error("home_branch_already_assigned");
+        const valid = await client.query(
+          `SELECT branch.id FROM resource_nodes branch JOIN resource_nodes scope ON scope.id=$3
+           WHERE branch.id=$1 AND branch.tenant_id=$2 AND branch.node_type='branch'
+             AND scope.tenant_id=$2 AND scope.node_type IN ('branch','zone','region') AND scope.path @> branch.path
+             AND ${activeResourceNode("branch")} AND ${activeResourceNode("scope")}`,
+          [assignment.branchId,agent.tenant_id,assignment.scopeNodeId]);
+        if (!valid.rows.length) throw new Error("invalid_branch_assignment");
+        merged.set(assignment.branchId,assignment);
+      }
+      const home = await client.query<{vpn_remote_networks:string[]}>(
+        `SELECT vpn_remote_networks FROM branch_connectivity_profiles WHERE branch_node_id=$1`, [agent.branch_node_id]);
+      assertNonOverlappingBranches([{branchId:agent.branch_node_id,vpnNetworks:home.rows[0]?.vpn_remote_networks??[]},...merged.values()]);
+      for (const assignment of assignments) {
+        await client.query(
+          `INSERT INTO edge_agent_branch_assignments (edge_agent_id,branch_node_id,tenant_id,scope_node_id,vpn_networks)
+           VALUES ($1,$2,$3,$4,$5::jsonb) ON CONFLICT (edge_agent_id,branch_node_id)
+           DO UPDATE SET scope_node_id=EXCLUDED.scope_node_id,vpn_networks=EXCLUDED.vpn_networks,assigned_at=now()`,
+          [id,assignment.branchId,agent.tenant_id,assignment.scopeNodeId,JSON.stringify(assignment.vpnNetworks)]);
+      }
+      await client.query("COMMIT");
+    } catch(error) { await client.query("ROLLBACK"); throw error; }
+    finally {client.release();}
+    return (await this.get(id))!;
+  }
+
+  async unassignBranch(id: string, branchId: string) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const agent = await client.query<{branch_node_id:string}>(`SELECT branch_node_id::text FROM edge_agents WHERE id=$1 FOR UPDATE`,[id]);
+      if (!agent.rows[0]) throw new Error("edge_agent_not_found");
+      if (agent.rows[0].branch_node_id === branchId) throw new Error("cannot_unassign_home_branch");
+      const cameras = await client.query(`SELECT id FROM cameras WHERE edge_agent_id=$1 AND branch_node_id=$2 LIMIT 1`,[id,branchId]);
+      if (cameras.rows.length) throw new Error("branch_has_agent_cameras");
+      await client.query(`DELETE FROM edge_agent_branch_assignments WHERE edge_agent_id=$1 AND branch_node_id=$2`,[id,branchId]);
+      await client.query(`UPDATE edge_scan_jobs SET status='failed',error='branch_unassigned',completed_at=now()
+        WHERE edge_agent_id=$1 AND branch_node_id=$2 AND status IN ('queued','running')`,[id,branchId]);
+      await client.query(`UPDATE edge_commands SET status='failed',error='branch_unassigned',completed_at=now()
+        WHERE edge_agent_id=$1 AND branch_node_id=$2 AND status IN ('queued','running')`,[id,branchId]);
+      await client.query("COMMIT");
+    } catch(error) { await client.query("ROLLBACK"); throw error; }
+    finally {client.release();}
+  }
+
   async register(branchId: string, name: string, version: string) {
     let result = await this.pool.query<AgentRow>(
       `INSERT INTO edge_agents (tenant_id, branch_node_id, name, version)
@@ -170,13 +244,17 @@ export class EdgeAgentRepository {
               agent.credential_issued_at, agent.credential_revoked_at
        FROM edge_agents agent
        JOIN resource_nodes branch ON branch.id = agent.branch_node_id
-       WHERE agent.branch_node_id = $1
+       WHERE (agent.branch_node_id = $1 OR EXISTS (
+         SELECT 1 FROM edge_agent_branch_assignments assignment
+         JOIN resource_nodes target ON target.id=assignment.branch_node_id AND target.tenant_id=agent.tenant_id
+         WHERE assignment.edge_agent_id=agent.id AND assignment.branch_node_id=$1 AND ${activeResourceNode("target")}
+       ))
          AND agent.credential_revoked_at IS NULL
          AND ${activeResourceNode("branch")}
        ORDER BY agent.name, agent.created_at`,
       [branchId],
     );
-    return result.rows.map(mapAgent);
+    return this.withAssignments(result.rows.map(mapAgent));
   }
 
   async listByTenant(tenantId: string) {
@@ -194,7 +272,7 @@ export class EdgeAgentRepository {
        ORDER BY e.name, e.created_at`,
       [tenantId],
     );
-    return result.rows.map(mapAgent);
+    return this.withAssignments(result.rows.map(mapAgent));
   }
 
   async get(id: string) {
@@ -207,7 +285,7 @@ export class EdgeAgentRepository {
        FROM edge_agents WHERE id = $1`,
       [id],
     );
-    return result.rows[0] ? mapAgent(result.rows[0]) : undefined;
+    return result.rows[0] ? (await this.withAssignments([mapAgent(result.rows[0])]))[0] : undefined;
   }
 
   async heartbeat(id: string, version: string, publicMediaUrl?: string, localMediaUrl?: string, branchId?: string) {
@@ -235,9 +313,13 @@ export class EdgeAgentRepository {
               $4::uuid, $5::inet, $6
        FROM resource_nodes branch
         JOIN LATERAL (
-          SELECT id
-          FROM edge_agents
-          WHERE branch_node_id = branch.id
+          SELECT candidate.id
+          FROM edge_agents candidate
+          WHERE (branch_node_id = branch.id OR EXISTS (
+            SELECT 1 FROM edge_agent_branch_assignments assignment
+            WHERE assignment.edge_agent_id=candidate.id AND assignment.branch_node_id=branch.id
+              AND assignment.tenant_id=branch.tenant_id
+          )) AND candidate.tenant_id=branch.tenant_id AND candidate.credential_revoked_at IS NULL
             AND ($2::uuid IS NULL OR id = $2::uuid)
           ORDER BY (status = 'online') DESC, last_seen_at DESC NULLS LAST, created_at DESC
           LIMIT 1
@@ -304,7 +386,11 @@ export class EdgeAgentRepository {
       `WITH next_job AS (
          SELECT job.id FROM edge_scan_jobs job
          JOIN edge_agents agent ON agent.id = $1::uuid
-         WHERE job.edge_agent_id = agent.id AND job.status = 'queued'
+         WHERE job.edge_agent_id = agent.id AND job.status = 'queued' AND agent.credential_revoked_at IS NULL
+           AND (job.branch_node_id=agent.branch_node_id OR EXISTS (
+             SELECT 1 FROM edge_agent_branch_assignments assignment
+             WHERE assignment.edge_agent_id=agent.id AND assignment.branch_node_id=job.branch_node_id
+           ))
          ORDER BY job.requested_at
          FOR UPDATE SKIP LOCKED LIMIT 1
        )
@@ -474,9 +560,14 @@ export class EdgeAgentRepository {
                 $17::jsonb, $18, $19, $20, $21, $22, $23, $24, $25, $26,
                 $27, $28, $29, $30, $31, $32, $33, $34, $35::jsonb, $36::discovery_status
          FROM resource_nodes n
-         LEFT JOIN edge_agents agent
+         JOIN edge_agents agent
            ON agent.id = $2
-          AND agent.branch_node_id = n.id
+          AND agent.tenant_id = n.tenant_id AND agent.credential_revoked_at IS NULL
+          AND (agent.branch_node_id = n.id OR EXISTS (
+            SELECT 1 FROM edge_agent_branch_assignments assignment
+            WHERE assignment.edge_agent_id=agent.id AND assignment.branch_node_id=n.id
+              AND assignment.tenant_id=n.tenant_id
+          ))
          WHERE n.id = $1 AND n.node_type = 'branch'
          ON CONFLICT (branch_node_id, device_identity_id) DO UPDATE
          SET edge_agent_id = EXCLUDED.edge_agent_id,

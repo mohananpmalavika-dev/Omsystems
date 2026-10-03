@@ -1,0 +1,332 @@
+{
+  "mode": "local static-image replay; no production events submitted",
+  "detectorVersion": "1.1.1",
+  "evidence": [
+    {
+      "sample": "incident-1791040935773",
+      "expectedAlert": false,
+      "persons": [
+        {
+          "label": "person",
+          "confidence": 0.7764534364526412,
+          "boundingBox": {
+            "x": 0.4782826906346368,
+            "y": 0.6896156953723273,
+            "width": 0.21256587021258955,
+            "height": 0.30772437911211614
+          }
+        },
+        {
+          "label": "person",
+          "confidence": 0.7378076862169358,
+          "boundingBox": {
+            "x": 0.11549247711275082,
+            "y": 0.02460213345599675,
+            "width": 0.15745247965919237,
+            "height": 0.423996983506645
+          }
+        }
+      ],
+      "alertsPerFrame": [
+        0,
+        0,
+        0
+      ],
+      "alerts": []
+    },
+    {
+      "sample": "incident-1791040925724",
+      "expectedAlert": false,
+      "persons": [
+        {
+          "label": "person",
+          "confidence": 0.6170429731131826,
+          "boundingBox": {
+            "x": 0.22795254120723882,
+            "y": 0.6584458633581833,
+            "width": 0.2024917301712064,
+            "height": 0.30929395129292747
+          }
+        },
+        {
+          "label": "person",
+          "confidence": 0.4559368020043486,
+          "boundingBox": {
+            "x": 0.8902104002297355,
+            "y": 0.12820404758796672,
+            "width": 0.10104345164565487,
+            "height": 0.29491384740615617
+          }
+        }
+      ],
+      "alertsPerFrame": [
+        0,
+        0,
+        0
+      ],
+      "alerts": []
+    },
+    {
+      "sample": "incident-1791040917135",
+      "expectedAlert": false,
+      "persons": [
+        {
+          "label": "person",
+          "confidence": 0.7407697167708704,
+          "boundingBox": {
+            "x": 0.1406062561363637,
+            "y": 0.36884015565210676,
+            "width": 0.18499183753853307,
+            "height": 0.5352477472874497
+          }
+        },
+        {
+          "label": "person",
+          "confidence": 0.6724448209733751,
+          "boundingBox": {
+            "x": 0.22719464152081192,
+            "y": 0.15658865246743245,
+            "width": 0.12047423332577495,
+            "height": 0.2907647184483816
+          }
+        },
+        {
+          "label": "person",
+          "confidence": 0.5812574664090562,
+          "boundingBox": {
+            "x": 0.8876002775461339,
+            "y": 0.17465738842656076,
+            "width": 0.10392015012714784,
+            "height": 0.25489171590508325
+          }
+        },
+        {
+          "label": "person",
+          "confidence": 0.5602847445926429,
+          "boundingBox": {
+            "x": 0.31448981914099405,
+            "y": 0.5754879460955926,
+            "width": 0.1739208640329462,
+            "height": 0.4120957418242811
+          }
+        },
+        {
+          "label": "person",
+          "confidence": 0.488105954262231,
+          "boundingBox": {
+            "x": 0.6448419054440707,
+            "y": 0.4545479034918394,
+            "width": 0.1599419287963304,
+            "height": 0.34209785091583544
+          }
+        },
+        {
+          "label": "person",
+          "confidence": 0.3514383558779812,
+          "boundingBox": {
+            "x": 0.682903590437996,
+            "y": 0.4566696707592255,
+            "width": 0.1151439655615798,
+            "height": 0.12876127141536808
+          }
+        }
+      ],
+      "alertsPerFrame": [
+        0,
+        0,
+        0
+      ],
+      "alerts": []
+    },
+    {
+      "sample": "incident-1791040909261",
+      "expectedAlert": false,
+      "persons": [
+        {
+          "label": "person",
+          "confidence": 0.6897230482999106,
+          "boundingBox": {
+            "x": 0.14070248684608513,
+            "y": 0.3661437839651051,
+            "width": 0.2093020019512811,
+            "height": 0.5502461755124228
+          }
+        },
+        {
+          "label": "person",
+          "confidence": 0.6548599770708705,
+          "boundingBox": {
+            "x": 0.2267625868128687,
+            "y": 0.15875401599912578,
+            "width": 0.11414191635005977,
+            "height": 0.2914827921224249
+          }
+        },
+        {
+          "label": "person",
+          "confidence": 0.6537383181579699,
+          "boundingBox": {
+            "x": 0.8893746173750703,
+            "y": 0.17903843837925706,
+            "width": 0.10500660274536977,
+            "height": 0.24800556673962446
+          }
+        },
+        {
+          "label": "person",
+          "confidence": 0.5509170007153941,
+          "boundingBox": {
+            "x": 0.6319885568898089,
+            "y": 0.4565922260993363,
+            "width": 0.17800304642006115,
+            "height": 0.43373817772013495
+          }
+        },
+        {
+          "label": "person",
+          "confidence": 0.5270046322498416,
+          "boundingBox": {
+            "x": 0.3168873261867325,
+            "y": 0.5740442151123003,
+            "width": 0.18630124469661286,
+            "height": 0.4063164887394918
+          }
+        },
+        {
+          "label": "person",
+          "confidence": 0.42588363255102735,
+          "boundingBox": {
+            "x": 0.8758729101276099,
+            "y": 0.1376619050382343,
+            "width": 0.059757525894518215,
+            "height": 0.17182097949700517
+          }
+        }
+      ],
+      "alertsPerFrame": [
+        0,
+        0,
+        0
+      ],
+      "alerts": []
+    },
+    {
+      "sample": "incident-1791006290219",
+      "expectedAlert": false,
+      "persons": [
+        {
+          "label": "person",
+          "confidence": 0.8262904324814997,
+          "boundingBox": {
+            "x": 0.5327641805540421,
+            "y": 0.3468327672634595,
+            "width": 0.27433245874518497,
+            "height": 0.6392760098346844
+          }
+        },
+        {
+          "label": "person",
+          "confidence": 0.791451852914804,
+          "boundingBox": {
+            "x": 0.24635119782995768,
+            "y": 0.015300089409795447,
+            "width": 0.2190910086991686,
+            "height": 0.4488218361830592
+          }
+        },
+        {
+          "label": "person",
+          "confidence": 0.5803896684179577,
+          "boundingBox": {
+            "x": 0.7366957957894178,
+            "y": 0.24698853389378878,
+            "width": 0.19552467053429545,
+            "height": 0.4083595337305806
+          }
+        },
+        {
+          "label": "person",
+          "confidence": 0.5385363097776832,
+          "boundingBox": {
+            "x": 0.22718634842430277,
+            "y": 0.03203552112665731,
+            "width": 0.06343920559190572,
+            "height": 0.13837676339588034
+          }
+        }
+      ],
+      "alertsPerFrame": [
+        0,
+        0,
+        0
+      ],
+      "alerts": []
+    },
+    {
+      "sample": "known-motorcycle-helmet",
+      "expectedAlert": true,
+      "persons": [
+        {
+          "label": "person",
+          "confidence": 0.9165022142924926,
+          "boundingBox": {
+            "x": 0.30443606529365325,
+            "y": 0.21965613695855002,
+            "width": 0.27801713454647775,
+            "height": 0.78034386304145
+          }
+        }
+      ],
+      "alertsPerFrame": [
+        0,
+        1,
+        1
+      ],
+      "alerts": [
+        {
+          "detectionType": "helmet-worn",
+          "status": "SUCCESS",
+          "provenance": "LIVE_INFERENCE",
+          "confidence": 0.9999414895023762,
+          "durationSeconds": 1,
+          "objects": [
+            {
+              "label": "helmet",
+              "confidence": 0.9999414895023762,
+              "boundingBox": {
+                "x": 0.332237778748301,
+                "y": 0.21965613695855002,
+                "width": 0.2224137076371822,
+                "height": 0.27312035206450747
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.9165022142924926,
+              "boundingBox": {
+                "x": 0.30443606529365325,
+                "y": 0.21965613695855002,
+                "width": 0.27801713454647775,
+                "height": 0.78034386304145
+              }
+            }
+          ],
+          "metadata": {
+            "compliantCount": 1,
+            "threatType": "helmet_worn_inside_facility",
+            "evidenceSource": "confirmed-head-classification"
+          },
+          "executionMetadata": {
+            "status": "SUCCESS",
+            "provenance": "LIVE_INFERENCE",
+            "modelId": "helmet-classifier",
+            "modelVersion": "1.1.1",
+            "simulated": false,
+            "timestamp": "2026-10-03T15:32:16.203Z"
+          },
+          "requiresAlert": true
+        }
+      ]
+    }
+  ]
+}

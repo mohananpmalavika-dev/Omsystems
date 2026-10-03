@@ -41,6 +41,7 @@ export interface CameraHeartbeatData {
 
 export interface CameraConfig {
   id: string;
+  branchId?: string;
   name: string;
   /** Undefined when this appliance does not have the matching local secret. */
   rtspUrl?: string;
@@ -413,7 +414,7 @@ export class CameraHeartbeatService {
   private async sendToPlatform(cameraId: string, data: CameraHeartbeatData): Promise<void> {
     const observedAt = new Date().toISOString();
     const payload: TelemetryPayload = {
-      branchId: this.branchId,
+      branchId: this.cameras.get(cameraId)?.branchId ?? this.branchId,
       edgeAgentId: this.edgeAgentId,
       deviceType: "camera",
       deviceId: cameraId,

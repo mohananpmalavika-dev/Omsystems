@@ -49,6 +49,6 @@ describe("device-scoped scan jobs", () => {
     expect(source).toContain("if (options.target) {\n    endpoints = [targetedOnvifEndpoint(options.target)]");
     expect(source).toContain("const knownHosts = options.target ? [options.target.ipAddress]");
     expect(source).toContain("restrictToHosts: Boolean(options.target)");
-    expect(source).toContain("scanBranch(target ? { target } : {})");
+    expect(source).toContain("branchId: job.branchId");
   });
 });

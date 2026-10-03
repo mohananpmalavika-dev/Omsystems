@@ -2188,7 +2188,7 @@ export function DeviceManager() {
           <section className="device-card">
             <div className="device-card-heading"><Router size={18} /><div><h3>Branch Gateway status</h3><p>{activeGateways.length} appliance{activeGateways.length !== 1 ? "s" : ""} enrolled</p></div></div>
             {activeGateways.length === 0 ? (
-              <div className="device-empty"><Router size={25} /><strong>No Branch Gateway enrolled</strong><span>That is expected for VPN-direct branches. Enroll one only for tunnel-based discovery and local proxying.</span></div>
+              <div className="device-empty"><Router size={25} /><strong>No gateway assigned</strong><span>Connect this branch to an existing HO, zone or regional agent over VPN, or enroll a gateway here.</span><Link href={`/admin/edge-agent-branches?branchId=${encodeURIComponent(selectedBranch)}`} className="secondary-button">Connect to existing agent</Link></div>
             ) : activeGateways.map((gateway) => {
               const gatewayReady = isGatewayReady(gateway);
               const displayStatus = gateway.status === "pending" ? "pending" : gatewayReady ? "online" : "offline";

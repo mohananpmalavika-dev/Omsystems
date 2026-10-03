@@ -47,6 +47,7 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { CameraCredentialVault, openSealedCommand, type SealedCommandEnvelope } from "./security/camera-credential-vault.js";
 import { DatabaseCredentialProvider } from "./security/database-credential-provider.js";
+import { hostInNetworks } from "./discovery/branch-network-scope.js";
 import { acquireSingleInstanceLock } from "./security/instance-lock.js";
 import {
   discoverRecorderChannels,
@@ -92,7 +93,7 @@ if (installEnvironmentFile && (
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.46\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.47\n");
   process.exit(0);
 }
 
@@ -252,6 +253,7 @@ const resolvedBranchId = identity?.branchId ?? config.BRANCH_ID;
 if (!resolvedAgentId || !resolvedBranchId) throw new Error("edge_gateway_identity_unavailable");
 const agentId: string = resolvedAgentId;
 const branchId: string = resolvedBranchId;
+const homeBranchId = branchId;
 // Attach the outbox only after activation so a one-time enrollment request is never queued.
 const authenticatedGateway = new GatewayClient(
   config.CONTROL_PLANE_URL,
@@ -281,6 +283,15 @@ const credentialVault = new CameraCredentialVault(
 await credentialVault.load();
 
 const dbCredentialProvider = new DatabaseCredentialProvider(control, agentId);
+const branchCredentialProviders = new Map<string, DatabaseCredentialProvider>([[homeBranchId, dbCredentialProvider]]);
+function getBranchCredentialProvider(id: string) {
+  let provider = branchCredentialProviders.get(id);
+  if (!provider) {
+    provider = new DatabaseCredentialProvider(control, agentId, id);
+    branchCredentialProviders.set(id, provider);
+  }
+  return provider;
+}
 let secureFaceRuntime: SecureFaceRuntime | null = null;
 const secureFaceBuffer = new SecureFaceObservationBuffer(config.SECURE_FACE_MIN_OBSERVATIONS);
 if (config.SECURE_FACE_AI_ENABLED) {
@@ -350,8 +361,9 @@ if (!scanOnce && !isDiagnostic) {
     if (!activeRecorders.has(recorder.id)) activeRecorders.set(recorder.id, recorder);
   }
 }
-async function registerRecorder(recorder: RecorderConfig) {
-  const { username: _username, password: _password, ...safe } = recorder;
+async function registerBranchRecorder(recorder: RecorderConfig, recorderBranchId = homeBranchId) {
+  const { username: _username, password: _password, ...withoutCredentials } = recorder;
+  const safe = { ...withoutCredentials, branchId: recorderBranchId };
   activeRecorders.set(recorder.id, safe);
   if (!scanOnce && !isDiagnostic) await recorderRegistry.save(activeRecorders.values());
 }
@@ -443,6 +455,7 @@ let lastCameraConfigSyncAt = 0;
 // any operator-requested work. A scan button click must not wait behind a
 // second, implicit startup scan.
 let lastDiscoveryAt = Date.now();
+const automaticDiscoveryBranches: string[] = [];
 await syncCameraHeartbeatConfig().catch((error) => {
   logger.warn("Initial camera monitoring sync failed; retrying after the control plane reconnects", {
     error: error instanceof Error ? error.message : String(error),
@@ -506,9 +519,9 @@ while (!stopping) {
     const job = await control.claimScanJob(agentId, config.EDGE_AGENT_VERSION);
     if (job) {
       try {
-        dbCredentialProvider.invalidate();
+        getBranchCredentialProvider(job.branchId).invalidate();
         const target = targetFromScanJob(job);
-        const resultCount = await scanBranch(target ? { target } : {});
+        const resultCount = await scanBranch({ branchId: job.branchId, ...(target ? { target } : {}) });
         await control.completeScanJob(agentId, job.id, {
           status: "completed",
           resultCount,
@@ -523,7 +536,7 @@ while (!stopping) {
       }
     }
     if (!command && !job && config.AUTO_DISCOVERY_ENABLED &&
-        Date.now() - lastDiscoveryAt >= config.AUTO_DISCOVERY_INTERVAL_MS) {
+        (automaticDiscoveryBranches.length > 0 || Date.now() - lastDiscoveryAt >= config.AUTO_DISCOVERY_INTERVAL_MS)) {
       await runAutomaticDiscovery();
     }
     if (config.EDGE_AUTO_UPDATE && Date.now() - lastAutoUpdateCheckAt >= config.EDGE_AUTO_UPDATE_INTERVAL_MS) {
@@ -566,10 +579,10 @@ cameraHeartbeat.stop();
 await presenceHeartbeat.stop();
 await edgeMediaRuntime?.stop();
 
-async function discoveryCredentials(host: string) {
+async function discoveryCredentials(host: string, requestedBranchId = homeBranchId) {
   let databaseCredentials;
   try {
-    databaseCredentials = await dbCredentialProvider.get(host);
+    databaseCredentials = await getBranchCredentialProvider(requestedBranchId).get(host);
   } catch (error) {
     logger.warn("Unable to load discovery credentials from the control plane", {
       error: error instanceof Error ? error.message : String(error),
@@ -583,21 +596,37 @@ async function discoveryCredentials(host: string) {
 }
 
 async function scanBranch(options: {
+  branchId?: string;
   persistStreamSecrets?: boolean;
   target?: DeviceScanTarget;
   targetCredentials?: { username: string; password: string };
 } = {}) {
+  const branchId = options.branchId ?? homeBranchId;
+  const isRemoteBranch = branchId !== homeBranchId;
+  const dbCredentialProvider = getBranchCredentialProvider(branchId);
+  const registerRecorder = (recorder: RecorderConfig) => registerBranchRecorder(recorder, branchId);
+  // Remote branch discovery is strictly limited to that branch's routed IPs.
+  const branchBootstrap = (isRemoteBranch || identity) ? await control.getDiscoveryBootstrap(agentId, branchId) : undefined;
+  const branchNetworks = branchBootstrap?.vpnScanNetworks ?? [];
+  const excludedBranchNetworks = isRemoteBranch ? [] : (branchBootstrap?.branchAssignments ?? []).flatMap(a => a.vpnNetworks);
+  const belongsToThisBranch = (host: string) => isRemoteBranch
+    ? hostInNetworks(host, branchNetworks) : !hostInNetworks(host, excludedBranchNetworks);
+  if (isRemoteBranch && branchNetworks.length === 0) throw new Error("branch_vpn_networks_required");
+  if (isRemoteBranch && !config.RTSP_SCAN_ENABLED) throw new Error("remote_branch_requires_rtsp_scan");
+  if (options.target && !belongsToThisBranch(options.target.ipAddress)) throw new Error("target_outside_branch_networks");
   const persistStreamSecrets = options.persistStreamSecrets ?? true;
   const credentialsForScan = scanCredentialResolver(
-    options.target, options.targetCredentials, discoveryCredentials,
+    options.target, options.targetCredentials, host => discoveryCredentials(host, branchId),
   );
-  const configuredEndpoints = config.ONVIF_ENDPOINTS
+  const configuredEndpoints = (isRemoteBranch ? "" : config.ONVIF_ENDPOINTS)
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
   let endpoints: DiscoveredOnvifEndpoint[];
   if (options.target) {
     endpoints = [targetedOnvifEndpoint(options.target)];
+  } else if (isRemoteBranch) {
+    endpoints = [];
   } else if (configuredEndpoints.length > 0) {
     endpoints = configuredEndpoints.map((serviceUrl) => ({
       endpointReference: null,
@@ -619,13 +648,14 @@ async function scanBranch(options: {
       });
     }
   }
+  endpoints = endpoints.filter(endpoint => belongsToThisBranch(endpoint.remoteAddress));
   logger.info(options.target
     ? `Probing only device ${options.target.ipAddress}`
     : `Discovered ${endpoints.length} ONVIF endpoint(s)`);
 
   const multicastDiscoveredHosts = new Set<string>();
 
-  if (!options.target && configuredEndpoints.length === 0) {
+  if (!options.target && !isRemoteBranch && configuredEndpoints.length === 0) {
     if (config.SSDP_DISCOVERY_ENABLED) {
       try {
         const ssdpDevices = await discoverSsdpDevices(Math.min(config.DISCOVERY_TIMEOUT_MS, 4000));
@@ -1280,8 +1310,8 @@ async function scanBranch(options: {
       const ports = parseDiscoveryPorts(config.RTSP_SCAN_PORTS, "RTSP_SCAN_PORTS");
       const recorderHttpPorts = parseDiscoveryPorts(config.RECORDER_HTTP_PORTS, "RECORDER_HTTP_PORTS");
       const paths = String(config.RTSP_SCAN_PATHS).split(",").map((p) => p.trim()).filter(Boolean);
-      const cidr = config.RTSP_SCAN_CIDR ? String(config.RTSP_SCAN_CIDR).trim() : undefined;
-      const vpnScanNetworks = options.target || cidr ? [] : await dbCredentialProvider.getVpnScanNetworks().catch((error) => {
+      const cidr = !isRemoteBranch && config.RTSP_SCAN_CIDR ? String(config.RTSP_SCAN_CIDR).trim() : undefined;
+      const vpnScanNetworks = isRemoteBranch ? branchNetworks : options.target || cidr ? [] : await dbCredentialProvider.getVpnScanNetworks().catch((error) => {
         logger.warn("Unable to load VPN scan networks from the control plane", {
           error: error instanceof Error ? error.message : String(error),
         });
@@ -1294,8 +1324,10 @@ async function scanBranch(options: {
         return [];
       });
       const knownHosts = options.target ? [options.target.ipAddress]
-        : [...new Set([...dbHosts, ...multicastDiscoveredHosts])];
+        : [...new Set([...dbHosts, ...multicastDiscoveredHosts])].filter(belongsToThisBranch);
       const rtspOptions = {
+        configuredNetworksOnly: isRemoteBranch,
+        excludeNetworks: excludedBranchNetworks,
         ports,
         recorderHttpPorts,
         paths,
@@ -1396,17 +1428,24 @@ function isCredentialFailure(value: string | null | undefined) {
 }
 
 async function runAutomaticDiscovery() {
-  // Set the timestamp before scanning so a failed/slow branch cannot create a
-  // tight retry loop. Credential updates and explicit scan jobs still trigger
-  // immediate rediscovery outside this schedule.
-  lastDiscoveryAt = Date.now();
+  // Process one branch per idle iteration so operator commands and scan jobs
+  // can run between branches instead of waiting for a whole regional sweep.
   try {
-    const discovered = await scanBranch();
-    logger.info("Automatic ONVIF discovery completed", { discovered });
+    if (automaticDiscoveryBranches.length === 0) {
+      lastDiscoveryAt = Date.now();
+      const bootstrap = await control.getDiscoveryBootstrap(agentId);
+      automaticDiscoveryBranches.push(...(bootstrap.branchIds ?? [homeBranchId]));
+    }
+    const assignedBranchId = automaticDiscoveryBranches.shift();
+    if (!assignedBranchId) return;
+    const discovered = await scanBranch({ branchId: assignedBranchId });
+    logger.info("Automatic branch discovery completed", { branchId: assignedBranchId, discovered });
   } catch (error) {
     logger.error("Automatic ONVIF discovery failed", {
       error: error instanceof Error ? error.message : String(error),
     });
+  } finally {
+    if (automaticDiscoveryBranches.length === 0) lastDiscoveryAt = Date.now();
   }
 }
 
@@ -1504,6 +1543,7 @@ async function heartbeatAndReport() {
       reasonCodes,
     }); }),
     ...recorderReports.flatMap(({ recorder, probe }) => {
+      const branchId = recorder.branchId ?? homeBranchId;
       const source = recorder.vendor === "cp-plus" ? "cp-plus-adapter" as const : recorder.vendor === "onvif" ? "onvif" as const : "system" as const;
       const submissions: Array<Promise<unknown>> = [control.submitTelemetry(agentId, {
         branchId, edgeAgentId: agentId, deviceType: "recorder", deviceId: recorder.id,
@@ -1562,6 +1602,16 @@ function resolveLocalMediaUrl() {
 
 async function syncCameraHeartbeatConfig() {
   const cameras = await control.listMonitoringCameras(agentId, config.EDGE_AGENT_VERSION);
+  const bootstrap = await control.getDiscoveryBootstrap(agentId);
+  const assignedBranches = new Set(bootstrap.branchIds ?? [homeBranchId]);
+  let removedRecorder = false;
+  for (const [recorderId, recorder] of activeRecorders) {
+    if (!assignedBranches.has(recorder.branchId ?? homeBranchId)) {
+      activeRecorders.delete(recorderId);
+      removedRecorder = true;
+    }
+  }
+  if (removedRecorder && !scanOnce && !isDiagnostic) await recorderRegistry.save(activeRecorders.values());
   await syncCentralStreamSecrets().catch((error) => {
     logger.warn("Central stream-secret migration will retry", {
       error: error instanceof Error ? error.message : String(error),
@@ -1587,7 +1637,7 @@ async function syncCameraHeartbeatConfig() {
     streamSecretRecoveryAttempts.set(reference, now);
     try {
       const hostIp = camera.ipAddress!.replace(/\/\d+$/, "").trim();
-      const credentials = await discoveryCredentials(hostIp);
+      const credentials = await discoveryCredentials(hostIp, camera.branchId ?? homeBranchId);
       if (!credentials.username && !credentials.password) return;
       const recovered = await probeVendorStream({
         host: hostIp,
@@ -1630,6 +1680,7 @@ async function syncCameraHeartbeatConfig() {
     }
     return {
       id: camera.id,
+      branchId: camera.branchId ?? homeBranchId,
       name: camera.name,
       ...(rtspUrl ? { rtspUrl } : {}),
       enabled: true,
@@ -1640,7 +1691,13 @@ async function syncCameraHeartbeatConfig() {
   const channelsByRecorder = new Map<string, Array<{ cameraId: string; channel: number }>>();
   for (const camera of cameras) {
     const restored = recorderFromMonitoringCamera(camera);
-    if (restored && !activeRecorders.has(restored.id)) await registerRecorder(restored);
+    if (restored) {
+      const existing = activeRecorders.get(restored.id);
+      const recorderBranchId = camera.branchId ?? homeBranchId;
+      if (!existing || existing.branchId !== recorderBranchId) {
+        await registerBranchRecorder({ ...restored, ...existing }, recorderBranchId);
+      }
+    }
     if (!camera.recorderId || camera.recorderChannel === undefined) continue;
     const channels = channelsByRecorder.get(camera.recorderId) ?? [];
     channels.push({ cameraId: camera.id, channel: camera.recorderChannel });
@@ -1692,7 +1749,7 @@ async function syncCentralDeviceCredentials() {
 
 async function collectRecorderReports(observedAt: string, includeArchive: boolean) {
   return Promise.all([...activeRecorders.values()].map(async (recorder) => {
-    const secureCredential = await dbCredentialProvider.get(recorder.host);
+    const secureCredential = await getBranchCredentialProvider(recorder.branchId ?? homeBranchId).get(recorder.host);
     const resolvedRecorder = secureCredential
       ? { ...recorder, username: secureCredential.username, password: secureCredential.password }
       : recorder;
@@ -1728,8 +1785,8 @@ async function collectRecorderReports(observedAt: string, includeArchive: boolea
 async function executeEdgeCommand(type: string, payload: Record<string, unknown>) {
   switch (type) {
     case "rediscover":
-      dbCredentialProvider.invalidate();
-      return { result: { discovered: await scanBranch() } };
+      getBranchCredentialProvider(typeof payload.branchId === "string" ? payload.branchId : homeBranchId).invalidate();
+      return { result: { discovered: await scanBranch({branchId:typeof payload.branchId === "string" ? payload.branchId : homeBranchId}) } };
     case "restart-media":
       if (!config.LIVE_MEDIA_ENABLED) throw new Error("live_media_disabled");
       await refreshManagedMediaBootstrap();
@@ -1757,7 +1814,7 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
       const recorderId = typeof payload.recorderId === "string" ? payload.recorderId : "";
       const recorder = activeRecorders.get(recorderId);
       if (!recorder) throw new Error("recorder_not_configured");
-      const credential = await dbCredentialProvider.get(recorder.host);
+      const credential = await getBranchCredentialProvider(recorder.branchId ?? homeBranchId).get(recorder.host);
       const resolvedRecorder = credential
         ? { ...recorder, username: credential.username, password: credential.password }
         : recorder;
@@ -1780,23 +1837,25 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
       const envelope = payload.envelope as SealedCommandEnvelope | undefined;
       if (!envelope || typeof envelope !== "object") throw new Error("credential_envelope_required");
       const decrypted = openSealedCommand<{
-        username?: unknown; password?: unknown; scope?: { host?: unknown };
+        username?: unknown; password?: unknown; scope?: { host?: unknown; branchId?: unknown };
       }>(envelope, identity.commandPrivateKey);
       if (typeof decrypted.username !== "string" || !decrypted.username ||
           typeof decrypted.password !== "string" || !decrypted.scope ||
           typeof decrypted.scope.host !== "string" || !decrypted.scope.host) {
         throw new Error("invalid_camera_credential_payload");
       }
+      const credentialBranchId = typeof decrypted.scope.branchId === "string" ? decrypted.scope.branchId : homeBranchId;
       const saved = await control.syncDeviceCredentials(agentId, [{
         username: decrypted.username,
         password: decrypted.password,
         host: decrypted.scope.host,
-      }]);
+      }], true, credentialBranchId);
       if (saved.stored !== 1) throw new Error("Central device-credential write was incomplete");
       // The database may still hold an older host login. Supply this command's
       // credentials directly to both ONVIF and RTSP verification.
-      dbCredentialProvider.invalidate();
+      getBranchCredentialProvider(credentialBranchId).invalidate();
       const discovered = await scanBranch({
+        branchId: credentialBranchId,
         target: { ipAddress: decrypted.scope.host },
         targetCredentials: { username: decrypted.username, password: decrypted.password },
       });
@@ -1867,6 +1926,7 @@ async function recoverCameraAtEdge(cameraId: string, trigger: "automatic" | "ope
     .find((item) => item.id === cameraId);
   const source = camera ? await control.resolveStreamSecret(agentId, camera.connectionSecretRef) : undefined;
   if (!camera || !source) throw new Error("camera_stream_secret_unavailable");
+  const branchId = camera.branchId ?? homeBranchId;
 
   const startedAt = new Date().toISOString();
   await control.submitTelemetry(agentId, {

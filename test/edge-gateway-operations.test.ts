@@ -233,9 +233,11 @@ describe("secure edge gateway operations", () => {
   });
 
   it("delivers remote commands once and records their result", async () => {
-    const app = await buildApp({ store: testStore() });
+    const store = testStore();
+    const app = await buildApp({ store });
     apps.push(app);
     const identity = await enroll(app, await createActivation(app));
+    store.cameras.set("cam-001", { ...store.cameras.get("cam-001")!, branchId: "branch-blr-001", edgeAgentId: identity.agentId });
     const created = await app.inject({
       method: "POST", url: `/v1/branches/branch-blr-001/edge-agents/${identity.agentId}/commands`,
       headers: { "x-user-id": "user-global-admin" },
@@ -282,9 +284,11 @@ describe("secure edge gateway operations", () => {
   });
 
   it("queues camera recovery for the branch edge agent", async () => {
-    const app = await buildApp({ store: testStore() });
+    const store = testStore();
+    const app = await buildApp({ store });
     apps.push(app);
     const identity = await enroll(app, await createActivation(app));
+    store.cameras.set("cam-001", { ...store.cameras.get("cam-001")!, branchId: "branch-blr-001", edgeAgentId: identity.agentId });
     const created = await app.inject({
       method: "POST", url: `/v1/branches/branch-blr-001/edge-agents/${identity.agentId}/commands`,
       headers: { "x-user-id": "user-global-admin" },

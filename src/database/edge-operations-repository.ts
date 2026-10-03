@@ -197,10 +197,16 @@ export class EdgeOperationsRepository {
     const result = await this.pool.query(
       `INSERT INTO edge_commands
          (tenant_id, branch_node_id, edge_agent_id, command_type, payload, requested_by)
-       SELECT tenant_id, branch_node_id, id, $2, $3::jsonb, $4
-       FROM edge_agents WHERE id = $1 AND credential_revoked_at IS NULL
+       SELECT agent.tenant_id, COALESCE($5::uuid, agent.branch_node_id), agent.id, $2, $3::jsonb, $4
+       FROM edge_agents agent WHERE agent.id = $1 AND agent.credential_revoked_at IS NULL
+         AND ($5::uuid IS NULL OR $5::uuid = agent.branch_node_id OR EXISTS (
+           SELECT 1 FROM edge_agent_branch_assignments assignment
+           WHERE assignment.edge_agent_id=agent.id AND assignment.branch_node_id=$5::uuid
+             AND assignment.tenant_id=agent.tenant_id
+         ))
        RETURNING *`,
-      [input.edgeAgentId, input.type, JSON.stringify(input.payload), input.requestedBy],
+      [input.edgeAgentId, input.type, JSON.stringify(input.payload), input.requestedBy,
+        typeof input.payload.branchId === "string" ? input.payload.branchId : null],
     );
     if (!result.rows[0]) throw new Error("edge_agent_not_found_or_revoked");
     return mapCommand(result.rows[0]);

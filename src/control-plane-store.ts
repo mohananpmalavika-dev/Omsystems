@@ -606,6 +606,8 @@ export interface ControlPlaneStore {
   listEdgeAgentsByBranch(branchId: string): Promise<EdgeAgent[]>;
   getEdgeAgent(id: string): Promise<EdgeAgent | undefined>;
   listEdgeAgents(tenantId: string): Promise<EdgeAgent[]>;
+  assignEdgeAgentBranches(id: string, assignments: import("./domain/models.js").EdgeBranchAssignment[]): Promise<EdgeAgent>;
+  unassignEdgeAgentBranch(id: string, branchId: string): Promise<void>;
   heartbeatEdgeAgent(
     id: string,
     version: string,
@@ -630,7 +632,7 @@ export interface ControlPlaneStore {
   /** Durable encrypted stream sources used by the central media gateway during edge failure. */
   upsertStreamSecrets?(edgeAgentId: string, secrets: Array<{ reference: string; sourceUri: string }>, overwrite?: boolean): Promise<number>;
   resolveStreamSecret?(reference: string, edgeAgentId?: string): Promise<string | undefined>;
-  upsertDeviceCredentials?(edgeAgentId: string, credentials: Array<{ host: string; username: string; password: string }>, overwrite?: boolean): Promise<number>;
+  upsertDeviceCredentials?(edgeAgentId: string, credentials: Array<{ host: string; username: string; password: string }>, overwrite?: boolean, branchId?: string): Promise<number>;
   listCentralDeviceCredentials?(branchId: string): Promise<Array<{ host: string; username: string; password: string; updatedAt: string }>>;
   migrateLegacyCameraPasswords?(): Promise<number>;
   getEdgeAgentCommandPublicKey(id: string): Promise<string | undefined>;

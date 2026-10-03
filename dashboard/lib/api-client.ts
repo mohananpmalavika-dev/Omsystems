@@ -1187,6 +1187,14 @@ export const cameraInventoryApi = {
     ),
 };
 
+export const edgeAgentBranchesApi = {
+  catalog: () => fetchApi<{data:import("./edge-agent-branches").BranchConnectionCatalog}>("/v1/edge-agent-branches"),
+  assign: (id:string,scopeNodeId:string,branches:Array<{branchId:string;vpnNetworks:string[]}>) =>
+    fetchApi(`/v1/edge-agents/${encodeURIComponent(id)}/branches`, {method:"POST",body:JSON.stringify({scopeNodeId,branches})}),
+  unassign: (id:string,branchId:string) =>
+    fetchApi(`/v1/edge-agents/${encodeURIComponent(id)}/branches/${encodeURIComponent(branchId)}`,{method:"DELETE"}),
+};
+
 export interface BranchOpeningPolicy {
   branchId: string;
   ruleId?: string;

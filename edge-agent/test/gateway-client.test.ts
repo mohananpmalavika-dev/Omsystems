@@ -6,6 +6,15 @@ afterEach(() => {
 });
 
 describe("GatewayClient", () => {
+  it("sends the requested branch on shared-agent bootstrap and device credential requests", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => Response.json({ credentials: [], vpnScanNetworks: [], stored: 1 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new GatewayClient("https://control.example", undefined);
+    await client.getDiscoveryBootstrap("shared", "branch-a");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("https://control.example/v1/edge-agents/shared/discovery-bootstrap?branchId=branch-a");
+    await client.syncDeviceCredentials("shared", [{ host: "10.20.1.10", username: "operator", password: "secret" }], true, "branch-a");
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toMatchObject({ branchId: "branch-a", overwrite: true });
+  });
   it('keeps the runtime version on subsequent authenticated requests, including live sessions', async () => {
     const fetchMock = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => Response.json({}));
     vi.stubGlobal('fetch', fetchMock);

@@ -117,6 +117,7 @@ export interface SecureAreaFaceObservationPayload {
 
 export interface MonitoringCamera {
   id: string;
+  branchId?: string;
   name: string;
   connectionSecretRef: string;
   ipAddress?: string;
@@ -182,6 +183,9 @@ export interface EdgeUpdateRelease {
 }
 
 export interface DiscoveryBootstrap {
+  branchId?: string;
+  branchIds?: string[];
+  branchAssignments?: Array<{ branchId: string; vpnNetworks: string[] }>;
   credentials: Array<{ host?: string; username: string; password: string | null; updatedAt: string }>;
   vpnScanNetworks: string[];
   transport: "vpn" | "cloudflare-tunnel" | null;
@@ -236,9 +240,9 @@ export class GatewayClient {
     );
   }
 
-  async getDiscoveryBootstrap(agentId: string) {
+  async getDiscoveryBootstrap(agentId: string, branchId?: string) {
     return this.request<DiscoveryBootstrap>(
-      `/v1/edge-agents/${encodeURIComponent(agentId)}/discovery-bootstrap`,
+      `/v1/edge-agents/${encodeURIComponent(agentId)}/discovery-bootstrap${branchId ? `?branchId=${encodeURIComponent(branchId)}` : ""}`,
       { method: "GET" },
     );
   }
@@ -290,7 +294,7 @@ export class GatewayClient {
     }
   }
 
-  async syncDeviceCredentials(id: string, credentials: Array<{ host: string; username: string; password: string }>, overwrite = true) {
+  async syncDeviceCredentials(id: string, credentials: Array<{ host: string; username: string; password: string }>, overwrite = true, branchId?: string) {
     const path = `/v1/edge-agents/${encodeURIComponent(id)}/device-credentials`;
     const endpoint = controlPlaneEndpoint(this.baseUrl, path);
     if (!isSecureCredentialEndpoint(endpoint)) {
@@ -298,7 +302,7 @@ export class GatewayClient {
     }
     return this.request<{ stored: number }>(path, {
       method: "POST",
-      body: JSON.stringify({ credentials, overwrite }),
+      body: JSON.stringify({ credentials, overwrite, ...(branchId ? { branchId } : {}) }),
     });
   }
 

@@ -185,7 +185,7 @@ export async function registerAuditRoutes(
         agent = await store.getEdgeAgent(camera.edgeAgentId);
         agentCache.set(camera.edgeAgentId, agent);
       }
-      if (!agent || agent.branchId !== camera.branchId || agent.status !== 'online') {
+      if (!agent || !(await store.listEdgeAgentsByBranch(camera.branchId)).some(a=>a.id===agent.id) || agent.status !== 'online') {
         unavailable.push({ cameraId: camera.id, reason: 'edge_agent_not_connected' });
         continue;
       }

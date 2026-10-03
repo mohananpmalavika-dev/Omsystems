@@ -1,5 +1,6 @@
 import os from "node:os";
 import net from "node:net";
+import { hostInNetworks } from "./branch-network-scope.js";
 import { attachCredentials } from "../devices/onvif-client.js";
 import {
   vendorRtspCandidates,
@@ -20,6 +21,8 @@ import {
 export interface RtspScanOptions {
   cidr?: string; // single CIDR like 192.168.1.0/24 or empty to infer
   cidrs?: string[];
+  /** A VPN branch scan must never expand into the agent's local LAN. */
+  configuredNetworksOnly?: boolean;
   hosts?: string[];
   ports: number[];
   paths: string[];
@@ -33,6 +36,8 @@ export interface RtspScanOptions {
   password: string;
   credentialsForHost?: (host: string) => Promise<{ username: string; password: string } | undefined>;
   excludeHosts?: string[];
+  /** Addresses assigned to another branch must also be omitted from local scans. */
+  excludeNetworks?: string[];
   /** Targeted verification must never expand into a subnet scan. */
   restrictToHosts?: boolean;
   recorderMaxChannels?: number;
@@ -275,7 +280,7 @@ export async function discoverRtspDevices(
     ?? (options.cidr && options.cidr.trim() ? [options.cidr.trim()] : []);
   const cidrList = options.restrictToHosts
     ? []
-    : [...new Set([...inferLocalCidrs(), ...configuredCidrs])];
+    : [...new Set([...(options.configuredNetworksOnly ? [] : inferLocalCidrs()), ...configuredCidrs])];
   if (cidrList.length === 0 && (options.hosts?.length ?? 0) === 0) {
     logger.info("RTSP scan: no local network addresses found to scan");
     return 0;
@@ -413,7 +418,8 @@ export async function discoverRtspDevices(
 
   let submittedCount = 0;
 
-  const hosts = [...candidates].filter((host) => !excludedHosts.has(host));
+  const hosts = [...candidates].filter((host) => !excludedHosts.has(host)
+    && !hostInNetworks(host, options.excludeNetworks ?? []));
   const discoveryPorts = uniqueValidPorts([...httpFingerprintPorts, ...rtspStreamingPorts]);
   const reachableHosts: Array<{ ip: string; ports: Set<number> }> = [];
 

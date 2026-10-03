@@ -226,6 +226,7 @@ export const navigation: NavGroup[] = [
     icon: Settings,
     items: [
       { label: "Administration", href: "/admin", icon: Settings },
+      { label: "Shared edge agents", href: "/admin/edge-agent-branches", icon: Network },
     ],
   },
   {
@@ -377,6 +378,7 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/admin/organization?tab=employees",
     "/admin/organization?tab=roles",
     "/admin/branch-onboarding",
+    "/admin/edge-agent-branches",
     "/admin/zero-touch",
     "/admin/zero-touch/diagnostics",
     "/admin/camera-import-export",
@@ -475,6 +477,7 @@ export const quickActions: NavItem[] = [
   { label: "Report an incident", href: "/incidents/create", icon: Siren },
   { label: "Create work order", href: "/maintenance/workorders/new", icon: ClipboardCheck },
   { label: "Onboard a branch", href: "/admin/branch-onboarding", icon: Building2 },
+  { label: "Connect branches to agent", href: "/admin/edge-agent-branches", icon: Network },
   { label: "Register hardware asset", href: "/maintenance/assets/new", icon: Library },
   { label: "Add an AMC contract", href: "/maintenance/amc/new", icon: FileClock },
   { label: "Add a vendor / OEM", href: "/maintenance/vendors/new", icon: Handshake },

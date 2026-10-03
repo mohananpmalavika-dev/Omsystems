@@ -15,6 +15,24 @@ const positiveClassifier = () => ({ run: vi.fn(async () => ({
 })) });
 
 describe("helmet false-alarm evidence", () => {
+  // Highest person score from each supplied annotated incident snapshot.
+  // Even an overconfident crop classifier must not promote these to alarms.
+  it.each([
+    ["hajipur-chair-1791040935773", 0.7764534364526412],
+    ["peravurani-1791040925724", 0.6170429731131826],
+    ["peravurani-1791040917135", 0.7407697167708704],
+    ["peravurani-1791040909261", 0.6897230482999106],
+    ["hajipur-bare-head-1791006290219", 0.8262904324814997],
+  ] as const)("suppresses classifier-only evidence from %s", async (cameraId, confidence) => {
+    const classifier = positiveClassifier();
+    const detector = new HelmetDetector(null, 0.88, classifier);
+    await detector.initialize();
+    for (const seconds of [0, 2, 4]) {
+      expect(await detector.detect({ ...frame(seconds, [person(confidence)]), cameraId })).toEqual([]);
+    }
+    expect(classifier.run).not.toHaveBeenCalled();
+  });
+
   it.each([0.6717, 0.8304])("rejects classifier-only alarms with person confidence %f even at near-certain helmet confidence", async (confidence) => {
     const classifier = positiveClassifier();
     const detector = new HelmetDetector(null, 0.88, classifier);

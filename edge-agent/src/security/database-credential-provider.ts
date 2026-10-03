@@ -5,7 +5,7 @@ export interface CameraCredential {
 }
 
 interface DiscoveryBootstrapClient {
-  getDiscoveryBootstrap(agentId: string): Promise<{
+  getDiscoveryBootstrap(agentId: string, branchId?: string): Promise<{
     credentials: Array<{ host?: string; username: string; password: string | null; updatedAt: string }>;
     vpnScanNetworks: string[];
   }>;
@@ -20,6 +20,7 @@ export class DatabaseCredentialProvider {
   constructor(
     private readonly control: DiscoveryBootstrapClient,
     private readonly edgeAgentId: string,
+    private readonly branchId?: string,
   ) {}
 
   async get(host: string): Promise<CameraCredential | undefined> {
@@ -48,7 +49,9 @@ export class DatabaseCredentialProvider {
   }
 
   private async refreshCache() {
-    const bootstrap = await this.control.getDiscoveryBootstrap(this.edgeAgentId);
+    const bootstrap = await (this.branchId
+      ? this.control.getDiscoveryBootstrap(this.edgeAgentId, this.branchId)
+      : this.control.getDiscoveryBootstrap(this.edgeAgentId));
     this.cache.clear();
     for (const item of bootstrap.credentials) {
       // Discovery credentials are device-scoped. Never try a branch default
