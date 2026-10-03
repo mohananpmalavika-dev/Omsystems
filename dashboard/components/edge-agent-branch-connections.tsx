@@ -92,7 +92,7 @@ export function EdgeAgentBranchConnections() {
     finally {setBusy(false);}
   }
 
-  return <main className={`page-container ${styles.page}`}>
+  return <main className={styles.page}>
     <header className={styles.header}>
       <div><span className={styles.eyebrow}><Network size={15}/> SHARED EDGE AGENT</span>
         <h1>Connect branches to an existing agent</h1>
