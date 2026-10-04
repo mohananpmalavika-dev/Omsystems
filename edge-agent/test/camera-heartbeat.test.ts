@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import * as rtspProbe from "../src/streaming/rtsp-probe.js";
 import {
   assessLumaFrame,
   CameraHeartbeatService,
@@ -8,6 +9,37 @@ import {
 } from "../src/monitoring/camera-heartbeat.js";
 
 describe("camera frame health", () => {
+  it("keeps the configured main stream for analytics head detail", async () => {
+    const capture = vi.spyOn(rtspProbe, "captureRtspRgbFrame").mockResolvedValue(Buffer.alloc(640 * 360 * 3));
+    try {
+      const send = vi.fn(async () => undefined);
+      const service = new CameraHeartbeatService("http://control.example", "branch", "agent", undefined,
+        "ffprobe", "ffmpeg", undefined, undefined, undefined, send);
+      const camera = { id: "main", name: "Main", rtspUrl: "rtsp://camera/stream?channel=6&subtype=0", enabled: true };
+      await (service as any).captureAnalyticsFrame(camera);
+      expect(capture).toHaveBeenCalledWith(camera.rtspUrl, "ffmpeg", 10_000, 640, 360);
+      expect(send).toHaveBeenCalledOnce();
+    } finally { capture.mockRestore(); }
+  });
+
+  it("backs off a failed source without delaying a working camera and retries after a minute", async () => {
+    const capture = vi.spyOn(rtspProbe, "captureRtspRgbFrame").mockImplementation(async (url) =>
+      url.includes("failed") ? null : Buffer.alloc(640 * 360 * 3));
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    try {
+      const service = new CameraHeartbeatService("http://control.example", "branch", "agent", undefined,
+        "ffprobe", "ffmpeg", undefined, undefined, undefined, vi.fn(async () => undefined));
+      const failed = { id: "failed", name: "Failed", rtspUrl: "rtsp://camera/failed", enabled: true };
+      const working = { id: "working", name: "Working", rtspUrl: "rtsp://camera/working", enabled: true };
+      await (service as any).captureAnalyticsFrame(failed);
+      await (service as any).captureAnalyticsFrame(failed);
+      await (service as any).captureAnalyticsFrame(working);
+      expect(capture).toHaveBeenCalledTimes(2);
+      now.mockReturnValue(61_000);
+      await (service as any).captureAnalyticsFrame(failed);
+      expect(capture).toHaveBeenCalledTimes(3);
+    } finally { capture.mockRestore(); now.mockRestore(); }
+  });
   it("detects a persistently identical frame only after three samples", () => {
     const frame = Buffer.alloc(64 * 36, 80);
     const one = assessLumaFrame(undefined, frame);

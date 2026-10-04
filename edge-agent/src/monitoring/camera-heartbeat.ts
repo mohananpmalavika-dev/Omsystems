@@ -146,6 +146,9 @@ export class CameraHeartbeatService {
     for (const cameraId of this.frameStates.keys()) {
       if (!retainedIds.has(cameraId)) this.frameStates.delete(cameraId);
     }
+    for (const cameraId of this.analyticsCaptureRetryAfter.keys()) {
+      if (!retainedIds.has(cameraId)) this.analyticsCaptureRetryAfter.delete(cameraId);
+    }
     logger.info(`Synchronized ${cameras.length} camera(s) for heartbeat monitoring`);
   }
 
@@ -212,20 +215,26 @@ export class CameraHeartbeatService {
     }
   }
 
+  private readonly analyticsCaptureRetryAfter = new Map<string, number>();
+
   private async captureAnalyticsFrame(camera: CameraConfig): Promise<void> {
+    if (Date.now() < (this.analyticsCaptureRetryAfter.get(camera.id) ?? 0)) return;
     // Helmet classification runs on a person's head crop. At 320x180 that
     // crop can be only a few pixels, even when the operator sees a helmet.
     const width = 640;
     const height = 360;
-    let captureUrl = camera.rtspUrl!;
-    if (captureUrl.includes("subtype=0")) {
-      captureUrl = captureUrl.replace("subtype=0", "subtype=1");
-    }
+    // Preserve the configured source's head detail. Upscaling a DVR's
+    // 352x288 substream to 640x360 does not restore the lost image detail.
+    const captureUrl = camera.rtspUrl!;
     const frame = await captureRtspRgbFrame(captureUrl, this.ffmpegPath, 10_000, width, height);
     if (!frame) {
+      // One offline camera must not spend another ten seconds on every
+      // batch and starve the cameras needed for temporal helmet evidence.
+      this.analyticsCaptureRetryAfter.set(camera.id, Date.now() + 60_000);
       logger.warn("Analytics frame capture unavailable", { cameraId: camera.id });
       return;
     }
+    this.analyticsCaptureRetryAfter.delete(camera.id);
     await this.deliverAnalyticsFrame(camera.id, frame, width, height, "edge-rtsp-scheduled");
     if (this.onAnalyticsRgbFrame) {
       await this.onAnalyticsRgbFrame({ cameraId: camera.id, rgb: frame, width, height, capturedAt: new Date().toISOString() });

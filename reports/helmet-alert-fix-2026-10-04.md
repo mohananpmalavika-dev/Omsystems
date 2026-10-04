@@ -53,6 +53,16 @@ Source, detector and original image references are backed up under
 on failed activation. The new image manifest is
 `sha256:85977f83e8aaf8799e2046fb44ee0cf5a640e55da1464db130daa1c79344ebdd`.
 
-Live event/alert verification is in progress. This crop change has limited
+The complete production-configured pipeline was replayed with the captured
+CH2 wearer image. It produced zero events at timestamps 0 and 2 seconds, then
+a `helmet-worn` event at 4 seconds with confidence 0.9999982. This replay was
+isolated and did not submit events. Effective production thresholds were
+object 0.35 and helmet 0.88, with the detector's independent-person gates.
+
+Live event/alert verification is in progress. The gateway stays online but
+fresh camera frame delivery is intermittent; cache entries sometimes expire
+and later recover. A `collect-logs` command was queued for the pilot gateway
+to investigate this. No analytics event delivery failures were reported by
+the analytics service on the checks so far. This crop change has limited
 camera validation; it is not a general accuracy guarantee. Weak person
 observations and unsupported helmet angles can still miss wearers.
