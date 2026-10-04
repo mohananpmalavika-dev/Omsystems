@@ -49,6 +49,7 @@ export class HelmetDetector extends BaseDetector {
     personBox: HelmetDetection["personBoundingBox"];
     lastSeenAt: number;
     confirmations: number;
+    cropMode: "standard" | "raised";
   }>>();
 
   constructor(
@@ -56,7 +57,7 @@ export class HelmetDetector extends BaseDetector {
     confidenceThreshold = 0.88,
     classifier: HelmetClassificationFrameInference | null = null,
   ) {
-    super("helmet", "1.1.3");
+    super("helmet", "1.1.5");
     this.inference = inference;
     this.classifier = classifier;
     this.MIN_CONFIDENCE = confidenceThreshold;
@@ -193,13 +194,36 @@ export class HelmetDetector extends BaseDetector {
     const pending = this.pendingHeads.get(frame.cameraId);
     if (pending) {
       this.pendingHeads.set(frame.cameraId, pending.filter((item) => indoorPersons.some((person) =>
-        this.hasClassifiablePerson(person) &&
+        (this.hasClassifiablePerson(person) || this.hasRaisedHeadCandidate(person)) &&
         calculateIoU(item.personBox, person.boundingBox) >= 0.5)));
     }
 
     for (const person of indoorPersons) {
       let presence = this.detectHelmetPresence(person, helmets);
       if (!presence && !this.hasClassifiablePerson(person)) {
+        // A seated person's COCO box may begin at the visor/neck. For a large
+        // independently observed person, inspect above that box without
+        // relaxing the existing torso/compact classification gates. This
+        // separate path needs both raised crops >= 0.98 and three frames.
+        if (this.hasRaisedHeadCandidate(person) && helmets.length === 0 && runLocal &&
+            this.classifier && frame.imageData?.length) {
+          const box = person.boundingBox;
+          const y = Math.max(0, box.y - box.height * 0.15);
+          const wide = { x: box.x, y, width: box.width, height: Math.min(1 - y, box.height * 0.25) };
+          const narrow = { ...wide, x: box.x + box.width * 0.1, width: box.width * 0.8 };
+          const wideResult = await this.classifier.run(frame, wide);
+          const narrowResult = await this.classifier.run(frame, narrow);
+          const confidence = Math.min(wideResult.wearingHelmetConfidence, narrowResult.wearingHelmetConfidence);
+          if (wideResult.wearingHelmet && narrowResult.wearingHelmet &&
+              confidence >= Math.max(this.MIN_CONFIDENCE, 0.98)) {
+            if (this.confirmClassifiedHead(frame.cameraId, box, frame.timestamp.getTime(), 3, "raised")) {
+              indoorHelmetDetections.push({ personBoundingBox: box, helmetBoundingBox: narrow,
+                helmetDetected: true, evidenceSource: "confirmed-head-classification", confidence,
+                personConfidence: person.confidence ?? 0, riskLevel: "violation" });
+            }
+            continue;
+          }
+        }
         this.clearPendingHead(frame.cameraId, person.boundingBox);
         continue;
       }
@@ -268,16 +292,22 @@ export class HelmetDetector extends BaseDetector {
       ((person.confidence ?? 0) >= this.FULL_PERSON_CONFIDENCE && person.boundingBox.height >= 0.75);
   }
 
-  private confirmClassifiedHead(cameraId: string, personBox: HelmetDetection["personBoundingBox"], observedAt: number, requiredConfirmations = 2) {
+  private hasRaisedHeadCandidate(person: { confidence?: number; boundingBox: HelmetDetection["personBoundingBox"] }) {
+    return (person.confidence ?? 0) >= 0.8 && person.boundingBox.height >= 0.7;
+  }
+
+  private confirmClassifiedHead(cameraId: string, personBox: HelmetDetection["personBoundingBox"], observedAt: number, requiredConfirmations = 2, cropMode: "standard" | "raised" = "standard") {
     const pending = (this.pendingHeads.get(cameraId) ?? [])
       .filter((item) => observedAt - item.lastSeenAt <= 120_000 && observedAt >= item.lastSeenAt);
     const previous = pending.find((item) => calculateIoU(item.personBox, personBox) >= 0.5);
     if (previous) {
-      if (observedAt > previous.lastSeenAt) previous.confirmations += 1;
+      if (previous.cropMode !== cropMode) previous.confirmations = 1;
+      else if (observedAt > previous.lastSeenAt) previous.confirmations += 1;
+      previous.cropMode = cropMode;
       previous.personBox = personBox;
       previous.lastSeenAt = observedAt;
     } else {
-      pending.push({ personBox, lastSeenAt: observedAt, confirmations: 1 });
+      pending.push({ personBox, lastSeenAt: observedAt, confirmations: 1, cropMode });
     }
     this.pendingHeads.set(cameraId, pending.slice(-20));
     return (previous?.confirmations ?? 1) >= requiredConfirmations;

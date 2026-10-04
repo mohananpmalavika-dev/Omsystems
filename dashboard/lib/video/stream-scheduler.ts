@@ -186,7 +186,9 @@ export class StreamScheduler {
           : detected.decoderBudget,
       ),
     );
-    const emergencyReserve = decoderBudget >= 64
+    const emergencyReserve = detected.emergencyReserve === 0
+      ? 0
+      : decoderBudget >= 64
       ? 0
       : decoderBudget > 1
       ? Math.min(decoderBudget - 1, Math.max(1, Math.round(decoderBudget * 0.1)))

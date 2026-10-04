@@ -84,7 +84,7 @@ interface VisibleRange {
   end: number;
 }
 
-const MAX_PARALLEL_LIVE_STARTS = 2;
+const MAX_PARALLEL_LIVE_STARTS = 8;
 const LIVE_START_TIMEOUT_MS = 30_000;
 const LIVE_START_RETRY_BASE_MS = 15_000;
 const LIVE_START_RETRY_MAX_MS = 120_000;

@@ -1,0 +1,140 @@
+{
+  "mode": "isolated static replay; no events submitted",
+  "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791120703973.jpg",
+  "detectorVersion": "1.1.5",
+  "detections": [
+    {
+      "label": "person",
+      "confidence": 0.8298166453225662,
+      "boundingBox": {
+        "x": 0.47231081726942686,
+        "y": 0.19112805213824105,
+        "width": 0.27078563152777085,
+        "height": 0.7374553437082622
+      }
+    },
+    {
+      "label": "car",
+      "confidence": 0.39128677861342,
+      "boundingBox": {
+        "x": 0.8289083137218206,
+        "y": 0.18933607398480337,
+        "width": 0.17050771341335091,
+        "height": 0.3438439363590692
+      }
+    }
+  ],
+  "scores": [
+    {
+      "person": {
+        "label": "person",
+        "confidence": 0.8298166453225662,
+        "boundingBox": {
+          "x": 0.47231081726942686,
+          "y": 0.19112805213824105,
+          "width": 0.27078563152777085,
+          "height": 0.7374553437082622
+        }
+      },
+      "crops": [
+        {
+          "box": {
+            "x": 0.43169297254026123,
+            "y": 0.08050975058200173,
+            "width": 0.3520213209861021,
+            "height": 0.40560043903954424
+          },
+          "wearingHelmet": false,
+          "confidence": 0.90545141424475,
+          "wearingHelmetConfidence": 0.09454858575525006,
+          "unwearingHelmetConfidence": 0.90545141424475
+        },
+        {
+          "box": {
+            "x": 0.49938938042220393,
+            "y": 0.19112805213824105,
+            "width": 0.2166285052222167,
+            "height": 0.2581093702978917
+          },
+          "wearingHelmet": true,
+          "confidence": 0.9485121774717707,
+          "wearingHelmetConfidence": 0.9485121774717707,
+          "unwearingHelmetConfidence": 0.051487822528229275
+        },
+        {
+          "box": {
+            "x": 0.47231081726942686,
+            "y": 0.19112805213824105,
+            "width": 0.27078563152777085,
+            "height": 0.11061830155623932
+          },
+          "wearingHelmet": false,
+          "confidence": 0.9789452520368228,
+          "wearingHelmetConfidence": 0.021054747963177235,
+          "unwearingHelmetConfidence": 0.9789452520368228
+        },
+        {
+          "box": {
+            "x": 0.49938938042220393,
+            "y": 0.19112805213824105,
+            "width": 0.2166285052222167,
+            "height": 0.11061830155623932
+          },
+          "wearingHelmet": false,
+          "confidence": 0.9451347694649821,
+          "wearingHelmetConfidence": 0.054865230535018,
+          "unwearingHelmetConfidence": 0.9451347694649821
+        }
+      ]
+    }
+  ],
+  "alerts": [
+    [],
+    [],
+    [
+      {
+        "detectionType": "helmet-worn",
+        "status": "SUCCESS",
+        "provenance": "LIVE_INFERENCE",
+        "confidence": 0.9855518113705273,
+        "durationSeconds": 1,
+        "objects": [
+          {
+            "label": "helmet",
+            "confidence": 0.9855518113705273,
+            "boundingBox": {
+              "x": 0.49938938042220393,
+              "y": 0.08050975058200173,
+              "width": 0.2166285052222167,
+              "height": 0.18436383592706554
+            }
+          },
+          {
+            "label": "person",
+            "confidence": 0.8298166453225662,
+            "boundingBox": {
+              "x": 0.47231081726942686,
+              "y": 0.19112805213824105,
+              "width": 0.27078563152777085,
+              "height": 0.7374553437082622
+            }
+          }
+        ],
+        "metadata": {
+          "compliantCount": 1,
+          "threatType": "helmet_worn_inside_facility",
+          "evidenceSource": "confirmed-head-classification"
+        },
+        "executionMetadata": {
+          "status": "SUCCESS",
+          "provenance": "LIVE_INFERENCE",
+          "modelId": "helmet-classifier",
+          "modelVersion": "1.1.5",
+          "simulated": false,
+          "timestamp": "2026-10-04T13:41:12.440Z"
+        },
+        "requiresAlert": true
+      }
+    ]
+  ]
+}

@@ -1,0 +1,126 @@
+{
+  "mode": "isolated static replay; no production submission",
+  "detectorVersion": "1.1.5",
+  "samples": [
+    {
+      "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791120703973.jpg",
+      "expected": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "counts": [
+        0,
+        0,
+        0,
+        1
+      ]
+    },
+    {
+      "file": "scratch/helmet-alert-ch6.jpg",
+      "expected": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "counts": [
+        0,
+        0,
+        1,
+        1
+      ]
+    },
+    {
+      "file": "tmp/helmet-channel-6.jpg",
+      "expected": [
+        0,
+        0,
+        1,
+        1
+      ],
+      "counts": [
+        0,
+        0,
+        1,
+        1
+      ]
+    },
+    {
+      "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791040935773.jpg",
+      "expected": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "counts": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791040925724.jpg",
+      "expected": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "counts": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791040917135.jpg",
+      "expected": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "counts": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791040909261.jpg",
+      "expected": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "counts": [
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791006290219.jpg",
+      "expected": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "counts": [
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  ]
+}

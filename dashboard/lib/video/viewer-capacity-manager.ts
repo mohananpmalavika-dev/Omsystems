@@ -203,16 +203,18 @@ export class ViewerCapacityManager {
   private decreaseCapacity(maxDecoderLimit?: number, droppedFrameRatio?: number): boolean {
     if (!this.capacity) return false;
 
-    // Reduce the workload actually in use, rather than an unused hardware
-    // estimate (e.g. 40 slots when the wall is limited to four streams).
+    if (this.capacity.activeDecoders <= 1) return false;
+
+    const ceiling = this.getDecoderCeiling(maxDecoderLimit);
+    const minFloor = ceiling >= 16 ? Math.min(ceiling, Math.max(MIN_DECODER_LIMIT, 16)) : 2;
     const current = Math.min(
       this.capacity.recommendedDecoderLimit,
-      this.getDecoderCeiling(maxDecoderLimit),
-      this.capacity.activeDecoders,
+      ceiling,
+      Math.max(this.capacity.activeDecoders, minFloor),
     );
-    if (current <= 1) return false;
+    if (current <= minFloor) return false;
     const decrease = Math.ceil(current * 0.15); // Decrease by 15%
-    const newLimit = Math.max(1, current - decrease);
+    const newLimit = Math.max(minFloor, current - decrease);
 
     console.warn(`[ViewerCapacity] Playback overload: decreasing from ${current} to ${newLimit}`, {
       droppedFrameRatio,
