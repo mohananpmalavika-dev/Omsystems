@@ -62,7 +62,16 @@ object 0.35 and helmet 0.88, with the detector's independent-person gates.
 Live event/alert verification is in progress. The gateway stays online but
 fresh camera frame delivery is intermittent; cache entries sometimes expire
 and later recover. A `collect-logs` command was queued for the pilot gateway
-to investigate this. No analytics event delivery failures were reported by
+to investigate this. Its returned logs confirmed repeated capture failures
+and overlapping analytics cycles. A signed pilot-only application update
+0.1.48 is prepared and hosted. It preserves the configured main RTSP source
+instead of forcing the 352x288 substream, and backs off an unsuccessful
+analytics capture for 60 seconds per camera. Camera health probes continue.
+All 11 focused edge heartbeat/RTSP tests and edge TypeScript checking passed;
+the generated bundle's import/entrypoint check passed. No fleet release was
+enabled. Local activation requires Windows administrator approval because
+the installed identity/update directory is protected by OS permissions.
+No analytics event delivery failures were reported by
 the analytics service on the checks so far. This crop change has limited
 camera validation; it is not a general accuracy guarantee. Weak person
 observations and unsupported helmet angles can still miss wearers.
