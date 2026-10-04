@@ -30,26 +30,10 @@ export class HelmetDetector extends BaseDetector {
   private modelLoadError: string | null = null;
   private readonly MIN_CONFIDENCE: number;
   private readonly PERSON_CONFIDENCE = 0.65;
-  // Crop classification cannot distinguish a helmet from every dark object.
-  // Without a localized helmet observation, require strong independent person
-  // evidence; the Hajipur empty-chair and bare-head alarms scored 0.67/0.83.
-  private readonly CLASSIFIED_PERSON_CONFIDENCE = 0.9;
-  // A clearly framed full person can score below 0.90 on the DVR substream.
-  // Keep partial people and the reproduced 0.67/0.83 false alarms excluded;
-  // this additional path needs three consecutive positive timestamps.
-  private readonly FULL_PERSON_CONFIDENCE = 0.85;
   private readonly HEAD_REGION_OVERLAP_THRESHOLD = 0.6;
   // Keep the existing alert confidence floor when selecting the motorcycle
   // classifier; generic object-presence thresholds are too low for alerts.
   private readonly HELMET_WORN_ALERT_CONFIDENCE = 0.9167;
-  // A person crop is only an approximate helmet location. Require a second
-  // independent frame when no helmet box is supplied.
-  private readonly CLASSIFIED_HEAD_CONFIDENCE = 0.9167;
-  private readonly pendingHeads = new Map<string, Array<{
-    personBox: HelmetDetection["personBoundingBox"];
-    lastSeenAt: number;
-    confirmations: number;
-  }>>();
 
   constructor(
     inference: ObjectFrameInference | null = null,
@@ -108,8 +92,7 @@ export class HelmetDetector extends BaseDetector {
     
     const results: DetectionResult[] = [];
 
-    // An observed helmet box alerts immediately; classifier-only head crops
-    // must agree across two frames before they become helmet evidence.
+    // Only a spatially observed helmet is eligible for an automatic alert.
     const helmetWearers = detections.filter(d => d.helmetDetected && !d.vehicleType);
     if (helmetWearers.length > 0) {
       const avgConf = this.calculateAverageConfidence(helmetWearers);
@@ -188,103 +171,31 @@ export class HelmetDetector extends BaseDetector {
     const indoorPersons = persons.filter((person) => !riderPersonIds.has(this.getPersonIdentifier(person)));
     const indoorHelmetDetections: HelmetDetection[] = [];
 
-    // A missing/weak person observation breaks consecutive confirmation. Do
-    // not combine an old positive with a later reappearance or another object.
-    const pending = this.pendingHeads.get(frame.cameraId);
-    if (pending) {
-      this.pendingHeads.set(frame.cameraId, pending.filter((item) => indoorPersons.some((person) =>
-        this.hasClassifiablePerson(person) &&
-        calculateIoU(item.personBox, person.boundingBox) >= 0.5)));
-    }
-
     for (const person of indoorPersons) {
-      let presence = this.detectHelmetPresence(person, helmets);
-      if (!presence && !this.hasClassifiablePerson(person)) {
-        this.clearPendingHead(frame.cameraId, person.boundingBox);
-        continue;
-      }
-      // An explicit helmet box elsewhere in the scene is contrary spatial
-      // evidence; do not override it with a crop classification.
-      if (!presence && (helmets.length > 0 || !runLocal || !this.classifier)) continue;
+      const presence = this.detectHelmetPresence(person, helmets);
+      // The incident's bare head scores >0.94 on both compact crops. Neither
+      // person confidence nor repeated classifications grounds a helmet box.
+      // Keep the classifier as a verifier; never invent localized evidence.
+      if (!presence) continue;
       if (runLocal && this.classifier && frame.imageData && frame.imageData.length > 0) {
-        const alertThreshold = presence
-          ? Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE)
-          : Math.max(this.MIN_CONFIDENCE, this.CLASSIFIED_HEAD_CONFIDENCE);
-        const box = person.boundingBox;
-        const classifiedHeadBox = presence ? this.headRegion(box) : {
-          x: box.x + box.width * 0.1, y: box.y,
-          width: box.width * 0.8, height: box.height * 0.15,
-        };
-        // Torso context can confidently misclassify a bare head (the supplied
-        // CH2 incident scored 0.973 on the original crops). Classifier-only
-        // evidence must always agree on both compact head crops, even when
-        // broader crops pass. Person confidence and repeated frames do not
-        // correct a systematic crop error.
-        const { upperResult, standardResult } = presence
-          ? await this.helmetClassifications(frame, box)
-          : {
-            upperResult: await this.classifier.run(frame, {
-              x: box.x, y: box.y, width: box.width, height: box.height * 0.15,
-            }),
-            standardResult: await this.classifier.run(frame, classifiedHeadBox),
-          };
+        const alertThreshold = Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE);
+        const { upperResult, standardResult } = await this.helmetClassifications(frame, person.boundingBox);
         if (!upperResult.wearingHelmet || !standardResult.wearingHelmet ||
             upperResult.wearingHelmetConfidence < alertThreshold ||
             standardResult.wearingHelmetConfidence < alertThreshold) {
-          this.clearPendingHead(frame.cameraId, person.boundingBox);
           continue;
         }
         const confidence = Math.min(
-          presence?.confidence ?? 1,
+          presence.confidence ?? 1,
           upperResult.wearingHelmetConfidence,
           standardResult.wearingHelmetConfidence,
         );
-        if (!presence) {
-          const confirmations = (person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ? 2 : 3;
-          if (!this.confirmClassifiedHead(frame.cameraId, person.boundingBox, frame.timestamp.getTime(), confirmations)) continue;
-          presence = {
-            personBoundingBox: person.boundingBox,
-            helmetBoundingBox: classifiedHeadBox,
-            helmetDetected: true,
-            evidenceSource: "confirmed-head-classification",
-            confidence,
-            personConfidence: person.confidence ?? 0,
-            riskLevel: "violation",
-          };
-        } else {
-          presence.confidence = confidence;
-        }
+        presence.confidence = confidence;
       }
       if (presence) indoorHelmetDetections.push(presence);
     }
 
     return [...riderDetections, ...indoorHelmetDetections];
-  }
-
-  private hasClassifiablePerson(person: { confidence?: number; boundingBox: HelmetDetection["personBoundingBox"] }) {
-    return (person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ||
-      ((person.confidence ?? 0) >= this.FULL_PERSON_CONFIDENCE && person.boundingBox.height >= 0.75);
-  }
-
-  private confirmClassifiedHead(cameraId: string, personBox: HelmetDetection["personBoundingBox"], observedAt: number, requiredConfirmations = 2) {
-    const pending = (this.pendingHeads.get(cameraId) ?? [])
-      .filter((item) => observedAt - item.lastSeenAt <= 120_000 && observedAt >= item.lastSeenAt);
-    const previous = pending.find((item) => calculateIoU(item.personBox, personBox) >= 0.5);
-    if (previous) {
-      if (observedAt > previous.lastSeenAt) previous.confirmations += 1;
-      previous.personBox = personBox;
-      previous.lastSeenAt = observedAt;
-    } else {
-      pending.push({ personBox, lastSeenAt: observedAt, confirmations: 1 });
-    }
-    this.pendingHeads.set(cameraId, pending.slice(-20));
-    return (previous?.confirmations ?? 1) >= requiredConfirmations;
-  }
-
-  private clearPendingHead(cameraId: string, personBox: HelmetDetection["personBoundingBox"]) {
-    const pending = this.pendingHeads.get(cameraId);
-    if (!pending) return;
-    this.pendingHeads.set(cameraId, pending.filter((item) => calculateIoU(item.personBox, personBox) < 0.5));
   }
 
   /**
@@ -475,7 +386,6 @@ export class HelmetDetector extends BaseDetector {
 
 
   async cleanup(): Promise<void> {
-    this.pendingHeads.clear();
     this.inference = null;
     this.classifier = null;
     this.isModelLoaded = false;
@@ -486,7 +396,7 @@ export class HelmetDetector extends BaseDetector {
     return {
       status: this.isModelLoaded ? ("healthy" as const) : ("degraded" as const),
       details: this.isModelLoaded
-        ? "Helmet classifier active; helmet-worn alerts require a localized observation or strong person evidence with consecutive confirmed head crops"
+        ? "Helmet classifier verification active; automatic helmet-worn alerts require an independent localized helmet observation. Classifier-only alerts are suppressed."
         : `Awaiting local helmet classifier; normalized observations remain supported. ${this.modelLoadError ?? "Model unavailable"}`,
     };
   }
