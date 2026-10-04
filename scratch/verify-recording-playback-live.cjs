@@ -2,6 +2,7 @@ const {execFileSync} = require('node:child_process');
 const {gzipSync} = require('node:zlib');
 const {chromium} = require('playwright');
 const base = 'https://34-14-220-41.sslip.io';
+const cameraId = process.env.RECORDING_TEST_CAMERA_ID || 'fa884a52-2378-4981-9c09-4620c12a9de5';
 function remote(script) {
   const command = 'printf %s ' + gzipSync(Buffer.from(script)).toString('base64') + ' | base64 -d | gzip -d | bash';
   // Capture the temporary credential in memory; do not log it or write it to disk.
@@ -26,7 +27,7 @@ JS`));
     const failures=[];
     page.on('pageerror', e => failures.push(e.message));
     const to=new Date(Date.now()-60000).toISOString(), from=new Date(Date.now()-24*3600000).toISOString();
-    await page.goto(base+'/recordings?branchId=00000000-0000-4000-8000-000000000104&cameraId=fa884a52-2378-4981-9c09-4620c12a9de5&from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to), {timeout:60000});
+    await page.goto(base+'/recordings?branchId=00000000-0000-4000-8000-000000000104&cameraId='+encodeURIComponent(cameraId)+'&from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to), {timeout:60000});
     await page.getByRole('button',{name:'Search recordings',exact:true}).click({timeout:30000});
     const clips = page.locator('[aria-label="Camera and recorder storage"] .segment-row');
     await clips.first().waitFor({timeout:60000});
@@ -37,6 +38,7 @@ JS`));
     await video.evaluate(v => v.play().catch(()=>{}));
     await page.waitForFunction(()=>{const v=document.querySelector('[aria-label="Camera and recorder storage"] video');return v&&v.videoWidth>0&&v.currentTime>2;}, undefined, {timeout:60000});
     console.log('LIVE_PLAYBACK',JSON.stringify(await video.evaluate(v=>({width:v.videoWidth,height:v.videoHeight,currentTime:v.currentTime,readyState:v.readyState,decodedFrames:v.getVideoPlaybackQuality().totalVideoFrames}))));
+    await video.screenshot({path:'scratch/black-recording-20261004/browser-'+cameraId+'.png'});
     if(failures.length) throw new Error('Browser errors: '+failures.join('; '));
     const released=page.waitForResponse(r=>r.request().method()==='DELETE'&&r.url().includes('/v1/live/'),{timeout:15000});
     await page.getByLabel('Camera',{exact:true}).selectOption({label:'CP PLUS DVR - Channel 8'});
