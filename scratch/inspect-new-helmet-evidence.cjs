@@ -7,7 +7,7 @@ const fs = require('fs');
     const metadata=row.metadata || {};
     console.log(JSON.stringify({...row,metadata:undefined,metadataKeys:Object.keys(metadata),objects:metadata.objects}));
     for (const [key,value] of Object.entries(metadata)) {
-      if (typeof value==='string' && value.length>1000 && (key.toLowerCase().includes('image') || key.toLowerCase().includes('snapshot'))) {
+      if (typeof value==='string' && value.length>1000 && key==='snapshotBase64') {
         const encoded=value.replace(/^data:image\/[^;]+;base64,/, '');
         fs.writeFileSync('/tmp/helmet-new-false-alert-raw.jpg',Buffer.from(encoded,'base64'));
         console.log(JSON.stringify({exported:key,bytes:fs.statSync('/tmp/helmet-new-false-alert-raw.jpg').size}));
