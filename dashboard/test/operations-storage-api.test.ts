@@ -26,6 +26,33 @@ afterEach(() => {
 });
 
 describe("Storage operations inventory", () => {
+  it("totals the same healthy disks as the count, excluding old and full recorder reports", async () => {
+    mockInventory([{ id: "camera-1", recorderId: "recorder-192.168.29.170" }], [
+      { id: "recorder-192.168.29.170:disk:1", operationalStatus: "healthy", capacityBytes: 1971123650560, usedBytes: 1630833475584, lastCheck: now },
+      { id: "recorder-192.168.29.171:disk:1", operationalStatus: "healthy", capacityBytes: 1971123650560, lastCheck: "2020-01-01T00:00:00Z" },
+      { id: "recorder-172.29.91.100:disk:1", operationalStatus: "critical", capacityBytes: 3951451701248, usedBytes: 3951451701248, lastCheck: now },
+      { id: "recorder-hajipur-172-29-91-100:disk:1", operationalStatus: "critical", capacityBytes: 3951451701248, usedBytes: 3951451701248, lastCheck: now },
+      { id: "recorder-172.29.55.100:disk:1", operationalStatus: "critical", capacityBytes: 14923333632, lastCheck: now },
+    ]);
+    const data = await (await GET(request())).json();
+    expect(data.summary.tier2DvrHddCount).toBe(1);
+    expect(data.summary.dvrHddNode).toMatchObject({ capacity: "2.0 TB", used: "1.6 TB", status: "healthy" });
+    expect(data.storageDevices).toHaveLength(5);
+    expect(data.cameras[0].capacity).toBe("2.0 TB");
+  });
+
+  it("does not advertise capacity when every disk is unavailable", async () => {
+    mockInventory([], [
+      { id: "recorder-1:disk:1", operationalStatus: "critical", capacityBytes: 4e12, lastCheck: now },
+      { id: "camera-1:sdcard", operationalStatus: "healthy", capacityBytes: 128e9, lastCheck: "2020-01-01T00:00:00Z" },
+    ]);
+    const data = await (await GET(request())).json();
+    expect(data.summary.tier2DvrHddCount).toBe(0);
+    expect(data.summary.dvrHddNode).toMatchObject({ capacity: "Unavailable", used: "Unavailable", status: "unavailable" });
+    expect(data.summary.sdCardNode.capacity).toBe("Unavailable");
+    expect(data.storageDevices).toHaveLength(2);
+  });
+
   it("does not present a recorder telemetry placeholder as a disk model or empty disk", async () => {
     mockInventory([{ id: "camera-1", recorderId: "recorder-1" }], [{
       id: "recorder-1:disk:storage-telemetry", model: "CP PLUS DVR", capacityBytes: 0,

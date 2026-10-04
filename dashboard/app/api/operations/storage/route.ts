@@ -123,11 +123,14 @@ function nodeHealthy(node: StorageNode): boolean {
 }
 
 function aggregate(disks: Disk[], name: string) {
+  // The summary count describes healthy, current storage. Use that same
+  // population for capacity; old and failed reports remain in the inventory.
+  const available = disks.filter(healthy);
   return {
     name,
-    capacity: formatBytes(disks.reduce((sum, disk) => sum + bytes(disk.capacityBytes ?? disk.totalBytes), 0)),
-    used: formatBytes(disks.reduce((sum, disk) => sum + bytes(disk.usedBytes), 0)),
-    status: disks.some(healthy) ? "healthy" : disks.length ? "unavailable" : "not_present",
+    capacity: formatBytes(available.reduce((sum, disk) => sum + bytes(disk.capacityBytes ?? disk.totalBytes), 0)),
+    used: formatBytes(available.reduce((sum, disk) => sum + bytes(disk.usedBytes), 0)),
+    status: available.length ? "healthy" : disks.length ? "unavailable" : "not_present",
   };
 }
 
