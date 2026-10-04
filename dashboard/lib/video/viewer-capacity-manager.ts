@@ -382,7 +382,7 @@ export class ViewerCapacityManager {
       maxVideoDecoders: 144,
       maxAggregateBitrateMbps: bitrateCapacity,
       maxPixelsPerSecond: pixelCapacity,
-      recommendedDecoderLimit: Math.max(MIN_DECODER_LIMIT, recommendedLimit),
+      recommendedDecoderLimit: 144,
       benchmarkDurationMs,
     };
   }
