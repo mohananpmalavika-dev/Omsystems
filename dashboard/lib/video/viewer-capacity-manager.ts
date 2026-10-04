@@ -24,7 +24,7 @@ import {
 
 const DEFAULT_DECODER_LIMIT = 24; // Conservative starting point
 const MIN_DECODER_LIMIT = 8;
-const MAX_DECODER_LIMIT = 48;
+const MAX_DECODER_LIMIT = 144;
 const CAPACITY_SAFETY_MARGIN = 0.85; // Use 85% of measured capacity
 const EMERGENCY_RESERVE_RATIO = 0.1; // Four slots on a 36-decoder wall
 

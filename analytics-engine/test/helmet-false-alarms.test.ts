@@ -106,4 +106,22 @@ describe("helmet false-alarm evidence", () => {
     await detector.initialize();
     for (const seconds of [0, 2, 4]) expect(await detector.detect(frame(seconds, [person(0.95)]))).toEqual([]);
   });
+
+  it("requires three distinct positive frames for a well-framed full person below 0.90", async () => {
+    const detector = new HelmetDetector(null, 0.88, positiveClassifier());
+    await detector.initialize();
+    for (const seconds of [0, 0, 2]) expect(await detector.detect(frame(seconds, [person(0.86)]))).toEqual([]);
+    expect(await detector.detect(frame(4, [person(0.86)]))).toHaveLength(1);
+  });
+
+  it("does not relax person evidence for partial bodies or scores below 0.85", async () => {
+    const classifier = positiveClassifier();
+    const detector = new HelmetDetector(null, 0.88, classifier);
+    await detector.initialize();
+    for (const seconds of [0, 2, 4, 6]) {
+      expect(await detector.detect(frame(seconds, [person(0.84)]))).toEqual([]);
+      expect(await detector.detect({...frame(seconds, [{...person(0.86), boundingBox:{...personBox,height:0.7}}]),cameraId:'partial'})).toEqual([]);
+    }
+    expect(classifier.run).not.toHaveBeenCalled();
+  });
 });

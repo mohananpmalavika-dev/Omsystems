@@ -34,6 +34,10 @@ export class HelmetDetector extends BaseDetector {
   // Without a localized helmet observation, require strong independent person
   // evidence; the Hajipur empty-chair and bare-head alarms scored 0.67/0.83.
   private readonly CLASSIFIED_PERSON_CONFIDENCE = 0.9;
+  // A clearly framed full person can score below 0.90 on the DVR substream.
+  // Keep partial people and the reproduced 0.67/0.83 false alarms excluded;
+  // this additional path needs three consecutive positive timestamps.
+  private readonly FULL_PERSON_CONFIDENCE = 0.85;
   private readonly HEAD_REGION_OVERLAP_THRESHOLD = 0.6;
   // Keep the existing alert confidence floor when selecting the motorcycle
   // classifier; generic object-presence thresholds are too low for alerts.
@@ -52,7 +56,7 @@ export class HelmetDetector extends BaseDetector {
     confidenceThreshold = 0.88,
     classifier: HelmetClassificationFrameInference | null = null,
   ) {
-    super("helmet", "1.1.2");
+    super("helmet", "1.1.3");
     this.inference = inference;
     this.classifier = classifier;
     this.MIN_CONFIDENCE = confidenceThreshold;
@@ -189,13 +193,13 @@ export class HelmetDetector extends BaseDetector {
     const pending = this.pendingHeads.get(frame.cameraId);
     if (pending) {
       this.pendingHeads.set(frame.cameraId, pending.filter((item) => indoorPersons.some((person) =>
-        (person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE &&
+        this.hasClassifiablePerson(person) &&
         calculateIoU(item.personBox, person.boundingBox) >= 0.5)));
     }
 
     for (const person of indoorPersons) {
       let presence = this.detectHelmetPresence(person, helmets);
-      if (!presence && (person.confidence ?? 0) < this.CLASSIFIED_PERSON_CONFIDENCE) {
+      if (!presence && !this.hasClassifiablePerson(person)) {
         this.clearPendingHead(frame.cameraId, person.boundingBox);
         continue;
       }
@@ -238,7 +242,8 @@ export class HelmetDetector extends BaseDetector {
           standardResult.wearingHelmetConfidence,
         );
         if (!presence) {
-          if (!this.confirmClassifiedHead(frame.cameraId, person.boundingBox, frame.timestamp.getTime())) continue;
+          const confirmations = (person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ? 2 : 3;
+          if (!this.confirmClassifiedHead(frame.cameraId, person.boundingBox, frame.timestamp.getTime(), confirmations)) continue;
           presence = {
             personBoundingBox: person.boundingBox,
             helmetBoundingBox: classifiedHeadBox,
@@ -258,7 +263,12 @@ export class HelmetDetector extends BaseDetector {
     return [...riderDetections, ...indoorHelmetDetections];
   }
 
-  private confirmClassifiedHead(cameraId: string, personBox: HelmetDetection["personBoundingBox"], observedAt: number) {
+  private hasClassifiablePerson(person: { confidence?: number; boundingBox: HelmetDetection["personBoundingBox"] }) {
+    return (person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ||
+      ((person.confidence ?? 0) >= this.FULL_PERSON_CONFIDENCE && person.boundingBox.height >= 0.75);
+  }
+
+  private confirmClassifiedHead(cameraId: string, personBox: HelmetDetection["personBoundingBox"], observedAt: number, requiredConfirmations = 2) {
     const pending = (this.pendingHeads.get(cameraId) ?? [])
       .filter((item) => observedAt - item.lastSeenAt <= 120_000 && observedAt >= item.lastSeenAt);
     const previous = pending.find((item) => calculateIoU(item.personBox, personBox) >= 0.5);
@@ -270,7 +280,7 @@ export class HelmetDetector extends BaseDetector {
       pending.push({ personBox, lastSeenAt: observedAt, confirmations: 1 });
     }
     this.pendingHeads.set(cameraId, pending.slice(-20));
-    return (previous?.confirmations ?? 1) >= 2;
+    return (previous?.confirmations ?? 1) >= requiredConfirmations;
   }
 
   private clearPendingHead(cameraId: string, personBox: HelmetDetection["personBoundingBox"]) {

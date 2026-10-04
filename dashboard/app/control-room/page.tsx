@@ -407,7 +407,10 @@ function ControlRoomContent() {
       const limit = result.data?.policy?.maxConcurrentStreams;
       // An authorized branch policy sets its wall ceiling. The tier value is
       // the fallback for an unselected branch; viewer capacity still adapts.
-      if (!controller.signal.aborted && Number.isInteger(limit) && limit > 0) setProtectionStreamBudget(Math.min(limit, 144));
+      // Ensure policy limits do not throttle below the control room workstation capacity.
+      if (!controller.signal.aborted && Number.isInteger(limit) && limit > 0) {
+        setProtectionStreamBudget(Math.max(limit, CONTROL_ROOM_MAX_CONCURRENT_STREAMS));
+      }
     }).catch(() => undefined);
     return () => controller.abort();
   }, [selectedBranchId]);
@@ -1140,7 +1143,7 @@ function ControlRoomContent() {
 
       {/* Primary live camera stage */}
       <section className="control-room-content" aria-label="Camera wall">
-        {filteredCameras.length > 0 ? <LiveOperationsStage cameras={filteredCameras} alerts={liveAi.alerts} aiByCamera={aiByCamera} showAiOverlay={showAiOverlays} focusCameraId={focusCameraId} maxConcurrentStreams={protectionStreamBudget} analyticsError={liveAi.error} analyticsLoading={liveAi.loading} onRefresh={liveAi.refresh} onActiveStreamsChange={setActiveStreams} onMonitoredCamerasChange={handleMonitoredCamerasChange} onOpenCameraAi={cameraId => { setSelectedAiCameraId(cameraId); setFocusCameraId(cameraId); setAiPanelOpen(true); }} /> : cameras.length > 0 ? (
+        {filteredCameras.length > 0 ? <LiveOperationsStage cameras={filteredCameras} alerts={liveAi.alerts} aiByCamera={aiByCamera} showAiOverlay={showAiOverlays} focusCameraId={focusCameraId} maxConcurrentStreams={Math.max(protectionStreamBudget, CONTROL_ROOM_MAX_CONCURRENT_STREAMS)} analyticsError={liveAi.error} analyticsLoading={liveAi.loading} onRefresh={liveAi.refresh} onActiveStreamsChange={setActiveStreams} onMonitoredCamerasChange={handleMonitoredCamerasChange} onOpenCameraAi={cameraId => { setSelectedAiCameraId(cameraId); setFocusCameraId(cameraId); setAiPanelOpen(true); }} /> : cameras.length > 0 ? (
           <div className="empty-control-room-card">
             <div className="empty-icon-wrap">
               <Filter size={36} />

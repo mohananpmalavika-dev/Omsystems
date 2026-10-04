@@ -24,7 +24,10 @@ export function useDecoderBudgetManager({
   const [preference, setPreference] = useState<number | undefined>(() => {
     try {
       const stored = window?.localStorage?.getItem(storedPreferenceKey);
-      if (stored) return Number(stored);
+      if (stored) {
+        const parsed = Number(stored);
+        if (Number.isFinite(parsed) && parsed >= 16) return parsed;
+      }
     } catch (e) {
       // ignore
     }
@@ -49,7 +52,7 @@ export function useDecoderBudgetManager({
     const base = decodeClass === "VIDEO_WALL" ? 144 : decodeClass === "HIGH" ? 64 : decodeClass === "STANDARD" ? 36 : 16;
     const gpuFactor = enableGPUAcceleration ? 1.25 : 1.0;
     let computed = clampDecoderLimit(Math.floor(base * gpuFactor), maxConcurrentStreams);
-    if (preference) {
+    if (preference && preference >= 16) {
       // user preference must respect maxConcurrentStreams
       computed = clampDecoderLimit(preference, maxConcurrentStreams);
     }

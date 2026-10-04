@@ -7,10 +7,15 @@ upper-body and 35%-height head crops scored only 0.0049 and 0.0920 for helmet.
 Visual inspection confirmed that the wearer had a helmet. The broad crops
 included too much torso for this head classifier.
 
-Detector 1.1.2 adds a fallback pair of compact head crops: the top 15% of the
+Detector 1.1.3 adds a fallback pair of compact head crops: the top 15% of the
 person box, using full person width and 80% person width. Both must exceed
 the existing 0.9167 floor. Classifier-only evidence still requires independent
-person confidence of at least 0.90 and confirmation at distinct timestamps.
+person confidence of at least 0.90 and confirmation at two distinct timestamps.
+The live test exposed a second rejection: a visible wearer in CH2 had person
+confidence 0.8600 while both original helmet crops exceeded 0.9999. A new
+conservative path accepts a person score of at least 0.85 only when its box
+occupies at least 75% of the frame height, and requires three consecutive
+positive timestamps. Scores below 0.85 and smaller boxes do not qualify.
 The snapshot annotation uses the compact region when that fallback succeeds.
 Localized helmet observations and the original successful crop path retain
 their existing behavior.
@@ -25,9 +30,11 @@ their existing behavior.
 - The CH2 bare-head capture produces zero alerts. CH8's helmet wearer is also
   suppressed because its person score is only 0.7701; this fix does not remove
   that conservative limitation.
-- All 61 tests in the analytics default test suite passed, including new
+- All 61 tests in the analytics default test suite passed for the crop change, including new
   compact-crop agreement and duplicate-timestamp regressions. Analytics
-  typecheck, build, and git whitespace checks passed.
+  typecheck, build, and git whitespace checks passed. After the three-frame
+  path was added, all 50 focused inference/helmet tests passed, including two
+  additional gate regressions. Build and the six-image replay also passed.
 
 Static-image replay evidence is in `helmet-compact-replay-2026-10-04.json`;
 crop comparisons are in `helmet-crop-study-2026-10-04.json`. Diagnostic replays
@@ -35,16 +42,16 @@ did not submit events to production.
 
 ## Deployment
 
-Detector 1.1.2 was deployed into the analytics image on kryptovision-server.
+Detector 1.1.3 was deployed into the analytics image on kryptovision-server.
 Only the analytics service was recreated. Its helmet detector, notification
 submitter and AI_OPERATIONAL health checks passed. The server source was also
 updated so an analytics rebuild retains the fix.
 
-Prior image: `sentinel-gcp-analytics-engine:before-helmet-compact-20261004`.
+Prior image: `sentinel-gcp-analytics-engine:before-helmet-compact-1.1.3-20261004`.
 Source, detector and original image references are backed up under
-`/tmp/sentinel-helmet-compact-20261004`. The deployment script includes rollback
+`/tmp/sentinel-helmet-compact-1.1.3-20261004`. The deployment script includes rollback
 on failed activation. The new image manifest is
-`sha256:f00f80ba05871dc77c0e99a3527b12bb854703d0559d1689fbad441f0a1a64f4`.
+`sha256:85977f83e8aaf8799e2046fb44ee0cf5a640e55da1464db130daa1c79344ebdd`.
 
 Live event/alert verification is in progress. This crop change has limited
 camera validation; it is not a general accuracy guarantee. Weak person
