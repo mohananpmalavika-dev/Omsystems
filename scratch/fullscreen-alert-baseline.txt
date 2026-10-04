@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   BellOff,
@@ -40,7 +40,6 @@ import type { AlertAudioStatus, AlertSeverity } from "@/services/alert-audio/ale
 import { CriticalAudioWarningBanner } from "@/components/alerts/critical-audio-warning-banner";
 import { AlertAudioActivationModal } from "@/components/alerts/alert-audio-activation-modal";
 import { IncidentImageModal } from "@/components/incident-image-modal";
-import { FullscreenAlertPortal } from "@/components/fullscreen-alert-portal";
 
 type EvidenceMode = "live" | "snapshot" | "clip";
 
@@ -338,7 +337,7 @@ export function GlobalAlertCenter() {
   if (!enabledForRoute) return null;
 
   return (
-    <FullscreenAlertPortal>
+    <>
       {/* Top Floating Alert Banner / Warning (Only when active P1 alerts exist) */}
       {activeP1Count > 0 && (
         <div className="fixed top-24 right-4 z-40 space-y-2 max-w-lg w-full pointer-events-none">
@@ -599,7 +598,7 @@ export function GlobalAlertCenter() {
           confidence={current.confidence}
         />
       )}
-    </FullscreenAlertPortal>
+    </>
   );
 }
 

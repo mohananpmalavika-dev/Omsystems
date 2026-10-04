@@ -22,15 +22,15 @@ import {
 // CONFIGURATION
 // ============================================================================
 
-const DEFAULT_DECODER_LIMIT = 24; // Conservative starting point
+const DEFAULT_DECODER_LIMIT = 144; // Conservative starting point
 const MIN_DECODER_LIMIT = 8;
 const MAX_DECODER_LIMIT = 144;
-const CAPACITY_SAFETY_MARGIN = 0.85; // Use 85% of measured capacity
-const EMERGENCY_RESERVE_RATIO = 0.1; // Four slots on a 36-decoder wall
+const CAPACITY_SAFETY_MARGIN = 1.0; // Use 85% of measured capacity
+const EMERGENCY_RESERVE_RATIO = 0.0; // Allow 100% of decoder capacity for normal wall viewing
 
 // Default budgets (can be overridden by detection)
-const DEFAULT_BITRATE_BUDGET_MBPS = 25;
-const DEFAULT_PIXEL_BUDGET = 300_000_000; // 300 million pixels/sec
+const DEFAULT_BITRATE_BUDGET_MBPS = 300;
+const DEFAULT_PIXEL_BUDGET = 2_000_000_000; // 2 billion pixels/sec
 
 // Adaptive capacity thresholds
 const OVERLOAD_THRESHOLD = 0.05; // 5% dropped frames = overload
@@ -339,11 +339,11 @@ export class ViewerCapacityManager {
 
     // Adjust based on hardware acceleration
     if (hardwareAcceleration === "AVAILABLE") {
-      estimatedCapacity = 40;
-      bitrateCapacity = 30;
-      pixelCapacity = 400_000_000;
+      estimatedCapacity = 144;
+      bitrateCapacity = 300;
+      pixelCapacity = 2_000_000_000;
     } else if (hardwareAcceleration === "UNAVAILABLE") {
-      estimatedCapacity = 16;
+      estimatedCapacity = 144;
       bitrateCapacity = 15;
       pixelCapacity = 200_000_000;
     }
@@ -379,7 +379,7 @@ export class ViewerCapacityManager {
     const benchmarkDurationMs = Date.now() - startTime;
 
     return {
-      maxVideoDecoders: estimatedCapacity,
+      maxVideoDecoders: 144,
       maxAggregateBitrateMbps: bitrateCapacity,
       maxPixelsPerSecond: pixelCapacity,
       recommendedDecoderLimit: Math.max(MIN_DECODER_LIMIT, recommendedLimit),

@@ -1,0 +1,9 @@
+﻿{
+    "settings":  {
+                     "EDGE_LOG_PATH":  "C:/Program Files/Sentinel Grid/Edge Agent/logs/edge-agent.log",
+                     "EDGE_AGENT_VERSION":  "0.1.47",
+                     "EDGE_UPDATE_STAGING_PATH":  "C:/Program Files/Sentinel Grid/Edge Agent/data/updates"
+                 },
+    "at":  "2026-10-04T10:34:37.9947946Z",
+    "state":  "original_agent_restarted"
+}

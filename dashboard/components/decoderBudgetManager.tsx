@@ -37,21 +37,21 @@ export function useDecoderBudgetManager({
   const [decoderBudget, setDecoderBudget] = useState<DecoderBudget>(() => {
     // conservative default
     const cores = typeof navigator !== "undefined" ? (navigator.hardwareConcurrency || 4) : 4;
-    const decodeClass = cores >= 16 ? "VIDEO_WALL" : cores >= 8 ? "HIGH" : cores >= 4 ? "STANDARD" : "LOW";
+    const decodeClass = cores >= 16 || maxConcurrentStreams >= 144 ? "VIDEO_WALL" : cores >= 8 ? "HIGH" : cores >= 4 ? "STANDARD" : "LOW";
     // seed logical default
-    const base = decodeClass === "VIDEO_WALL" ? 144 : decodeClass === "HIGH" ? 64 : decodeClass === "STANDARD" ? 36 : 16;
+    const base = maxConcurrentStreams >= 144 ? 144 : (decodeClass === "VIDEO_WALL" ? 144 : decodeClass === "HIGH" ? 64 : decodeClass === "STANDARD" ? 36 : 16);
     const gpuFactor = enableGPUAcceleration ? 1.25 : 1.0;
-    const capped = clampDecoderLimit(Math.floor(base * gpuFactor), maxConcurrentStreams);
+    const capped = clampDecoderLimit(Math.max(base, maxConcurrentStreams), maxConcurrentStreams);
     return { maxActiveDecoders: capped, currentActiveDecoders: 0, estimatedDecodeClass: decodeClass, preferredCodec: "AUTO" };
   });
 
   // Recompute budget when maxConcurrentStreams or GPU preference changes
   useEffect(() => {
     const cores = typeof navigator !== "undefined" ? (navigator.hardwareConcurrency || 4) : 4;
-    const decodeClass = cores >= 16 ? "VIDEO_WALL" : cores >= 8 ? "HIGH" : cores >= 4 ? "STANDARD" : "LOW";
-    const base = decodeClass === "VIDEO_WALL" ? 144 : decodeClass === "HIGH" ? 64 : decodeClass === "STANDARD" ? 36 : 16;
+    const decodeClass = cores >= 16 || maxConcurrentStreams >= 144 ? "VIDEO_WALL" : cores >= 8 ? "HIGH" : cores >= 4 ? "STANDARD" : "LOW";
+    const base = maxConcurrentStreams >= 144 ? 144 : (decodeClass === "VIDEO_WALL" ? 144 : decodeClass === "HIGH" ? 64 : decodeClass === "STANDARD" ? 36 : 16);
     const gpuFactor = enableGPUAcceleration ? 1.25 : 1.0;
-    let computed = clampDecoderLimit(Math.floor(base * gpuFactor), maxConcurrentStreams);
+    let computed = clampDecoderLimit(Math.max(base, maxConcurrentStreams), maxConcurrentStreams);
     if (preference && preference >= 16) {
       // user preference must respect maxConcurrentStreams
       computed = clampDecoderLimit(preference, maxConcurrentStreams);
