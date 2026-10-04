@@ -24,7 +24,7 @@ try {
     const detector = new HelmetDetector(null,.88,classifier); await detector.initialize(); const results=[];
     for (const seconds of [0,2,4]) results.push(await detector.detect({...frame,timestamp:new Date(seconds*1000),metadata:{inferenceMode:'local-onnx',detections:detected}}));
     const isBareHead=file.includes('incident-snapshot') || file.includes('false-alert-raw');
-    console.log(JSON.stringify({file,persons,crops,alerts:results.map(r=>r.length)}));
+    assert.deepEqual(results.map(r=>r.length),[0,0,0],file);
     await detector.cleanup(); output.push({file,persons,crops,results}); console.log(JSON.stringify({file,alerts:results.map(r=>r.length),personConfidence:persons.map(p=>p.confidence)}));
   }
   await writeFile('reports/helmet-new-false-alert-study-2026-10-04.json',JSON.stringify(output,null,2));

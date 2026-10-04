@@ -1,0 +1,367 @@
+diff --git a/analytics-engine/src/detectors/helmet-detector.ts b/analytics-engine/src/detectors/helmet-detector.ts
+index 585adcc6..4722edb7 100644
+--- a/analytics-engine/src/detectors/helmet-detector.ts
++++ b/analytics-engine/src/detectors/helmet-detector.ts
+@@ -30,33 +30,17 @@ export class HelmetDetector extends BaseDetector {
+   private modelLoadError: string | null = null;
+   private readonly MIN_CONFIDENCE: number;
+   private readonly PERSON_CONFIDENCE = 0.65;
+-  // Crop classification cannot distinguish a helmet from every dark object.
+-  // Without a localized helmet observation, require strong independent person
+-  // evidence; the Hajipur empty-chair and bare-head alarms scored 0.67/0.83.
+-  private readonly CLASSIFIED_PERSON_CONFIDENCE = 0.9;
+-  // A clearly framed full person can score below 0.90 on the DVR substream.
+-  // Keep partial people and the reproduced 0.67/0.83 false alarms excluded;
+-  // this additional path needs three consecutive positive timestamps.
+-  private readonly FULL_PERSON_CONFIDENCE = 0.85;
+   private readonly HEAD_REGION_OVERLAP_THRESHOLD = 0.6;
+   // Keep the existing alert confidence floor when selecting the motorcycle
+   // classifier; generic object-presence thresholds are too low for alerts.
+   private readonly HELMET_WORN_ALERT_CONFIDENCE = 0.9167;
+-  // A person crop is only an approximate helmet location. Require a second
+-  // independent frame when no helmet box is supplied.
+-  private readonly CLASSIFIED_HEAD_CONFIDENCE = 0.9167;
+-  private readonly pendingHeads = new Map<string, Array<{
+-    personBox: HelmetDetection["personBoundingBox"];
+-    lastSeenAt: number;
+-    confirmations: number;
+-  }>>();
+ 
+   constructor(
+     inference: ObjectFrameInference | null = null,
+     confidenceThreshold = 0.88,
+     classifier: HelmetClassificationFrameInference | null = null,
+   ) {
+-    super("helmet", "1.1.3");
++    super("helmet", "1.1.4");
+     this.inference = inference;
+     this.classifier = classifier;
+     this.MIN_CONFIDENCE = confidenceThreshold;
+@@ -108,8 +92,7 @@ export class HelmetDetector extends BaseDetector {
+     
+     const results: DetectionResult[] = [];
+ 
+-    // An observed helmet box alerts immediately; classifier-only head crops
+-    // must agree across two frames before they become helmet evidence.
++    // Only a spatially observed helmet is eligible for an automatic alert.
+     const helmetWearers = detections.filter(d => d.helmetDetected && !d.vehicleType);
+     if (helmetWearers.length > 0) {
+       const avgConf = this.calculateAverageConfidence(helmetWearers);
+@@ -188,74 +171,26 @@ export class HelmetDetector extends BaseDetector {
+     const indoorPersons = persons.filter((person) => !riderPersonIds.has(this.getPersonIdentifier(person)));
+     const indoorHelmetDetections: HelmetDetection[] = [];
+ 
+-    // A missing/weak person observation breaks consecutive confirmation. Do
+-    // not combine an old positive with a later reappearance or another object.
+-    const pending = this.pendingHeads.get(frame.cameraId);
+-    if (pending) {
+-      this.pendingHeads.set(frame.cameraId, pending.filter((item) => indoorPersons.some((person) =>
+-        this.hasClassifiablePerson(person) &&
+-        calculateIoU(item.personBox, person.boundingBox) >= 0.5)));
+-    }
+-
+     for (const person of indoorPersons) {
+-      let presence = this.detectHelmetPresence(person, helmets);
+-      if (!presence && !this.hasClassifiablePerson(person)) {
+-        this.clearPendingHead(frame.cameraId, person.boundingBox);
+-        continue;
+-      }
+-      // An explicit helmet box elsewhere in the scene is contrary spatial
+-      // evidence; do not override it with a crop classification.
+-      if (!presence && (helmets.length > 0 || !runLocal || !this.classifier)) continue;
++      const presence = this.detectHelmetPresence(person, helmets);
++      // The incident's bare head scores >0.94 on both compact crops. Neither
++      // person confidence nor repeated classifications grounds a helmet box.
++      // Keep the classifier as a verifier; never invent localized evidence.
++      if (!presence) continue;
+       if (runLocal && this.classifier && frame.imageData && frame.imageData.length > 0) {
+-        let { upperResult, standardResult } = await this.helmetClassifications(frame, person.boundingBox);
+-        const alertThreshold = presence
+-          ? Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE)
+-          : Math.max(this.MIN_CONFIDENCE, this.CLASSIFIED_HEAD_CONFIDENCE);
+-        let classifiedHeadBox = this.headRegion(person.boundingBox);
+-        // A seated person's 35% head region includes much of the pink shirt
+-        // in the pilot camera. The head classifier rejects that torso crop
+-        // despite a visible helmet. Require agreement from two compact head
+-        // crops when the original pair fails, retaining the independent
+-        // person gate and distinct-frame confirmation above/below.
+-        if (!presence && (!upperResult.wearingHelmet || !standardResult.wearingHelmet ||
+-            upperResult.wearingHelmetConfidence < alertThreshold ||
+-            standardResult.wearingHelmetConfidence < alertThreshold)) {
+-          const box = person.boundingBox;
+-          classifiedHeadBox = {
+-            x: box.x + box.width * 0.1, y: box.y,
+-            width: box.width * 0.8, height: box.height * 0.15,
+-          };
+-          upperResult = await this.classifier.run(frame, {
+-            x: box.x, y: box.y, width: box.width, height: box.height * 0.15,
+-          });
+-          standardResult = await this.classifier.run(frame, classifiedHeadBox);
+-        }
++        const alertThreshold = Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE);
++        const { upperResult, standardResult } = await this.helmetClassifications(frame, person.boundingBox);
+         if (!upperResult.wearingHelmet || !standardResult.wearingHelmet ||
+             upperResult.wearingHelmetConfidence < alertThreshold ||
+             standardResult.wearingHelmetConfidence < alertThreshold) {
+-          this.clearPendingHead(frame.cameraId, person.boundingBox);
+           continue;
+         }
+         const confidence = Math.min(
+-          presence?.confidence ?? 1,
++          presence.confidence ?? 1,
+           upperResult.wearingHelmetConfidence,
+           standardResult.wearingHelmetConfidence,
+         );
+-        if (!presence) {
+-          const confirmations = (person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ? 2 : 3;
+-          if (!this.confirmClassifiedHead(frame.cameraId, person.boundingBox, frame.timestamp.getTime(), confirmations)) continue;
+-          presence = {
+-            personBoundingBox: person.boundingBox,
+-            helmetBoundingBox: classifiedHeadBox,
+-            helmetDetected: true,
+-            evidenceSource: "confirmed-head-classification",
+-            confidence,
+-            personConfidence: person.confidence ?? 0,
+-            riskLevel: "violation",
+-          };
+-        } else {
+-          presence.confidence = confidence;
+-        }
++        presence.confidence = confidence;
+       }
+       if (presence) indoorHelmetDetections.push(presence);
+     }
+@@ -263,32 +198,6 @@ export class HelmetDetector extends BaseDetector {
+     return [...riderDetections, ...indoorHelmetDetections];
+   }
+ 
+-  private hasClassifiablePerson(person: { confidence?: number; boundingBox: HelmetDetection["personBoundingBox"] }) {
+-    return (person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ||
+-      ((person.confidence ?? 0) >= this.FULL_PERSON_CONFIDENCE && person.boundingBox.height >= 0.75);
+-  }
+-
+-  private confirmClassifiedHead(cameraId: string, personBox: HelmetDetection["personBoundingBox"], observedAt: number, requiredConfirmations = 2) {
+-    const pending = (this.pendingHeads.get(cameraId) ?? [])
+-      .filter((item) => observedAt - item.lastSeenAt <= 120_000 && observedAt >= item.lastSeenAt);
+-    const previous = pending.find((item) => calculateIoU(item.personBox, personBox) >= 0.5);
+-    if (previous) {
+-      if (observedAt > previous.lastSeenAt) previous.confirmations += 1;
+-      previous.personBox = personBox;
+-      previous.lastSeenAt = observedAt;
+-    } else {
+-      pending.push({ personBox, lastSeenAt: observedAt, confirmations: 1 });
+-    }
+-    this.pendingHeads.set(cameraId, pending.slice(-20));
+-    return (previous?.confirmations ?? 1) >= requiredConfirmations;
+-  }
+-
+-  private clearPendingHead(cameraId: string, personBox: HelmetDetection["personBoundingBox"]) {
+-    const pending = this.pendingHeads.get(cameraId);
+-    if (!pending) return;
+-    this.pendingHeads.set(cameraId, pending.filter((item) => calculateIoU(item.personBox, personBox) < 0.5));
+-  }
+-
+   /**
+    * Generate stable identifier for person (trackId or bounding box hash)
+    */
+@@ -477,7 +386,6 @@ export class HelmetDetector extends BaseDetector {
+ 
+ 
+   async cleanup(): Promise<void> {
+-    this.pendingHeads.clear();
+     this.inference = null;
+     this.classifier = null;
+     this.isModelLoaded = false;
+@@ -488,7 +396,7 @@ export class HelmetDetector extends BaseDetector {
+     return {
+       status: this.isModelLoaded ? ("healthy" as const) : ("degraded" as const),
+       details: this.isModelLoaded
+-        ? "Helmet classifier active; helmet-worn alerts require a localized observation or strong person evidence with consecutive confirmed head crops"
++        ? "Helmet classifier verification active; automatic helmet-worn alerts require an independent localized helmet observation. Classifier-only alerts are suppressed."
+         : `Awaiting local helmet classifier; normalized observations remain supported. ${this.modelLoadError ?? "Model unavailable"}`,
+     };
+   }
+diff --git a/analytics-engine/test/helmet-false-alarms.test.ts b/analytics-engine/test/helmet-false-alarms.test.ts
+index 8b6054f0..f4c1fbcb 100644
+--- a/analytics-engine/test/helmet-false-alarms.test.ts
++++ b/analytics-engine/test/helmet-false-alarms.test.ts
+@@ -4,124 +4,44 @@ import type { DetectionFrame, InferenceObject } from "../src/detectors/base-dete
+ 
+ const personBox = { x: 0.1, y: 0.1, width: 0.4, height: 0.8 };
+ const person = (confidence: number): InferenceObject => ({ label: "person", confidence, boundingBox: personBox });
++const helmet: InferenceObject = {label:"helmet",confidence:0.98,boundingBox:{x:0.18,y:0.11,width:0.24,height:0.12}};
+ const frame = (seconds: number, detections: InferenceObject[]): DetectionFrame => ({
+   cameraId: "hajipur", tenantId: "test", timestamp: new Date(seconds * 1000),
+   imageData: Buffer.alloc(100 * 100 * 3), width: 100, height: 100,
+   metadata: { inferenceMode: "local-onnx", detections },
+ });
+-const positiveClassifier = () => ({ run: vi.fn(async () => ({
+-  wearingHelmet: true, confidence: 0.99999,
+-  wearingHelmetConfidence: 0.99999, unwearingHelmetConfidence: 0.00001,
+-})) });
++const classifier = (p = 0.99999) => ({run:vi.fn(async () => ({
++  wearingHelmet:p >= 0.5,confidence:Math.max(p,1-p),
++  wearingHelmetConfidence:p,unwearingHelmetConfidence:1-p,
++}))});
+ 
+ describe("helmet false-alarm evidence", () => {
+-  // Highest person score from each supplied annotated incident snapshot.
+-  // Even an overconfident crop classifier must not promote these to alarms.
+-  it.each([
+-    ["hajipur-chair-1791040935773", 0.7764534364526412],
+-    ["peravurani-1791040925724", 0.6170429731131826],
+-    ["peravurani-1791040917135", 0.7407697167708704],
+-    ["peravurani-1791040909261", 0.6897230482999106],
+-    ["hajipur-bare-head-1791006290219", 0.8262904324814997],
+-  ] as const)("suppresses classifier-only evidence from %s", async (cameraId, confidence) => {
+-    const classifier = positiveClassifier();
+-    const detector = new HelmetDetector(null, 0.88, classifier);
+-    await detector.initialize();
+-    for (const seconds of [0, 2, 4]) {
+-      expect(await detector.detect({ ...frame(seconds, [person(confidence)]), cameraId })).toEqual([]);
+-    }
+-    expect(classifier.run).not.toHaveBeenCalled();
+-  });
+-
+-  it.each([0.6717, 0.8304])("rejects classifier-only alarms with person confidence %f even at near-certain helmet confidence", async (confidence) => {
+-    const classifier = positiveClassifier();
+-    const detector = new HelmetDetector(null, 0.88, classifier);
+-    await detector.initialize();
+-    for (const seconds of [0, 2, 4]) {
+-      expect(await detector.detect(frame(seconds, [person(confidence)]))).toEqual([]);
+-    }
+-    expect(classifier.run).not.toHaveBeenCalled();
+-  });
+-
+-  it("preserves the independent person score on confirmed helmet events", async () => {
+-    const detector = new HelmetDetector(null, 0.88, positiveClassifier());
+-    await detector.initialize();
+-    expect(await detector.detect(frame(0, [person(0.95)]))).toEqual([]);
+-    const results = await detector.detect(frame(2, [person(0.95)]));
++  it.each([0.617, 0.6717, 0.77645, 0.82629, 0.8304, 0.86, 0.8988568926467266, 0.9066970414499878, 0.95, 0.999])(
++    "does not invent helmet evidence from an overconfident classifier, person %f", async confidence => {
++      const model=classifier(); const detector=new HelmetDetector(null,0.88,model);
++      await detector.initialize();
++      for (const seconds of [0,0,2,4,6]) expect(await detector.detect(frame(seconds,[person(confidence)]))).toEqual([]);
++      expect(model.run).not.toHaveBeenCalled();
++    });
++
++  it("preserves independent person and helmet evidence on a grounded alert", async () => {
++    const detector=new HelmetDetector(null,0.88,classifier()); await detector.initialize();
++    const results=await detector.detect(frame(0,[person(0.83),helmet]));
+     expect(results).toHaveLength(1);
+-    expect(results[0]?.objects.find(o => o.label === "person")?.confidence).toBe(0.95);
+-    expect(results[0]?.objects.find(o => o.label === "helmet")?.confidence).toBe(0.99999);
+-  });
+-
+-  it.each([[], [person(0.83)]])("breaks confirmation when the person is absent or weak", async (intervening) => {
+-    const detector = new HelmetDetector(null, 0.88, positiveClassifier());
+-    await detector.initialize();
+-    expect(await detector.detect(frame(0, [person(0.95)]))).toEqual([]);
+-    expect(await detector.detect(frame(2, intervening))).toEqual([]);
+-    expect(await detector.detect(frame(4, [person(0.95)]))).toEqual([]);
+-    expect(await detector.detect(frame(6, [person(0.95)]))).toHaveLength(1);
+-  });
+-
+-  it("continues accepting a localized helmet on a person below the classifier-only floor", async () => {
+-    const detector = new HelmetDetector(null, 0.88, positiveClassifier());
+-    await detector.initialize();
+-    expect(await detector.detect(frame(0, [person(0.83), {
+-      label: "helmet", confidence: 0.98,
+-      boundingBox: { x: 0.18, y: 0.11, width: 0.24, height: 0.12 },
+-    }]))).toHaveLength(1);
+-  });
+-
+-  it("does not use duplicate timestamps as a second confirmation", async () => {
+-    const detector = new HelmetDetector(null, 0.88, positiveClassifier());
+-    await detector.initialize();
+-    expect(await detector.detect(frame(0, [person(0.95)]))).toEqual([]);
+-    expect(await detector.detect(frame(0, [person(0.95)]))).toEqual([]);
+-  });
+-
+-  it("confirms a seated wearer when both compact head crops pass and torso crops fail", async () => {
+-    const classifier = { run: vi.fn(async (_frame, box) => {
+-      const positive = box.height <= personBox.height * 0.15;
+-      return { wearingHelmet: positive, confidence: 0.99,
+-        wearingHelmetConfidence: positive ? 0.99 : 0.01,
+-        unwearingHelmetConfidence: positive ? 0.01 : 0.99 };
+-    }) };
+-    const detector = new HelmetDetector(null, 0.88, classifier);
+-    await detector.initialize();
+-    expect(await detector.detect(frame(0, [person(0.95)]))).toEqual([]);
+-    expect(await detector.detect(frame(0, [person(0.95)]))).toEqual([]);
+-    const result = await detector.detect(frame(2, [person(0.95)]));
+-    expect(result).toHaveLength(1);
+-    expect(result[0]?.objects.find(o => o.label === "helmet")?.boundingBox.height).toBe(personBox.height * 0.15);
+-    expect(result[0]?.objects.find(o => o.label === "person")?.confidence).toBe(0.95);
+-  });
+-
+-  it("rejects a compact crop positive when its wider head context disagrees", async () => {
+-    const classifier = { run: vi.fn(async (_frame, box) => {
+-      const positive = box.height <= personBox.height * 0.15 && box.width < personBox.width;
+-      return { wearingHelmet: positive, confidence: 0.99,
+-        wearingHelmetConfidence: positive ? 0.99 : 0.01,
+-        unwearingHelmetConfidence: positive ? 0.01 : 0.99 };
+-    }) };
+-    const detector = new HelmetDetector(null, 0.88, classifier);
+-    await detector.initialize();
+-    for (const seconds of [0, 2, 4]) expect(await detector.detect(frame(seconds, [person(0.95)]))).toEqual([]);
++    expect(results[0]?.metadata?.evidenceSource).toBe("observed-helmet");
++    expect(results[0]?.objects.find(o=>o.label==='person')?.confidence).toBe(0.83);
++    const actualBox=results[0]?.objects.find(o=>o.label==='helmet')?.boundingBox;
++    for (const key of ['x','y','width','height'] as const) expect(actualBox?.[key]).toBeCloseTo(helmet.boundingBox[key]);
+   });
+ 
+-  it("requires three distinct positive frames for a well-framed full person below 0.90", async () => {
+-    const detector = new HelmetDetector(null, 0.88, positiveClassifier());
+-    await detector.initialize();
+-    for (const seconds of [0, 0, 2]) expect(await detector.detect(frame(seconds, [person(0.86)]))).toEqual([]);
+-    expect(await detector.detect(frame(4, [person(0.86)]))).toHaveLength(1);
++  it("rejects a helmet elsewhere in the scene even when the classifier is positive", async () => {
++    const model=classifier(); const detector=new HelmetDetector(null,0.88,model); await detector.initialize();
++    expect(await detector.detect(frame(0,[person(0.95),{...helmet,boundingBox:{x:0.7,y:0.6,width:0.15,height:0.1}}]))).toEqual([]);
++    expect(model.run).not.toHaveBeenCalled();
+   });
+ 
+-  it("does not relax person evidence for partial bodies or scores below 0.85", async () => {
+-    const classifier = positiveClassifier();
+-    const detector = new HelmetDetector(null, 0.88, classifier);
+-    await detector.initialize();
+-    for (const seconds of [0, 2, 4, 6]) {
+-      expect(await detector.detect(frame(seconds, [person(0.84)]))).toEqual([]);
+-      expect(await detector.detect({...frame(seconds, [{...person(0.86), boundingBox:{...personBox,height:0.7}}]),cameraId:'partial'})).toEqual([]);
+-    }
+-    expect(classifier.run).not.toHaveBeenCalled();
++  it("allows classifier disagreement to veto localized evidence", async () => {
++    const detector=new HelmetDetector(null,0.88,classifier(0.05)); await detector.initialize();
++    expect(await detector.detect(frame(0,[person(0.95),helmet]))).toEqual([]);
+   });
+ });
+diff --git a/analytics-engine/test/specialty-inference.test.ts b/analytics-engine/test/specialty-inference.test.ts
+index 03f645b9..18eb261c 100644
+--- a/analytics-engine/test/specialty-inference.test.ts
++++ b/analytics-engine/test/specialty-inference.test.ts
+@@ -161,7 +161,7 @@ describe("local specialty model adapters", () => {
+     expect(results).toHaveLength(0);
+   });
+ 
+-  it("requires repeated high-confidence head classifications without a helmet box", async () => {
++  it("withholds repeated high-confidence classifications without a localized helmet box", async () => {
+     const run = vi.fn(async () => ({
+         wearingHelmet: true,
+         confidence: 0.94,
+@@ -176,12 +176,8 @@ describe("local specialty model adapters", () => {
+     const second = await detector.detect(secondFrame);
+ 
+     expect(first).toHaveLength(0);
+-    expect(second).toEqual([expect.objectContaining({
+-      detectionType: "helmet-worn",
+-      requiresAlert: true,
+-      metadata: expect.objectContaining({ evidenceSource: "confirmed-head-classification" }),
+-    })]);
+-    expect(run).toHaveBeenCalledTimes(4);
++    expect(second).toEqual([]);
++    expect(run).not.toHaveBeenCalled();
+   });
+ 
+   it("keeps classifier confirmation isolated by camera and resets on a negative frame", async () => {

@@ -1,5 +1,45 @@
 # Pilot helmet alert repair — 4 October 2026
 
+## Current status: false alert confirmed; proposed mitigation not deployed
+
+The supplied `incident-snapshot-1791111334054.jpg` shows a bare-headed person.
+Its original, unannotated server frame was retrieved and visually verified.
+The event is `495a0460-55e4-4937-9ad8-7cc88a8b47bd`,
+alert `43c8353e-2e14-4382-9bb1-54d968242578`, model 1.1.3.
+The original frame's person score is 0.906697. Both compact head crops are
+incorrectly positive (0.960447 and 0.947321). Crop agreement and repeated
+timestamps cannot establish that this classifier has actually found a helmet.
+An attempted compact-only correction failed this original-frame check and
+was not deployed.
+
+Proposed detector 1.1.4 removes classifier-only automatic alerts. An independent
+helmet observation overlapping a person's head is required; classification
+can verify or veto it, but cannot invent a helmet box. This is a mitigation,
+not restored helmet detection: the pilot COCO detector does not supply helmet
+boxes, so true classifier-only alerts would also be suppressed until a suitable
+localized helmet detector is validated.
+
+The supplied image, original frame, and two prior true-wearer frames all
+produce zero classifier-only alerts with this proposal. Grounded positives,
+misplaced helmets, and classifier veto have 34 passing helmet tests.
+Inference/model-manager tests and analytics build passed. All 11 app tests
+passed with a 60-second timeout after the normal 20-second timeout was exceeded
+during model initialization. Replay: `helmet-new-false-alert-study-2026-10-04.json`.
+
+Automatic approval review rejected the production mitigation because it can
+silence legitimate helmet detections and explicit authorization for that
+tradeoff had not been given. User approval was requested and the user chose to
+retain existing detection. Local source, compiled detector, and tests were
+restored to 1.1.3 from revision `631684468dea849f1d3b0e122e9c008d04c37aed`.
+The mitigation is archived as `scratch/helmet-localization-required-proposal.patch`;
+its replay is `reports/helmet-localization-mitigation-replay-2026-10-04.json`.
+No mitigation deployment was authorized.
+Final read-only verification confirmed live detector 1.1.3 and edge agent
+0.1.47 online (last seen 11:19:13.427135 UTC).
+
+Earlier work and notification records below are historical and do not establish
+that classifier-only detection is reliable.
+
 The live service already ran detector 1.1.1 and the motorcycle helmet model;
 all pilot helmet-worn rules were enabled. The missed seated wearer was
 reproduced with the live CH6 frame. Person confidence was 0.9065, but the
@@ -101,4 +141,8 @@ fullscreen element and returns it to the document body on fullscreen exit.
 It also supports single-camera fullscreen. Chromium verification exercised
 real wall and tile fullscreen, alert interaction, and return to normal view,
 with no browser errors. All three existing alert queue tests passed.
-Dashboard deployment/health verification is pending.
+The dashboard-only build and activation completed. Login health returned HTTP
+200. Activated image: `sha256:4800c323f48ca16f9f8da43b6db6623eac22a5bc8e841555e28f51d3fbb136e2`.
+Previous dashboard image is tagged
+`sentinel-gcp-dashboard:before-fullscreen-alert-20261004`; build/activation
+records are in `/tmp/sentinel-fullscreen-alert-dashboard-build-20261004`.
