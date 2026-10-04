@@ -183,6 +183,20 @@ describe('Protection route permissions', () => {
     const response = await app.inject({ method: 'PUT', url: '/v1/branches/branch-a/protection/policy', payload: { ...f.repository.state.policy, verificationFreshMinutes: 1 } });
     expect(response.statusCode).toBeGreaterThanOrEqual(400); await app.close();
   });
+  it('persists a 144-stream branch policy and rejects a higher limit without changing it', async () => {
+    const f = fixture(); const app = Fastify();
+    app.decorateRequest('currentUser', null);
+    app.addHook('preHandler', async request => { request.currentUser = user; });
+    await registerBranchProtectionRoutes(app, f.store, f.service);
+    try {
+      const saved = await app.inject({ method: 'PUT', url: '/v1/branches/branch-a/protection/policy', payload: { ...f.repository.state.policy, maxConcurrentStreams: 144 } });
+      expect(saved.statusCode).toBe(200);
+      expect(f.repository.state.policy.maxConcurrentStreams).toBe(144);
+      const rejected = await app.inject({ method: 'PUT', url: '/v1/branches/branch-a/protection/policy', payload: { ...f.repository.state.policy, maxConcurrentStreams: 145 } });
+      expect(rejected.statusCode).toBeGreaterThanOrEqual(400);
+      expect(f.repository.state.policy.maxConcurrentStreams).toBe(144);
+    } finally { await app.close(); }
+  });
 });
 
 describe('Real archive decoding and offline replay', () => {

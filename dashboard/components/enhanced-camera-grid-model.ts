@@ -1,4 +1,4 @@
-export const DECODER_CAPACITY_OPTIONS = [16, 25, 36, 64] as const;
+export const DECODER_CAPACITY_OPTIONS = [16, 25, 36, 64, 144] as const;
 
 export type GridStreamType = "main" | "sub";
 

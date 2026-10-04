@@ -1,0 +1,164 @@
+{
+  "version": "1.1.2",
+  "mode": "static replay; no events submitted",
+  "evidence": [
+    {
+      "file": "scratch/helmet-alert-ch6.jpg",
+      "expected": true,
+      "persons": [
+        0.9073691705806937
+      ],
+      "events": [
+        {
+          "seconds": 0,
+          "alerts": 0
+        },
+        {
+          "seconds": 0,
+          "alerts": 0
+        },
+        {
+          "seconds": 2,
+          "alerts": 1,
+          "confidence": 0.9575283175077834
+        },
+        {
+          "seconds": 4,
+          "alerts": 1,
+          "confidence": 0.9575283175077834
+        }
+      ]
+    },
+    {
+      "file": "scratch/helmet-alert-ch2.jpg",
+      "expected": false,
+      "persons": [
+        0.8792403807951814
+      ],
+      "events": [
+        {
+          "seconds": 0,
+          "alerts": 0
+        },
+        {
+          "seconds": 0,
+          "alerts": 0
+        },
+        {
+          "seconds": 2,
+          "alerts": 0
+        },
+        {
+          "seconds": 4,
+          "alerts": 0
+        }
+      ]
+    },
+    {
+      "file": "scratch/helmet-alert-ch8.jpg",
+      "expected": false,
+      "persons": [
+        0.7701293525499011
+      ],
+      "events": [
+        {
+          "seconds": 0,
+          "alerts": 0
+        },
+        {
+          "seconds": 0,
+          "alerts": 0
+        },
+        {
+          "seconds": 2,
+          "alerts": 0
+        },
+        {
+          "seconds": 4,
+          "alerts": 0
+        }
+      ]
+    },
+    {
+      "file": "tmp/helmet-channel-6.jpg",
+      "expected": true,
+      "persons": [
+        0.9165022142924926
+      ],
+      "events": [
+        {
+          "seconds": 0,
+          "alerts": 0
+        },
+        {
+          "seconds": 0,
+          "alerts": 0
+        },
+        {
+          "seconds": 2,
+          "alerts": 1,
+          "confidence": 0.9999414895023762
+        },
+        {
+          "seconds": 4,
+          "alerts": 1,
+          "confidence": 0.9999414895023762
+        }
+      ]
+    },
+    {
+      "file": "tmp/false-helmet-6e8bb747-de8e-4eb2-9159-272e370f0e87.jpg",
+      "expected": false,
+      "persons": [
+        0.8304352195095532,
+        0.824952200180654,
+        0.7900854207195209,
+        0.521032451021
+      ],
+      "events": [
+        {
+          "seconds": 0,
+          "alerts": 0
+        },
+        {
+          "seconds": 0,
+          "alerts": 0
+        },
+        {
+          "seconds": 2,
+          "alerts": 0
+        },
+        {
+          "seconds": 4,
+          "alerts": 0
+        }
+      ]
+    },
+    {
+      "file": "tmp/false-helmet-b5642331-f399-4a7a-a091-26eb293eeef9.jpg",
+      "expected": false,
+      "persons": [
+        0.8020668443699321,
+        0.6717315197474107
+      ],
+      "events": [
+        {
+          "seconds": 0,
+          "alerts": 0
+        },
+        {
+          "seconds": 0,
+          "alerts": 0
+        },
+        {
+          "seconds": 2,
+          "alerts": 0
+        },
+        {
+          "seconds": 4,
+          "alerts": 0
+        }
+      ]
+    }
+  ]
+}

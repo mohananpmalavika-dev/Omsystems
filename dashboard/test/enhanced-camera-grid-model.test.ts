@@ -16,6 +16,8 @@ describe("camera wall decoder limits", () => {
   it("only offers decoder capacities allowed by the embedding page", () => {
     expect(getDecoderCapacityOptions(16)).toEqual([16]);
     expect(getDecoderCapacityOptions(36)).toEqual([16, 25, 36]);
+    expect(getDecoderCapacityOptions(144)).toEqual([16, 25, 36, 64, 144]);
+    expect(clampDecoderLimit(144, 144)).toBe(144);
   });
 
   it("assigns available cameras when a saved layout cannot be resolved", () => {

@@ -1193,8 +1193,9 @@ function CameraTileComponent({
           ) : (
             <div className={`camera-feed-placeholder ${liveError ? "has-error" : ""}`}>
               <CameraIcon size={26} />
-              <span>{camera.status === "offline" ? "Camera offline" : "No live video"}</span>
-              <small>{camera.status === "offline" ? "Waiting for the edge camera to reconnect" : "Connect the edge stream to start viewing"}</small>
+              <span>{camera.status === "offline" ? "Camera offline" : loading ? "Connecting live video" : deferredDescription ? "Live view paused" : liveError ? "Reconnecting live video" : "Waiting for live video"}</span>
+              <small>{camera.name}</small>
+              <small>{camera.status === "offline" ? "Waiting for the edge camera to reconnect" : degradationReason === "DECODER_CAPACITY" ? "Viewer capacity reached; select this camera to prioritize it" : degradationReason === "STREAM_FAILURE" || liveError ? "Retrying the camera stream automatically" : deferredDescription ? deferredDescription : "The stream will start automatically"}</small>
             </div>
           )}
         </div>

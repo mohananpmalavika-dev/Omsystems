@@ -1,0 +1,25 @@
+[
+  {
+    "name": "main",
+    "role": "main",
+    "codec": "H264",
+    "width": 2560,
+    "height": 1440,
+    "frameRate": 24.0,
+    "preferredFor": [
+      "recording"
+    ]
+  },
+  {
+    "name": "sub",
+    "role": "sub",
+    "codec": "H264",
+    "width": 800,
+    "height": 448,
+    "frameRate": 12.0,
+    "preferredFor": [
+      "live",
+      "analytics"
+    ]
+  }
+]

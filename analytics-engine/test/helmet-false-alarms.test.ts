@@ -77,4 +77,33 @@ describe("helmet false-alarm evidence", () => {
     expect(await detector.detect(frame(0, [person(0.95)]))).toEqual([]);
     expect(await detector.detect(frame(0, [person(0.95)]))).toEqual([]);
   });
+
+  it("confirms a seated wearer when both compact head crops pass and torso crops fail", async () => {
+    const classifier = { run: vi.fn(async (_frame, box) => {
+      const positive = box.height <= personBox.height * 0.15;
+      return { wearingHelmet: positive, confidence: 0.99,
+        wearingHelmetConfidence: positive ? 0.99 : 0.01,
+        unwearingHelmetConfidence: positive ? 0.01 : 0.99 };
+    }) };
+    const detector = new HelmetDetector(null, 0.88, classifier);
+    await detector.initialize();
+    expect(await detector.detect(frame(0, [person(0.95)]))).toEqual([]);
+    expect(await detector.detect(frame(0, [person(0.95)]))).toEqual([]);
+    const result = await detector.detect(frame(2, [person(0.95)]));
+    expect(result).toHaveLength(1);
+    expect(result[0]?.objects.find(o => o.label === "helmet")?.boundingBox.height).toBe(personBox.height * 0.15);
+    expect(result[0]?.objects.find(o => o.label === "person")?.confidence).toBe(0.95);
+  });
+
+  it("rejects a compact crop positive when its wider head context disagrees", async () => {
+    const classifier = { run: vi.fn(async (_frame, box) => {
+      const positive = box.height <= personBox.height * 0.15 && box.width < personBox.width;
+      return { wearingHelmet: positive, confidence: 0.99,
+        wearingHelmetConfidence: positive ? 0.99 : 0.01,
+        unwearingHelmetConfidence: positive ? 0.01 : 0.99 };
+    }) };
+    const detector = new HelmetDetector(null, 0.88, classifier);
+    await detector.initialize();
+    for (const seconds of [0, 2, 4]) expect(await detector.detect(frame(seconds, [person(0.95)]))).toEqual([]);
+  });
 });

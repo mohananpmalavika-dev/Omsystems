@@ -1,0 +1,8 @@
+set -eu
+sudo docker exec sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid -P pager=off -c "SELECT branch_id,state->'policy'->>'maxConcurrentStreams' AS branch_live_limit FROM branch_protection_state WHERE branch_id='00000000-0000-4000-8000-000000000104';"
+sudo docker exec sentinel-gcp-control-plane node -e 'const fs=require("fs");const source=fs.readFileSync("/app/dist/src/branch-protection/routes.js","utf8");if(!source.includes("maxConcurrentStreams: z.number().int().min(1).max(144)"))process.exit(1);console.log("Production API policy maximum: 144");'
+sudo docker exec sentinel-gcp-dashboard sh -c 'test -s /app/dashboard/.next/BUILD_ID; cat /app/dashboard/.next/BUILD_ID'
+sudo docker inspect sentinel-gcp-control-plane --format '{{.State.Health.Status}}'
+curl --fail --silent --show-error https://34-14-220-41.sslip.io/ready
+curl --silent --show-error --output /dev/null --write-out '\nDashboard HTTP %{http_code}\n' https://34-14-220-41.sslip.io/control-room
+sudo docker exec sentinel-gcp-dashboard node -e 'const fs=require("fs"),path=require("path");const root="/app/dashboard/.next/static";let capacity=false,placeholder=false,branch=false;function scan(dir){for(const entry of fs.readdirSync(dir,{withFileTypes:true})){const file=path.join(dir,entry.name);if(entry.isDirectory())scan(file);else if(file.endsWith(".js")){const s=fs.readFileSync(file,"utf8");capacity ||= /16,25,36,64,144/.test(s);placeholder ||= s.includes("Viewer capacity reached; select this camera to prioritize it");branch ||= /Math\.min\([^,]+,144\)/.test(s);}}}scan(root);console.log(JSON.stringify({capacityOption144:capacity,accurateMissingTileMessage:placeholder,branchLimit144:branch}));if(!capacity||!placeholder||!branch)process.exit(1);'

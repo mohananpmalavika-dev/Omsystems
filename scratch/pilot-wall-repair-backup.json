@@ -1,0 +1,119 @@
+{
+  "cameras": [
+    {
+      "id": "c826111f-1de6-4eb0-a538-481c49e0500c",
+      "channel": 1,
+      "profiles": [
+        {
+          "name": "main",
+          "role": "main",
+          "codec": "H264",
+          "width": 1920,
+          "height": 1080
+        }
+      ],
+      "recorder_channel": null
+    },
+    {
+      "id": "5a114643-b80e-4872-8067-376fed66e8bd",
+      "channel": 2,
+      "profiles": [
+        {
+          "name": "main",
+          "role": "main",
+          "codec": "H264",
+          "width": 1920,
+          "height": 1080
+        }
+      ],
+      "recorder_channel": null
+    },
+    {
+      "id": "ee68c32f-646c-49c9-bc74-ef0fa5a1bda8",
+      "channel": 3,
+      "profiles": [
+        {
+          "name": "main",
+          "role": "main",
+          "codec": "H264",
+          "width": 1920,
+          "height": 1080
+        }
+      ],
+      "recorder_channel": null
+    },
+    {
+      "id": "07ff69e5-d609-4be2-a865-f692292a24d7",
+      "channel": 4,
+      "profiles": [
+        {
+          "name": "main",
+          "role": "main",
+          "codec": "H264",
+          "width": 1920,
+          "height": 1080
+        }
+      ],
+      "recorder_channel": null
+    },
+    {
+      "id": "f0ab5ca1-3690-4e16-bd45-0141fdb03374",
+      "channel": 5,
+      "profiles": [
+        {
+          "name": "main",
+          "role": "main",
+          "codec": "H264",
+          "width": 1920,
+          "height": 1080
+        }
+      ],
+      "recorder_channel": null
+    },
+    {
+      "id": "0494e750-b4b2-49a6-9dbc-9d97a086df1f",
+      "channel": 6,
+      "profiles": [
+        {
+          "name": "main",
+          "role": "main",
+          "codec": "H264",
+          "width": 1920,
+          "height": 1080
+        }
+      ],
+      "recorder_channel": null
+    },
+    {
+      "id": "e138b296-4f60-45e7-8a2f-cc3e40cfeebb",
+      "channel": 7,
+      "profiles": [
+        {
+          "name": "main",
+          "role": "main",
+          "codec": "H264",
+          "width": 1920,
+          "height": 1080
+        }
+      ],
+      "recorder_channel": null
+    },
+    {
+      "id": "af9e87de-714a-4175-8162-096e89cffc13",
+      "channel": 8,
+      "profiles": [
+        {
+          "name": "main",
+          "role": "main",
+          "codec": "H264",
+          "width": 1920,
+          "height": 1080
+        }
+      ],
+      "recorder_channel": null
+    }
+  ],
+  "tenant": "00000000-0000-4000-8000-000000000001",
+  "branch": "00000000-0000-4000-8000-000000000104",
+  "state": null
+}

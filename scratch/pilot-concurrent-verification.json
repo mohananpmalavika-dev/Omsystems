@@ -1,0 +1,83 @@
+[
+  {
+    "camera": "H264 IPC_NT98566_IPG-N4C-WQ2_S38",
+    "framesReceived": true,
+    "stream": {
+      "codec_name": "h264",
+      "width": 800,
+      "height": 448
+    }
+  },
+  {
+    "camera": "CP PLUS DVR - Channel 1",
+    "framesReceived": true,
+    "stream": {
+      "codec_name": "h264",
+      "width": 352,
+      "height": 288
+    }
+  },
+  {
+    "camera": "CP PLUS DVR - Channel 2",
+    "framesReceived": true,
+    "stream": {
+      "codec_name": "h264",
+      "width": 352,
+      "height": 288
+    }
+  },
+  {
+    "camera": "CP PLUS DVR - Channel 3",
+    "framesReceived": true,
+    "stream": {
+      "codec_name": "h264",
+      "width": 352,
+      "height": 288
+    }
+  },
+  {
+    "camera": "CP PLUS DVR - Channel 4",
+    "framesReceived": true,
+    "stream": {
+      "codec_name": "h264",
+      "width": 352,
+      "height": 288
+    }
+  },
+  {
+    "camera": "CP PLUS DVR - Channel 5",
+    "framesReceived": true,
+    "stream": {
+      "codec_name": "h264",
+      "width": 352,
+      "height": 288
+    }
+  },
+  {
+    "camera": "CP PLUS DVR - Channel 6",
+    "framesReceived": true,
+    "stream": {
+      "codec_name": "h264",
+      "width": 352,
+      "height": 288
+    }
+  },
+  {
+    "camera": "CP PLUS DVR - Channel 7",
+    "framesReceived": true,
+    "stream": {
+      "codec_name": "h264",
+      "width": 352,
+      "height": 288
+    }
+  },
+  {
+    "camera": "CP PLUS DVR - Channel 8",
+    "framesReceived": true,
+    "stream": {
+      "codec_name": "hevc",
+      "width": 352,
+      "height": 288
+    }
+  }
+]

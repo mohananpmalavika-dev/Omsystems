@@ -1,0 +1,11 @@
+const {Pool}=require('pg');
+(async()=>{const pool=new Pool({connectionString:process.env.DATABASE_URL});const client=await pool.connect();
+try{await client.query('BEGIN');
+const branch='00000000-0000-4000-8000-000000000104';
+const result=await client.query('SELECT tenant_id,branch_id,state FROM branch_protection_state WHERE branch_id=$1 FOR UPDATE',[branch]);
+if(result.rows.length!==1)throw Error('Branch policy not found');
+const row=result.rows[0];const previousLimit=row.state.policy.maxConcurrentStreams;
+await client.query("UPDATE branch_protection_state SET state=jsonb_set(state,'{policy,maxConcurrentStreams}','144'::jsonb),updated_at=now() WHERE tenant_id=$1 AND branch_id=$2",[row.tenant_id,branch]);
+await client.query('INSERT INTO branch_protection_audit(tenant_id,branch_id,actor_id,action,detail) VALUES($1,$2,$3,$4,$5)',[row.tenant_id,branch,'043561dc-a162-48ca-b7e4-290a9c4ad1ff','branch_live_limit_updated',JSON.stringify({performedBy:'Codex',previousLimit,maxConcurrentStreams:144,reason:'User explicitly requested branch live limit 144'})]);
+await client.query('COMMIT');console.log(JSON.stringify({branchId:branch,previousLimit,maxConcurrentStreams:144,backup:row}));
+}catch(error){await client.query('ROLLBACK');console.error(error.message);process.exitCode=1;}finally{client.release();await pool.end();}})();

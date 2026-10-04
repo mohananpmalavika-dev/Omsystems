@@ -1,0 +1,19 @@
+{
+  "tenant_id": "00000000-0000-4000-8000-000000000001",
+  "branch_id": "00000000-0000-4000-8000-000000000104",
+  "state": {
+    "checks": {},
+    "policy": {
+      "enabled": false,
+      "sopRules": [],
+      "bandwidthMode": "normal",
+      "maxGapSeconds": 60,
+      "criticalCameraIds": [],
+      "maxConcurrentStreams": 12,
+      "requiredRetentionDays": 90,
+      "verificationFreshMinutes": 30,
+      "verificationIntervalMinutes": 15
+    },
+    "reviews": []
+  }
+}

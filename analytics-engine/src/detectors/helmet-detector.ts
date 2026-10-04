@@ -52,7 +52,7 @@ export class HelmetDetector extends BaseDetector {
     confidenceThreshold = 0.88,
     classifier: HelmetClassificationFrameInference | null = null,
   ) {
-    super("helmet", "1.1.1");
+    super("helmet", "1.1.2");
     this.inference = inference;
     this.classifier = classifier;
     this.MIN_CONFIDENCE = confidenceThreshold;
@@ -203,10 +203,29 @@ export class HelmetDetector extends BaseDetector {
       // evidence; do not override it with a crop classification.
       if (!presence && (helmets.length > 0 || !runLocal || !this.classifier)) continue;
       if (runLocal && this.classifier && frame.imageData && frame.imageData.length > 0) {
-        const { upperResult, standardResult } = await this.helmetClassifications(frame, person.boundingBox);
+        let { upperResult, standardResult } = await this.helmetClassifications(frame, person.boundingBox);
         const alertThreshold = presence
           ? Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE)
           : Math.max(this.MIN_CONFIDENCE, this.CLASSIFIED_HEAD_CONFIDENCE);
+        let classifiedHeadBox = this.headRegion(person.boundingBox);
+        // A seated person's 35% head region includes much of the pink shirt
+        // in the pilot camera. The head classifier rejects that torso crop
+        // despite a visible helmet. Require agreement from two compact head
+        // crops when the original pair fails, retaining the independent
+        // person gate and distinct-frame confirmation above/below.
+        if (!presence && (!upperResult.wearingHelmet || !standardResult.wearingHelmet ||
+            upperResult.wearingHelmetConfidence < alertThreshold ||
+            standardResult.wearingHelmetConfidence < alertThreshold)) {
+          const box = person.boundingBox;
+          classifiedHeadBox = {
+            x: box.x + box.width * 0.1, y: box.y,
+            width: box.width * 0.8, height: box.height * 0.15,
+          };
+          upperResult = await this.classifier.run(frame, {
+            x: box.x, y: box.y, width: box.width, height: box.height * 0.15,
+          });
+          standardResult = await this.classifier.run(frame, classifiedHeadBox);
+        }
         if (!upperResult.wearingHelmet || !standardResult.wearingHelmet ||
             upperResult.wearingHelmetConfidence < alertThreshold ||
             standardResult.wearingHelmetConfidence < alertThreshold) {
@@ -222,7 +241,7 @@ export class HelmetDetector extends BaseDetector {
           if (!this.confirmClassifiedHead(frame.cameraId, person.boundingBox, frame.timestamp.getTime())) continue;
           presence = {
             personBoundingBox: person.boundingBox,
-            helmetBoundingBox: this.headRegion(person.boundingBox),
+            helmetBoundingBox: classifiedHeadBox,
             helmetDetected: true,
             evidenceSource: "confirmed-head-classification",
             confidence,

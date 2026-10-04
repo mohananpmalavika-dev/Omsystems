@@ -1,0 +1,15 @@
+{
+  "cameraId": "b58d2744-7613-4dd0-80b3-94af6fb18bb7",
+  "profiles": [
+    {
+      "name": "main",
+      "role": "main",
+      "codec": "H264",
+      "width": 1920,
+      "height": 1080
+    }
+  ],
+  "reference": "edge://aaeda07f-01ce-4361-afd3-a54e4ca114f3/923f6aa9-97df-4412-ac3e-db0e2dfe9f14",
+  "encrypted_uri": "7TGzZb4wJvrNcyI7jztHxo2Wge3w9AYSihXnT+peV4HhS8W4HKXLb19WFpzA3F7bq6Hb1/fSOOfRKDkdjpvjlHLw+tvgmRPzdKllYYXkW571vG+rod0i3VWAqhsQOKoPHnn1m6i0wVgrPBVJZPSN9e/mJsXYK/dkHooF9OB/B2SrBi2Cn4plEUCEQw3u",
+  "previousSub": null
+}

@@ -14,7 +14,7 @@ const policySchema = z.object({
   enabled: z.boolean(), verificationIntervalMinutes: z.number().int().min(5).max(1440),
   verificationFreshMinutes: z.number().int().min(5).max(2880), maxGapSeconds: z.number().int().min(0).max(3600),
   requiredRetentionDays: z.number().int().min(1).max(3650), criticalCameraIds: z.array(id).max(1000),
-  bandwidthMode: z.enum(['normal', 'low']), maxConcurrentStreams: z.number().int().min(1).max(16),
+  bandwidthMode: z.enum(['normal', 'low']), maxConcurrentStreams: z.number().int().min(1).max(144),
   sopRules: z.array(z.object({ id, title: z.string().trim().min(3).max(200), kind: z.enum(['OPENING', 'CLOSING', 'RESTRICTED_ACCESS', 'AFTER_HOURS']),
     cameraIds: z.array(id).min(1).max(1000), timeZone: z.string().refine(value => { try { new Intl.DateTimeFormat('en', { timeZone: value }); return true; } catch { return false; } }),
     startMinute: z.number().int().min(0).max(1439), endMinute: z.number().int().min(0).max(1439), mandatory: z.boolean() })).max(100),

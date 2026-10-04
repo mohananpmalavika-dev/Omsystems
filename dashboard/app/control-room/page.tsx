@@ -405,7 +405,9 @@ function ControlRoomContent() {
       if (!response.ok) return;
       const result = await response.json();
       const limit = result.data?.policy?.maxConcurrentStreams;
-      if (!controller.signal.aborted && Number.isInteger(limit) && limit > 0) setProtectionStreamBudget(Math.min(limit, CONTROL_ROOM_MAX_CONCURRENT_STREAMS));
+      // An authorized branch policy sets its wall ceiling. The tier value is
+      // the fallback for an unselected branch; viewer capacity still adapts.
+      if (!controller.signal.aborted && Number.isInteger(limit) && limit > 0) setProtectionStreamBudget(Math.min(limit, 144));
     }).catch(() => undefined);
     return () => controller.abort();
   }, [selectedBranchId]);
