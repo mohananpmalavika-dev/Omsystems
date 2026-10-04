@@ -39,5 +39,5 @@ fi
 echo 'Fullscreen alert dashboard deployed; login health passed'
 sudo docker inspect --format '{{.Image}}' sentinel-gcp-dashboard
 '''
-(root / 'scratch/deploy-fullscreen-alert-2026-10-04.sh').write_text(script, encoding='utf-8')
+(root / 'scratch/deploy-fullscreen-alert-2026-10-04.sh').write_text(script, encoding='utf-8', newline='\n')
 print('Prepared guarded dashboard-only deployment')
