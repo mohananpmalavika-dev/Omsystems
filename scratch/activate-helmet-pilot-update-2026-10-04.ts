@@ -1,0 +1,12 @@
+import {readFile} from 'node:fs/promises';
+import {DeviceIdentityStore} from '../edge-agent/src/security/device-identity.js';
+import {stageSignedUpdate,activateSignedUpdate} from '../edge-agent/src/updates/signed-update.js';
+const install='C:/Program Files/Sentinel Grid/Edge Agent';
+const identity=await new DeviceIdentityStore(install+'/data/device-identity.enc',install+'/data/device-identity.key').load();
+if(identity?.agentId!=='aaeda07f-01ce-4361-afd3-a54e4ca114f3')throw new Error('installed_pilot_identity_mismatch');
+if(!identity.updatePublicKey)throw new Error('trusted_update_key_missing');
+const release=JSON.parse(await readFile('scratch/helmet-edge-update-0.1.48/manifest.json','utf8'));
+const root=install+'/data/updates';
+const staged=await stageSignedUpdate(release,identity.updatePublicKey,root);
+await activateSignedUpdate(release,staged,root,'0.1.47');
+console.log(JSON.stringify({agentId:identity.agentId,version:staged.version,bytes:staged.bytes,sha256:staged.sha256,activated:true}));
