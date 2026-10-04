@@ -30,7 +30,7 @@ type VmsView = {
 };
 
 type DeviceClip = { startTime: string; endTime: string; apiFamily?: "hikvision-isapi" | "dahua-cgi" };
-type DevicePlayback = { hls: { url: string; bearerToken: string }; sessionId: string };
+type DevicePlayback = { hls: { url: string; bearerToken: string }; sessionId: string; releaseUrl: string };
 type StorageGrant = { token: string; mediaGatewayUrl?: string; localMediaGatewayUrl?: string };
 
 function storageGatewayUrl(grant: StorageGrant, action: "search" | "play") {
@@ -64,6 +64,20 @@ export function RecordingWorkspace() {
   const [devicePlayback, setDevicePlayback] = useState<DevicePlayback>();
   const [storageLoading, setStorageLoading] = useState(false);
   const [storageError, setStorageError] = useState<string>();
+  const [storageSearched, setStorageSearched] = useState(false);
+  const selection = `${branchId}:${cameraId}:${from}:${to}`;
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
+
+  useEffect(() => {
+    setSegments([]); setSelected(undefined); setHealth([]); setJob(undefined); setVms(undefined);
+    setDeviceClips([]); setDevicePlayback(undefined); setStorageError(undefined); setError(undefined);
+    setStorageSearched(false); setLoading(false); setStorageLoading(false);
+  }, [selection]);
+
+  useEffect(() => {
+    return () => { if (devicePlayback) releaseDevicePlayback(devicePlayback); };
+  }, [devicePlayback]);
 
   useEffect(() => {
     void fetch("/api/branches", { credentials: "include" })
@@ -83,15 +97,19 @@ export function RecordingWorkspace() {
 
   useEffect(() => {
     if (!branchId) return;
+    let cancelled = false;
+    setCameras([]); setCameraId("");
     void fetch(`/api/branches/${encodeURIComponent(branchId)}/cameras`, { credentials: "include" })
       .then((response) => response.ok ? response.json() : Promise.reject())
       .then((body: { data: Camera[] }) => {
+        if (cancelled) return;
         setCameras(body.data);
         setCameraId(body.data.some((camera) => camera.id === requestedCameraId) ? requestedCameraId : body.data[0]?.id ?? "");
         setSegments([]); setSelected(undefined); setHealth([]); setJob(undefined); setVms(undefined);
         setDeviceClips([]); setDevicePlayback(undefined); setStorageError(undefined);
       })
-      .catch(() => setError("Cameras for this branch are unavailable."));
+      .catch(() => { if (!cancelled) setError("Cameras for this branch are unavailable."); });
+    return () => { cancelled = true; };
   }, [branchId, requestedCameraId]);
 
   const camera = cameras.find((item) => item.id === cameraId);
@@ -100,17 +118,10 @@ export function RecordingWorkspace() {
 
   const loadRecording = async () => {
     if (!cameraId) return;
+    const requestSelection = selection;
     setLoading(true); setError(undefined);
     try {
-      const fromIso = new Date(from).toISOString();
-      const toIso = new Date(to).toISOString();
-      const rangeMs = Date.parse(toIso) - Date.parse(fromIso);
-      if (rangeMs <= 0) {
-        throw new Error("End time must be after start time.");
-      }
-      if (rangeMs > 31 * 24 * 60 * 60 * 1000) {
-        throw new Error("Recording searches are limited to 31 days.");
-      }
+      const { fromIso, toIso } = recordingRange(from, to);
       const [policyResult, playbackResult, healthResult] = await Promise.allSettled([
         fetch(`/api/recording/${encodeURIComponent(cameraId)}`),
         fetch(`/api/control/v1/cameras/${encodeURIComponent(cameraId)}/playback?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`),
@@ -124,10 +135,11 @@ export function RecordingWorkspace() {
       const events = healthResult.status === "fulfilled" && healthResult.value.ok
         ? await healthResult.value.json() as { data: HealthEvent[] }
         : { data: [] as HealthEvent[] };
+      if (selectionRef.current !== requestSelection) return;
       setJob(policy); setSegments(playback.segments ?? []); setHealth(events.data ?? []); setVms(playback.vms);
       setSelected((current) => current && playback.segments.some((item) => item.id === current.id) ? current : playback.segments.find((item) => item.status === "ready"));
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Recording data could not be loaded. Check recorder and access permissions."); }
-    finally { setLoading(false); }
+    } catch (reason) { if (selectionRef.current === requestSelection) setError(reason instanceof Error ? reason.message : "Recording data could not be loaded. Check recorder and access permissions."); }
+    finally { if (selectionRef.current === requestSelection) setLoading(false); }
   };
 
   const requestStorageGrant = async (): Promise<StorageGrant> => {
@@ -149,29 +161,35 @@ export function RecordingWorkspace() {
 
   const loadDeviceArchive = async () => {
     if (!cameraId) return;
+    const requestSelection = selection;
     setStorageLoading(true); setStorageError(undefined); setDevicePlayback(undefined);
     try {
-      const fromIso = new Date(from).toISOString();
-      const toIso = new Date(to).toISOString();
+      const { fromIso, toIso } = recordingRange(from, to);
       const grant = await requestStorageGrant();
       const response = await fetch(storageGatewayUrl(grant, "search"), {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ controlPlaneToken: grant.token, from: fromIso, to: toIso }),
       });
       const body = await response.json();
-      if (!response.ok) throw new Error(body.error === "not_found"
+      if (!response.ok) throw new Error(body.error === "edge_media_offline"
+        ? "The branch gateway is offline. Reconnect it to access device storage."
+        : body.error === "not_found"
         ? "The branch edge agent needs an update before it can search device storage."
         : body.error === "camera_archive_search_unavailable_or_unsupported"
           ? "This device did not expose a supported archive API. Check its recording API, web port, and credentials."
           : body.error ?? "Device archive search failed.");
+      if (selectionRef.current !== requestSelection) return;
+      setStorageSearched(true);
       setDeviceClips(Array.isArray(body.clips) ? body.clips : []);
     } catch (reason) {
+      if (selectionRef.current !== requestSelection) return;
       setDeviceClips([]);
       setStorageError(reason instanceof Error ? reason.message : "Device archive search failed.");
-    } finally { setStorageLoading(false); }
+    } finally { if (selectionRef.current === requestSelection) setStorageLoading(false); }
   };
 
   const playDeviceClip = async (clip: DeviceClip) => {
+    const requestSelection = selection;
     setStorageLoading(true); setStorageError(undefined); setDevicePlayback(undefined);
     try {
       const grant = await requestStorageGrant();
@@ -180,14 +198,21 @@ export function RecordingWorkspace() {
         body: JSON.stringify({ controlPlaneToken: grant.token, from: clip.startTime, to: clip.endTime, apiFamily: clip.apiFamily }),
       });
       const body = await response.json();
-      if (!response.ok || !body.hls?.url || !body.hls?.bearerToken) {
+      if (!response.ok || !body.sessionId || !body.hls?.url || !body.hls?.bearerToken) {
         throw new Error(body.error ?? "Device playback is unavailable.");
       }
-      setDevicePlayback(body as DevicePlayback);
+      const playback: DevicePlayback = {
+        ...body,
+        releaseUrl: `${storageGatewayUrl(grant, "play").replace(/\/v1\/storage\/play$/, "")}/v1/live/${encodeURIComponent(body.sessionId)}`,
+      };
+      if (selectionRef.current !== requestSelection) { releaseDevicePlayback(playback); return; }
+      setDevicePlayback(playback);
     } catch (reason) {
-      setStorageError(reason instanceof Error ? reason.message : "Device playback is unavailable.");
-    } finally { setStorageLoading(false); }
+      if (selectionRef.current === requestSelection) setStorageError(reason instanceof Error ? reason.message : "Device playback is unavailable.");
+    } finally { if (selectionRef.current === requestSelection) setStorageLoading(false); }
   };
+
+  const searchRecordings = async () => { await Promise.all([loadRecording(), loadDeviceArchive()]); };
 
   const recordingState = vms?.recordingStatus.state === "AVAILABLE"
     ? vms.recordingStatus.value.active === true ? "Recording" : vms.recordingStatus.value.active === false ? "Stopped" : "Unknown"
@@ -204,11 +229,11 @@ export function RecordingWorkspace() {
       <FieldVisual /></header>
 
       <section className="recording-filters" aria-label="Recording playback filters">
-        <label>Branch<select value={branchId} onChange={(event) => setBranchId(event.target.value)}>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>
-        <label>Camera<select value={cameraId} onChange={(event) => setCameraId(event.target.value)}>{cameras.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label>Branch<select aria-label="Branch" value={branchId} onChange={(event) => { setCameraId(""); setBranchId(event.target.value); }}>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select></label>
+        <label>Camera<select aria-label="Camera" value={cameraId} onChange={(event) => setCameraId(event.target.value)}>{cameras.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label>From<input type="datetime-local" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
         <label>To<input type="datetime-local" value={to} onChange={(event) => setTo(event.target.value)} /></label>
-        <button className="primary-button" onClick={() => void loadRecording()} disabled={!cameraId || loading}>{loading ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />}Load indexed footage</button>
+        <button className="primary-button" onClick={() => void searchRecordings()} disabled={!cameraId || loading || storageLoading}>{loading || storageLoading ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />}Search recordings</button>
       </section>
 
       {error && <div className="error-banner"><AlertTriangle size={17} />{typeof error === "string" ? error : JSON.stringify(error)}</div>}
@@ -217,7 +242,7 @@ export function RecordingWorkspace() {
           <div className="recording-section-heading"><div><Clapperboard size={18} /><h2>Camera SD card / recorder HDD</h2></div></div>
           <div className="recording-device-actions">
             <p>Browse footage stored on the device for the selected time range.</p>
-            <button className="primary-button" onClick={() => void loadDeviceArchive()} disabled={!cameraId || storageLoading}>
+            <button className="primary-button" onClick={() => void loadDeviceArchive()} disabled={!cameraId || loading || storageLoading}>
               {storageLoading ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />}Search device storage
             </button>
             {storageError && <div className="error-banner"><AlertTriangle size={17} />{storageError}</div>}
@@ -227,7 +252,7 @@ export function RecordingWorkspace() {
         <article className="recording-segment-card">
           <div className="recording-section-heading"><div><Play size={18} /><h2>Device clips</h2></div><span>{deviceClips.length}</span></div>
           <div className="segment-list">{deviceClips.length === 0
-            ? <div className="recording-empty"><span>No device clips loaded for this range.</span></div>
+            ? <div className="recording-empty"><span>{storageLoading ? "Searching device storage..." : storageSearched ? "No device recordings found for this camera and time range." : "Search recordings to find footage on the camera SD card or recorder HDD."}</span></div>
             : deviceClips.map((clip, index) => <button key={`${clip.startTime}-${index}`} className="segment-row" onClick={() => void playDeviceClip(clip)} disabled={storageLoading}>
               <span className="segment-status ready" /><span><strong>{formatTime(clip.startTime)}</strong><small>{formatTime(clip.endTime)}</small></span><Play size={16} />
             </button>)}</div>
@@ -252,7 +277,7 @@ export function RecordingWorkspace() {
       <section className="recording-content">
         <article className="recording-player-card">
           <div className="recording-section-heading"><div><CalendarClock size={18} /><h2>{camera?.name ?? "Select a camera"}</h2></div>{selected && <span>{formatTime(selected.startedAt)} – {formatTime(selected.endedAt)}</span>}</div>
-          {selected ? <video key={selected.id} className="recording-player" controls preload="metadata"><source src={`/api/recordings/play?segmentId=${encodeURIComponent(selected.id)}`} type="video/mp4" />Your browser cannot play this recording.</video> : <div className="recording-empty"><Clapperboard size={30} /><strong>{vms?.source === "RECORDER" ? "Recorder playback is not available in this browser session" : "No playable segment selected"}</strong><span>{vms?.source === "RECORDER" ? availabilityMessage(vms.recordingSearch) : "Load a time range containing indexed footage."}</span></div>}
+          {selected ? <video key={selected.id} className="recording-player" controls preload="metadata"><source src={`/api/recordings/play?segmentId=${encodeURIComponent(selected.id)}`} type="video/mp4" />Your browser cannot play this recording.</video> : <div className="recording-empty"><Clapperboard size={30} /><strong>{vms?.source === "RECORDER" ? "No indexed recorder segment selected" : "No playable segment selected"}</strong><span>{vms?.source === "RECORDER" ? availabilityMessage(vms.recordingSearch) : "Load a time range containing indexed footage."}</span></div>}
         </article>
         <article className="recording-segment-card">
           <div className="recording-section-heading"><div><Play size={18} /><h2>{vms?.source === "RECORDER" ? "Playable recorder clips" : "Indexed segments"}</h2></div><span>{segments.length}</span></div>
@@ -268,31 +293,50 @@ export function RecordingWorkspace() {
 function DeviceArchivePlayer({ playback }: { playback: DevicePlayback }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState<string>();
+  const [connecting, setConnecting] = useState(true);
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    setError(undefined);
+    setError(undefined); setConnecting(true);
+    const ready = () => setConnecting(false);
+    video.addEventListener("loadeddata", ready);
+    const failed = () => { setConnecting(false); setError("Device playback stream failed. Search again or select another clip."); };
+    video.addEventListener("error", failed);
+    const cleanup = () => { video.removeEventListener("loadeddata", ready); video.removeEventListener("error", failed); };
     if (Hls.isSupported()) {
       const hls = new Hls({
         lowLatencyMode: false, startPosition: 0,
         xhrSetup: (xhr) => xhr.setRequestHeader("Authorization", `Bearer ${playback.hls.bearerToken}`),
       });
       hls.on(Hls.Events.ERROR, (_event, data) => {
-        if (data.fatal) setError("Device playback stream failed.");
+        if (data.fatal) failed();
       });
       hls.loadSource(playback.hls.url);
       hls.attachMedia(video);
-      return () => hls.destroy();
+      return () => { cleanup(); hls.destroy(); };
     }
     if (video.canPlayType("application/vnd.apple.mpegurl")) {
       const url = new URL(playback.hls.url);
       url.searchParams.set("token", playback.hls.bearerToken);
       video.src = url.toString();
-      return () => { video.removeAttribute("src"); video.load(); };
+      return () => { cleanup(); video.removeAttribute("src"); video.load(); };
     }
-    setError("This browser cannot play HLS device footage.");
+    setConnecting(false); setError("This browser cannot play HLS device footage.");
+    return cleanup;
   }, [playback]);
-  return <div>{error && <div className="error-banner">{error}</div>}<video ref={videoRef} className="recording-player" controls playsInline preload="metadata" /></div>;
+  return <div>{connecting && <p role="status">Preparing recording...</p>}{error && <div className="error-banner">{error}</div>}<video ref={videoRef} className="recording-player" controls playsInline preload="metadata" /></div>;
+}
+
+function releaseDevicePlayback(playback: DevicePlayback) {
+  void fetch(playback.releaseUrl, { method: "DELETE", headers: { Authorization: `Bearer ${playback.hls.bearerToken}` }, keepalive: true }).catch(() => {});
+}
+
+function recordingRange(from: string, to: string) {
+  const start = Date.parse(from); const end = Date.parse(to);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) throw new Error("Choose a valid start and end time.");
+  if (end <= start) throw new Error("End time must be after start time.");
+  if (end - start > 31 * 24 * 60 * 60 * 1000) throw new Error("Recording searches are limited to 31 days.");
+  return { fromIso: new Date(start).toISOString(), toIso: new Date(end).toISOString() };
 }
 
 function toLocalInput(value: number) { const date = new Date(value - new Date().getTimezoneOffset() * 60_000); return date.toISOString().slice(0, 16); }

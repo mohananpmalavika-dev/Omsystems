@@ -139,6 +139,15 @@ describe('VMS user communication routes', () => {
     expect(initiate).not.toHaveBeenCalled();
   });
 
+  it('allows tenant administrators to call employees without explicit branch scopes', async () => {
+    scopes = [null];
+    accessible = [];
+    store.getUser.mockResolvedValueOnce({ id: callerId, tenantId, role: 'super_admin' });
+    const response = await call();
+    expect(response.statusCode).toBe(201);
+    expect(initiate).toHaveBeenCalled();
+  });
+
   it('rejects missing or archived target assignments', async () => {
     scopes = ['missing-scope'];
     expect((await call()).statusCode).toBe(403);
