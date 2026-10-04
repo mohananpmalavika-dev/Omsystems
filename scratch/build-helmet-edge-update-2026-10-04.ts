@@ -1,10 +1,16 @@
 import {build} from 'esbuild';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
+import {createRequire} from 'node:module';
+import path from 'node:path';
 import {signEdgeUpdateManifest} from '../src/security/edge-update-signing.js';
 const root='scratch/helmet-edge-update-0.1.48';await mkdir(root,{recursive:true});
 await build({entryPoints:['edge-agent/src/index.ts'],bundle:true,platform:'node',format:'cjs',target:'node22',outfile:root+'/edge-agent.bundle',minify:true,external:['pg-native','fsevents','onnxruntime-node','sharp','*.node']});
 const bytes=await readFile(root+'/edge-agent.bundle');
+process.env.SENTINEL_EDGE_IMPORT_ONLY='1';
+const require=createRequire(import.meta.url);
+if(typeof require(path.resolve(root+'/edge-agent.bundle')).runEdgeAgent!=='function')throw new Error('bundle_entrypoint_missing');
+delete process.env.SENTINEL_EDGE_IMPORT_ONLY;
 const manifest={version:'0.1.48',artifactUrl:'https://34-14-220-41.sslip.io/v1/edge-updates/artifacts/0.1.48/edge-agent.bundle',sha256:createHash('sha256').update(bytes).digest('hex'),notes:'Pilot helmet capture: retain configured main source and back off failed cameras for one minute'};
 const signature=signEdgeUpdateManifest(manifest,await readFile('config/keys/evidence-signing.pem','utf8'));
 await writeFile(root+'/manifest.json',JSON.stringify({...manifest,signature,id:'pilot-helmet-capture-0.1.48',releasedAt:new Date().toISOString()},null,2));

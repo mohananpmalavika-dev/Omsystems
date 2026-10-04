@@ -1,0 +1,9 @@
+{
+  "version": "0.1.48",
+  "artifactUrl": "https://34-14-220-41.sslip.io/v1/edge-updates/artifacts/0.1.48/edge-agent.bundle",
+  "sha256": "82fb4df1e7aaf11418983ba1cb1447e2e87e6fd462a326346be03ca08f824c1b",
+  "notes": "Pilot helmet capture: retain configured main source and back off failed cameras for one minute",
+  "signature": "uJGKT6whKfEsLidPgZIoGhmFU-Xa2kBIVYEf0eTZltu2wtxSkqbYJx2oLHY9O9P6_L4UkFM9r2G9BVbOxyTnAw",
+  "id": "pilot-helmet-capture-0.1.48",
+  "releasedAt": "2026-10-04T10:22:47.977Z"
+}
