@@ -1187,9 +1187,9 @@ export function EnhancedCameraGrid({
   const handleRequestLive = useCallback((cameraId: string) => {
     setOperatorSelectedCameraId(cameraId);
     updateStreamState(cameraId, "CONNECTING");
-    const targetStream = [...gridPositions.values()].find((p) => p.camera.id === cameraId)?.stream ?? "sub";
-    void handleStartLive(cameraId, targetStream);
-  }, [handleStartLive, updateStreamState, gridPositions]);
+    // Selecting a camera immediately reschedules it with operator priority;
+    // the scheduler admits it before the session effect starts playback.
+  }, [updateStreamState]);
 
   const handleStreamQualityChange = useCallback((cameraId: string, quality: "main" | "sub") => {
     setGridPositions((current) => {
@@ -1544,24 +1544,8 @@ export function EnhancedCameraGrid({
         ]),
     );
 
-    // Older camera records do not advertise streamProfiles even though their
-    // gateway can start HLS. Admit those visible cameras into the remaining
-    // decoder budget so the wall starts real video instead of stopping at a
-    // metadata placeholder.
-    let fallbackSlots = Math.max(0, decoderLimit - desiredLive.size);
-    if (fallbackSlots > 0) {
-      const cameraById = new Map(cameras.map((camera) => [camera.id, camera]));
-      const orderedVisibleEntries = [...schedulerGridPositions.entries()]
-        .filter(([position]) => position >= visibleRange.start && position < visibleRange.end)
-        .sort(([left], [right]) => left - right);
-      for (const [, entry] of orderedVisibleEntries) {
-        if (fallbackSlots <= 0 || desiredLive.has(entry.cameraId)) continue;
-        const camera = cameraById.get(entry.cameraId);
-        if (!camera) continue;
-        desiredLive.set(entry.cameraId, entry.stream);
-        fallbackSlots -= 1;
-      }
-    }
+    // The scheduler supplies default profiles for legacy camera records too.
+    // Starting deferred tiles here would bypass its adaptive resource budget.
 
     for (const cameraId of liveStartRetryRef.current.keys()) {
       if (!desiredLive.has(cameraId)) liveStartRetryRef.current.delete(cameraId);
@@ -1570,11 +1554,9 @@ export function EnhancedCameraGrid({
     for (const [cameraId] of sessions) {
       const desiredStream = desiredLive.get(cameraId);
       if (desiredStream && activeStreamTypesRef.current.get(cameraId) === desiredStream) continue;
-      // Do not aggressively tear down an active live session for a camera currently on the visible grid
-      // unless there is an unrecoverable playback error or it was removed from the grid.
-      if (visibleGridCameraIds.has(cameraId) && !liveErrors.has(cameraId)) {
-        continue;
-      }
+      // Preserve an operator's quality choice while the camera is admitted.
+      if (desiredStream && visibleGridCameraIds.has(cameraId) && !liveErrors.has(cameraId)) continue;
+      // Release deferred streams so capacity reductions actually free decoders.
       markPlaybackDeferred(cameraId);
       updateStreamState(cameraId, "PAUSED");
       releaseSession(cameraId);
@@ -1589,19 +1571,15 @@ export function EnhancedCameraGrid({
   }, [
     handleStartLive,
     isInitialized,
-    cameras,
-    decoderLimit,
     loading,
+    liveErrors,
     liveRetryTick,
     markPlaybackDeferred,
     releaseSession,
     schedule,
-    schedulerGridPositions,
     sessions,
     updateStreamState,
     visibleGridCameraIds,
-    visibleRange.end,
-    visibleRange.start,
   ]);
 
   const loadSavedLayouts = () => {

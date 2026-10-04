@@ -93,10 +93,10 @@ export class ViewerCapacityManager {
   /**
    * Get current resource budget
    */
-  async getResourceBudget(): Promise<ViewerResourceBudget> {
+  async getResourceBudget(maxDecoderLimit?: number): Promise<ViewerResourceBudget> {
     const capacity = await this.getCapacity();
     
-    const total = capacity.recommendedDecoderLimit;
+    const total = Math.min(capacity.recommendedDecoderLimit, this.getDecoderCeiling(maxDecoderLimit));
     const emergencyReserve = total > 1
       ? Math.min(total - 1, Math.max(1, Math.round(total * EMERGENCY_RESERVE_RATIO)))
       : 0;
@@ -133,7 +133,8 @@ export class ViewerCapacityManager {
    * Monitor playback metrics and adapt capacity
    */
   async monitorPerformance(
-    metrics: Map<string, PlaybackMetrics>
+    metrics: Map<string, PlaybackMetrics>,
+    maxDecoderLimit?: number,
   ): Promise<boolean> {
     if (!this.capacity) {
       return false;
@@ -145,32 +146,40 @@ export class ViewerCapacityManager {
 
     // Calculate average dropped frame ratio
     for (const metric of metrics.values()) {
+      if (!Number.isFinite(metric.droppedFrameRatio) ||
+          metric.droppedFrameRatio < 0 || metric.droppedFrameRatio > 1) continue;
       totalDroppedRatio += metric.droppedFrameRatio;
       cameraCount++;
     }
 
-    const avgDroppedRatio = cameraCount > 0 ? totalDroppedRatio / cameraCount : 0;
+    // No playing samples are not evidence of either overload or recovery.
+    if (cameraCount === 0 || this.capacity.activeDecoders === 0) {
+      this.overloadStartTime = null;
+      this.healthyStartTime = null;
+      return false;
+    }
+    const avgDroppedRatio = totalDroppedRatio / cameraCount;
 
     // Detect overload
     if (avgDroppedRatio > OVERLOAD_THRESHOLD) {
-      if (!this.overloadStartTime) {
+      this.healthyStartTime = null;
+      if (this.overloadStartTime === null) {
         this.overloadStartTime = now;
       }
 
       // Sustained overload - decrease capacity
       if (now - this.overloadStartTime > OVERLOAD_DURATION_MS) {
-        console.warn("[ViewerCapacity] Overload detected, decreasing capacity");
-        await this.decreaseCapacity();
+        const changed = this.decreaseCapacity(maxDecoderLimit, avgDroppedRatio);
         this.overloadStartTime = null;
         this.healthyStartTime = null;
-        return true;
+        return changed;
       }
     } else {
       // Reset overload timer
       this.overloadStartTime = null;
 
       // Track healthy duration
-      if (!this.healthyStartTime) {
+      if (this.healthyStartTime === null) {
         this.healthyStartTime = now;
       }
 
@@ -179,10 +188,9 @@ export class ViewerCapacityManager {
         now - this.healthyStartTime > HEALTHY_DURATION_MS &&
         now - this.lastAdjustmentTime > HEALTHY_DURATION_MS
       ) {
-        console.log("[ViewerCapacity] Sustained healthy state, increasing capacity");
-        await this.increaseCapacity();
+        const changed = this.increaseCapacity(maxDecoderLimit);
         this.healthyStartTime = null;
-        return true;
+        return changed;
       }
     }
 
@@ -192,39 +200,59 @@ export class ViewerCapacityManager {
   /**
    * Decrease decoder capacity due to performance issues
    */
-  private async decreaseCapacity(): Promise<void> {
-    if (!this.capacity) return;
+  private decreaseCapacity(maxDecoderLimit?: number, droppedFrameRatio?: number): boolean {
+    if (!this.capacity) return false;
 
-    const current = this.capacity.recommendedDecoderLimit;
+    // Reduce the workload actually in use, rather than an unused hardware
+    // estimate (e.g. 40 slots when the wall is limited to four streams).
+    const current = Math.min(
+      this.capacity.recommendedDecoderLimit,
+      this.getDecoderCeiling(maxDecoderLimit),
+      this.capacity.activeDecoders,
+    );
+    if (current <= 1) return false;
     const decrease = Math.ceil(current * 0.15); // Decrease by 15%
-    const newLimit = Math.max(MIN_DECODER_LIMIT, current - decrease);
+    const newLimit = Math.max(1, current - decrease);
 
-    console.log(`[ViewerCapacity] Decreasing from ${current} to ${newLimit}`);
+    console.warn(`[ViewerCapacity] Playback overload: decreasing from ${current} to ${newLimit}`, {
+      droppedFrameRatio,
+      activeDecoders: this.capacity.activeDecoders,
+    });
 
     this.capacity.recommendedDecoderLimit = newLimit;
     this.lastAdjustmentTime = Date.now();
+    return true;
   }
 
   /**
    * Increase decoder capacity when performance is good
    */
-  private async increaseCapacity(): Promise<void> {
-    if (!this.capacity) return;
+  private increaseCapacity(maxDecoderLimit?: number): boolean {
+    if (!this.capacity) return false;
 
     const current = this.capacity.recommendedDecoderLimit;
     
     // Don't exceed hard limit
-    if (current >= this.capacity.maxVideoDecoders) {
-      return;
+    const ceiling = this.getDecoderCeiling(maxDecoderLimit);
+    if (current >= ceiling) {
+      return false;
     }
 
     const increase = Math.min(2, Math.ceil(current * 0.1)); // Increase by 10% or 2
-    const newLimit = Math.min(MAX_DECODER_LIMIT, current + increase);
+    const newLimit = Math.min(ceiling, current + increase);
 
     console.log(`[ViewerCapacity] Increasing from ${current} to ${newLimit}`);
 
     this.capacity.recommendedDecoderLimit = newLimit;
     this.lastAdjustmentTime = Date.now();
+    return true;
+  }
+
+  private getDecoderCeiling(maxDecoderLimit?: number): number {
+    const configuredLimit = typeof maxDecoderLimit === "number" && Number.isFinite(maxDecoderLimit)
+      ? Math.max(1, Math.floor(maxDecoderLimit))
+      : MAX_DECODER_LIMIT;
+    return Math.min(MAX_DECODER_LIMIT, this.capacity?.maxVideoDecoders ?? MAX_DECODER_LIMIT, configuredLimit);
   }
 
   // ==========================================================================

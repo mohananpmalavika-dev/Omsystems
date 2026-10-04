@@ -1,0 +1,61 @@
+.dock {
+  position: absolute;
+  inset: auto 8px 8px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100% - 16px);
+  pointer-events: none;
+}
+
+.timeline {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  flex: 0 1 auto;
+  pointer-events: auto;
+  scrollbar-width: thin;
+}
+
+.timeline button {
+  font-size: 10px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.timeline :global(.text-zinc-300) {
+  color: #e4e4e7 !important;
+}
+
+.timeline :global(.text-zinc-400) {
+  color: #a1a1aa !important;
+}
+
+/* Keep the live scrubber out of the workspace's general form-input styling. */
+.dock .timeline input[type="range"] {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 6px;
+  height: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #3f3f46 !important;
+}
+
+.dock .actions {
+  position: static;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  gap: 4px;
+  max-width: 100%;
+  pointer-events: auto;
+}
+
+.actions > * {
+  flex-shrink: 0;
+}

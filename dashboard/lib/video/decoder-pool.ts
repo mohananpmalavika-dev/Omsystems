@@ -172,6 +172,7 @@ export class DecoderPool {
       return;
     }
 
+    if (handle.videoElement !== videoElement) this.previousFrameCounts.delete(cameraId);
     handle.videoElement = videoElement;
   }
 
@@ -186,6 +187,7 @@ export class DecoderPool {
       return;
     }
     handle.videoElement = undefined;
+    this.previousFrameCounts.delete(cameraId);
   }
 
   /**
@@ -244,6 +246,10 @@ export class DecoderPool {
     }
 
     return metrics;
+  }
+
+  resetPerformanceMetrics(): void {
+    this.previousFrameCounts.clear();
   }
 
   /**
@@ -326,32 +332,31 @@ export class DecoderPool {
         const cameraId = Array.from(this.handles.entries()).find(
           ([, handle]) => handle.videoElement === videoElement,
         )?.[0];
+        if (videoElement.paused || videoElement.ended || videoElement.readyState < 2) {
+          if (cameraId) this.previousFrameCounts.delete(cameraId);
+          return null;
+        }
         const previous = cameraId ? this.previousFrameCounts.get(cameraId) : undefined;
-        const decodedSinceLastSample = Math.max(0, totalFrames - (previous?.totalFrames ?? totalFrames));
-        const droppedSinceLastSample = Math.max(0, droppedFrames - (previous?.droppedFrames ?? droppedFrames));
         if (cameraId) {
           this.previousFrameCounts.set(cameraId, { totalFrames, droppedFrames });
         }
+        // Establish a fresh baseline after attaching/restarting a player.
+        if (!previous || totalFrames < previous.totalFrames || droppedFrames < previous.droppedFrames) return null;
+        const decodedSinceLastSample = totalFrames - previous.totalFrames;
+        const droppedSinceLastSample = droppedFrames - previous.droppedFrames;
+        if (decodedSinceLastSample === 0) return null;
 
         return {
           totalFrames,
           droppedFrames,
-          droppedFrameRatio: decodedSinceLastSample > 0
-            ? droppedSinceLastSample / decodedSinceLastSample
-            : 0,
+          droppedFrameRatio: droppedSinceLastSample / decodedSinceLastSample,
           bufferHealthMs: this.estimateBufferHealth(videoElement),
           stallCount: 0, // Would need to track separately
         };
       }
 
-      // Fallback for browsers without getVideoPlaybackQuality
-      return {
-        totalFrames: 0,
-        droppedFrames: 0,
-        droppedFrameRatio: 0,
-        bufferHealthMs: this.estimateBufferHealth(videoElement),
-        stallCount: 0,
-      };
+      // Missing browser metrics are not evidence of healthy playback.
+      return null;
     } catch (error) {
       console.error('[DecoderPool] Error collecting metrics:', error);
       return null;

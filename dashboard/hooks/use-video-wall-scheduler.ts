@@ -265,6 +265,14 @@ export function useVideoWallScheduler(
     if (schedulerRunRef.current) return schedulerRunRef.current;
 
     const run = (async () => {
+      const decoderPool = decoderPoolRef.current!;
+      if (document.hidden) decoderPool.resetPerformanceMetrics();
+      // Adapt before scheduling so an overload reduction takes effect in
+      // this pass, including in the budget exposed to the grid.
+      await capacityManagerRef.current!.monitorPerformance(
+        document.hidden ? new Map() : decoderPool.getAllMetrics(),
+        maxDecoderLimit,
+      );
       const nextSchedule = await schedulerRef.current!.schedule(
         buildCameraContexts(),
         tileGeometry,
@@ -281,24 +289,13 @@ export function useVideoWallScheduler(
 
       const [nextCapacity, nextBudget] = await Promise.all([
         capacityManagerRef.current!.getCapacity(),
-        capacityManagerRef.current!.getResourceBudget(),
+        capacityManagerRef.current!.getResourceBudget(maxDecoderLimit),
       ]);
       const capacitySnapshot = { ...nextCapacity };
       const budgetSnapshot = { ...nextBudget };
       setCapacity(capacitySnapshot);
       setBudget(budgetSnapshot);
       onCapacityChange?.(capacitySnapshot, budgetSnapshot);
-
-      const capacityChanged = await capacityManagerRef.current!.monitorPerformance(
-        decoderPoolRef.current!.getAllMetrics(),
-      );
-      if (capacityChanged) {
-        const adjustedCapacity = { ...await capacityManagerRef.current!.getCapacity() };
-        const adjustedBudget = { ...await capacityManagerRef.current!.getResourceBudget() };
-        setCapacity(adjustedCapacity);
-        setBudget(adjustedBudget);
-        onCapacityChange?.(adjustedCapacity, adjustedBudget);
-      }
     })();
 
     schedulerRunRef.current = run;
@@ -322,8 +319,8 @@ export function useVideoWallScheduler(
 
   useEffect(() => {
     let cancelled = false;
-    void capacityManagerRef.current!.initialize().then(async (initialCapacity) => {
-      const initialBudget = await capacityManagerRef.current!.getResourceBudget();
+    void capacityManagerRef.current!.getCapacity().then(async (initialCapacity) => {
+      const initialBudget = await capacityManagerRef.current!.getResourceBudget(maxDecoderLimit);
       if (cancelled) return;
       setCapacity({ ...initialCapacity });
       setBudget({ ...initialBudget });
@@ -333,7 +330,7 @@ export function useVideoWallScheduler(
       console.error("[VideoWallScheduler] Capacity initialization error:", error);
     });
     return () => { cancelled = true; };
-  }, [onCapacityChange]);
+  }, [maxDecoderLimit, onCapacityChange]);
 
   useEffect(() => {
     if (!enableSnapshots) {
@@ -366,10 +363,9 @@ export function useVideoWallScheduler(
   }, [runScheduler]);
 
   useEffect(() => {
-    // Run once on initialization and then on a fixed 8-second cadence.
-    // The effect intentionally depends only on `isInitialized` (set once, never
-    // unset) so the interval is never torn down and recreated due to upstream
-    // prop changes — the ref above ensures we always call the latest scheduler.
+    // Run every eight seconds and immediately when the operator selects a
+    // camera or changes the limit. Other prop changes use the latest ref
+    // without restarting the interval on every render.
     if (!isInitialized) return;
     let cancelled = false;
     const run = async () => {
@@ -385,8 +381,7 @@ export function useVideoWallScheduler(
       cancelled = true;
       window.clearInterval(interval);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isInitialized]); // stable — runSchedulerRef.current provides latest logic
+  }, [isInitialized, maxDecoderLimit, operatorSelectedCameraId]);
 
   useEffect(() => () => {
     snapshotServiceRef.current?.stopAll();
@@ -399,12 +394,12 @@ export function useVideoWallScheduler(
 
   const resetCapacity = useCallback(async () => {
     const nextCapacity = await capacityManagerRef.current!.reset();
-    const nextBudget = await capacityManagerRef.current!.getResourceBudget();
+    const nextBudget = await capacityManagerRef.current!.getResourceBudget(maxDecoderLimit);
     setCapacity({ ...nextCapacity });
     setBudget({ ...nextBudget });
     onCapacityChange?.({ ...nextCapacity }, { ...nextBudget });
     await refresh();
-  }, [onCapacityChange, refresh]);
+  }, [maxDecoderLimit, onCapacityChange, refresh]);
 
   const attachVideoElement = useCallback((cameraId: string, videoElement: HTMLVideoElement | null) => {
     const decoderPool = decoderPoolRef.current!;

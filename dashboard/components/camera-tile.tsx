@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import controlStyles from "./camera-tile-controls.module.css";
 import {
   BookmarkPlus,
   BrainCircuit,
@@ -1350,114 +1351,6 @@ function CameraTileComponent({
           </div>
         )}
 
-        {/* Instant Hover Mini Timeline & Time Scrubbing Bar */}
-        {controlsVisible && (showDvrScrubber || isTileHovered || dvrOffset > 0) && (
-          <div
-            className="absolute bottom-11 left-2 right-2 z-20 flex flex-col gap-1.5 p-2 rounded-lg bg-zinc-950/95 border border-zinc-700/80 backdrop-blur shadow-2xl text-xs transition-opacity duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between text-[11px] font-semibold text-zinc-300">
-              <span className="flex items-center gap-1.5 text-sky-400">
-                <History size={13} />
-                <span>Hover Timeline Scrub</span>
-                {dvrOffset > 0 ? (
-                  <span className="text-amber-400 font-mono font-bold">(-{dvrOffset}s)</span>
-                ) : (
-                  <span className="text-emerald-400 font-mono font-bold">● LIVE</span>
-                )}
-              </span>
-              <button
-                type="button"
-                onClick={() => handleDvrScrub(0)}
-                className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
-                  dvrOffset > 0
-                    ? "bg-emerald-600 hover:bg-emerald-500 text-white"
-                    : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
-                }`}
-              >
-                ▶ RETURN TO LIVE
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-zinc-400 font-mono">-60s</span>
-              <input
-                type="range"
-                min={0}
-                max={60}
-                step={1}
-                value={dvrOffset}
-                onChange={(e) => handleDvrScrub(Number(e.target.value))}
-                className="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-sky-400"
-                title="Drag to scrub back up to 60s"
-              />
-              <span className="text-[10px] text-emerald-400 font-mono">0s (LIVE)</span>
-            </div>
-            <div className="flex items-center justify-between pt-1 border-t border-zinc-800/80 gap-2 flex-wrap">
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => handleDvrScrub(10)}
-                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
-                    dvrOffset === 10 ? "border-amber-400 text-amber-300 bg-amber-950/60" : "border-zinc-700 hover:border-zinc-500 text-zinc-300"
-                  }`}
-                  title="Instant 10-second rewind"
-                >
-                  ⚡ -10s REWIND
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDvrScrub(30)}
-                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
-                    dvrOffset === 30 ? "border-amber-400 text-amber-300 bg-amber-950/60" : "border-zinc-700 hover:border-zinc-500 text-zinc-300"
-                  }`}
-                  title="Instant 30-second rewind"
-                >
-                  ⚡ -30s REWIND
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDvrScrub(60)}
-                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer ${
-                    dvrOffset === 60 ? "border-amber-400 text-amber-300 bg-amber-950/60" : "border-zinc-700 hover:border-zinc-500 text-zinc-300"
-                  }`}
-                >
-                  -60s
-                </button>
-              </div>
-
-              {/* Speed Controls: 0.5x, 1x, 2x */}
-              <div className="flex items-center gap-1 border-l border-zinc-700/80 pl-2">
-                <span className="text-[9px] text-zinc-400 font-mono">SPEED:</span>
-                {[0.5, 1, 2].map((spd) => (
-                  <button
-                    key={spd}
-                    type="button"
-                    onClick={() => handleSetPlaybackSpeed(spd)}
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border transition-colors cursor-pointer ${
-                      playbackSpeed === spd
-                        ? "border-sky-400 text-sky-300 bg-sky-950/80 shadow-[0_0_6px_rgba(56,189,248,0.4)]"
-                        : "border-zinc-700 hover:border-zinc-500 text-zinc-400"
-                    }`}
-                  >
-                    {spd}x
-                  </button>
-                ))}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setShowDvrScrubber(false);
-                  if (dvrOffset > 0) handleDvrScrub(0);
-                }}
-                className="text-[10px] text-zinc-400 hover:text-zinc-200 cursor-pointer ml-auto"
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        )}
-
         {cameraFlags.length > 0 && (
           <div className="absolute top-11 left-2.5 z-20 flex flex-wrap items-center gap-1.5 pointer-events-auto">
             {cameraFlags.map((flag, idx) => {
@@ -1570,286 +1463,396 @@ function CameraTileComponent({
         )}
 
 
-        <div className="tile-actions">
-          {onBookmark && (
-            <button type="button" aria-label="Bookmark live video" title="Bookmark live video" onClick={onBookmark} disabled={!canPlayLive}>
-              <BookmarkPlus size={15} />
-            </button>
+        <div className={controlStyles.dock} onWheel={(event) => event.stopPropagation()}>
+          {/* Instant Hover Mini Timeline & Time Scrubbing Bar */}
+          {controlsVisible && (showDvrScrubber || isTileHovered || dvrOffset > 0) && (
+            <div
+              className={`${controlStyles.timeline} flex flex-col gap-1.5 p-2 rounded-lg bg-zinc-950/95 border border-zinc-700/80 backdrop-blur shadow-2xl text-xs transition-opacity duration-200`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px] font-semibold text-zinc-300">
+                <span className="flex flex-wrap items-center gap-1.5 text-sky-400">
+                  <History size={13} />
+                  <span>Hover Timeline Scrub</span>
+                  {dvrOffset > 0 ? (
+                    <span className="text-amber-400 font-mono font-bold">(-{dvrOffset}s)</span>
+                  ) : (
+                    <span className="text-emerald-400 font-mono font-bold">● LIVE</span>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleDvrScrub(0)}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                    dvrOffset > 0
+                      ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                      : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  ▶ RETURN TO LIVE
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-[10px] text-zinc-400 font-mono">-60s</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={60}
+                  step={1}
+                  value={dvrOffset}
+                  onChange={(e) => handleDvrScrub(Number(e.target.value))}
+                  className="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-sky-400"
+                  title="Drag to scrub back up to 60s"
+                />
+                <span className="shrink-0 whitespace-nowrap text-[10px] text-emerald-400 font-mono">0s (LIVE)</span>
+              </div>
+              <div className="flex items-center justify-between pt-1 border-t border-zinc-800/80 gap-2 flex-wrap">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleDvrScrub(10)}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                      dvrOffset === 10 ? "border-amber-400 text-amber-300 bg-amber-950/60" : "border-zinc-700 hover:border-zinc-500 text-zinc-300"
+                    }`}
+                    title="Instant 10-second rewind"
+                  >
+                    ⚡ -10s REWIND
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDvrScrub(30)}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
+                      dvrOffset === 30 ? "border-amber-400 text-amber-300 bg-amber-950/60" : "border-zinc-700 hover:border-zinc-500 text-zinc-300"
+                    }`}
+                    title="Instant 30-second rewind"
+                  >
+                    ⚡ -30s REWIND
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDvrScrub(60)}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer ${
+                      dvrOffset === 60 ? "border-amber-400 text-amber-300 bg-amber-950/60" : "border-zinc-700 hover:border-zinc-500 text-zinc-300"
+                    }`}
+                  >
+                    -60s
+                  </button>
+                </div>
+
+                {/* Speed Controls: 0.5x, 1x, 2x */}
+                <div className="flex flex-wrap items-center gap-1 border-l border-zinc-700/80 pl-2">
+                  <span className="text-[9px] text-zinc-400 font-mono">SPEED:</span>
+                  {[0.5, 1, 2].map((spd) => (
+                    <button
+                      key={spd}
+                      type="button"
+                      onClick={() => handleSetPlaybackSpeed(spd)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border transition-colors cursor-pointer ${
+                        playbackSpeed === spd
+                          ? "border-sky-400 text-sky-300 bg-sky-950/80 shadow-[0_0_6px_rgba(56,189,248,0.4)]"
+                          : "border-zinc-700 hover:border-zinc-500 text-zinc-400"
+                      }`}
+                    >
+                      {spd}x
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDvrScrubber(false);
+                    if (dvrOffset > 0) handleDvrScrub(0);
+                  }}
+                  className="text-[10px] text-zinc-400 hover:text-zinc-200 cursor-pointer ml-auto"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
           )}
-          {onCreateIncident && (
-            <button type="button" aria-label="Create incident" title="Create incident and protect recording" onClick={onCreateIncident} disabled={!canPlayLive}>
-              <Siren size={15} />
-            </button>
-          )}
-          <button
-            type="button"
-            aria-label={effectiveMuted ? "Unmute audio (Listen to camera)" : "Mute camera audio (Listening)"}
-            title={effectiveMuted ? "Click to hear live audio from camera" : "Camera audio listening is active. Click to mute."}
-            className={!effectiveMuted ? "audio-listening-active text-emerald-400 border-emerald-500/60 shadow-[0_0_8px_rgba(16,185,129,0.35)]" : ""}
-            onClick={() => setIsMuted(!effectiveMuted)}
-            disabled={!canPlayLive}
-            onDoubleClick={() => setShowAudioDiagnostic(true)}
-          >
-            {effectiveMuted ? <VolumeX size={15} /> : <Volume2 size={15} className="text-emerald-400" />}
-          </button>
-          {onSoloAudio && (
+
+          <div className={`tile-actions ${controlStyles.actions}`}>
+            {onBookmark && (
+              <button type="button" aria-label="Bookmark live video" title="Bookmark live video" onClick={onBookmark} disabled={!canPlayLive}>
+                <BookmarkPlus size={15} />
+              </button>
+            )}
+            {onCreateIncident && (
+              <button type="button" aria-label="Create incident" title="Create incident and protect recording" onClick={onCreateIncident} disabled={!canPlayLive}>
+                <Siren size={15} />
+              </button>
+            )}
             <button
               type="button"
-              aria-label="Solo Audio"
-              title={isSoloAudio ? "Solo Audio is Active (Click to unmute all)" : "Solo Audio: Mute all other cameras and isolate this stream"}
-              className={isSoloAudio ? "text-amber-400 border-amber-500/80 bg-amber-950/80 shadow-[0_0_10px_rgba(245,158,11,0.5)]" : ""}
-              onClick={() => onSoloAudio(camera.id)}
+              aria-label={effectiveMuted ? "Unmute audio (Listen to camera)" : "Mute camera audio (Listening)"}
+              title={effectiveMuted ? "Click to hear live audio from camera" : "Camera audio listening is active. Click to mute."}
+              className={!effectiveMuted ? "audio-listening-active text-emerald-400 border-emerald-500/60 shadow-[0_0_8px_rgba(16,185,129,0.35)]" : ""}
+              onClick={() => setIsMuted(!effectiveMuted)}
+              disabled={!canPlayLive}
+              onDoubleClick={() => setShowAudioDiagnostic(true)}
+            >
+              {effectiveMuted ? <VolumeX size={15} /> : <Volume2 size={15} className="text-emerald-400" />}
+            </button>
+            {onSoloAudio && (
+              <button
+                type="button"
+                aria-label="Solo Audio"
+                title={isSoloAudio ? "Solo Audio is Active (Click to unmute all)" : "Solo Audio: Mute all other cameras and isolate this stream"}
+                className={isSoloAudio ? "text-amber-400 border-amber-500/80 bg-amber-950/80 shadow-[0_0_10px_rgba(245,158,11,0.5)]" : ""}
+                onClick={() => onSoloAudio(camera.id)}
+                disabled={!canPlayLive}
+              >
+                <Headphones size={15} />
+              </button>
+            )}
+            <HoldToTalkButton
+              cameraId={camera.id}
+              disabled={!canPlayLive}
+              unsupportedReason={talkbackUnsupportedReason}
+              onTalkingChange={handleTalkChange}
+            />
+            <button
+              type="button"
+              aria-label="Direct Interventions (Siren, Strobe & Door Release)"
+              title={
+                isSirenActive
+                  ? "🚨 Siren/Strobe Active! Click to manage or stop"
+                  : isDoorUnlocked
+                  ? "🔓 Door Unlocked! Click to manage"
+                  : "⚡ Direct Operator Interventions: 110dB Edge Siren, Strobe, Floodlight & Door Release"
+              }
+              className={
+                isSirenActive
+                  ? "text-rose-400 border-rose-500/80 bg-rose-950/90 shadow-[0_0_12px_rgba(244,63,94,0.6)] animate-pulse"
+                  : isDoorUnlocked
+                  ? "text-emerald-400 border-emerald-500/80 bg-emerald-950/80 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+                  : showInterventionModal
+                  ? "text-rose-300 border-rose-500/60 bg-rose-950/60"
+                  : ""
+              }
+              onClick={() => setShowInterventionModal((prev) => !prev)}
               disabled={!canPlayLive}
             >
-              <Headphones size={15} />
+              <Zap size={15} />
             </button>
-          )}
-          <HoldToTalkButton
-            cameraId={camera.id}
-            disabled={!canPlayLive}
-            unsupportedReason={talkbackUnsupportedReason}
-            onTalkingChange={handleTalkChange}
-          />
-          <button
-            type="button"
-            aria-label="Direct Interventions (Siren, Strobe & Door Release)"
-            title={
-              isSirenActive
-                ? "🚨 Siren/Strobe Active! Click to manage or stop"
-                : isDoorUnlocked
-                ? "🔓 Door Unlocked! Click to manage"
-                : "⚡ Direct Operator Interventions: 110dB Edge Siren, Strobe, Floodlight & Door Release"
-            }
-            className={
-              isSirenActive
-                ? "text-rose-400 border-rose-500/80 bg-rose-950/90 shadow-[0_0_12px_rgba(244,63,94,0.6)] animate-pulse"
-                : isDoorUnlocked
-                ? "text-emerald-400 border-emerald-500/80 bg-emerald-950/80 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
-                : showInterventionModal
-                ? "text-rose-300 border-rose-500/60 bg-rose-950/60"
-                : ""
-            }
-            onClick={() => setShowInterventionModal((prev) => !prev)}
-            disabled={!canPlayLive}
-          >
-            <Zap size={15} />
-          </button>
-          <button
-            type="button"
-            aria-label="PTZ Click-to-Center & Box Zoom"
-            title={
-              isPtzTargetMode
-                ? "🎯 PTZ Wall Active: Click view to Center, Drag box to Zoom, Double-click to Home (Click to disable)"
-                : "🎯 PTZ Wall Control: Click-to-Center & Box Zoom (Optical/Digital Sync)"
-            }
-            className={
-              isPtzTargetMode
-                ? "text-cyan-400 border-cyan-500/80 bg-cyan-950/80 shadow-[0_0_10px_rgba(6,182,212,0.5)] animate-pulse"
-                : ""
-            }
-            onClick={() => {
-              setIsPtzTargetMode((prev) => !prev);
-              if (!isPtzTargetMode) {
-                showPtzFeedback("🎯 PTZ Wall Mode: Click to Center, Drag box to Zoom");
+            <button
+              type="button"
+              aria-label="PTZ Click-to-Center & Box Zoom"
+              title={
+                isPtzTargetMode
+                  ? "🎯 PTZ Wall Active: Click view to Center, Drag box to Zoom, Double-click to Home (Click to disable)"
+                  : "🎯 PTZ Wall Control: Click-to-Center & Box Zoom (Optical/Digital Sync)"
               }
-            }}
-            disabled={!canPlayLive}
-          >
-            <Crosshair size={15} />
-          </button>
-          {camera.capabilities.ptz && (
-            <button type="button" aria-label="PTZ controls" title="PTZ controls" onClick={() => setShowPtzControl(!showPtzControl)} disabled={!canPlayLive}>
-              <Move3D size={15} />
+              className={
+                isPtzTargetMode
+                  ? "text-cyan-400 border-cyan-500/80 bg-cyan-950/80 shadow-[0_0_10px_rgba(6,182,212,0.5)] animate-pulse"
+                  : ""
+              }
+              onClick={() => {
+                setIsPtzTargetMode((prev) => !prev);
+                if (!isPtzTargetMode) {
+                  showPtzFeedback("🎯 PTZ Wall Mode: Click to Center, Drag box to Zoom");
+                }
+              }}
+              disabled={!canPlayLive}
+            >
+              <Crosshair size={15} />
             </button>
-          )}
-          {onUpdateRecording && (
-            <button type="button" aria-label="Recording settings" title="Recording settings" onClick={openRecordingSettings}>
-              <SlidersHorizontal size={15} />
-            </button>
-          )}
-          <Link
-            href={`/settings/alerts?branchId=${encodeURIComponent(camera.branchId || "")}&cameraId=${encodeURIComponent(camera.id)}`}
-            aria-label="Alert suppression and toggle settings"
-            title="Configure Alert Toggles & Suppression for this camera"
-            className="inline-flex items-center justify-center p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-amber-400 transition-colors"
-          >
-            <Bell size={15} />
-          </Link>
-          <button
-            type="button"
-            aria-label="360 Dewarp"
-            title={showFisheyeDewarp ? "Exit 360 Dewarp" : "Enter 360 Dewarp (Virtual PTZ & Quad Split)"}
-            className={showFisheyeDewarp ? "text-sky-400 border-sky-500/60 bg-sky-950/70" : ""}
-            onClick={() => setShowFisheyeDewarp(!showFisheyeDewarp)}
-            disabled={!canPlayLive}
-          >
-            <Move size={15} />
-          </button>
-          <button
-            type="button"
-            aria-label="Operator Status Flags"
-            title={
-              cameraFlags.length > 0
-                ? `Operator Flags (${cameraFlags.map((f) => f.label).join(", ")}): Click to manage`
-                : "Add Operator Status Flags (Maintenance Needed, Lens Dirty, VIP, etc.)"
-            }
-            className={
-              cameraFlags.length > 0
-                ? "text-amber-400 border-amber-500/70 bg-amber-950/80 shadow-[0_0_8px_rgba(245,158,11,0.35)]"
-                : ""
-            }
-            onClick={() => setShowFlagModal(true)}
-          >
-            <Tag size={15} />
-          </button>
-          <button
-            type="button"
-            aria-label="Dispatch to Wall"
-            title="Dispatch camera to physical SOC Video Wall"
-            onClick={() => setShowDispatchModal(true)}
-            disabled={!canPlayLive}
-          >
-            <Tv size={15} />
-          </button>
-          <button
-            type="button"
-            aria-label={isFlashbackEnabled ? "Disable Event Flashback PiP" : "Enable Event Flashback PiP"}
-            title={
-              isFlashbackEnabled
-                ? "Event Flashback PiP is ACTIVE (Click to hide flashback frame)"
-                : "Event Flashback PiP is OFF (Click to show 5s alert preview frame)"
-            }
-            className={
-              isFlashbackEnabled
-                ? "text-red-400 border-red-500/80 bg-red-950/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]"
-                : ""
-            }
-            onClick={toggleFlashback}
-            disabled={!canPlayLive}
-          >
-            <History size={15} />
-          </button>
-          <button
-            type="button"
-            aria-label="Operator Live Notes"
-            title={
-              activeAnnotationCount > 0
-                ? `Live Operator Notes (${activeAnnotationCount} active pin${activeAnnotationCount === 1 ? "" : "s"}) – synced to all operators in real-time. Click to view/add.`
-                : "Pin a live operator note on this camera tile (shift-aware, shift-persistent log)"
-            }
-            className={
-              activeAnnotationCount > 0
-                ? "text-indigo-400 border-indigo-500/80 bg-indigo-950/80 shadow-[0_0_8px_rgba(99,102,241,0.4)] relative"
-                : showAnnotationPanel
-                ? "text-indigo-300 border-indigo-500/60 bg-indigo-950/60"
-                : ""
-            }
-            onClick={() => setShowAnnotationPanel((p) => !p)}
-          >
-            <MessageSquarePlus size={15} />
-            {activeAnnotationCount > 0 && (
-              <span
-                className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] px-[3px] rounded-full bg-indigo-500 text-[9px] font-black text-white flex items-center justify-center border border-zinc-900 pointer-events-none"
-              >
-                {activeAnnotationCount}
-              </span>
+            {camera.capabilities.ptz && (
+              <button type="button" aria-label="PTZ controls" title="PTZ controls" onClick={() => setShowPtzControl(!showPtzControl)} disabled={!canPlayLive}>
+                <Move3D size={15} />
+              </button>
             )}
-          </button>
-          <button
-            type="button"
-            aria-label="Pop-out camera stream"
-            title="Pop-out stream into a detached window for multi-monitor display"
-            onClick={() => {
-              const popoutUrl = `/control-room?detached=true&cameraId=${encodeURIComponent(camera.id)}`;
-              window.open(popoutUrl, `camera_detached_${camera.id}`, "width=1280,height=720,menubar=no,toolbar=no,location=no,status=no");
-            }}
-          >
-            <ExternalLink size={15} />
-          </button>
-          <button
-            type="button"
-            aria-label="Open fullscreen"
-            title="Open fullscreen"
-            onClick={() => void tileRef.current?.requestFullscreen()}
-          >
-            <Maximize2 size={15} />
-          </button>
-          <button
-            type="button"
-            aria-label="Zoom out"
-            title="Zoom out (-25% · Shift+Click for 100%)"
-            onClick={(e) => {
-              if (e.shiftKey) {
-                resetZoom();
-              } else {
-                setZoom((value) => {
-                  const next = Math.max(1, Number((value - 0.25).toFixed(2)));
-                  if (next === 1) setPan({ x: 0, y: 0 });
-                  return next;
-                });
-              }
-            }}
-            disabled={zoom <= 1}
-          >
-            <ZoomOut size={15} />
-          </button>
-          {zoom > 1 && (
+            {onUpdateRecording && (
+              <button type="button" aria-label="Recording settings" title="Recording settings" onClick={openRecordingSettings}>
+                <SlidersHorizontal size={15} />
+              </button>
+            )}
+            <Link
+              href={`/settings/alerts?branchId=${encodeURIComponent(camera.branchId || "")}&cameraId=${encodeURIComponent(camera.id)}`}
+              aria-label="Alert suppression and toggle settings"
+              title="Configure Alert Toggles & Suppression for this camera"
+              className="inline-flex items-center justify-center p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-amber-400 transition-colors"
+            >
+              <Bell size={15} />
+            </Link>
             <button
               type="button"
-              className="zoom-pill"
-              title={`Zoom: ${Math.round(zoom * 100)}% (Click to reset to 100%)`}
-              onClick={resetZoom}
+              aria-label="360 Dewarp"
+              title={showFisheyeDewarp ? "Exit 360 Dewarp" : "Enter 360 Dewarp (Virtual PTZ & Quad Split)"}
+              className={showFisheyeDewarp ? "text-sky-400 border-sky-500/60 bg-sky-950/70" : ""}
+              onClick={() => setShowFisheyeDewarp(!showFisheyeDewarp)}
+              disabled={!canPlayLive}
             >
-              {Math.round(zoom * 100)}% · Reset
+              <Move size={15} />
             </button>
-          )}
-          <button
-            type="button"
-            aria-label="Zoom in"
-            title="Zoom in (+25%, max 300% · Shift+Click for 300%)"
-            onClick={(e) => {
-              if (e.shiftKey) {
-                setZoom(3);
-              } else {
-                setZoom((value) => Math.min(3, Number((value + 0.25).toFixed(2))));
-              }
-            }}
-            disabled={zoom >= 3}
-          >
-            <ZoomIn size={15} />
-          </button>
-          <button
-            type="button"
-            aria-label="Instant Rewind & DVR Scrub"
-            title={showDvrScrubber ? "Close DVR Quick Scrub" : "Instant Rewind: Quick scrub past 10s–60s without leaving live view"}
-            className={showDvrScrubber || dvrOffset > 0 ? "text-amber-400 border-amber-500/80 bg-amber-950/80 shadow-[0_0_8px_rgba(245,158,11,0.4)]" : ""}
-            onClick={() => setShowDvrScrubber(!showDvrScrubber)}
-            disabled={!canPlayLive}
-          >
-            <History size={15} />
-          </button>
-          <button
-            type="button"
-            aria-label={isRecordingClip ? "Stop recording clip" : "Record 15-second incident evidence clip"}
-            title={isRecordingClip ? `Recording incident clip (${clipCountdown}s left). Click to stop and download now.` : "One-Click Incident Clip: Record and download 15s evidence video with audio"}
-            className={isRecordingClip ? "text-red-400 border-red-500 bg-red-950/90 shadow-[0_0_12px_rgba(239,68,68,0.7)] animate-pulse" : ""}
-            onClick={handleExportIncidentClip}
-            disabled={!canPlayLive}
-          >
-            <Film size={15} />
-          </button>
-          <button type="button" aria-label="Take forensic snapshot" title="Take forensic watermarked snapshot" onClick={takeSnapshot} disabled={!hasLiveFrame}><SnapshotIcon size={15} /></button>
-          {onDeleteCamera && (
             <button
               type="button"
-              aria-label="Remove camera from this wall"
-              title="Remove camera from this wall"
-              onClick={() => setShowDeleteModal(true)}
-              style={{ color: "#f87171" }}
+              aria-label="Operator Status Flags"
+              title={
+                cameraFlags.length > 0
+                  ? `Operator Flags (${cameraFlags.map((f) => f.label).join(", ")}): Click to manage`
+                  : "Add Operator Status Flags (Maintenance Needed, Lens Dirty, VIP, etc.)"
+              }
+              className={
+                cameraFlags.length > 0
+                  ? "text-amber-400 border-amber-500/70 bg-amber-950/80 shadow-[0_0_8px_rgba(245,158,11,0.35)]"
+                  : ""
+              }
+              onClick={() => setShowFlagModal(true)}
             >
-              <Trash2 size={15} />
+              <Tag size={15} />
             </button>
-          )}
+            <button
+              type="button"
+              aria-label="Dispatch to Wall"
+              title="Dispatch camera to physical SOC Video Wall"
+              onClick={() => setShowDispatchModal(true)}
+              disabled={!canPlayLive}
+            >
+              <Tv size={15} />
+            </button>
+            <button
+              type="button"
+              aria-label={isFlashbackEnabled ? "Disable Event Flashback PiP" : "Enable Event Flashback PiP"}
+              title={
+                isFlashbackEnabled
+                  ? "Event Flashback PiP is ACTIVE (Click to hide flashback frame)"
+                  : "Event Flashback PiP is OFF (Click to show 5s alert preview frame)"
+              }
+              className={
+                isFlashbackEnabled
+                  ? "text-red-400 border-red-500/80 bg-red-950/80 shadow-[0_0_8px_rgba(239,68,68,0.4)]"
+                  : ""
+              }
+              onClick={toggleFlashback}
+              disabled={!canPlayLive}
+            >
+              <History size={15} />
+            </button>
+            <button
+              type="button"
+              aria-label="Operator Live Notes"
+              title={
+                activeAnnotationCount > 0
+                  ? `Live Operator Notes (${activeAnnotationCount} active pin${activeAnnotationCount === 1 ? "" : "s"}) – synced to all operators in real-time. Click to view/add.`
+                  : "Pin a live operator note on this camera tile (shift-aware, shift-persistent log)"
+              }
+              className={
+                activeAnnotationCount > 0
+                  ? "text-indigo-400 border-indigo-500/80 bg-indigo-950/80 shadow-[0_0_8px_rgba(99,102,241,0.4)] relative"
+                  : showAnnotationPanel
+                  ? "text-indigo-300 border-indigo-500/60 bg-indigo-950/60"
+                  : ""
+              }
+              onClick={() => setShowAnnotationPanel((p) => !p)}
+            >
+              <MessageSquarePlus size={15} />
+              {activeAnnotationCount > 0 && (
+                <span
+                  className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] px-[3px] rounded-full bg-indigo-500 text-[9px] font-black text-white flex items-center justify-center border border-zinc-900 pointer-events-none"
+                >
+                  {activeAnnotationCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              aria-label="Pop-out camera stream"
+              title="Pop-out stream into a detached window for multi-monitor display"
+              onClick={() => {
+                const popoutUrl = `/control-room?detached=true&cameraId=${encodeURIComponent(camera.id)}`;
+                window.open(popoutUrl, `camera_detached_${camera.id}`, "width=1280,height=720,menubar=no,toolbar=no,location=no,status=no");
+              }}
+            >
+              <ExternalLink size={15} />
+            </button>
+            <button
+              type="button"
+              aria-label="Open fullscreen"
+              title="Open fullscreen"
+              onClick={() => void tileRef.current?.requestFullscreen()}
+            >
+              <Maximize2 size={15} />
+            </button>
+            <button
+              type="button"
+              aria-label="Zoom out"
+              title="Zoom out (-25% · Shift+Click for 100%)"
+              onClick={(e) => {
+                if (e.shiftKey) {
+                  resetZoom();
+                } else {
+                  setZoom((value) => {
+                    const next = Math.max(1, Number((value - 0.25).toFixed(2)));
+                    if (next === 1) setPan({ x: 0, y: 0 });
+                    return next;
+                  });
+                }
+              }}
+              disabled={zoom <= 1}
+            >
+              <ZoomOut size={15} />
+            </button>
+            {zoom > 1 && (
+              <button
+                type="button"
+                className="zoom-pill"
+                title={`Zoom: ${Math.round(zoom * 100)}% (Click to reset to 100%)`}
+                onClick={resetZoom}
+              >
+                {Math.round(zoom * 100)}% · Reset
+              </button>
+            )}
+            <button
+              type="button"
+              aria-label="Zoom in"
+              title="Zoom in (+25%, max 300% · Shift+Click for 300%)"
+              onClick={(e) => {
+                if (e.shiftKey) {
+                  setZoom(3);
+                } else {
+                  setZoom((value) => Math.min(3, Number((value + 0.25).toFixed(2))));
+                }
+              }}
+              disabled={zoom >= 3}
+            >
+              <ZoomIn size={15} />
+            </button>
+            <button
+              type="button"
+              aria-label="Instant Rewind & DVR Scrub"
+              title={showDvrScrubber ? "Close DVR Quick Scrub" : "Instant Rewind: Quick scrub past 10s–60s without leaving live view"}
+              className={showDvrScrubber || dvrOffset > 0 ? "text-amber-400 border-amber-500/80 bg-amber-950/80 shadow-[0_0_8px_rgba(245,158,11,0.4)]" : ""}
+              onClick={() => setShowDvrScrubber(!showDvrScrubber)}
+              disabled={!canPlayLive}
+            >
+              <History size={15} />
+            </button>
+            <button
+              type="button"
+              aria-label={isRecordingClip ? "Stop recording clip" : "Record 15-second incident evidence clip"}
+              title={isRecordingClip ? `Recording incident clip (${clipCountdown}s left). Click to stop and download now.` : "One-Click Incident Clip: Record and download 15s evidence video with audio"}
+              className={isRecordingClip ? "text-red-400 border-red-500 bg-red-950/90 shadow-[0_0_12px_rgba(239,68,68,0.7)] animate-pulse" : ""}
+              onClick={handleExportIncidentClip}
+              disabled={!canPlayLive}
+            >
+              <Film size={15} />
+            </button>
+            <button type="button" aria-label="Take forensic snapshot" title="Take forensic watermarked snapshot" onClick={takeSnapshot} disabled={!hasLiveFrame}><SnapshotIcon size={15} /></button>
+            {onDeleteCamera && (
+              <button
+                type="button"
+                aria-label="Remove camera from this wall"
+                title="Remove camera from this wall"
+                onClick={() => setShowDeleteModal(true)}
+                style={{ color: "#f87171" }}
+              >
+                <Trash2 size={15} />
+              </button>
+            )}
+          </div>
         </div>
         {showPtzControl && isActive && session?.sessionId && (
           <div className="ptz-overlay">
