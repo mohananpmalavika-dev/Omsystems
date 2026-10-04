@@ -162,7 +162,12 @@ export class AnalyticsPipeline {
     // Initialize enhanced detectors
     this.personDetector = new PersonDetector();
     this.vehicleDetector = new VehicleDetector();
-    this.helmetDetector = new HelmetDetector(null, environmentProbability("HELMET_CONFIDENCE_THRESHOLD", 0.88));
+    this.helmetDetector = new HelmetDetector(
+      null,
+      environmentProbability("HELMET_CONFIDENCE_THRESHOLD", 0.88),
+      null,
+      process.env.HELMET_FAST_ALERT !== "false",
+    );
     this.ppeDetector = new PPEDetector(environmentProbability("PPE_CONFIDENCE_THRESHOLD", 0.6));
     this.fallDetector = new FallDetector();
     this.smokeFireDetector = new SmokeFireDetector(

@@ -267,6 +267,7 @@ services:
       MODELS_DIR: /app/models
       ANALYTICS_REQUIRE_MODELS: "${ANALYTICS_REQUIRE_MODELS:-false}"
       FACE_RECOGNITION_ENABLED: "true"
+      HELMET_FAST_ALERT: "true"
       # ArcFace model — downloaded from GCS by startup-script.sh before container starts
       ARCFACE_MODEL_PATH: /app/models/face/arcface_r100.onnx
     ports:

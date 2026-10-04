@@ -150,4 +150,14 @@ describe("helmet false-alarm evidence", () => {
       expect(await detector.detect(frame(seconds,[{...person(0.83),boundingBox:{...personBox,height:0.69}}]))).toEqual([]);
     }expect(classifier.run).not.toHaveBeenCalled();
   });
+
+  it("confirms a seated wearer immediately on the first frame when fastAlert is enabled", async () => {
+    const detector = new HelmetDetector(null, 0.88, positiveClassifier(), true);
+    await detector.initialize();
+    const candidate = { ...person(0.83), boundingBox: { x: 0.47, y: 0.19, width: 0.27, height: 0.737 } };
+    const results = await detector.detect(frame(0, [candidate]));
+    expect(results).toHaveLength(1);
+    expect(results[0]?.objects.find(o => o.label === "person")?.confidence).toBe(0.83);
+    expect(results[0]?.objects.find(o => o.label === "helmet")?.confidence).toBeGreaterThanOrEqual(0.95);
+  });
 });

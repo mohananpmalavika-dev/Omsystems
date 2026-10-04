@@ -67,7 +67,7 @@ const schema = z.object({
   ),
   MEDIA_ACCESS_TTL_SECONDS: z.coerce.number().int().min(30).max(86400).default(3600),
   CAMERA_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().min(5_000).max(3_600_000).default(30_000),
-  CAMERA_ANALYTICS_INTERVAL_MS: z.coerce.number().int().min(1_000).max(300_000).default(30_000),
+  CAMERA_ANALYTICS_INTERVAL_MS: z.coerce.number().int().min(1_000).max(300_000).default(3_000),
   SECURE_FACE_AI_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   SECURE_FACE_MODEL_MANIFEST: z.string().default("./models/secure-face/manifest.json"),
   SECURE_FACE_MODELS_DIR: z.string().default("./models/secure-face"),

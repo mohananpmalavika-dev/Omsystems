@@ -206,7 +206,7 @@ export class CameraHeartbeatService {
       );
       // FFmpeg process startup is CPU intensive. Two concurrent captures keep
       // inference fresh without allowing a large branch to exhaust the host.
-      const batchSize = 2;
+      const batchSize = 4;
       for (let index = 0; index < cameras.length; index += batchSize) {
         await Promise.allSettled(cameras.slice(index, index + batchSize).map((camera) => this.captureAnalyticsFrame(camera)));
       }

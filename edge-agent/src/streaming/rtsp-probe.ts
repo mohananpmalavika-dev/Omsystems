@@ -171,6 +171,10 @@ export async function captureRtspRgbFrame(
   const result = await runProcess(ffmpegPath, [
     "-v", "error",
     "-rtsp_transport", "tcp",
+    "-fflags", "nobuffer",
+    "-flags", "low_delay",
+    "-analyzeduration", "500000",
+    "-probesize", "500000",
     "-i", uri,
     "-frames:v", "1",
     "-vf", `scale=${width}:${height}`,

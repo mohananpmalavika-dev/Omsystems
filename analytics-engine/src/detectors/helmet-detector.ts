@@ -51,16 +51,19 @@ export class HelmetDetector extends BaseDetector {
     confirmations: number;
     cropMode: "standard" | "raised";
   }>>();
+  private readonly fastAlert: boolean;
 
   constructor(
     inference: ObjectFrameInference | null = null,
     confidenceThreshold = 0.88,
     classifier: HelmetClassificationFrameInference | null = null,
+    fastAlert = process.env.HELMET_FAST_ALERT === "true",
   ) {
-    super("helmet", "1.1.5");
+    super("helmet", "1.1.6");
     this.inference = inference;
     this.classifier = classifier;
     this.MIN_CONFIDENCE = confidenceThreshold;
+    this.fastAlert = fastAlert;
   }
 
   async initialize(): Promise<void> {
@@ -215,8 +218,9 @@ export class HelmetDetector extends BaseDetector {
           const narrowResult = await this.classifier.run(frame, narrow);
           const confidence = Math.min(wideResult.wearingHelmetConfidence, narrowResult.wearingHelmetConfidence);
           if (wideResult.wearingHelmet && narrowResult.wearingHelmet &&
-              confidence >= Math.max(this.MIN_CONFIDENCE, 0.98)) {
-            if (this.confirmClassifiedHead(frame.cameraId, box, frame.timestamp.getTime(), 3, "raised")) {
+              confidence >= Math.max(this.MIN_CONFIDENCE, this.fastAlert ? 0.95 : 0.98)) {
+            const requiredConfirmations = this.fastAlert ? 1 : 3;
+            if (this.confirmClassifiedHead(frame.cameraId, box, frame.timestamp.getTime(), requiredConfirmations, "raised")) {
               indoorHelmetDetections.push({ personBoundingBox: box, helmetBoundingBox: narrow,
                 helmetDetected: true, evidenceSource: "confirmed-head-classification", confidence,
                 personConfidence: person.confidence ?? 0, riskLevel: "violation" });
@@ -266,7 +270,9 @@ export class HelmetDetector extends BaseDetector {
           standardResult.wearingHelmetConfidence,
         );
         if (!presence) {
-          const confirmations = (person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ? 2 : 3;
+          const confirmations = this.fastAlert
+            ? 1
+            : ((person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ? 2 : 3);
           if (!this.confirmClassifiedHead(frame.cameraId, person.boundingBox, frame.timestamp.getTime(), confirmations)) continue;
           presence = {
             personBoundingBox: person.boundingBox,
