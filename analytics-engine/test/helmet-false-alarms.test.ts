@@ -107,6 +107,22 @@ describe("helmet false-alarm evidence", () => {
     for (const seconds of [0, 2, 4]) expect(await detector.detect(frame(seconds, [person(0.95)]))).toEqual([]);
   });
 
+  it.each([0.8988568926467266, 0.95])("rejects positive torso crops when compact head evidence disagrees, person %f", async (confidence) => {
+    const classifier = { run: vi.fn(async (_frame, box) => {
+      // Supplied CH2 bare-head snapshot: broad crops ~0.97, wider compact
+      // head 0.234, centered compact head 0.938. A stronger person score
+      // must not bypass the contradictory head evidence either.
+      const p = box.height > personBox.height * 0.15 ? 0.9734
+        : box.width < personBox.width ? 0.937654 : 0.233697;
+      return { wearingHelmet: p >= 0.5, confidence: Math.max(p, 1-p),
+        wearingHelmetConfidence: p, unwearingHelmetConfidence: 1-p };
+    }) };
+    const detector = new HelmetDetector(null, 0.88, classifier);
+    await detector.initialize();
+    for (const seconds of [0, 2, 4, 6]) expect(await detector.detect(frame(seconds, [person(confidence)]))).toEqual([]);
+    expect(classifier.run).toHaveBeenCalled();
+  });
+
   it("requires three distinct positive frames for a well-framed full person below 0.90", async () => {
     const detector = new HelmetDetector(null, 0.88, positiveClassifier());
     await detector.initialize();
