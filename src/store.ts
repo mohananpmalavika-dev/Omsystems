@@ -51,6 +51,7 @@ import {
   sortedMatchingRules,
 } from "./analytics/rule-engine.js";
 import { moreSevere, resolveAlertSeverity } from "./analytics/severity-policy.js";
+import { buildFalseAlarmSignature, matchesFalseAlarm, type FalseAlarmSignature } from "./analytics/false-alarm-feedback.js";
 import type {
   CameraApprovalInput,
   CameraDiscoveryInput,
@@ -691,6 +692,8 @@ export class MemoryStore {
   readonly analyticsRules: AnalyticsRule[] = [];
   readonly analyticsEvents: AnalyticsEvent[] = [];
   readonly analyticsAlerts: AnalyticsAlert[] = [];
+  private readonly detectionSignatures = new Map<string, FalseAlarmSignature | null>();
+  private readonly falseAlarmSignatures = new Map<string, FalseAlarmSignature | null>();
   readonly analyticsAcknowledgements: Array<Record<string, unknown>> = [];
   readonly analyticsEscalations: Array<Record<string, unknown>> = [];
   readonly analyticsNotifications: AlertNotification[] = [];
@@ -3729,11 +3732,15 @@ export class MemoryStore {
       this.analyticsRules.filter((rule) => rule.cameraId === input.cameraId),
       input,
     );
+    const signature = matchingRules.length ? await buildFalseAlarmSignature(input) : null;
     const now = new Date().toISOString();
     const eventId = randomUUID();
     const alerts: AnalyticsAlert[] = [];
     let created = 0;
     for (const rule of matchingRules) {
+      if (this.analyticsAlerts.some((alert) => alert.tenantId === input.tenantId &&
+          alert.cameraId === input.cameraId && alert.ruleId === rule.id && alert.status === "false_alarm" &&
+          matchesFalseAlarm(this.falseAlarmSignatures.get(alert.id) ?? null, signature))) continue;
       const effectiveSeverity = resolveAlertSeverity({
         configuredSeverity: rule.severity,
         durationSeconds: input.durationSeconds,
@@ -3755,7 +3762,7 @@ export class MemoryStore {
         continue;
       }
       const recentlyResolved = this.analyticsAlerts.find((alert) => {
-        if (alert.ruleId !== rule.id || alert.cameraId !== input.cameraId || !alert.resolvedAt) return false;
+        if (alert.ruleId !== rule.id || alert.cameraId !== input.cameraId || alert.status !== "resolved" || !alert.resolvedAt) return false;
         const elapsed = Date.parse(input.occurredAt) - Date.parse(alert.resolvedAt);
         return elapsed >= 0 && elapsed <= rule.cooldownSeconds * 1_000;
       });
@@ -3781,6 +3788,7 @@ export class MemoryStore {
         version: 1, createdAt: now, updatedAt: now,
       };
       this.analyticsAlerts.push(alert);
+      this.detectionSignatures.set(alert.id, signature);
       alerts.push(alert);
       created += 1;
     }
@@ -3988,7 +3996,20 @@ export class MemoryStore {
       alert.assignedAt = now;
     }
     if (input.status === "resolved") alert.resolvedAt = now;
-    if (input.status === "false_alarm") alert.falseAlarmReason = input.falseAlarmReason;
+    if (input.status === "false_alarm") {
+      alert.falseAlarmReason = input.falseAlarmReason;
+      alert.resolvedAt = now;
+      const original = this.analyticsEvents.find((event) => event.id === alert.eventId && event.tenantId === inputTenantId);
+      const signature = this.detectionSignatures.get(alert.id) ?? (original ? await buildFalseAlarmSignature(original) : null);
+      this.falseAlarmSignatures.set(alert.id, structuredClone(signature));
+      alert.repeatSuppressionActive = Boolean(signature);
+      for (const notification of this.analyticsNotifications) {
+        if (notification.alertId === id && ["queued", "failed"].includes(notification.status)) {
+          notification.status = "cancelled";
+          notification.updatedAt = now;
+        }
+      }
+    }
     return alert;
   }
 

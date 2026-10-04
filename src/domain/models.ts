@@ -1556,6 +1556,7 @@ export interface AnalyticsAlert {
   acknowledgedBy?: string | undefined;
   acknowledgedAt?: string | undefined;
   falseAlarmReason?: string | undefined;
+  repeatSuppressionActive?: boolean | undefined;
   resolvedAt?: string | undefined;
   assignedTo?: string | undefined;
   assignedAt?: string | undefined;

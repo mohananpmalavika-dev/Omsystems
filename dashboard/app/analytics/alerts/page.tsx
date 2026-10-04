@@ -382,9 +382,12 @@ export default function AiAlertsIncidentHubPage() {
         throw new Error(errData.message || errData.error || `HTTP ${res.status}`);
       }
 
+      const reviewed = await res.json();
       setActionMessage({
         kind: "success",
-        text: `Alert successfully marked as False Alarm: ${reason}`,
+        text: reviewed.repeatSuppressionActive
+          ? "Marked as false alarm. Matching object or scene repeats will be suppressed; new events can still alert."
+          : "Marked as false alarm. Repeat suppression needs object identity or image evidence for this alert.",
       });
 
       // Update local state immediately
@@ -1135,6 +1138,9 @@ export default function AiAlertsIncidentHubPage() {
               </div>
 
               <div className="space-y-4">
+                <p className="text-xs text-slate-400">
+                  Matching object or scene repeats are suppressed when identifying evidence is available. New events can still alert.
+                </p>
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1.5">
                     False Alarm Categorization <span className="text-rose-400">*</span>

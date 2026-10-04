@@ -660,6 +660,7 @@ export async function registerAnalyticsRoutes(
       actorUserId: request.currentUser.id,
       ...(body.notes !== undefined && { notes: body.notes }),
       ...(body.falseAlarmReason !== undefined && { falseAlarmReason: body.falseAlarmReason }),
+      ...(body.expectedVersion !== undefined && { expectedVersion: body.expectedVersion }),
     };
     
     let updated;

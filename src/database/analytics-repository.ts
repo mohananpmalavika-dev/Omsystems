@@ -25,6 +25,7 @@ import {
   sortedMatchingRules,
 } from "../analytics/rule-engine.js";
 import { moreSevere, resolveAlertSeverity } from "../analytics/severity-policy.js";
+import { buildFalseAlarmSignature, matchesFalseAlarm, type FalseAlarmSignature } from "../analytics/false-alarm-feedback.js";
 
 function correlationCount(metadata?: Record<string, unknown>) {
   const explicit = metadata?.correlatedDetectionCount;
@@ -254,6 +255,8 @@ export class AnalyticsRepository {
         "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
         [`${input.tenantId}:${input.sourceEventId}`],
       );
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+        [`analytics-camera:${input.tenantId}:${input.cameraId}`]);
       const camera = await client.query(
         `SELECT camera.id, COALESCE(camera.branch_node_id::text, node.id::text) AS branch_id
          FROM cameras camera
@@ -287,6 +290,7 @@ export class AnalyticsRepository {
         [input.cameraId, input.tenantId, eventDetectionTypes(input)],
       );
       const rules = sortedMatchingRules(candidates.rows.map(mapRule), input);
+      const signature = rules.length ? await buildFalseAlarmSignature(input) : null;
       const eventId = randomUUID();
       await client.query(
         `INSERT INTO analytics_events (
@@ -339,6 +343,13 @@ export class AnalyticsRepository {
       let created = 0;
       let suppressedByPolicy = 0;
       for (const rule of rules) {
+        const feedback = signature ? await client.query(
+          `SELECT false_alarm_signature FROM analytics_alerts
+           WHERE tenant_id=$1 AND camera_id=$2 AND rule_id=$3
+             AND status='false_alarm' AND false_alarm_signature IS NOT NULL`,
+          [input.tenantId, input.cameraId, rule.id],
+        ) : { rows: [] };
+        if (feedback.rows.some((row) => matchesFalseAlarm(json<FalseAlarmSignature | null>(row.false_alarm_signature, null), signature))) continue;
         const effectiveSeverity = resolveAlertSeverity({
           configuredSeverity: rule.severity,
           durationSeconds: input.durationSeconds,
@@ -371,7 +382,7 @@ export class AnalyticsRepository {
         const recentlyResolved = await client.query(
           `SELECT id FROM analytics_alerts
            WHERE rule_id=$1 AND camera_id=$2
-             AND status IN ('resolved', 'false_alarm')
+             AND status = 'resolved'
              AND resolved_at IS NOT NULL
              AND resolved_at >= $3::timestamptz - ($4::double precision * interval '1 second')
            LIMIT 1`,
@@ -412,8 +423,8 @@ export class AnalyticsRepository {
              id, tenant_id, camera_id, rule_id, event_id, title, description,
              severity, confidence, object_classes, model_version,
            snapshot_reference, clip_reference, first_detected_at,
-             last_detected_at, sla_due_at, correlation_key
-           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14,$15,$16)
+             last_detected_at, sla_due_at, correlation_key, detection_signature
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14,$15,$16,$17)
            RETURNING *`,
           [
             alertId, input.tenantId, input.cameraId, rule.id, eventId,
@@ -427,6 +438,7 @@ export class AnalyticsRepository {
               : null,
             typeof input.metadata?.correlationKey === "string"
               ? input.metadata.correlationKey : `${rule.id}:${input.cameraId}`,
+            JSON.stringify(signature),
           ],
         );
         alerts.push(mapAlert(inserted.rows[0]));
@@ -727,6 +739,11 @@ export class AnalyticsRepository {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      const scope = await client.query("SELECT camera_id FROM analytics_alerts WHERE id=$1 AND tenant_id=$2", [id, tenantId]);
+      if (scope.rows[0]) {
+        await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+          [`analytics-camera:${tenantId}:${scope.rows[0].camera_id}`]);
+      }
       const current = await client.query(
         "SELECT * FROM analytics_alerts WHERE id=$1 AND tenant_id=$2 FOR UPDATE",
         [id, tenantId],
@@ -745,12 +762,26 @@ export class AnalyticsRepository {
       if (input.status === "acknowledged" && current.rows[0].acknowledged_at) {
         throw new Error("alert_already_acknowledged");
       }
+      // Older alerts predate the signature column. Use the original evidence
+      // displayed to the operator, rather than the last coalesced detection.
+      if (input.status === "false_alarm" && !current.rows[0].detection_signature) {
+        const original = await client.query("SELECT * FROM analytics_events WHERE id=$1 AND tenant_id=$2", [current.rows[0].event_id, tenantId]);
+        if (original.rows[0]) {
+          const objects = await client.query("SELECT label, confidence, track_id, bounding_box FROM detected_objects WHERE event_id=$1 AND tenant_id=$2", [current.rows[0].event_id, tenantId]);
+          const signature = await buildFalseAlarmSignature(mapEvent(original.rows[0], objects.rows.map((object) => ({
+            label: object.label, confidence: Number(object.confidence), trackId: object.track_id ?? undefined,
+            boundingBox: json(object.bounding_box, undefined),
+          }))));
+          await client.query("UPDATE analytics_alerts SET detection_signature=$3 WHERE id=$1 AND tenant_id=$2", [id, tenantId, signature ? JSON.stringify(signature) : null]);
+        }
+      }
       const updated = await client.query(
         `UPDATE analytics_alerts SET status=$3,
            acknowledged_by=CASE WHEN $3='acknowledged' THEN $4 ELSE acknowledged_by END,
            acknowledged_at=CASE WHEN $3='acknowledged' THEN now() ELSE acknowledged_at END,
            false_alarm_reason=CASE WHEN $3='false_alarm' THEN $5 ELSE false_alarm_reason END,
-           resolved_at=CASE WHEN $3='resolved' THEN now() ELSE resolved_at END,
+           resolved_at=CASE WHEN $3 IN ('resolved', 'false_alarm') THEN now() ELSE resolved_at END,
+           false_alarm_signature=CASE WHEN $3='false_alarm' THEN detection_signature ELSE false_alarm_signature END,
            assigned_to=COALESCE($6, assigned_to),
            assigned_at=CASE WHEN $6::uuid IS NOT NULL THEN now() ELSE assigned_at END,
            version=version+1,
@@ -759,6 +790,13 @@ export class AnalyticsRepository {
         [id, tenantId, input.status, input.actorUserId,
           input.falseAlarmReason ?? null, input.assignedTo ?? null],
       );
+      if (input.status === "false_alarm") {
+        await client.query(
+          `UPDATE analytics_notifications SET status='cancelled', updated_at=now()
+           WHERE alert_id=$1 AND tenant_id=$2 AND status IN ('queued', 'failed')`,
+          [id, tenantId],
+        );
+      }
       if (input.status === "acknowledged") {
         await client.query(
           `INSERT INTO analytics_acknowledgements
@@ -1078,6 +1116,7 @@ function mapAlert(row: any): AnalyticsAlert {
     ...(row.acknowledged_by ? { acknowledgedBy: row.acknowledged_by } : {}),
     ...(row.acknowledged_at ? { acknowledgedAt: iso(row.acknowledged_at) } : {}),
     ...(row.false_alarm_reason ? { falseAlarmReason: row.false_alarm_reason } : {}),
+    ...(row.status === "false_alarm" ? { repeatSuppressionActive: Boolean(row.false_alarm_signature) } : {}),
     ...(row.resolved_at ? { resolvedAt: iso(row.resolved_at) } : {}),
     ...(row.assigned_to ? { assignedTo: row.assigned_to } : {}),
     ...(row.assigned_at ? { assignedAt: iso(row.assigned_at) } : {}),
