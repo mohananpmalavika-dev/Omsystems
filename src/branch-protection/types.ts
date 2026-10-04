@@ -58,7 +58,7 @@ export interface ProtectionState {
 export const defaultProtectionPolicy: ProtectionPolicy = {
   enabled: false, verificationIntervalMinutes: 15, verificationFreshMinutes: 30,
   maxGapSeconds: 60, requiredRetentionDays: 90, criticalCameraIds: [],
-  bandwidthMode: 'normal', maxConcurrentStreams: 32, sopRules: [],
+  bandwidthMode: 'normal', maxConcurrentStreams: 144, sopRules: [],
 };
 export function initialProtectionState(): ProtectionState {
   return { policy: structuredClone(defaultProtectionPolicy), checks: {}, reviews: [] };
