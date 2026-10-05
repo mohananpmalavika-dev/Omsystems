@@ -87,6 +87,19 @@ describe("NBFC AI rules API production safeguards", () => {
     expect(loaded.json()).toMatchObject({ openingStart: "08:15", openingEnd: "09:05" });
   });
 
+  it("saves a custom opening window while disabling and re-enabling the branch check", async () => {
+    const payload = { openingStart: "08:45", openingEnd: "10:15", timezone: "Asia/Kolkata", activeDays: [1, 2, 3, 4, 5, 6] };
+    for (const enabled of [true, false, true]) {
+      const saved = await app.inject({ method: "PUT", url: "/api/ai/branch-opening-policy/A005",
+        headers: { "x-user-id": "user-global-admin" }, payload: { ...payload, enabled } });
+      expect(saved.statusCode).toBe(200);
+      expect(saved.json()).toMatchObject({ ...payload, enabled });
+      const loaded = await app.inject({ method: "GET", url: "/api/ai/branch-opening-policy/A005",
+        headers: { "x-user-id": "user-global-admin" } });
+      expect(loaded.json()).toMatchObject({ ...payload, enabled });
+    }
+  });
+
   it("rejects an invalid branch-opening time range", async () => {
     const response = await app.inject({
       method: "PUT",

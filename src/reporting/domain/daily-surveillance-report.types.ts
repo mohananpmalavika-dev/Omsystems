@@ -92,6 +92,8 @@ export interface SurveillanceException {
 }
 
 export interface BranchHealthReportRow {
+  zone?: string;
+  area?: string;
   branchId: string;
   branchCode: string;
   branchName: string;

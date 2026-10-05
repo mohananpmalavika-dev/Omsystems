@@ -4,6 +4,7 @@ import { z } from "zod";
 import { shutterConfigSchema } from "../../packages/contracts/src/shutter.js";
 import { AnalyticsPipeline, snapshotCache } from "./analytics-pipeline.js";
 import type { AnalyticsRule } from "./analytics-pipeline.js";
+import type { PersonCountObservation } from "../../packages/contracts/src/live-person-count.js";
 import { NotificationEngine } from "./notification-engine.js";
 import { StreamProcessor } from "./stream-processor.js";
 import { createIncidentIntegration, type IncidentIntegrationHook } from './incident-integration.js';
@@ -407,6 +408,7 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
         message: "Omit detections only when imageBase64 contains exactly width * height * 3 RGB24 bytes.",
       });
     }
+    let personCount: PersonCountObservation | null = null;
     const events = await pipeline.processFrame({
       tenantId: input.tenantId,
       cameraId: input.cameraId,
@@ -417,7 +419,7 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
       metadata: input.detections === undefined
         ? input.metadata
         : { ...input.metadata, detections: input.detections },
-    }, input.rules as AnalyticsRule[]);
+    }, input.rules as AnalyticsRule[], observation => { personCount = observation; });
     const submissions = await Promise.allSettled(events.map(options.submit));
     const accepted = submissions.filter((item) => item.status === "fulfilled").length;
     state.received += events.length;
@@ -427,6 +429,7 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     return reply.code(202).send({
       cameraId: input.cameraId,
       inferenceMode: input.detections === undefined ? "local-onnx" : "normalized-observation",
+      personCount,
       detectionsReceived: input.detections?.length ?? 0,
       eventsGenerated: events.length,
       accepted,

@@ -609,7 +609,7 @@ export class EdgeAgentRepository {
                  SELECT 1 FROM cameras c
                  WHERE c.branch_node_id = camera_discoveries.branch_node_id
                    AND (
-                     (c.ip_address IS NOT NULL AND camera_discoveries.ip_address IS NOT NULL AND c.ip_address = camera_discoveries.ip_address AND COALESCE(c.recorder_channel, c.channel, 0) = camera_discoveries.recorder_channel)
+                     (c.ip_address IS NOT NULL AND camera_discoveries.ip_address IS NOT NULL AND c.ip_address = camera_discoveries.ip_address AND COALESCE(c.recorder_channel, CASE WHEN c.source_type IN ('analog-dvr-channel', 'nvr-channel') THEN c.channel ELSE NULL END, 0) = camera_discoveries.recorder_channel)
                      OR (c.serial_number IS NOT NULL AND camera_discoveries.serial_number IS NOT NULL AND LOWER(BTRIM(c.serial_number)) = LOWER(BTRIM(camera_discoveries.serial_number)))
                    )
                ) THEN 'pending'::discovery_status
@@ -752,7 +752,7 @@ export class EdgeAgentRepository {
              AND (
                (c.ip_address IS NOT NULL AND camera_discoveries.ip_address IS NOT NULL
                 AND c.ip_address = camera_discoveries.ip_address
-                AND COALESCE(c.recorder_channel, c.channel, 0) = camera_discoveries.recorder_channel)
+                AND COALESCE(c.recorder_channel, CASE WHEN c.source_type IN ('analog-dvr-channel', 'nvr-channel') THEN c.channel ELSE NULL END, 0) = camera_discoveries.recorder_channel)
                OR (
                  c.serial_number IS NOT NULL AND camera_discoveries.serial_number IS NOT NULL
                  AND NULLIF(BTRIM(c.serial_number), '') IS NOT NULL

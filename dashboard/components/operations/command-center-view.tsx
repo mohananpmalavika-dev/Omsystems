@@ -61,6 +61,46 @@ export function CommandCenterView() {
   const [selectedBranchWorkspace, setSelectedBranchWorkspace] = useState<any | null>(null);
   const pendingLoad = useRef<AbortController | null>(null);
   const branchDialogRef = useRef<HTMLDivElement>(null);
+  const [bringingCamerasOnline, setBringingCamerasOnline] = useState(false);
+  const [onlineActionMessage, setOnlineActionMessage] = useState<string | null>(null);
+
+  const handleBringBranchCamerasOnline = async (branchId: string) => {
+    setBringingCamerasOnline(true);
+    setOnlineActionMessage(null);
+    try {
+      const res = await fetch("/api/control/v1/operations/health/cameras/bring-online", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ branchId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.message || data.error || "Failed to bring cameras online");
+      }
+      setOnlineActionMessage(data.message || "Cameras set to online successfully.");
+      await loadData();
+      if (selectedBranchWorkspace && selectedBranchWorkspace.branchId === branchId) {
+        setSelectedBranchWorkspace((prev: any) => prev ? {
+          ...prev,
+          cameras: {
+            ...prev.cameras,
+            working: prev.cameras?.total ?? prev.cameras?.working ?? 0,
+            healthy: prev.cameras?.total ?? prev.cameras?.healthy ?? 0,
+            notWorking: 0,
+            offline: 0,
+            degraded: 0,
+            unknown: 0,
+          }
+        } : null);
+      }
+    } catch (err) {
+      setOnlineActionMessage(err instanceof Error ? err.message : "Error restoring cameras");
+    } finally {
+      setBringingCamerasOnline(false);
+    }
+  };
+
   const router = useRouter();
   useDialogFocus(branchDialogRef, selectedBranchWorkspace !== null);
 
@@ -388,7 +428,7 @@ export function CommandCenterView() {
             { label: "Camera issues", value: hasCameraCountData ? knownCameraFailures.toLocaleString() : "—", detail: hasCameraCountData ? `${cameraTotals.unknown.toLocaleString()} unknown` : "Awaiting diagnostics", icon: Activity, href: "/operations/cameras", tone: "amber" },
           ].map(({ label, value, detail, icon: Icon, href, tone }, index) => <Link key={label} href={href} onClick={navigateTo(href)} className={`atlas-metric tone-${tone}`}><div><span>{String(index + 1).padStart(2, "0")}</span><Icon size={16} /><ArrowUpRight size={14} /></div><strong>{value}</strong><span>{label}</span><small>{detail}</small></Link>)}
         </div>
-        <footer className="atlas-stage-footer"><span><Radio size={13} /> TELEMETRY REFRESHES EVERY 15 SECONDS</span><div><Link href="/admin/branch-onboarding"><PlusCircle size={14} /> Onboard branch</Link><button type="button" onClick={exportHealthCsv} disabled={branches.length === 0}><FileCheck2 size={14} /> Export health</button></div></footer>
+        <footer className="atlas-stage-footer"><span><Radio size={13} /> TELEMETRY REFRESHES EVERY 15 SECONDS</span><div><Link href="/reports/mis?tab=branch-opening" onClick={navigateTo("/reports/mis?tab=branch-opening")}><FileCheck2 size={14} /> Branch opening report</Link><Link href="/admin/branch-onboarding"><PlusCircle size={14} /> Onboard branch</Link><button type="button" onClick={exportHealthCsv} disabled={branches.length === 0}><FileCheck2 size={14} /> Export health</button></div></footer>
       </section>
 
       <div className="dashboard-action-grid">
@@ -938,8 +978,36 @@ export function CommandCenterView() {
 
             <div className="space-y-3">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Subsystem Diagnostics</h3>
-              <div className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 text-xs">
-                Cameras: {selectedBranchWorkspace.cameras?.working ?? selectedBranchWorkspace.cameras?.healthy ?? 0}/{selectedBranchWorkspace.cameras?.total ?? 0} Working · {selectedBranchWorkspace.cameras?.notWorking ?? Math.max(0, (selectedBranchWorkspace.cameras?.total ?? 0) - (selectedBranchWorkspace.cameras?.healthy ?? 0))} Not working
+              <div className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span>
+                    Cameras: {selectedBranchWorkspace.cameras?.working ?? selectedBranchWorkspace.cameras?.healthy ?? 0}/{selectedBranchWorkspace.cameras?.total ?? 0} Working · {selectedBranchWorkspace.cameras?.notWorking ?? Math.max(0, (selectedBranchWorkspace.cameras?.total ?? 0) - (selectedBranchWorkspace.cameras?.healthy ?? 0))} Not working
+                  </span>
+                  {(selectedBranchWorkspace.cameras?.notWorking ?? Math.max(0, (selectedBranchWorkspace.cameras?.total ?? 0) - (selectedBranchWorkspace.cameras?.healthy ?? 0))) > 0 && (
+                    <button
+                      type="button"
+                      disabled={bringingCamerasOnline}
+                      onClick={() => handleBringBranchCamerasOnline(selectedBranchWorkspace.branchId)}
+                      className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-[11px] shadow transition-colors flex items-center gap-1 disabled:opacity-50"
+                      title="Force bring all not working or degraded cameras online"
+                    >
+                      {bringingCamerasOnline ? (
+                        <>
+                          <RefreshCw className="w-3 h-3 animate-spin" />
+                          <span>Restoring...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>Make Online</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+                {onlineActionMessage && (
+                  <p className="text-[11px] text-emerald-400 font-medium">{onlineActionMessage}</p>
+                )}
               </div>
               <div className="p-3.5 rounded-lg bg-slate-950 border border-slate-800 text-xs">
                 Recording: {selectedBranchWorkspace.recording?.recordingChannels ?? 0}/{selectedBranchWorkspace.recording?.totalChannels ?? 0} Channels

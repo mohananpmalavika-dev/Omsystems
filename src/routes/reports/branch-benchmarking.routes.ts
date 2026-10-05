@@ -10,6 +10,7 @@
  * - Improvement opportunities
  */
 
+import { reportCalendarPeriod } from '../../../packages/contracts/src/report-hierarchy.js';
 import { Router, Request, Response } from 'express';
 import { Pool } from 'pg';
 import { activeCamera } from '../../database/active-resource.js';
@@ -37,7 +38,10 @@ export function createBranchBenchmarkingRoutes(pool: Pool): Router {
       const period = (req.query.period as string) || '30d';
       const metric = (req.query.metric as string) || 'overall';
 
-      const { start, end } = getPeriodDates(period);
+      let bounds;
+      try { bounds = reportCalendarPeriod(period, req.query.startDate, req.query.endDate); }
+      catch(error) { return res.status(400).json({error:error instanceof Error ? error.message : 'Invalid report dates'}); }
+      const start = new Date(bounds.from), end = new Date(bounds.to);
 
       // Get all branches with their metrics
       const branches = await calculateBranchMetrics(pool, tenantId, start, end);
@@ -164,7 +168,10 @@ export function createBranchBenchmarkingRoutes(pool: Pool): Router {
       }
 
       const period = (req.query.period as string) || '30d';
-      const { start, end } = getPeriodDates(period);
+      let bounds;
+      try { bounds = reportCalendarPeriod(period, req.query.startDate, req.query.endDate); }
+      catch(error) { return res.status(400).json({error:error instanceof Error ? error.message : 'Invalid report dates'}); }
+      const start = new Date(bounds.from), end = new Date(bounds.to);
 
       // Get branch metrics
       const branches = await calculateBranchMetrics(pool, tenantId, start, end);

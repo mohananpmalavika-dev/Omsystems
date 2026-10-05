@@ -63,7 +63,7 @@ describe("MIS report branch permissions", () => {
     expect(response.json()).toMatchObject({ startDate: "2026-09-21", endDate: "2026-09-21", total: 1 });
     expect(response.json().rows[0]).toMatchObject({ branchId: "A005", personCount: 1,
       photoUrl: expect.stringContaining("/mis/branch-opening-failures/") });
-    expect(response.json().rows[0].zoneName).toBeTruthy();
+    expect(response.json().rows[0].zoneName).toBeNull(); // A region's name cannot create a zone level.
     expect(store.analyticsAlerts.find((alert) => alert.ruleId === rule.id)).toBeTruthy();
     const photo = await app.inject({ method: "GET",
       url: `/mis/branch-opening-failures/${response.json().rows[0].eventId}/photo` });
@@ -139,5 +139,43 @@ describe("MIS report branch permissions", () => {
       outcome: "NOT_RECORDED", photoUrl: null });
     const forbidden = await app.inject({ method: "GET", url: "/mis/branch-openings?branchId=A008" });
     expect(forbidden.statusCode).toBe(403);
+  });
+
+  it("filters opening observations by hierarchy, camera and location without leaking other branches", async () => {
+    const camera = store.cameras.get("cam-001")!;
+    const originalLocation = camera.locationType;
+    camera.locationType = "branch-entrance";
+    const period = "timeRange=custom&startDate=2026-09-23&endDate=2026-09-24";
+    try {
+      const response = await app.inject({ method: "GET", url: `/mis/branch-openings?${period}&cameraId=cam-001&locationType=branch-entrance` });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().rows).toHaveLength(2);
+      expect(response.json().rows.every((row: any) => row.cameraId === "cam-001" && row.locationType === "branch-entrance")).toBe(true);
+      expect(response.json().filterOptions.cameras.every((option: any) => option.branchId === "A005" && option.locationType === "branch-entrance")).toBe(true);
+      expect(response.json().filterOptions.branches.map((branch: any) => branch.id)).toEqual(["A005"]);
+      const otherCamera = await app.inject({ method: "GET", url: `/mis/branch-openings?${period}&cameraId=cam-a005-01` });
+      // First observations belong to cam-001; never relabel them as missing.
+      expect(otherCamera.json().rows).toEqual([]);
+      const otherLocation = await app.inject({ method: "GET", url: `/mis/branch-openings?${period}&locationType=parking-area` });
+      expect(otherLocation.json().rows).toEqual([]);
+      const missing = await app.inject({ method: "GET", url: "/mis/branch-openings?timeRange=custom&startDate=2026-09-25&endDate=2026-09-25&cameraId=cam-001" });
+      expect(missing.json().rows[0]).toMatchObject({ outcome: "NOT_RECORDED", personCount: null, cameraId: null });
+      const forbidden = await app.inject({ method: "GET", url: `/mis/branch-openings?${period}&cameraId=cam-a008-01` });
+      expect(forbidden.statusCode).toBe(403);
+      const general = await app.inject({ method: "GET", url: "/mis" });
+      const filters = general.json().filterOptions;
+      for (const [key, value] of Object.entries({ zone: filters.zones[0], region: filters.regions[0], area: filters.areas[0], branchId: "A005" }).filter(([, value]) => value !== undefined)) {
+        const filtered = await app.inject({ method: "GET", url: `/mis/branch-openings?${period}&${key}=${encodeURIComponent(String(value))}` });
+        expect(filtered.statusCode).toBe(200);
+        expect(filtered.json().rows).toHaveLength(2);
+        const excluded = await app.inject({ method: "GET", url: `/mis/branch-openings?${period}&${key}=non-matching-scope` });
+        if (key === "branchId") expect(excluded.statusCode).toBe(403);
+        else {
+          expect(excluded.json().rows).toEqual([]);
+          expect(excluded.json().filterOptions.branches).toEqual([]);
+          expect(excluded.json().filterOptions.cameras).toEqual([]);
+        }
+      }
+    } finally { camera.locationType = originalLocation; }
   });
 });

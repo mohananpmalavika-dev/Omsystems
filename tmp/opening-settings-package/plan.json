@@ -1,0 +1,29 @@
+{
+  "files": [
+    {
+      "path": "src/analytics/nbfc-rule-repository.ts",
+      "beforeHash": "00ffecdc3e366bf5d48a691829357e88c6cb5f4123f412648e3757631f53f3c4"
+    },
+    {
+      "path": "src/analytics/nbfc-rule-engine.service.ts",
+      "beforeHash": "90ba7d1a9e211fe9205d57e4d2150fdda3b104472d28a9cfbdb2a57642c21510"
+    },
+    {
+      "path": "src/routes/nbfc-analytics.routes.ts",
+      "beforeHash": "bdb2486fc3149c3b484dd34d23f4ac6af9e56d370f4a1f44cf4cb300a9475016"
+    },
+    {
+      "path": "dashboard/app/nbfc-operations/page.tsx",
+      "beforeHash": "89fcff334648b483f588345a53dbacce292e9d3dc08cc4c08d62c22fb6182a78"
+    },
+    {
+      "path": "dashboard/components/nbfc-rules/nbfc-rules-workspace.tsx",
+      "beforeHash": "7f3db73c5df68aec8480501463e6c8a8e0ab0ca8c024083d7639c3ae7a324795"
+    }
+  ],
+  "apiPatch": {
+    "path": "dashboard/lib/api-client.ts",
+    "before": "policy: Pick<BranchOpeningPolicy, \"openingStart\" | \"openingEnd\" | \"timezone\" | \"activeDays\" | \"graceSeconds\">)",
+    "after": "policy: Pick<BranchOpeningPolicy, \"openingStart\" | \"openingEnd\" | \"timezone\" | \"activeDays\" | \"graceSeconds\"> & { enabled?: boolean })"
+  }
+}

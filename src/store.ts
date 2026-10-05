@@ -1,3 +1,4 @@
+import { resolveReportHierarchy } from "../packages/contracts/src/report-hierarchy.js";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { isFreshEdgeAgent } from "./edge-agent/presence.js";
 import { edgeAgentServesBranch } from "./edge-agent/branch-assignments.js";
@@ -2177,12 +2178,13 @@ export class MemoryStore {
       (observation.deviceType !== "analog-dvr-channel" && observation.deviceType !== "nvr-channel")) {
       return undefined;
     }
-    const recorderModel = /(dvr|nvr|xvr|uvr|recorder|multi[- ]?channel)/i;
+    const recorderModel = /(dvr|nvr|xvr|uvr|recorder|multi[- ]?channel|ip camera|generic)/i;
     return [...this.deviceIdentities.values()].find((candidate) => {
       if (candidate.branchId !== branchId || candidate.deviceType !== "ip-camera" ||
         candidate.currentIpAddress !== observation.ipAddress) return false;
       const cameraModel = candidate.cameraId ? this.cameras.get(candidate.cameraId)?.model : undefined;
-      return recorderModel.test(candidate.model ?? "") || recorderModel.test(cameraModel ?? "");
+      return recorderModel.test(candidate.model ?? "") || recorderModel.test(cameraModel ?? "") ||
+        candidate.channel === undefined || candidate.channel === null || candidate.channel === 1;
     });
   }
 
@@ -2318,7 +2320,7 @@ export class MemoryStore {
         deviceIdentityId: identity.deviceId,
         // A routine rescan of an already-approved physical identity updates
         // its address/firmware evidence without reopening duplicate approval.
-        status: existing.status === "approved" ? "approved" as const : "pending" as const,
+        status: (existing.status === "approved" && !recorderPlaceholderUpgrade) ? "approved" as const : "pending" as const,
         ...(recorderPlaceholderUpgrade ? {
           duplicateStatus: normalized.duplicateStatus ?? "unique" as const,
           ...(identity.cameraId ? { existingDeviceAssociation: identity.cameraId } : {}),
@@ -2375,7 +2377,7 @@ export class MemoryStore {
         discovery.duplicateStatus !== "duplicate" &&
         !branchCameras.some((c) =>
           (c.ipAddress && discovery.ipAddress && c.ipAddress === discovery.ipAddress &&
-           (c.recorderChannel ?? c.channel ?? 0) === (discovery.recorderChannel ?? 0)) ||
+           (c.recorderChannel ?? (c.sourceType === "analog-dvr-channel" || c.sourceType === "nvr-channel" ? c.channel : undefined) ?? 0) === (discovery.recorderChannel ?? 0)) ||
           (c.serialNumber && discovery.serialNumber && c.serialNumber.trim().length > 0 &&
            c.serialNumber.trim().toLowerCase() === discovery.serialNumber.trim().toLowerCase())
         )
@@ -2451,6 +2453,14 @@ export class MemoryStore {
     if (resolvedIdentity.cameraId) {
       const existingCamera = this.cameras.get(resolvedIdentity.cameraId);
       if (!existingCamera) throw new Error("identity_camera_not_found");
+      if (input.name) {
+        existingCamera.name = input.name;
+        const node = this.nodes.get(existingCamera.nodeId);
+        if (node) {
+          node.name = input.name;
+          Object.assign(node, { isActive: true });
+        }
+      }
       Object.assign(existingCamera, clean({
         edgeAgentId: discovery.edgeAgentId,
         vendor: discovery.vendor,
@@ -3850,27 +3860,25 @@ export class MemoryStore {
       .filter((alert) => !filters.from || alert.lastDetectedAt >= filters.from)
       .filter((alert) => !filters.to || alert.firstDetectedAt <= filters.to)
       .sort((left, right) => (filters.priorityFirst ? Number(["resolved", "false_alarm", "suppressed"].includes(left.status)) - Number(["resolved", "false_alarm", "suppressed"].includes(right.status)) || left.severity.localeCompare(right.severity) : 0) || right.lastDetectedAt.localeCompare(left.lastDetectedAt))
-      .slice(0, filters.limit);
+      .slice(filters.offset ?? 0, (filters.offset ?? 0) + filters.limit);
 
     return raw.map((alert) => {
       const camera = this.cameras.get(alert.cameraId);
-      const branchId = alert.branchId || camera?.branchId;
+      const branchId = camera?.branchId || alert.branchId;
       const branchNode = branchId ? this.nodes.get(branchId) : undefined;
-      const parentNode = branchNode?.parentId ? this.nodes.get(branchNode.parentId) : undefined;
-      const grandParentNode = parentNode?.parentId ? this.nodes.get(parentNode.parentId) : undefined;
-
-      const areaName = alert.areaName ||
-        (parentNode?.type === "area" ? parentNode.name : (grandParentNode?.type === "area" ? grandParentNode.name : undefined));
-      const regionName = alert.regionName ||
-        (parentNode?.type === "region" ? parentNode.name : (grandParentNode?.type === "region" ? grandParentNode.name : undefined));
-      const branchName = alert.branchName || branchNode?.name;
+      const hierarchy = resolveReportHierarchy(branchId ?? '', this.nodes);
+      const areaName = hierarchy.area || undefined;
+      const regionName = hierarchy.region || undefined;
+      const branchName = branchNode?.name || alert.branchName;
       const alertType = alert.alertType || alert.detectionType || alert.objectClasses?.[0] || alert.title;
 
       return {
         ...alert,
         ...(branchName ? { branchName } : {}),
-        ...(areaName ? { areaName } : {}),
-        ...(regionName ? { regionName } : {}),
+        branchId,
+        zoneName: hierarchy.zone || undefined,
+        areaName,
+        regionName,
         ...(alertType ? { alertType, detectionType: alertType } : {}),
       };
     });
@@ -3930,9 +3938,16 @@ export class MemoryStore {
   }
 
   async getAnalyticsAlert(id: string, inputTenantId: string) {
-    return this.analyticsAlerts.find((alert) =>
+    const alert = this.analyticsAlerts.find((alert) =>
       alert.id === id && alert.tenantId === inputTenantId
     );
+    if (alert) {
+      const branchId = this.cameras.get(alert.cameraId)?.branchId || alert.branchId;
+      const hierarchy = resolveReportHierarchy(branchId ?? '', this.nodes);
+      Object.assign(alert, { branchId, branchName: hierarchy.branchName || alert.branchName,
+        zoneName: hierarchy.zone || undefined, regionName: hierarchy.region || undefined, areaName: hierarchy.area || undefined });
+    }
+    return alert;
   }
 
   async updateAnalyticsAlertEvidence(

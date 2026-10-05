@@ -60,6 +60,8 @@ import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
 import { ensureCameraAiBundle } from "./analytics/camera-ai-bundle.js";
 import { AutoStorageTelemetryService } from "./services/auto-storage-telemetry.service.js";
 import { registerReportsRoutes } from "./routes/reports.routes.js";
+import { registerLivePersonCountRoutes } from "./routes/live-person-count.routes.js";
+import { LivePersonCountService } from "./analytics/live-person-count.service.js";
 import { registerLiveOperationsRoutes } from "./routes/live-operations.routes.js";
 import { registerMediaSessionRoutes } from "./routes/media-session.routes.js";
 import { registerDashboardRoutes } from "./routes/dashboard.routes.js";
@@ -640,6 +642,7 @@ export async function buildApp(options?: {
   // A local fallback would make snapshots disappear after a restart or route
   // to the wrong control-plane instance.
   const analyticsFrameRedis = redisModule.getClient();
+  const livePersonCountService = analyticsFrameRedis ? new LivePersonCountService(analyticsFrameRedis) : null;
   const recordingRoot = options?.recordingRoot ?? process.env.RECORDING_ROOT ?? "./recordings";
   
   let searchService: RecordingSearchService | undefined;
@@ -1377,7 +1380,7 @@ export async function buildApp(options?: {
         name: camera.name,
         profiles: camera.profiles,
         connectionSecretRef: camera.connectionSecretRef,
-        analyticsEnabled: analyticsEnabledByCamera.get(camera.id) === true,
+        analyticsEnabled: analyticsEnabledByCamera.get(camera.id) === true || Boolean(options?.analyticsEngineUrl),
         ...(camera.ipAddress ? { ipAddress: camera.ipAddress.replace(/\/\d+$/, "").trim() } : {}),
         ...(camera.vendor ? { vendor: camera.vendor } : {}),
         ...(camera.sourceType && camera.sourceType !== "ip-camera" ? { sourceType: camera.sourceType } : {}),
@@ -1417,9 +1420,6 @@ export async function buildApp(options?: {
     const branch = await store.getNode(camera.branchId);
     if (!branch) return reply.code(404).send({ error: "branch_not_found" });
     const rules = (await store.listAnalyticsRules(camera.id)).filter((rule) => rule.enabled);
-    if (rules.length === 0) {
-      return reply.code(202).send({ accepted: false, reason: "no_enabled_camera_ai_rules" });
-    }
     const analyticsSourceKey = options?.analyticsSourceSharedKey ?? options?.analyticsEngineSharedKey;
     if (!options?.analyticsEngineUrl || !analyticsSourceKey) {
       return reply.code(202).send({ accepted: false, reason: "analytics_engine_not_configured" });
@@ -1447,6 +1447,13 @@ export async function buildApp(options?: {
       if (!upstream.ok) {
         request.log.warn({ cameraId: camera.id, upstreamStatus: upstream.status }, "Analytics engine rejected edge frame");
         return reply.code(502).send({ error: "analytics_engine_rejected_frame", upstreamStatus: upstream.status });
+      }
+      if (livePersonCountService && result.personCount) {
+        // Only the authenticated engine result for this capture can update the report.
+        if (Date.parse(result.personCount.observedAt) === Date.parse(input.capturedAt)) {
+          await livePersonCountService.record(branch.tenantId, camera.id, result.personCount)
+            .catch(error => request.log.warn({ error, cameraId: camera.id }, "Live person count could not be saved"));
+        }
       }
       if (typeof result.failed === "number" && result.failed > 0) {
         request.log.warn({ cameraId: camera.id, failed: result.failed }, "Analytics events were not accepted by the control plane");
@@ -2936,6 +2943,7 @@ export async function buildApp(options?: {
   }
   await registerPrivacyRoutes(app, store, options?.dependencies?.privacyService ?? undefined);
   await registerReportsRoutes(app, store);
+  await registerLivePersonCountRoutes(app, store, livePersonCountService);
   
   // Phase 1 MIS Reports - Executive & Financial Intelligence
   if (pool) {

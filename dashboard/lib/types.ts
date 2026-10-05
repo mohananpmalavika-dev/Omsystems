@@ -297,6 +297,7 @@ export interface ComplianceCertificate {
 export interface Camera {
   id: string;
   name: string;
+  locationType?: string;
   branchId: string;
   branchName?: string;
   /** Gateway that owns the local stream secret, when the camera is edge-managed. */

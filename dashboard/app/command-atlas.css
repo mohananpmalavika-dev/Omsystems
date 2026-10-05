@@ -85,7 +85,7 @@ html[data-theme] .app-shell .command-atlas .atlas-intro h1 { margin: 22px 0 20px
 .atlas-metric > small { color: #6f86aa; font-size: 8px; margin-top: 6px; }
 .atlas-stage-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px 28px; border-top: 1px solid var(--atlas-line); }
 .atlas-stage-footer > span { display: flex; align-items: center; gap: 7px; font: 7px/1.5 ui-monospace, monospace; letter-spacing: .08em; color: #7189b0; }
-.atlas-stage-footer > div { display: flex; align-items: center; gap: 18px; }
+.atlas-stage-footer > div { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; }
 .atlas-stage-footer :is(a, button) { display: flex; align-items: center; gap: 5px; color: #a5bee4; background: transparent; border: 0; font-size: 9px; }
 .atlas-stage-footer button:disabled { opacity: .4; }
 .command-atlas :is(button, a):focus-visible { outline: 2px solid #90b9ff; outline-offset: 4px; }

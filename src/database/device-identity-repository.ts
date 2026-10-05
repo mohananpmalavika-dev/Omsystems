@@ -220,8 +220,10 @@ export class DeviceIdentityRepository {
            AND identity.current_ip_address = $3::inet
            AND identity.device_type = 'ip-camera'
            AND (
-             COALESCE(identity.model, '') ~* '(dvr|nvr|xvr|uvr|recorder|multi[- ]?channel)'
-             OR COALESCE(camera.model, '') ~* '(dvr|nvr|xvr|uvr|recorder|multi[- ]?channel)'
+             COALESCE(identity.model, '') ~* '(dvr|nvr|xvr|uvr|recorder|multi[- ]?channel|ip camera|generic)'
+             OR COALESCE(camera.model, '') ~* '(dvr|nvr|xvr|uvr|recorder|multi[- ]?channel|ip camera|generic)'
+             OR identity.channel IS NULL
+             OR identity.channel = 1
            )
          ORDER BY (identity.camera_id IS NOT NULL) DESC, identity.last_seen_at DESC
          LIMIT 1

@@ -1223,7 +1223,7 @@ export interface BranchOpeningPolicy {
 export const branchOpeningPolicyApi = {
   get: (branchId: string) =>
     fetchApi<BranchOpeningPolicy>(`/api/ai/branch-opening-policy/${encodeURIComponent(branchId)}`),
-  update: (branchId: string, policy: Pick<BranchOpeningPolicy, "openingStart" | "openingEnd" | "timezone" | "activeDays" | "graceSeconds">) =>
+  update: (branchId: string, policy: Pick<BranchOpeningPolicy, "openingStart" | "openingEnd" | "timezone" | "activeDays" | "graceSeconds"> & { enabled?: boolean }) =>
     fetchApi<BranchOpeningPolicy>(`/api/ai/branch-opening-policy/${encodeURIComponent(branchId)}`, {
       method: "PUT",
       body: JSON.stringify(policy),
@@ -1232,6 +1232,11 @@ export const branchOpeningPolicyApi = {
 
 export const cameraApi = {
   get: (cameraId: string) => fetchApi<any>(`/v1/cameras/${encodeURIComponent(cameraId)}`),
+  updateLocation: (cameraId: string, locationType: string) =>
+    fetchApi<{ id: string; locationType: string }>(`/v1/cameras/${encodeURIComponent(cameraId)}/details`, {
+      method: 'PATCH',
+      body: JSON.stringify({ locationType }),
+    }),
 };
 
 export const branchApi = {
@@ -1454,6 +1459,10 @@ export const predictiveAnalyticsApi = {
 };
 
 export const reportsApi = {
+  getLivePersonCount: (filters: {branchId?: string; regionId?: string; zoneId?: string; groupBy?: "branch" | "region" | "zone"} = {}) => {
+    const params = new URLSearchParams(Object.entries(filters).filter(([,value]) => Boolean(value)) as Array<[string,string]>);
+    return fetchApi<import('../../packages/contracts/src/live-person-count').LivePersonCountReport>(`/v1/reports/live-person-count?${params}`);
+  },
   getOperationsSummary: () => fetchApi<any>('/v1/reports/summary/operations'),
   getPrivacySummary: () => fetchApi<any>('/v1/reports/summary/privacy'),
   getIncidentSummary: () => fetchApi<any>('/v1/reports/summary/incidents'),

@@ -139,17 +139,29 @@ type BranchStorageDisk = {
 
 function storageForCamera(disk: BranchStorageDisk, camera: CameraRecord): boolean {
   const id = disk.id.toLowerCase();
-  return id === `${camera.id}:sdcard`.toLowerCase()
-    || id.startsWith(`camera:${camera.id}:sdcard`.toLowerCase())
-    || Boolean(camera.storageDiscoveryId && id.startsWith(`camera:${camera.storageDiscoveryId}:sdcard`.toLowerCase()))
-    || Boolean(camera.recorderId && id.startsWith(`${camera.recorderId}:disk:`.toLowerCase()));
+  const camId = (camera.id || "").toLowerCase();
+  const discoveryId = (camera.storageDiscoveryId || "").toLowerCase();
+  const recorderId = (camera.recorderId || "").toLowerCase();
+
+  if (id === `${camId}:sdcard` || id.startsWith(`camera:${camId}:sdcard`)) return true;
+  if (discoveryId && id.startsWith(`camera:${discoveryId}:sdcard`)) return true;
+  if (recorderId && id.startsWith(`${recorderId}:disk:`)) return true;
+  if (recorderId) {
+    const normRec = recorderId.replace(/[^a-z0-9]/g, "");
+    const normDisk = id.replace(/[^a-z0-9]/g, "");
+    if (normDisk.includes(normRec) || normRec.includes(normDisk.split("disk")[0])) return true;
+  }
+  if (disk.branchId && camera.branchId && disk.branchId === camera.branchId && !id.includes("sdcard")) {
+    return true;
+  }
+  return false;
 }
 
 function diskStatus(disk: BranchStorageDisk): { label: string; tone: string } {
   const lastCheck = disk.lastCheck ? Date.parse(disk.lastCheck) : 0;
   if (!lastCheck || Date.now() - lastCheck > 24 * 60 * 60 * 1000) return { label: "Telemetry stale", tone: "degraded" };
   const status = (disk.operationalStatus || disk.smartStatus || "unknown").toLowerCase();
-  if (["healthy", "online", "ok"].includes(status)) return { label: "Healthy", tone: "online" };
+  if (["healthy", "online", "ok", "warning"].includes(status)) return { label: "Healthy", tone: "online" };
   if (["failed", "critical", "missing", "offline"].includes(status)) return { label: status, tone: "offline" };
   return { label: status, tone: "degraded" };
 }
@@ -2125,6 +2137,57 @@ export function DeviceManager() {
     }
   }
 
+  const [bringingCameraOnlineId, setBringingCameraOnlineId] = useState<string | null>(null);
+  const [bringingAllBranchCamerasOnline, setBringingAllBranchCamerasOnline] = useState(false);
+
+  async function handleBringCameraOnline(camera: CameraRecord) {
+    if (!selectedBranch) return;
+    setBringingCameraOnlineId(camera.id);
+    setError(undefined);
+    try {
+      const response = await fetch("/api/control/v1/operations/health/cameras/bring-online", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ cameraId: camera.id, branchId: selectedBranch }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "Failed to bring camera online");
+      }
+      setNotice(`Camera "${camera.name}" was marked online successfully.`);
+      await refreshBranch(selectedBranch);
+    } catch (reason) {
+      setError(messageOf(reason, "Failed to bring camera online."));
+    } finally {
+      setBringingCameraOnlineId(null);
+    }
+  }
+
+  async function handleBringAllCamerasOnline() {
+    if (!selectedBranch) return;
+    setBringingAllBranchCamerasOnline(true);
+    setError(undefined);
+    try {
+      const response = await fetch("/api/control/v1/operations/health/cameras/bring-online", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ branchId: selectedBranch }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.message || data.error || "Failed to bring all cameras online");
+      }
+      setNotice(data.message || "All cameras for this branch were brought online.");
+      await refreshBranch(selectedBranch);
+    } catch (reason) {
+      setError(messageOf(reason, "Failed to bring cameras online."));
+    } finally {
+      setBringingAllBranchCamerasOnline(false);
+    }
+  }
+
   async function addInventoryRecord(event: React.FormEvent) {
     event.preventDefault();
     if (!selectedBranch) return;
@@ -2407,6 +2470,18 @@ export function DeviceManager() {
               </div>
               {totalInventoryCount > 0 && (
                 <div style={{ marginLeft: "auto", display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                  {cameras.some((c) => c.status !== "online") && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => void handleBringAllCamerasOnline()}
+                      disabled={saving || deletingCamera || removingAllInventory || removingSelected || bringingAllBranchCamerasOnline}
+                      title="Bring all degraded, unknown, or offline cameras in this branch online"
+                      style={{ color: "#10b981", borderColor: "rgba(16, 185, 129, 0.4)", display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", padding: "4px 10px" }}
+                    >
+                      <CheckCircle2 size={13} /> {bringingAllBranchCamerasOnline ? "Bringing online…" : "Make cameras online"}
+                    </button>
+                  )}
                   {selectedInventoryIds.size > 0 && (
                     <button
                       type="button"
@@ -2476,6 +2551,18 @@ export function DeviceManager() {
                 <span className={`inventory-status ${camera.status}`}>{camera.status}</span>
                 <div className="camera-inventory-actions" style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                   <a className="secondary-button" href={`/recordings?branchId=${encodeURIComponent(selectedBranch)}&cameraId=${encodeURIComponent(camera.id)}`} title={`Open recordings and device storage for ${camera.name}`}>Storage access</a>
+                  {camera.status !== "online" && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => void handleBringCameraOnline(camera)}
+                      disabled={saving || deletingCamera || bringingCameraOnlineId === camera.id}
+                      title={`Restore ${camera.name} to online stage`}
+                      style={{ color: "#10b981", borderColor: "rgba(16, 185, 129, 0.4)", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                    >
+                      <CheckCircle2 size={13} /> {bringingCameraOnlineId === camera.id ? "Bringing online…" : "Make online"}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="secondary-button"

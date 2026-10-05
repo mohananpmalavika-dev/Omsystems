@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import { ReportPagination } from '@/components/reports/report-pagination';
+import { downloadReportCsv } from '@/lib/report-export';
+import { ReportDateControls, type ReportDateRange } from '@/components/reports/report-date-controls';
 import { AppLayout } from '@/components/app-layout';
 import { PageHero } from '@/components/page-hero';
 import { 
@@ -71,6 +74,9 @@ interface ReportData {
 }
 
 export default function BranchBenchmarkingPage() {
+  const [range,setRange]=useState<ReportDateRange>({});
+  const [page,setPage]=useState(1);
+  const [pageSize,setPageSize]=useState(25);
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -78,11 +84,12 @@ export default function BranchBenchmarkingPage() {
   const [metric, setMetric] = useState('overall');
 
   const loadData = async () => {
+    const dateParams = new URLSearchParams(range).toString();
     setLoading(true);
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
       const response = await fetch(
-        `/api/control/v1/reports/branch-benchmarking?period=${period}&metric=${metric}`,
+        `/api/control/v1/reports/branch-benchmarking?period=${period}&metric=${metric}&${dateParams}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -106,7 +113,7 @@ export default function BranchBenchmarkingPage() {
 
   useEffect(() => {
     loadData();
-  }, [period, metric]);
+  }, [period, metric, range]);
 
   if (loading) {
     return (
@@ -139,7 +146,8 @@ export default function BranchBenchmarkingPage() {
   return (
     <AppLayout>
       <main className="p-6 space-y-6 max-w-[1800px] mx-auto">
-        <PageHero
+        <ReportDateControls range={range} onGenerate={setRange}/>
+          <PageHero
           eyebrow="Operational MIS"
           title="Branch Performance Benchmarking"
           description="Comparative analysis across all branches to identify top performers and improvement opportunities"
@@ -258,7 +266,7 @@ export default function BranchBenchmarkingPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.branches.map((branch) => (
+                {data.branches.slice((page-1)*pageSize,page*pageSize).map((branch) => (
                   <tr key={branch.branch} className="border-b border-gray-800 hover:bg-gray-800/30">
                     <td className="py-3 px-2">
                       <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-bold ${
@@ -293,6 +301,8 @@ export default function BranchBenchmarkingPage() {
                 ))}
               </tbody>
             </table>
+            <ReportPagination total={data.branches.length} page={page} pageSize={pageSize} onPage={setPage} onPageSize={setPageSize}/>
+            <button className="btn-secondary m-4" onClick={()=>downloadReportCsv(data.branches.map(branch=>({Branch:branch.branch,Rank:branch.rank,...branch.scores,...branch.metrics,Status:branch.status})), 'branch-benchmarking.csv')}>Export all branches (CSV)</button>
           </div>
         </div>
 

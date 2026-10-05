@@ -1,0 +1,132 @@
+{
+  "changes": [
+    {
+      "path": "src/app.ts",
+      "before": "import { registerReportsRoutes } from \"./routes/reports.routes.js\";",
+      "after": "import { registerReportsRoutes } from \"./routes/reports.routes.js\";\nimport { registerLivePersonCountRoutes } from \"./routes/live-person-count.routes.js\";\nimport { LivePersonCountService } from \"./analytics/live-person-count.service.js\";"
+    },
+    {
+      "path": "src/app.ts",
+      "before": "const analyticsFrameRedis = redisModule.getClient();",
+      "after": "const analyticsFrameRedis = redisModule.getClient();\n  const livePersonCountService = analyticsFrameRedis ? new LivePersonCountService(analyticsFrameRedis) : null;",
+      "runtimeAfter": "const analyticsFrameRedis = redisModule.getClient();\n    const livePersonCountService = analyticsFrameRedis ? new LivePersonCountService(analyticsFrameRedis) : null;"
+    },
+    {
+      "path": "src/app.ts",
+      "before": "analyticsEnabled: analyticsEnabledByCamera.get(camera.id) === true,",
+      "after": "analyticsEnabled: analyticsEnabledByCamera.get(camera.id) === true || Boolean(options?.analyticsEngineUrl),"
+    },
+    {
+      "path": "src/app.ts",
+      "before": "    if (rules.length === 0) {\n      return reply.code(202).send({ accepted: false, reason: \"no_enabled_camera_ai_rules\" });\n    }\n",
+      "after": "",
+      "runtimeBefore": "        if (rules.length === 0) {\n            return reply.code(202).send({ accepted: false, reason: \"no_enabled_camera_ai_rules\" });\n        }\n",
+      "runtimeAfter": ""
+    },
+    {
+      "path": "src/app.ts",
+      "before": "      if (typeof result.failed === \"number\" && result.failed > 0) {",
+      "after": "      if (livePersonCountService && result.personCount) {\n        // Only the authenticated engine result for this capture can update the report.\n        if (Date.parse(result.personCount.observedAt) === Date.parse(input.capturedAt)) {\n          await livePersonCountService.record(branch.tenantId, camera.id, result.personCount)\n            .catch(error => request.log.warn({ error, cameraId: camera.id }, \"Live person count could not be saved\"));\n        }\n      }\n      if (typeof result.failed === \"number\" && result.failed > 0) {",
+      "runtimeBefore": "        if (typeof result.failed === \"number\" && result.failed > 0) {",
+      "runtimeAfter": "        if (livePersonCountService && result.personCount) {\n          // Only the authenticated engine result for this capture can update the report.\n          if (Date.parse(result.personCount.observedAt) === Date.parse(input.capturedAt)) {\n            await livePersonCountService.record(branch.tenantId, camera.id, result.personCount)\n              .catch(error => request.log.warn({ error, cameraId: camera.id }, \"Live person count could not be saved\"));\n          }\n        }\n          if (typeof result.failed === \"number\" && result.failed > 0) {"
+    },
+    {
+      "path": "src/app.ts",
+      "before": "await registerReportsRoutes(app, store);",
+      "after": "await registerReportsRoutes(app, store);\n  await registerLivePersonCountRoutes(app, store, livePersonCountService);",
+      "runtimeAfter": "await registerReportsRoutes(app, store);\n    await registerLivePersonCountRoutes(app, store, livePersonCountService);"
+    },
+    {
+      "path": "analytics-engine/src/app.ts",
+      "before": "import type { AnalyticsRule } from \"./analytics-pipeline.js\";",
+      "after": "import type { AnalyticsRule } from \"./analytics-pipeline.js\";\nimport type { PersonCountObservation } from \"../../packages/contracts/src/live-person-count.js\";",
+      "runtimeBefore": "",
+      "runtimeAfter": ""
+    },
+    {
+      "path": "analytics-engine/src/app.ts",
+      "before": "    const events = await pipeline.processFrame({",
+      "after": "    let personCount: PersonCountObservation | null = null;\n    const events = await pipeline.processFrame({",
+      "runtimeBefore": "        const events = await pipeline.processFrame({",
+      "runtimeAfter": "        let personCount = null;\n        const events = await pipeline.processFrame({"
+    },
+    {
+      "path": "analytics-engine/src/app.ts",
+      "before": "}, input.rules as AnalyticsRule[]);",
+      "after": "}, input.rules as AnalyticsRule[], observation => { personCount = observation; });",
+      "runtimeBefore": "}, input.rules);",
+      "runtimeAfter": "}, input.rules, observation => { personCount = observation; });"
+    },
+    {
+      "path": "analytics-engine/src/app.ts",
+      "before": "      inferenceMode: input.detections === undefined ? \"local-onnx\" : \"normalized-observation\",",
+      "after": "      inferenceMode: input.detections === undefined ? \"local-onnx\" : \"normalized-observation\",\n      personCount,",
+      "runtimeBefore": "            inferenceMode: input.detections === undefined ? \"local-onnx\" : \"normalized-observation\",",
+      "runtimeAfter": "            inferenceMode: input.detections === undefined ? \"local-onnx\" : \"normalized-observation\",\n            personCount,"
+    },
+    {
+      "path": "analytics-engine/src/analytics-pipeline.ts",
+      "before": "import type { detectionSchema } from \"./app.js\";",
+      "after": "import type { detectionSchema } from \"./app.js\";\nimport { PERSON_COUNT_CONFIDENCE, type PersonCountObservation } from \"../../packages/contracts/src/live-person-count.js\";",
+      "runtimeBefore": "import { randomUUID } from \"node:crypto\";",
+      "runtimeAfter": "import { randomUUID } from \"node:crypto\";\nimport { PERSON_COUNT_CONFIDENCE } from \"../../packages/contracts/src/live-person-count.js\";"
+    },
+    {
+      "path": "analytics-engine/src/analytics-pipeline.ts",
+      "before": "    rules: AnalyticsRule[],\n  ): Promise<Array<z.infer<typeof detectionSchema>>> {",
+      "after": "    rules: AnalyticsRule[],\n    observePersonCount?: (observation: PersonCountObservation) => void,\n  ): Promise<Array<z.infer<typeof detectionSchema>>> {",
+      "runtimeBefore": "async processFrame(frame, rules) {",
+      "runtimeAfter": "async processFrame(frame, rules, observePersonCount) {"
+    },
+    {
+      "path": "analytics-engine/src/analytics-pipeline.ts",
+      "before": "const shouldDetectObjects = hasMotion || this.needsObjectDetection(rules);",
+      "after": "const shouldDetectObjects = Boolean(observePersonCount) || hasMotion || this.needsObjectDetection(rules);"
+    },
+    {
+      "path": "analytics-engine/src/analytics-pipeline.ts",
+      "before": "    const hasObservedObjects = detectedObjects.length > 0;",
+      "after": "    if (observePersonCount) {\n      const available = !localInferenceRequested || this.objectDetector.getHealth().status === \"healthy\";\n      observePersonCount({ observedAt: frame.timestamp.toISOString(),\n        count: available ? detectedObjects.filter(object => object.label === \"person\" && object.confidence >= PERSON_COUNT_CONFIDENCE).length : null,\n        status: available ? \"observed\" : \"unavailable\" });\n    }\n    const hasObservedObjects = detectedObjects.length > 0;",
+      "runtimeBefore": "        const hasObservedObjects = detectedObjects.length > 0;",
+      "runtimeAfter": "        if (observePersonCount) {\n          const available = !localInferenceRequested || this.objectDetector.getHealth().status === \"healthy\";\n          observePersonCount({ observedAt: frame.timestamp.toISOString(),\n            count: available ? detectedObjects.filter(object => object.label === \"person\" && object.confidence >= PERSON_COUNT_CONFIDENCE).length : null,\n            status: available ? \"observed\" : \"unavailable\" });\n        }\n            const hasObservedObjects = detectedObjects.length > 0;"
+    },
+    {
+      "path": "src/analytics/rule-engine.ts",
+      "before": "rule.enabled && rule.detectionType !== \"no-helmet\" && detectionTypes.has(rule.detectionType)",
+      "after": "rule.enabled && ![\"no-helmet\", \"person-counting\", \"occupancy-counting\"].includes(rule.detectionType) && detectionTypes.has(rule.detectionType)"
+    },
+    {
+      "path": "dashboard/lib/api-client.ts",
+      "before": "export const reportsApi = {",
+      "after": "export const reportsApi = {\n  getLivePersonCount: (filters: {branchId?: string; regionId?: string; zoneId?: string; groupBy?: \"branch\" | \"region\" | \"zone\"} = {}) => {\n    const params = new URLSearchParams(Object.entries(filters).filter(([,value]) => Boolean(value)) as Array<[string,string]>);\n    return fetchApi<import('../../packages/contracts/src/live-person-count').LivePersonCountReport>(`/v1/reports/live-person-count?${params}`);\n  },"
+    },
+    {
+      "path": "dashboard/components/app-layout.tsx",
+      "before": "      { label: \"Report studio\", href: \"/reports\", icon: FileText },",
+      "after": "      { label: \"Report studio\", href: \"/reports\", icon: FileText },\n      { label: \"Live person count\", href: \"/reports/live-person-count\", icon: BarChart3 },"
+    },
+    {
+      "path": "dashboard/components/live-wall-windows.tsx",
+      "before": "import { ExternalLink, MonitorUp, X } from \"lucide-react\";",
+      "after": "import { ExternalLink, MonitorUp, X } from \"lucide-react\";\nimport Link from \"next/link\";"
+    },
+    {
+      "path": "dashboard/components/live-wall-windows.tsx",
+      "before": "      <div><strong>Live Wall windows</strong><p>Combine your selected locations in a new window. Change the selection to open another wall.</p></div>",
+      "after": "      <div><strong>Live Wall windows</strong><p>Combine your selected locations in a new window. Change the selection to open another wall.</p></div>\n      <Link className={styles.open} href=\"/reports/live-person-count\">Live person count report <ExternalLink size={14}/></Link>"
+    },
+    {
+      "path": "dashboard/app/reports/page.tsx",
+      "before": "<div className=\"workflow-heading-actions\"><Link href=\"/reports/mis\"",
+      "after": "<div className=\"workflow-heading-actions\"><Link href=\"/reports/live-person-count\" className=\"btn-secondary\"><BarChart3 size={16}/>Live person count</Link><Link href=\"/reports/mis\""
+    }
+  ],
+  "newFiles": [
+    "packages/contracts/src/live-person-count.ts",
+    "src/analytics/live-person-count.service.ts",
+    "src/routes/live-person-count.routes.ts",
+    "dashboard/app/reports/live-person-count/page.tsx",
+    "dashboard/components/reports/live-person-count-report.tsx",
+    "dashboard/components/reports/live-person-count-report.module.css"
+  ]
+}

@@ -29,6 +29,7 @@ type CameraRow = {
   channel: number;
   protocol: Camera["protocol"];
   status: CameraStatus;
+  location_type: Camera["locationType"] | null;
   profiles: CameraProfile[];
   capabilities: CameraCapabilities;
   connection_secret_ref: string;
@@ -86,6 +87,7 @@ function mapCamera(row: CameraRow): Camera {
     channel: row.channel,
     protocol: row.protocol,
     status: row.status,
+    ...(row.location_type ? { locationType: row.location_type } : {}),
     profiles: row.profiles,
     capabilities: row.capabilities,
     connectionSecretRef: row.connection_secret_ref,
@@ -115,7 +117,7 @@ const activeCameraFrom = `FROM cameras
 const selectCamera = `SELECT cameras.id::text, cameras.device_identity_id::text,
   cameras.resource_node_id::text, camera_node.tenant_id::text AS tenant_id,
   cameras.branch_node_id::text, cameras.edge_agent_id::text, camera_node.name, cameras.vendor,
-  cameras.model, cameras.channel, cameras.protocol, cameras.status,
+  cameras.model, cameras.channel, cameras.protocol, cameras.status, cameras.location_type,
   cameras.profiles, cameras.capabilities, cameras.connection_secret_ref,
   cameras.connection_transport, host(cameras.ip_address) AS ip_address,
   cameras.source_type, cameras.recorder_id, cameras.recorder_channel,
@@ -574,6 +576,12 @@ export class CameraRepository {
        input.certificateRef ?? source.certificate_ref,
        input.certificateFingerprint ?? source.certificate_fingerprint,
        source.identity_last_seen_at, source.device_identity_id],
+    );
+    await client.query(
+      `UPDATE resource_nodes
+       SET name = COALESCE($2, name), is_active = true, lifecycle_status = 'ACTIVE', updated_at = now()
+       WHERE id = (SELECT resource_node_id FROM cameras WHERE id = $1::uuid)`,
+      [cameraId, input.name ?? source.model ?? null],
     );
     await this.deviceIdentities.linkCamera(
       client,

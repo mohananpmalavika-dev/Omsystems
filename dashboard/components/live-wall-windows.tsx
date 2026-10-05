@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ExternalLink, MonitorUp, X } from "lucide-react";
+import Link from "next/link";
 import { liveWallWindowUrl, type LiveWallWindowScope } from "@/lib/live-wall-windows";
 import styles from "./live-wall-windows.module.css";
 
@@ -35,6 +36,7 @@ export function LiveWallWindows({ scope, label, cameraCount, disabled }: {
   return <section className={styles.root} aria-label="Multiple Live Wall windows">
     <div className={styles.toolbar}>
       <div><strong>Live Wall windows</strong><p>Combine your selected locations in a new window. Change the selection to open another wall.</p></div>
+      <Link className={styles.open} href="/reports/live-person-count">Live person count report <ExternalLink size={14}/></Link>
       <button type="button" className={styles.open} onClick={openWall} disabled={disabled}><MonitorUp size={16} />Open wall window<span>({cameraCount} camera{cameraCount === 1 ? "" : "s"})</span></button>
     </div>
     {blockedUrl && <p className={styles.blocked} role="alert">The browser blocked this window. Allow pop-ups for this site or <a href={blockedUrl} target="_blank" rel="noopener noreferrer">open the selected wall in a new tab</a>.</p>}

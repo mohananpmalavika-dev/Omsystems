@@ -9,6 +9,7 @@
  * - Industry-specific compliance
  */
 
+import { reportCalendarPeriod } from '../../../packages/contracts/src/report-hierarchy.js';
 import { Router, Request, Response } from 'express';
 import { Pool } from 'pg';
 import { authenticateToken } from '../../middleware/auth.middleware.js';
@@ -29,8 +30,10 @@ export function createComplianceScorecardRoutes(pool: Pool): Router {
         return res.status(400).json({ error: 'Tenant ID required' });
       }
 
-      const now = new Date();
-      const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      let bounds;
+      try { bounds = reportCalendarPeriod('30d', req.query.startDate, req.query.endDate); }
+      catch(error) { return res.status(400).json({error:error instanceof Error ? error.message : 'Invalid report dates'}); }
+      const now = new Date(bounds.to), last30Days = new Date(bounds.from);
 
       // Banking Compliance (RBI)
       const bankingCompliance = await calculateBankingCompliance(pool, tenantId, last30Days, now);

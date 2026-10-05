@@ -211,6 +211,7 @@ export const navigation: NavGroup[] = [
     icon: FileText,
     items: [
       { label: "Report studio", href: "/reports", icon: FileText },
+      { label: "Live person count", href: "/reports/live-person-count", icon: BarChart3 },
       { label: "Executive reports", href: "/reports/mis", icon: FileSpreadsheet },
       { label: "Cost & value analysis", href: "/reports/financial", icon: TrendingUp },
       { label: "Compliance Frameworks", href: "/compliance", icon: ShieldCheck },

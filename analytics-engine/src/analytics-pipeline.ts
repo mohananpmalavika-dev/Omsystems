@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import type { z } from "zod";
 import type { detectionSchema } from "./app.js";
+import { PERSON_COUNT_CONFIDENCE, type PersonCountObservation } from "../../packages/contracts/src/live-person-count.js";
 import { BaseDetector, hasInferenceObjects, type DetectionFrame, type DetectedObject, type InferenceObject } from "./detectors/base-detector.js";
 
 export interface SnapshotRecord {
@@ -316,6 +317,7 @@ export class AnalyticsPipeline {
   async processFrame(
     frame: DetectionFrame,
     rules: AnalyticsRule[],
+    observePersonCount?: (observation: PersonCountObservation) => void,
   ): Promise<Array<z.infer<typeof detectionSchema>>> {
     if (!this.isInitialized) {
       throw new Error("Analytics pipeline not initialized");
@@ -366,7 +368,7 @@ export class AnalyticsPipeline {
     const hasMotion = motionResults.length > 0;
 
     // Step 3: Run base object detection ONCE if motion detected or required by rules
-    const shouldDetectObjects = hasMotion || this.needsObjectDetection(rules);
+    const shouldDetectObjects = Boolean(observePersonCount) || hasMotion || this.needsObjectDetection(rules);
     let inferenceFrame = frame;
     let detectedObjects: InferenceObject[] = [];
     
@@ -383,6 +385,12 @@ export class AnalyticsPipeline {
           events.push(await this.createEvent(frame, result));
         }
       }
+    }
+    if (observePersonCount) {
+      const available = !localInferenceRequested || this.objectDetector.getHealth().status === "healthy";
+      observePersonCount({ observedAt: frame.timestamp.toISOString(),
+        count: available ? detectedObjects.filter(object => object.label === "person" && object.confidence >= PERSON_COUNT_CONFIDENCE).length : null,
+        status: available ? "observed" : "unavailable" });
     }
     const hasObservedObjects = detectedObjects.length > 0;
 

@@ -14,6 +14,7 @@ import {
   Siren,
   ArrowLeft,
   RefreshCw,
+  CheckCircle2,
   Layers,
   Activity,
   Play,
@@ -34,6 +35,30 @@ export default function BranchWorkspacePage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
   const [error, setError] = useState<string | null>(null);
+  const [bringingOnlineCameraId, setBringingOnlineCameraId] = useState<string | null>(null);
+  const [onlineSuccessMessage, setOnlineSuccessMessage] = useState<string | null>(null);
+
+  const handleMakeCameraOnline = async (camId?: string) => {
+    setBringingOnlineCameraId(camId || "all");
+    setOnlineSuccessMessage(null);
+    try {
+      const res = await fetch("/api/control/v1/operations/health/cameras/bring-online", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(camId ? { cameraId: camId, branchId } : { branchId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || data.error || "Failed to bring camera online");
+      setOnlineSuccessMessage(data.message || (camId ? "Camera marked online." : "All branch cameras marked online."));
+      await loadWorkspace();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Error restoring camera to online");
+    } finally {
+      setBringingOnlineCameraId(null);
+    }
+  };
+
 
   const loadWorkspace = async () => {
     setLoading(true);
@@ -248,19 +273,44 @@ export default function BranchWorkspacePage() {
 
         {/* Tab 2: Cameras */}
         {activeTab === "cameras" && (
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
-            <table className="w-full text-left text-xs text-slate-300">
-              <thead className="bg-slate-950 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
-                <tr>
-                  <th className="px-4 py-3">Channel / Name</th>
-                  <th className="px-4 py-3">Zone</th>
-                  <th className="px-4 py-3">Health State</th>
-                  <th className="px-4 py-3">Streaming</th>
-                  <th className="px-4 py-3">Recording Active</th>
-                  <th className="px-4 py-3">Profile (FPS / Bitrate)</th>
-                  <th className="px-4 py-3">Last Recorded</th>
-                </tr>
-              </thead>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400">
+                {workspace?.cameras?.length ?? 0} cameras monitored for this branch
+              </span>
+              {workspace?.cameras?.some((c: any) => c.operationalState !== "HEALTHY" && c.operationalState !== "LIVE" && c.operationalState !== "ONLINE") && (
+                <button
+                  type="button"
+                  onClick={() => handleMakeCameraOnline()}
+                  disabled={bringingOnlineCameraId !== null}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                  title="Make all degraded, unknown, or not working cameras online"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>{bringingOnlineCameraId === "all" ? "Bringing online…" : "Make all online"}</span>
+                </button>
+              )}
+            </div>
+            {onlineSuccessMessage && (
+              <div className="p-3 rounded-lg bg-emerald-950/60 border border-emerald-800 text-emerald-300 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{onlineSuccessMessage}</span>
+              </div>
+            )}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
+              <table className="w-full text-left text-xs text-slate-300">
+                <thead className="bg-slate-950 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
+                  <tr>
+                    <th className="px-4 py-3">Channel / Name</th>
+                    <th className="px-4 py-3">Zone</th>
+                    <th className="px-4 py-3">Health State</th>
+                    <th className="px-4 py-3">Streaming</th>
+                    <th className="px-4 py-3">Recording Active</th>
+                    <th className="px-4 py-3">Profile (FPS / Bitrate)</th>
+                    <th className="px-4 py-3">Last Recorded</th>
+                    <th className="px-4 py-3 text-right">Action</th>
+                  </tr>
+                </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {workspace?.cameras?.length ? workspace.cameras.map((cam: any) => (
                   <tr key={cam.cameraId} className="hover:bg-slate-800/40">
@@ -279,10 +329,25 @@ export default function BranchWorkspacePage() {
                     </td>
                     <td className="px-4 py-3">{cam.fps !== undefined ? `${cam.fps} FPS` : "Not reported"}{cam.bitrateKbps !== undefined ? ` • ${cam.bitrateKbps} Kbps` : ""}</td>
                     <td className="px-4 py-3 text-slate-400">{cam.lastRecordedAt ? new Date(cam.lastRecordedAt).toLocaleTimeString() : "Unavailable"}</td>
+                    <td className="px-4 py-3 text-right">
+                      {["DEGRADED", "UNKNOWN", "OFFLINE", "STREAM_LOSS", "NO_RECORD", "CRITICAL", "WARNING"].includes(cam.operationalState?.toUpperCase?.() || "") && (
+                        <button
+                          type="button"
+                          onClick={() => handleMakeCameraOnline(cam.cameraId)}
+                          disabled={bringingOnlineCameraId === cam.cameraId}
+                          className="px-2.5 py-1 rounded bg-emerald-600/80 hover:bg-emerald-600 text-white text-[11px] font-medium transition-colors inline-flex items-center gap-1 disabled:opacity-50"
+                          title="Restore camera to online stage"
+                        >
+                          <CheckCircle2 className="w-3 h-3" />
+                          <span>{bringingOnlineCameraId === cam.cameraId ? "Online…" : "Make online"}</span>
+                        </button>
+                      )}
+                    </td>
                   </tr>
-                )) : <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500">No camera telemetry has been reported for this branch.</td></tr>}
+                )) : <tr><td colSpan={8} className="px-4 py-8 text-center text-slate-500">No camera telemetry has been reported for this branch.</td></tr>}
               </tbody>
             </table>
+          </div>
           </div>
         )}
 

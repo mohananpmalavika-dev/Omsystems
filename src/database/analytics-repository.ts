@@ -542,19 +542,7 @@ export class AnalyticsRepository {
          COALESCE(cam_node.name, camera.model, 'Camera') AS camera_name,
          camera.branch_node_id AS branch_id,
          branch.name AS branch_name,
-         event.metadata->>'zoneName' AS zone_name,
-         COALESCE(
-           CASE WHEN parent_node.node_type = 'area' THEN parent_node.name
-                WHEN grandparent_node.node_type = 'area' THEN grandparent_node.name
-                ELSE NULL END,
-           NULL
-         ) AS area_name,
-         COALESCE(
-           CASE WHEN parent_node.node_type = 'region' THEN parent_node.name
-                WHEN grandparent_node.node_type = 'region' THEN grandparent_node.name
-                ELSE NULL END,
-           NULL
-         ) AS region_name,
+         hierarchy.zone_name, hierarchy.area_name, hierarchy.region_name,
          COALESCE(event.detection_type, alert.object_classes->>0, 'intrusion') AS detection_type,
          inc.incident_number,
          inc.status AS incident_status
@@ -563,8 +551,20 @@ export class AnalyticsRepository {
        LEFT JOIN analytics_events event ON event.id=alert.event_id
        LEFT JOIN resource_nodes cam_node ON cam_node.id=camera.resource_node_id
        LEFT JOIN resource_nodes branch ON branch.id=camera.branch_node_id
-       LEFT JOIN resource_nodes parent_node ON parent_node.id=branch.parent_id
-       LEFT JOIN resource_nodes grandparent_node ON grandparent_node.id=parent_node.parent_id
+       LEFT JOIN LATERAL (
+         WITH RECURSIVE ancestors AS (
+           SELECT n.id, n.parent_id, n.node_type, n.name, 0 AS depth, ARRAY[n.id] AS visited
+           FROM resource_nodes n WHERE n.id = branch.id AND n.tenant_id = alert.tenant_id
+           UNION ALL
+           SELECT n.id, n.parent_id, n.node_type, n.name, a.depth + 1, a.visited || n.id
+           FROM resource_nodes n JOIN ancestors a ON n.id = a.parent_id
+           WHERE n.tenant_id = alert.tenant_id AND NOT n.id = ANY(a.visited)
+         )
+         SELECT
+           (SELECT name FROM ancestors WHERE node_type::text = 'zone' ORDER BY depth LIMIT 1) AS zone_name,
+           (SELECT name FROM ancestors WHERE node_type::text = 'area' ORDER BY depth LIMIT 1) AS area_name,
+           (SELECT name FROM ancestors WHERE node_type::text = 'region' ORDER BY depth LIMIT 1) AS region_name
+       ) hierarchy ON true
        LEFT JOIN incidents inc ON inc.id=alert.incident_id
        WHERE alert.tenant_id=$1
          AND ${activeCamera("camera")}
@@ -575,9 +575,9 @@ export class AnalyticsRepository {
          AND ($6::timestamptz IS NULL OR alert.last_detected_at >= $6)
          AND ($7::timestamptz IS NULL OR alert.first_detected_at <= $7)
        AND ($9::uuid[] IS NULL OR alert.camera_id = ANY($9::uuid[]))
-       ORDER BY ${filters.priorityFirst ? "CASE WHEN alert.status IN ('resolved','false_alarm','suppressed') THEN 1 ELSE 0 END, alert.severity ASC," : ""} alert.last_detected_at DESC LIMIT $8`,
+       ORDER BY ${filters.priorityFirst ? "CASE WHEN alert.status IN ('resolved','false_alarm','suppressed') THEN 1 ELSE 0 END, alert.severity ASC," : ""} alert.last_detected_at DESC, alert.id DESC LIMIT $8 OFFSET $10`,
       [...params, filters.status ?? null, filters.severity ?? null, filters.from ?? null,
-        filters.to ?? null, filters.limit, filters.cameraIds ?? null],
+        filters.to ?? null, filters.limit, filters.cameraIds ?? null, filters.offset ?? 0],
     );
     return result.rows.map(mapAlert);
   }
@@ -698,19 +698,7 @@ export class AnalyticsRepository {
          COALESCE(cam_node.name, camera.model, 'Camera') AS camera_name,
          camera.branch_node_id AS branch_id,
          branch.name AS branch_name,
-         zone.name AS zone_name,
-         COALESCE(
-           CASE WHEN parent_node.node_type = 'area' THEN parent_node.name
-                WHEN grandparent_node.node_type = 'area' THEN grandparent_node.name
-                ELSE NULL END,
-           NULL
-         ) AS area_name,
-         COALESCE(
-           CASE WHEN parent_node.node_type = 'region' THEN parent_node.name
-                WHEN grandparent_node.node_type = 'region' THEN grandparent_node.name
-                ELSE NULL END,
-           NULL
-         ) AS region_name,
+         hierarchy.zone_name, hierarchy.area_name, hierarchy.region_name,
          COALESCE(event.detection_type, alert.object_classes->>0, 'intrusion') AS detection_type,
          inc.incident_number,
          inc.status AS incident_status
@@ -719,13 +707,20 @@ export class AnalyticsRepository {
        LEFT JOIN analytics_events event ON event.id=alert.event_id
        LEFT JOIN resource_nodes cam_node ON cam_node.id=camera.resource_node_id
        LEFT JOIN resource_nodes branch ON branch.id=camera.branch_node_id
-       LEFT JOIN resource_nodes parent_node ON parent_node.id=branch.parent_id
-       LEFT JOIN resource_nodes grandparent_node ON grandparent_node.id=parent_node.parent_id
        LEFT JOIN LATERAL (
-         SELECT name FROM nbfc_analytics_zones 
-         WHERE camera_id = camera.id::text OR branch_id = camera.branch_node_id::text 
-         ORDER BY created_at DESC LIMIT 1
-       ) zone ON true
+         WITH RECURSIVE ancestors AS (
+           SELECT n.id, n.parent_id, n.node_type, n.name, 0 AS depth, ARRAY[n.id] AS visited
+           FROM resource_nodes n WHERE n.id = branch.id AND n.tenant_id = alert.tenant_id
+           UNION ALL
+           SELECT n.id, n.parent_id, n.node_type, n.name, a.depth + 1, a.visited || n.id
+           FROM resource_nodes n JOIN ancestors a ON n.id = a.parent_id
+           WHERE n.tenant_id = alert.tenant_id AND NOT n.id = ANY(a.visited)
+         )
+         SELECT
+           (SELECT name FROM ancestors WHERE node_type::text = 'zone' ORDER BY depth LIMIT 1) AS zone_name,
+           (SELECT name FROM ancestors WHERE node_type::text = 'area' ORDER BY depth LIMIT 1) AS area_name,
+           (SELECT name FROM ancestors WHERE node_type::text = 'region' ORDER BY depth LIMIT 1) AS region_name
+       ) hierarchy ON true
        LEFT JOIN incidents inc ON inc.id=alert.incident_id
        WHERE alert.id=$1 AND alert.tenant_id=$2
          AND ${activeCamera("camera")}`,

@@ -1,3 +1,5 @@
+import { loadReportHierarchyNodes } from '../hierarchy.js';
+import { resolveReportHierarchy } from "../../../packages/contracts/src/report-hierarchy.js";
 /**
  * Daily Surveillance Report Collector Service
  * 
@@ -90,11 +92,10 @@ export class DailySurveillanceCollectorService {
       if (options.filters?.branchId) {
         branchNodes = branchNodes.filter((b) => b.id === options.filters?.branchId);
       }
+      const hierarchyNodes = await loadReportHierarchyNodes(activeStore, branchNodes);
+      const hierarchyByBranch = new Map(branchNodes.map(node => [node.id, resolveReportHierarchy(node.id, hierarchyNodes)]));
       if (options.filters?.region) {
-        branchNodes = branchNodes.filter((b) => {
-          const regionName = (b.metadata?.region || b.parentId || "").toLowerCase();
-          return regionName.includes(options.filters?.region?.toLowerCase() || "");
-        });
+        branchNodes = branchNodes.filter(node => hierarchyByBranch.get(node.id)?.region === options.filters?.region);
       }
       const selectedBranchIds = new Set(branchNodes.map((branch) => branch.id));
 
@@ -111,7 +112,9 @@ export class DailySurveillanceCollectorService {
             branchId: snapshot.branchId,
             branchCode: snapshot.branchCode,
             branchName: snapshot.branchName,
-            region: snapshot.regionName || node.metadata?.region || "Unassigned",
+            region: hierarchyByBranch.get(node.id)?.region || "",
+            zone: hierarchyByBranch.get(node.id)?.zone || "",
+            area: hierarchyByBranch.get(node.id)?.area || "",
             status: branchStatus,
             internetStatus: snapshot.network.state === "ONLINE" ? "HEALTHY" : snapshot.network.state === "FAILOVER" ? "WARNING" : snapshot.network.state === "OFFLINE" ? "OFFLINE" : "UNKNOWN",
             recorderStatus: snapshot.recorders.state,

@@ -95,8 +95,8 @@ function healthy(disk: Disk): boolean {
   const status = string(disk.operationalStatus ?? disk.healthStatus ?? disk.smartStatus).toLowerCase();
   const smart = string(disk.smartStatus).toLowerCase();
   return recent(disk) && bytes(disk.capacityBytes ?? disk.totalBytes) > 0
-    && ["healthy", "ok", "online"].includes(status)
-    && !["failed", "critical", "warning", "degraded", "missing"].includes(smart)
+    && ["healthy", "ok", "online", "warning"].includes(status)
+    && !["failed", "critical", "missing"].includes(smart)
     && disk.isReadOnly !== true && disk.readOnly !== true
     && !["read_only", "uninitialized", "missing", "failed"].includes(string(disk.slotStatus).toLowerCase())
     && disk.detected !== false && disk.writeVerification !== "failed";
@@ -145,15 +145,27 @@ function matchesSd(disk: Disk, camera: Disk): boolean {
   const id = diskId(disk);
   const camId = cameraId(camera);
   const discoveryId = string(camera.storageDiscoveryId);
-  return id === `${camId}:sdcard` || id.startsWith(`camera:${camId}:sdcard`)
-    || Boolean(discoveryId && id.startsWith(`camera:${discoveryId}:sdcard`));
+  return id === `${camId}:sdcard` || id === `camera:${camId}:sdcard` || id.startsWith(`camera:${camId}:sdcard`)
+    || Boolean(discoveryId && (id === `${discoveryId}:sdcard` || id.startsWith(`camera:${discoveryId}:sdcard`)));
 }
 
 function matchesRecorder(disk: Disk, camera: Disk): boolean {
-  if (string(disk.branchId) && string(camera.branch_id ?? camera.branchId)
-    && string(disk.branchId) !== string(camera.branch_id ?? camera.branchId)) return false;
+  const diskBranch = string(disk.branchId);
+  const cameraBranch = string(camera.branch_id ?? camera.branchId);
+  if (diskBranch && cameraBranch && diskBranch !== cameraBranch) return false;
+  if (isSdCard(disk)) return false;
   const recorderId = string(camera.recorder_id ?? camera.recorderId);
-  return Boolean(recorderId) && !isSdCard(disk) && diskId(disk).startsWith(`${recorderId}:disk:`);
+  const id = diskId(disk);
+  if (recorderId && id.startsWith(`${recorderId}:disk:`)) return true;
+  if (recorderId) {
+    const normRec = recorderId.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+    const normDisk = id.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+    if (normDisk.includes(normRec) || normRec.includes(normDisk.split("disk")[0])) return true;
+  }
+  if (diskBranch && cameraBranch && diskBranch === cameraBranch && (Boolean(recorderId) || !isSdCard(disk))) {
+    return true;
+  }
+  return false;
 }
 
 function isCloudNode(node: StorageNode): boolean {

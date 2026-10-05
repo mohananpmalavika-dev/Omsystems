@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import { ReportDateControls, type ReportDateRange } from '@/components/reports/report-date-controls';
+import { ReportPagination } from '@/components/reports/report-pagination';
+import { downloadReportCsv } from '@/lib/report-export';
 import { AppLayout } from '@/components/app-layout';
 import { PageHero } from '@/components/page-hero';
 import { 
@@ -74,6 +77,9 @@ interface ScorecardData {
 }
 
 export default function ComplianceScorecardPage() {
+  const [gapPage,setGapPage]=useState(1),[gapSize,setGapSize]=useState(10);
+  const [actionPage,setActionPage]=useState(1),[actionSize,setActionSize]=useState(10);
+  const [range,setRange]=useState<ReportDateRange>({});
   const [data, setData] = useState<ScorecardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,10 +94,11 @@ export default function ComplianceScorecardPage() {
   const [merkleVerifiedAt, setMerkleVerifiedAt] = useState<string | null>(null);
 
   const loadData = async () => {
+    const dateParams = new URLSearchParams(range).toString();
     setLoading(true);
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
-      const response = await fetch('/api/control/v1/reports/compliance-scorecard', {
+      const response = await fetch(`/api/control/v1/reports/compliance-scorecard?${dateParams}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'x-sentinel-session': token || '',
@@ -113,7 +120,7 @@ export default function ComplianceScorecardPage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [range]);
 
   if (loading) {
     return (
@@ -153,7 +160,9 @@ export default function ComplianceScorecardPage() {
   return (
     <AppLayout>
       <main className="p-6 space-y-6 max-w-[1800px] mx-auto">
-        <PageHero
+        <ReportDateControls range={range} onGenerate={setRange}/>
+          <div className="flex flex-wrap gap-2 print:hidden"><button className="btn-secondary" onClick={()=>downloadReportCsv(Object.entries(data.domains).flatMap(([domain,value])=>value.checks.map(check=>({Domain:domain,Requirement:check.requirement,Regulation:check.regulation,Status:check.status,Score:check.score,Findings:check.findings.join('; ')}))), 'compliance-checks.csv')}>Export all compliance checks (CSV)</button><button className="btn-secondary" onClick={()=>window.print()}>Print / PDF</button></div>
+          <PageHero
           eyebrow="Compliance & Audit"
           title="Compliance Scorecard"
           description="Real-time compliance tracking across regulatory domains with audit readiness assessment"
@@ -457,8 +466,9 @@ export default function ComplianceScorecardPage() {
               <AlertTriangle size={20} />
               Compliance Gaps Requiring Attention ({data.gaps.length})
             </h3>
+            <ReportPagination total={data.gaps.length} page={gapPage} pageSize={gapSize} onPage={setGapPage} onPageSize={setGapSize}/>
             <div className="space-y-3">
-              {data.gaps.map((gap, idx) => (
+              {data.gaps.slice((Math.min(gapPage,Math.max(1,Math.ceil(data.gaps.length/gapSize)))-1)*gapSize,Math.min(gapPage,Math.max(1,Math.ceil(data.gaps.length/gapSize)))*gapSize).map((gap, idx) => (
                 <div key={idx} className={`p-4 rounded-lg border ${
                   gap.severity === 'high' 
                     ? 'bg-red-900/30 border-red-500/50'
@@ -511,8 +521,9 @@ export default function ComplianceScorecardPage() {
               <Target size={20} className="text-blue-400" />
               Remediation Action Plan
             </h3>
+            <ReportPagination total={data.remediationActions.length} page={actionPage} pageSize={actionSize} onPage={setActionPage} onPageSize={setActionSize}/>
             <div className="space-y-4">
-              {data.remediationActions.map((action, idx) => {
+              {data.remediationActions.slice((Math.min(actionPage,Math.max(1,Math.ceil(data.remediationActions.length/actionSize)))-1)*actionSize,Math.min(actionPage,Math.max(1,Math.ceil(data.remediationActions.length/actionSize)))*actionSize).map((action, idx) => {
                 const relatedGap = data.gaps.find(g => g.id === action.gapId);
                 return (
                   <div key={idx} className={`p-4 rounded-lg border ${

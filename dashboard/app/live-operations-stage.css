@@ -1,4 +1,14 @@
 /* The operations stage is a dark video canvas in every application theme. */
+.los-location-editor { display:flex; flex-wrap:wrap; align-items:end; gap:10px 14px; grid-column:1/-1; padding:12px 14px; margin-bottom:14px; background:#142239; border:1px solid #304669; border-radius:8px; }
+.los-location-editor label { display:grid; gap:7px; min-width:0; color:#b7c9e5; font-size:12px; }
+.los-location-editor label>span { display:flex; align-items:center; gap:7px; }
+.operations-stage-room .los-location-editor select { width:240px; max-width:100%; padding:9px 12px; color:#e1ecff!important; background:#0c192c!important; border:1px solid #425b7f!important; border-radius:6px; font-size:13px; }
+.operations-stage-room .los-location-editor button { min-height:38px; padding:9px 18px; color:#fff; background:#315ab4; border:1px solid #567dd0; border-radius:6px; font-size:13px; font-weight:600; }
+.los-location-editor :is(select,button):focus-visible { outline:2px solid #a7c8ff; outline-offset:3px; }
+.los-location-editor :is(select,button):disabled { opacity:.55; cursor:not-allowed; }
+.los-location-feedback { flex:1 1 220px; align-self:center; margin:0; color:#a3e0d0; font-size:12px; line-height:1.6; }
+.los-location-feedback.error { color:#ffb9c2; }
+@media(max-width:430px) { .los-location-editor label { flex:1 1 170px; }.operations-stage-room .los-location-editor select { width:100%; }.los-location-feedback { flex-basis:100%; } }
 html[data-theme] .app-shell .experience-surface .operations-stage-room { background:#09111f!important; color:#dce8ff!important; padding:24px!important; gap:16px!important; max-width:none; }
 .los-eyebrow { display:block; font:9px/1.7 ui-monospace,monospace; letter-spacing:.15em; color:#7c9cc8; text-transform:uppercase; }.los-page-heading { display:flex; gap:25px; align-items:center; justify-content:space-between; padding:8px 0 20px; border-bottom:1px solid #27354b; }.los-page-heading h1 { color:#e3edff!important; font-size:35px; letter-spacing:-.045em; line-height:1.15; margin:9px 0; }.los-page-heading p { font-size:11px; color:#92a6c5; line-height:1.8; }.los-page-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:12px; }.los-page-actions :is(a,button),.los-advanced-actions button { display:flex; align-items:center; gap:9px; font-size:11px; color:#b7c9e5; border:1px solid #2c3f5e; background:#132039; border-radius:9px; padding:11px 14px; }.los-data-state { display:flex; align-items:center; gap:8px; font:9px ui-monospace,monospace; color:#9fb4d5; }.los-data-state i { width:6px; height:6px; border-radius:50%; background:#7fc8be; }.los-data-state.partial i { background:#f4bb66; }.los-data-state.unavailable i { background:#ed7389; }
 .los-scope-sheet,.los-patrol-sheet { border:1px solid #24354f; border-radius:12px; background:#101a2c; overflow:hidden; }.los-scope-sheet>summary,.los-patrol-sheet>summary { display:flex; gap:16px; align-items:center; cursor:pointer; padding:15px 18px; list-style:none; color:#b3c7e5; font-size:11px; }.los-scope-sheet>summary::-webkit-details-marker,.los-patrol-sheet>summary::-webkit-details-marker { display:none; }.los-scope-sheet>summary>span,.los-patrol-sheet>summary>span { display:flex; align-items:center; gap:10px; flex:1; }.los-scope-sheet>summary>strong { font-weight:500; color:#7f9cc5; font-size:10px; }.los-patrol-sheet>summary>small { color:#7f9cc5; }.los-scope-sheet[open]>summary>svg,.los-patrol-sheet[open]>summary>svg { transform:rotate(90deg); }.los-advanced-actions { display:flex; flex-wrap:wrap; gap:12px; padding:0 18px 18px; }
@@ -608,4 +618,47 @@ html[data-theme] .app-shell .experience-surface .operations-stage-room .mode-fle
     grid-template-rows: repeat(var(--fleet-mobile-row-count), minmax(0, 1fr));
   }
   .operations-stage-room .mode-fleet .los-video-stage { --fleet-meta-height: 20px !important; }
+}
+
+/* Independent wall windows use the same fleet monitor without the workspace chrome. */
+html[data-theme] .app-shell.wall-window-shell {
+  display: block !important;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden;
+  background: #050a13 !important;
+}
+html[data-theme] .app-shell.wall-window-shell .experience-surface.wall-window-surface,
+html[data-theme] .app-shell.wall-window-shell .operations-stage-room.wall-window-room,
+html[data-theme] .app-shell.wall-window-shell .camera-only-wall {
+  display: block !important;
+  width: 100%;
+  height: 100%;
+  min-height: 0 !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  overflow: hidden;
+  background: #050a13 !important;
+}
+html[data-theme] .app-shell.wall-window-shell .experience-surface .operations-stage-room .mode-fleet .los-video-stage {
+  height: 100dvh;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+.wall-window-shell .wall-window-message {
+  display: grid;
+  place-content: center;
+  height: 100%;
+  padding: 24px;
+  color: #aebed3;
+  text-align: center;
 }

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { GlobalAlertCenter } from "@/components/global-alert-center";
 import { SessionProvider } from "@/components/session-provider";
 import { ActivityMonitor } from "@/components/activity-monitor";
 import { ApplicationShell } from "@/components/application-shell";
@@ -7,8 +6,6 @@ import { ThemeProvider } from "@/components/ui/theme-provider";
 import { OrgBrandingProvider } from "@/components/ui/org-branding-provider";
 import { PerformanceMonitorProvider } from "@/components/performance-monitor-provider";
 import { NotificationsProvider } from "@/components/notifications/NotificationsProvider";
-import { ApiErrorNotifier } from "@/components/api-error-notifier";
-import { GuardianFAB } from "@/components/guardian-ai/guardian-fab";
 import "./globals.css";
 import "./workspace.css";
 import "./rich.css";
@@ -152,13 +149,10 @@ export default function RootLayout({
         <ThemeProvider>
           <OrgBrandingProvider>
             <NotificationsProvider>
-              <ApiErrorNotifier />
               <SessionProvider>
                 <ActivityMonitor>
                    <PerformanceMonitorProvider>
                   <ApplicationShell>{children}</ApplicationShell>
-                  <GlobalAlertCenter />
-                  <GuardianFAB />
                    </PerformanceMonitorProvider>
                 </ActivityMonitor>
               </SessionProvider>

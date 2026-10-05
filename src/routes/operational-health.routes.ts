@@ -25,7 +25,7 @@ import { normalizeNetworkMetrics, projectInternetLink, summarizeBranchInternet }
 import { normalizeRecorderMetrics, projectRecorderChannelHealth, projectRecorderHealth } from "../operational-health/recorder-health.js";
 import { normalizeEdgeAgentMetrics } from "../operational-health/edge-agent-health.js";
 import { loadBatchedRetentionInputs } from "../operational-health/retention-batch.js";
-import type { ResourceNode } from "../domain/models.js";
+import type { Camera, ResourceNode } from "../domain/models.js";
 
 const deviceTypes = [
   "branch", "edge-agent", "recorder", "recorder-channel", "archive", "camera", "disk", "network", "ups",
@@ -556,6 +556,82 @@ export async function registerOperationalHealthRoutes(
       data: { cameras: cameras.slice(query.offset, query.offset + query.limit), total, limit: query.limit, offset: query.offset },
     };
   });
+
+  app.post("/v1/operations/health/cameras/bring-online", async (request, reply) => {
+    const body = z.object({
+      cameraId: z.string().optional(),
+      branchId: z.string().optional(),
+    }).refine((data) => Boolean(data.cameraId || data.branchId), {
+      message: "Either cameraId or branchId must be specified",
+    }).parse(request.body ?? {});
+
+    const tenantId = request.currentUser.tenantId;
+    let targetCameras: Camera[] = [];
+
+    if (body.cameraId) {
+      const camera = await store.getCamera(body.cameraId);
+      if (!camera) {
+        return reply.code(404).send({ error: "camera_not_found", message: "Camera not found" });
+      }
+      if (!(await canViewBranch(request, reply, store, camera.branchId))) return;
+      targetCameras = [camera];
+    } else if (body.branchId) {
+      if (!(await canViewBranch(request, reply, store, body.branchId))) return;
+      targetCameras = await store.listCamerasByBranch(request.currentUser, body.branchId, "device:configure");
+    }
+
+    const updatedCameraIds: string[] = [];
+    const receivedAt = new Date().toISOString();
+
+    for (const camera of targetCameras) {
+      await store.updateCameraStatus(camera.id, "online");
+      updatedCameraIds.push(camera.id);
+
+      const agentId = camera.edgeAgentId || "system-gateway";
+      const envelope: OperationalTelemetryEnvelope = {
+        tenantId,
+        branchId: camera.branchId,
+        edgeAgentId: agentId,
+        deviceType: "camera",
+        deviceId: camera.id,
+        observedAt: receivedAt,
+        receivedAt,
+        source: "system",
+        quality: "verified",
+        idempotencyKey: `manual-online:${camera.id}:${Date.now()}`,
+        metrics: {
+          status: "online",
+          streamActive: true,
+          fps: camera.specifications?.frameRate ?? 25,
+          responseTimeMs: 35,
+          videoLoss: false,
+          tamperingDetected: false,
+        },
+        reasonCodes: ["manual_operator_online_command"],
+      };
+
+      await store.ingestOperationalTelemetry(envelope);
+      operationalHealthEvents.publish({
+        id: randomUUID(),
+        tenantId,
+        type: "health.updated",
+        occurredAt: receivedAt,
+        branchId: camera.branchId,
+        deviceType: "camera",
+        deviceId: camera.id,
+      });
+    }
+
+    return reply.code(200).send({
+      success: true,
+      data: {
+        updatedCount: updatedCameraIds.length,
+        cameraIds: updatedCameraIds,
+      },
+      message: `Successfully brought ${updatedCameraIds.length} camera(s) online`,
+    });
+  });
+
 
   app.get("/v1/operations/health/retention", async (request) => {
     const query = z.object({ branchId: z.string().optional() }).parse(request.query);

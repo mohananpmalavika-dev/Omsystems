@@ -1,3 +1,4 @@
+import { resolveReportHierarchy } from "../../packages/contracts/src/report-hierarchy.js";
 import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -97,32 +98,38 @@ export async function buildDailyOperationalReport(store:ControlPlaneStore,user:N
   // Batch fetch all nodes to avoid N+1 queries
   const allNodeIds = new Set<string>();
   for (const branch of branches) {
-    for (const id of branch.path) {
+    for (const id of [branch.id, ...branch.path]) {
       allNodeIds.add(id);
     }
   }
   const allNodes = await store.listNodesByIds([...allNodeIds]);
   const nodesById = new Map(allNodes.map((node) => [node.id, node]));
   
-  const regionByBranch = new Map<string, string>();
-  for (const branch of branches) {
-    let region = "Unassigned";
-    for (const id of [...branch.path].reverse()) {
-      const node = nodesById.get(id);
-      if (node?.type === "region") {
-        region = node.name;
-        break;
-      }
-    }
-    regionByBranch.set(branch.id, region);
-  }
-  if(filters.region)branches=branches.filter((item)=>regionByBranch.get(item.id)===filters.region);
+  const hierarchyByBranch = new Map(branches.map(branch => [branch.id, resolveReportHierarchy(branch.id, nodesById)]));
+  const regionByBranch = new Map([...hierarchyByBranch].map(([id, h]) => [id, h.region]));
+  branches = branches.filter(branch => {
+    const h = hierarchyByBranch.get(branch.id)!;
+    return (!filters.zone || h.zone === filters.zone) && (!filters.region || h.region === filters.region) && (!filters.area || h.area === filters.area);
+  });
+  const hierarchyColumns = (id: string) => {
+    const h = hierarchyByBranch.get(id);
+    return { zone: h?.zone ?? '', region: h?.region ?? '', area: h?.area ?? '', organizationPath: h?.path.join(' / ') ?? '' };
+  };
   const telemetry=await store.listLatestOperationalTelemetry(user.tenantId,branches.map((item)=>item.id));const projections=[];
   const branchInputs=await Promise.all(branches.map(async(branch)=>{const cameras=await store.listCamerasByBranch(user,branch.id,"live:view");const policy=await store.getOperationalHealthPolicy(user.tenantId,branch.id)??await store.getOperationalHealthPolicy(user.tenantId)??defaultOperationalHealthPolicy;return{branch,cameras,policy};}));
   const retentionInputs=await loadBatchedRetentionInputs(store,branchInputs.flatMap(({cameras,policy})=>cameras.map((camera)=>({cameraId:camera.id,policyRetentionDays:policy.retentionDays,maxRecordingGapSeconds:policy.maxRecordingGapSeconds}))),Date.parse(to));
   for(const {branch,cameras,policy} of branchInputs){const retentions=cameras.map((camera)=>{const input=retentionInputs.get(camera.id);return verifyContinuousRetention(camera.id,input?.segments??[],{...policy,retentionDays:input?.configuredDays??policy.retentionDays},Date.parse(to));});projections.push(projectBranchHealth({branch,cameras,telemetry:telemetry.filter((item)=>item.branchId===branch.id),retentions,policy,now:Date.parse(to),region:regionByBranch.get(branch.id)}));}
   const selected=filters.deviceStatus?projections.filter((item)=>item.healthStatus===filters.deviceStatus):projections;
-  let alerts=await store.listAnalyticsAlerts(user.tenantId,{limit:10_000,from,to});
+  const scopeCameras = selected.flatMap(branch => branch.cameras.map(camera => camera.id));
+  const alertsInScope = [];
+  if (scopeCameras.length) {
+    for (let offset = 0; ; offset += 200) {
+      const batch = await store.listAnalyticsAlerts(user.tenantId, { cameraIds: scopeCameras, limit: 200, offset, from, to });
+      alertsInScope.push(...batch);
+      if (batch.length < 200) break;
+    }
+  }
+  let alerts = alertsInScope;
   const cameraBranch=new Map<string,string>();
   for(const branch of selected)for(const camera of branch.cameras)cameraBranch.set(String(camera.id),String(branch.id));
   alerts=alerts
@@ -130,10 +137,10 @@ export async function buildDailyOperationalReport(store:ControlPlaneStore,user:N
     .filter((alert)=>!filters.severity||alert.severity===filters.severity)
     .filter((alert)=>!filters.alertState||alert.status===filters.alertState);
   if(filters.alertType)alerts=alerts.filter((alert)=>alert.title.toLowerCase().includes(filters.alertType!.toLowerCase())||alert.objectClasses.some((item)=>item.toLowerCase().includes(filters.alertType!.toLowerCase())));
-  const branchRows=selected.map((branch)=>({branchId:branch.id,branchName:branch.name,region:branch.region,status:branch.healthStatus,healthScore:branch.healthScore,totalCameras:branch.totalCameras,onlineCameras:branch.onlineCameras,recordingCameras:branch.recordingCameras,retentionBreaches:branch.retentionBreaches,recorderStatus:branch.components.recording?.status??"unknown",diskStatus:branch.components.storage?.status??"unknown",internetStatus:branch.components.network?.status??"unknown",lastSeen:branch.lastHealthCheck}));
-  const cameraRows=selected.flatMap((branch)=>branch.cameras.map((camera)=>({branchId:branch.id,branchName:branch.name,region:branch.region,cameraId:camera.id,cameraName:camera.name,status:camera.onlineStatus,recordingStatus:camera.recordingStatus,retentionDays:camera.retention?.actualDays??null,requiredRetentionDays:camera.retention?.configuredDays??null,lastSeen:camera.lastHeartbeat,latencyMs:camera.latencyMs,packetLossPercent:camera.packetLoss,quality:camera.quality})));
-  const alertRows=alerts.map((alert)=>({alertId:alert.id,branchId:cameraBranch.get(alert.cameraId)??null,cameraId:alert.cameraId,type:alert.title,severity:alert.severity,state:alert.status,detectedAt:alert.firstDetectedAt,acknowledgedAt:alert.acknowledgedAt??null,escalated:alert.status==="escalated"?"yes":"no",slaDueAt:alert.slaDueAt??null,slaBreached:alert.slaDueAt&&(!alert.acknowledgedAt||alert.acknowledgedAt>alert.slaDueAt)?"yes":"no"}));
-  const exceptions=branchRows.flatMap((row)=>[{component:"recorder",status:row.recorderStatus},{component:"disk",status:row.diskStatus},{component:"internet",status:row.internetStatus}].filter((item)=>item.status!=="healthy").map((item)=>({branchId:row.branchId,branchName:row.branchName,region:row.region,component:item.component,status:item.status,detail:"Operational health exception"}))).concat(cameraRows.filter((row)=>row.recordingStatus==="breach").map((row)=>({branchId:row.branchId,branchName:row.branchName,region:row.region,component:"retention",status:"critical",detail:`${row.cameraName}: ${row.retentionDays??"unknown"}/${row.requiredRetentionDays??"unknown"} days`})));
+  const branchRows=selected.map((branch)=>({branchId:branch.id,branchName:branch.name,...hierarchyColumns(branch.id),status:branch.healthStatus,healthScore:branch.healthScore,totalCameras:branch.totalCameras,onlineCameras:branch.onlineCameras,recordingCameras:branch.recordingCameras,retentionBreaches:branch.retentionBreaches,recorderStatus:branch.components.recording?.status??"unknown",diskStatus:branch.components.storage?.status??"unknown",internetStatus:branch.components.network?.status??"unknown",lastSeen:branch.lastHealthCheck}));
+  const cameraRows=selected.flatMap((branch)=>branch.cameras.map((camera)=>({branchId:branch.id,branchName:branch.name,...hierarchyColumns(branch.id),cameraId:camera.id,cameraName:camera.name,status:camera.onlineStatus,recordingStatus:camera.recordingStatus,retentionDays:camera.retention?.actualDays??null,requiredRetentionDays:camera.retention?.configuredDays??null,lastSeen:camera.lastHeartbeat,latencyMs:camera.latencyMs,packetLossPercent:camera.packetLoss,quality:camera.quality})));
+  const alertRows=alerts.map((alert)=>({alertId:alert.id,...hierarchyColumns(cameraBranch.get(alert.cameraId) ?? ""),branchId:cameraBranch.get(alert.cameraId)??null,cameraId:alert.cameraId,type:alert.title,severity:alert.severity,state:alert.status,detectedAt:alert.firstDetectedAt,acknowledgedAt:alert.acknowledgedAt??null,escalated:alert.status==="escalated"?"yes":"no",slaDueAt:alert.slaDueAt??null,slaBreached:alert.slaDueAt&&(!alert.acknowledgedAt||alert.acknowledgedAt>alert.slaDueAt)?"yes":"no"}));
+  const exceptions=branchRows.flatMap((row)=>[{component:"recorder",status:row.recorderStatus},{component:"disk",status:row.diskStatus},{component:"internet",status:row.internetStatus}].filter((item)=>item.status!=="healthy").map((item)=>({branchId:row.branchId,branchName:row.branchName,zone:row.zone,region:row.region,area:row.area,component:item.component,status:item.status,detail:"Operational health exception"}))).concat(cameraRows.filter((row)=>row.recordingStatus==="breach").map((row)=>({branchId:row.branchId,branchName:row.branchName,zone:row.zone,region:row.region,area:row.area,component:"retention",status:"critical",detail:`${row.cameraName}: ${row.retentionDays??"unknown"}/${row.requiredRetentionDays??"unknown"} days`})));
   const summary={totalBranches:selected.length,healthyBranches:selected.filter((b)=>b.healthStatus==="healthy").length,warningBranches:selected.filter((b)=>b.healthStatus==="warning").length,criticalBranches:selected.filter((b)=>b.healthStatus==="critical").length,unknownBranches:selected.filter((b)=>b.healthStatus==="unknown").length,totalCameras:cameraRows.length,camerasOnline:cameraRows.filter((c)=>c.status==="online").length,camerasOffline:cameraRows.filter((c)=>c.status==="offline").length,camerasDegradedOrUnknown:cameraRows.filter((c)=>!["online","offline"].includes(String(c.status))).length,retentionBreaches:cameraRows.filter((c)=>c.recordingStatus==="breach").length,recorderExceptions:branchRows.filter((b)=>b.recorderStatus!=="healthy").length,diskExceptions:branchRows.filter((b)=>b.diskStatus!=="healthy").length,internetExceptions:branchRows.filter((b)=>b.internetStatus!=="healthy").length,alertCount:alertRows.length,unacknowledgedAlerts:alerts.filter((a)=>!a.acknowledgedAt).length,escalatedAlerts:alerts.filter((a)=>a.status==="escalated").length,slaBreaches:alertRows.filter((a)=>a.slaBreached==="yes").length};
   return{generatedAt:new Date().toISOString(),period:{from,to},filters,summary,branches:branchRows,cameras:cameraRows,alerts:alertRows,exceptions};
 }
@@ -150,8 +157,8 @@ export function reportSections(report:DailyOperationalReport,template:Operationa
   if(template==="branch_health_summary")return [all[0]];
   if(template==="camera_availability")return [all[1]];
   if(template==="alert_summary")return [all[2]];
-  if(template==="recorder_status")return [{name:"DVR NVR Status",recordType:"recorder",rows:report.branches.map((row)=>({branchId:row.branchId,branchName:row.branchName,region:row.region,recorderStatus:row.recorderStatus,lastSeen:row.lastSeen}))}];
-  if(template==="hdd_health")return [{name:"HDD Health",recordType:"hdd",rows:report.branches.map((row)=>({branchId:row.branchId,branchName:row.branchName,region:row.region,diskStatus:row.diskStatus,lastSeen:row.lastSeen}))}];
+  if(template==="recorder_status")return [{name:"DVR NVR Status",recordType:"recorder",rows:report.branches.map((row)=>({branchId:row.branchId,branchName:row.branchName,zone:row.zone,region:row.region,area:row.area,recorderStatus:row.recorderStatus,lastSeen:row.lastSeen}))}];
+  if(template==="hdd_health")return [{name:"HDD Health",recordType:"hdd",rows:report.branches.map((row)=>({branchId:row.branchId,branchName:row.branchName,zone:row.zone,region:row.region,area:row.area,diskStatus:row.diskStatus,lastSeen:row.lastSeen}))}];
   return [{name:"Retention Compliance",recordType:"retention",rows:report.cameras.map((row)=>({branchId:row.branchId,branchName:row.branchName,cameraId:row.cameraId,cameraName:row.cameraName,recordingStatus:row.recordingStatus,retentionDays:row.retentionDays,requiredRetentionDays:row.requiredRetentionDays,compliant:row.recordingStatus==="breach"?"no":"yes"}))}];
 }
 function humanize(value:string){return value.replaceAll("_"," ").replace(/([A-Z])/g," $1").replace(/\b\w/g,(c)=>c.toUpperCase());}

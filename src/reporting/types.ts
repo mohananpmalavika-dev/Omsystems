@@ -4,6 +4,8 @@ export type OperationalReportTemplate = "comprehensive" | "branch_health_summary
 export type OperationalReportRunStatus = "queued" | "running" | "completed" | "failed" | "dead";
 
 export interface OperationalReportFilters {
+  zone?: string;
+  area?: string;
   region?: string;
   branchId?: string;
   deviceStatus?: "healthy" | "warning" | "critical" | "unknown";

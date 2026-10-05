@@ -12,7 +12,7 @@ export function sortedMatchingRules(
 ): AnalyticsRule[] {
   const detectionTypes = new Set(eventDetectionTypes(event));
   const matches = rules
-    .filter((rule) => rule.enabled && rule.detectionType !== "no-helmet" && detectionTypes.has(rule.detectionType))
+    .filter((rule) => rule.enabled && !["no-helmet", "person-counting", "occupancy-counting"].includes(rule.detectionType) && detectionTypes.has(rule.detectionType))
     .filter(rule=>!["shutter-opened","shutter-closed"].includes(event.detectionType) ||
       isConfirmedShutterTransition(event) && event.metadata?.shutterRuleId===rule.id)
     .filter((rule) => event.confidence >= rule.minConfidence)
@@ -66,6 +66,9 @@ export function isTerminalAlertStatus(status: AnalyticsAlertStatus) {
 }
 
 export function analyticsAlertTitle(rule: AnalyticsRule, metadata?: Record<string, unknown>) {
+  if (rule.detectionType === "person" && rule.schedule && rule.schedule.start > rule.schedule.end) {
+    return "Person Detected after office hour";
+  }
   if(rule.detectionType==="shutter-state")return metadata?.shutterState==="open"?"Shutter opened":"Shutter closed";
   if(rule.detectionType==="shutter-opened")return "Shutter opened";
   if(rule.detectionType==="shutter-closed")return "Shutter closed";

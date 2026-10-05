@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { CalendarClock, CheckCircle2, Download, LoaderCircle, Play, RefreshCw, Trash2, FileText, BarChart3, ArrowRight } from "lucide-react";
+import { ReportPagination } from "@/components/reports/report-pagination";
 import { AppLayout } from "@/components/app-layout";
 import { WorkflowNav } from "@/components/workflow-nav";
 
 type Format="csv"|"xlsx"|"pdf";
 type Template="daily_surveillance_health"|"comprehensive"|"branch_health_summary"|"camera_availability"|"alert_summary"|"recorder_status"|"hdd_health"|"retention_compliance";
-type Filters={region?:string;branchId?:string;deviceStatus?:string;alertType?:string;severity?:string;alertState?:string;from?:string;to?:string};
+type Filters={zone?:string;area?:string;region?:string;branchId?:string;deviceStatus?:string;alertType?:string;severity?:string;alertState?:string;from?:string;to?:string};
 type Schedule={id:string;name:string;timezone:string;dailyAt:string;template:Template;formats:Format[];recipients:string[];filters:Filters;enabled:boolean;lastRunAt:string|null;nextRunAt:string};
 type Artifact={id:string;format:Format;filename:string;sizeBytes:number;expiresAt:string;downloadUrl:string};
 type Delivery={id:string;recipient:string;status:string;attempts:number;error?:string};
@@ -44,6 +45,18 @@ export default function ReportsPage(){
   const[templates,setTemplates]=useState(REPORT_TEMPLATES);
   const[formats,setFormats]=useState<Format[]>(["pdf","xlsx","csv"]);
   const[filters,setFilters]=useState<Filters>({});
+  const[scope,setScope]=useState<{zones:string[];regions:string[];areas:string[];branches:Array<{id:string;name:string}>}>({zones:[],regions:[],areas:[],branches:[]});
+  const[historyPage,setHistoryPage]=useState(1);
+  const[historyPageSize,setHistoryPageSize]=useState(25);
+  const[schedulePage,setSchedulePage]=useState(1);
+  const[schedulePageSize,setSchedulePageSize]=useState(10);
+  useEffect(()=>{
+    let active=true;
+    const params=new URLSearchParams();
+    for(const [key,value] of Object.entries({zone:filters.zone,region:filters.region,area:filters.area})) if(value) params.set(key,value);
+    fetch(`/api/control/v1/reports/mis/hierarchy?${params}`,{headers:getReportAuthHeaders(),credentials:'include',cache:'no-store'}).then(async response=>{if(!response.ok)throw new Error('Unable to load organization scope');return response.json();}).then(data=>{if(active)setScope(data);}).catch(cause=>{if(active)setError(cause.message);});
+    return()=>{active=false;};
+  },[filters.zone,filters.region,filters.area]);
   const[deliveryConfiguration,setDeliveryConfiguration]=useState<DeliveryConfiguration|null>(null);
   
   function getReportAuthHeaders(): Record<string, string> {
@@ -134,7 +147,7 @@ export default function ReportsPage(){
   return <AppLayout><main className="content reports-page p-6 space-y-6 max-w-[1500px] mx-auto">
     <header className="workflow-heading report-studio-heading">
       <div><p className="workflow-kicker">REPORT STUDIO / ASSURANCE</p><h1>Make insight.<br/><em>Deliver clarity.</em></h1><p>Choose a story, set its scope, then build your report.</p></div>
-      <div className="workflow-heading-actions"><Link href="/reports/mis" className="btn-secondary"><BarChart3 size={16}/>Explore MIS analytics<ArrowRight size={14}/></Link><button className="workflow-icon-button" aria-label="Refresh report data" onClick={()=>void load()}><RefreshCw size={18}/></button></div>
+      <div className="workflow-heading-actions"><Link href="/reports/live-person-count" className="btn-secondary"><BarChart3 size={16}/>Live person count</Link><Link href="/reports/mis" className="btn-secondary"><BarChart3 size={16}/>Explore MIS analytics<ArrowRight size={14}/></Link><button className="workflow-icon-button" aria-label="Refresh report data" onClick={()=>void load()}><RefreshCw size={18}/></button></div>
     </header>
     <WorkflowNav label="Report workspace" value={workspace} onChange={setWorkspace} items={[{id:"compose",label:"Compose"},{id:"schedules",label:"Schedules",count:schedules.length},{id:"history",label:"Run history",count:runs.length}]} />
     {message&&<div className="card py-3 text-sm" role="status">{message}</div>}
@@ -167,8 +180,8 @@ export default function ReportsPage(){
         
 </div>
           <div hidden={step!==1}>        <div className="grid md:grid-cols-3 gap-3">
-          <Filter label="Region" value={filters.region} set={(value)=>setFilters({...filters,region:value})}/>
-          <Filter label="Branch ID" value={filters.branchId} set={(value)=>setFilters({...filters,branchId:value})}/>
+          {(['zone','region','area'] as const).map(key=><label className="text-sm" key={key}>{key.charAt(0).toUpperCase()+key.slice(1)}<select aria-label={`Report ${key}`} className="input w-full mt-1" value={filters[key]??''} onChange={event=>setFilters({...filters,[key]:event.target.value,branchId:undefined,...(key==='zone'?{region:undefined,area:undefined}:key==='region'?{area:undefined}:{})})}><option value="">All</option>{scope[key === "zone" ? "zones" : key === "region" ? "regions" : "areas"].map(value=><option key={value}>{value}</option>)}</select></label>)}
+          <label className="text-sm">Branch<select aria-label="Report branch" className="input w-full mt-1" value={filters.branchId??''} onChange={event=>setFilters({...filters,branchId:event.target.value})}><option value="">All branches</option>{scope.branches.map(branch=><option value={branch.id} key={branch.id}>{branch.name}</option>)}</select></label>
           <label className="text-sm">
             Device status
             <select className="input w-full mt-1" value={filters.deviceStatus??""} onChange={(e)=>setFilters({...filters,deviceStatus:e.target.value})}>
@@ -256,9 +269,10 @@ export default function ReportsPage(){
     </section>
     <section hidden={workspace!=="schedules"} className="report-schedule-workspace">      <div className="card">
         <h2 className="text-lg font-semibold mb-3">Saved schedules</h2>
+        <ReportPagination total={schedules.length} page={schedulePage} pageSize={schedulePageSize} onPage={setSchedulePage} onPageSize={setSchedulePageSize}/>
         {schedules.length===0?<p className="text-gray-500 text-sm">No saved schedules.</p>:(
           <div className="space-y-2">
-            {schedules.map((schedule)=>(
+            {schedules.slice((schedulePage-1)*schedulePageSize,schedulePage*schedulePageSize).map((schedule)=>(
               <div key={schedule.id} className="border rounded-lg p-3 flex justify-between gap-3">
                 <div>
                   <strong>{schedule.name}</strong>
@@ -281,6 +295,7 @@ export default function ReportsPage(){
 </section>
     <section hidden={workspace!=="history"} className="card overflow-auto report-history-workspace">
       <h2 className="text-lg font-semibold mb-3">Run history</h2>
+      <ReportPagination total={runs.length} page={historyPage} pageSize={historyPageSize} onPage={setHistoryPage} onPageSize={setHistoryPageSize}/>
       {loading?<p><LoaderCircle className="animate-spin inline"/> Loading…</p>:(
         <table className="w-full text-sm">
           <thead>
@@ -295,7 +310,7 @@ export default function ReportsPage(){
             </tr>
           </thead>
           <tbody>
-            {runs.map((run)=>(
+            {runs.slice((historyPage-1)*historyPageSize,historyPage*historyPageSize).map((run)=>(
               <tr key={run.id} className="border-b align-top">
                 <td className="py-3">{new Date(run.createdAt).toLocaleString()}</td>
                 <td className="text-xs">{templates.find(t => t.id === run.template)?.name || run.template}</td>

@@ -16,6 +16,31 @@ async function useEmptyModelsDirectory(): Promise<void> {
 
 describe("analytics engine adapter", () => {
   const apps: Array<ReturnType<typeof buildAnalyticsEngine>> = [];
+  it("reports present and empty scenes without creating counting alerts or requiring camera rules", async () => {
+    const submit = vi.fn(async () => ({}));
+    const app = buildAnalyticsEngine({sourceSharedKey:sourceKey,controlPlaneSharedKey:controlPlaneKey,submit});
+    apps.push(app);
+    for (const detections of [[{label:"person",confidence:0.94,boundingBox:{x:0.1,y:0.1,width:0.2,height:0.5}},
+      {label:"person",confidence:0.6,boundingBox:{x:0.6,y:0.1,width:0.2,height:0.5}},
+      {label:"car",confidence:0.99,boundingBox:{x:0.2,y:0.7,width:0.4,height:0.2}}], []]) {
+      const response = await app.inject({method:"POST",url:"/internal/frames",headers:{"x-analytics-source-key":sourceKey},
+        payload:{tenantId:"tenant-1",cameraId:"report-only-camera",width:64,height:36,detections,rules:[]}});
+      expect(response.statusCode).toBe(202);
+      expect(response.json().personCount).toMatchObject({count:detections.length ? 1 : 0,status:"observed"});
+      expect(response.json().eventsGenerated).toBe(0);
+    }
+    expect(submit).not.toHaveBeenCalled();
+  });
+  it("reports model-unavailable counts as unknown instead of zero", async () => {
+    await useEmptyModelsDirectory();
+    vi.stubEnv("ANALYTICS_REQUIRE_MODELS","false");
+    const app = buildAnalyticsEngine({sourceSharedKey:sourceKey,controlPlaneSharedKey:controlPlaneKey,submit:async () => ({})});
+    apps.push(app);
+    const response = await app.inject({method:"POST",url:"/internal/frames",headers:{"x-analytics-source-key":sourceKey},
+      payload:{tenantId:"tenant-1",cameraId:"missing-model-camera",width:64,height:36,imageBase64:Buffer.alloc(64*36*3,127).toString("base64"),rules:[]}});
+    expect(response.statusCode).toBe(202);
+    expect(response.json().personCount).toMatchObject({count:null,status:"unavailable"});
+  });
   afterEach(async () => {
     vi.unstubAllEnvs();
     await Promise.all(apps.splice(0).map((app) => app.close()));

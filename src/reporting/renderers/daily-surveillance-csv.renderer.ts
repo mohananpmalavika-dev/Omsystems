@@ -28,13 +28,15 @@ export function renderDailySurveillanceHealthCsv(
   const type = reportTypeOrSection || report.metadata.reportType || "DAILY_SURVEILLANCE_HEALTH";
 
   if (type === "DAILY_BRANCH_HEALTH" || type === "branches") {
-    lines.push("Branch Code,Branch Name,Region,Overall Status,Internet,Recorder,Camera,Storage,Recording,Retention,Active P1,Active P2,Last Observed,Reason Codes");
+    lines.push("Branch Code,Branch Name,Zone,Region,Area,Overall Status,Internet,Recorder,Camera,Storage,Recording,Retention,Active P1,Active P2,Last Observed,Reason Codes");
     for (const b of report.branches) {
       lines.push(
         [
           escapeCsv(b.branchCode),
           escapeCsv(b.branchName),
-          escapeCsv(b.region || "Unassigned"),
+          escapeCsv(b.zone || ""),
+          escapeCsv(b.region || ""),
+          escapeCsv(b.area || ""),
           escapeCsv(b.status),
           escapeCsv(b.internetStatus),
           escapeCsv(b.recorderStatus),
@@ -226,7 +228,7 @@ export function renderDailySurveillanceHealthCsv(
   }
   lines.push("");
 
-  lines.push("Branch Code,Branch Name,Region,Overall Status,Internet,Recorder,Camera,Storage,Recording,Retention,Reason Codes");
+  lines.push("Branch Code,Branch Name,Zone,Region,Area,Overall Status,Internet,Recorder,Camera,Storage,Recording,Retention,Reason Codes");
   for (const b of report.branches) {
     lines.push(
       [

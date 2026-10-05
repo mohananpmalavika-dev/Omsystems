@@ -137,6 +137,7 @@ const eventSchema = z.object({
   message: "endedAt must not be before occurredAt", path: ["endedAt"],
 });
 const alertListQuery = z.object({
+  offset: z.coerce.number().int().min(0).default(0),
   cameraId: z.string().min(1).optional(), branchId: z.string().min(1).optional(),
   status: z.enum(alertStatuses).optional(), severity: z.enum(severities).optional(),
   from: z.string().datetime().optional(), to: z.string().datetime().optional(),
@@ -575,7 +576,7 @@ export async function registerAnalyticsRoutes(
       request.currentUser.tenantId,
       { cameraIds, branchId: query.branchId, cameraId: query.cameraId },
     );
-    return { data: candidates, summary, total: summary.total };
+    return { data: candidates, summary, total: summary.total, hasMore: candidates.length === query.limit };
   });
 
   app.get("/v1/analytics/alerts/summary", async (request, reply) => {

@@ -24,10 +24,43 @@ function event(personCount: number, occurredAt = "2026-09-21T03:05:00.000Z"): An
 }
 
 describe("branch opening two-person enforcement", () => {
+  it("defaults new opening templates to an active 08:00–11:00 IST policy", async () => {
+    const repository = new NbfcRuleRepository();
+    const engine = new NbfcRuleEngineService(repository);
+    const rule = await repository.instantiateTemplate("tmpl-27-opening-staff-count", {
+      tenantId: "tenant-opening-test", branchIds: ["new-branch"], createdBy: "admin",
+    });
+    expect(rule).toMatchObject({ enabled: true, state: "ACTIVE", durationMs: 0, schedule: {
+      type: "BRANCH_OPENING", start: "08:00", end: "11:00", timezone: "Asia/Kolkata", days: [1, 2, 3, 4, 5, 6],
+    } });
+    for (const schedule of [rule.schedule, { type: "BRANCH_OPENING" as const }]) {
+      for (const [time, expected] of [["07:59", false], ["08:00", true], ["10:59", true], ["11:00", true], ["11:01", false]] as const) {
+        expect(engine.isWithinSchedule(schedule, new Date(`2026-10-06T${time}:00+05:30`))).toBe(expected);
+      }
+    }
+  });
+
   it("uses explicit count metadata before object fallback", () => {
     const sample = event(1);
     sample.metadata = { staffCount: 0 };
     expect(observedStaffCount(sample)).toBe(0);
+  });
+
+  it("disabling a branch prevents opening decisions while preserving its custom times", async () => {
+    const repository = new NbfcRuleRepository();
+    const engine = new NbfcRuleEngineService(repository);
+    const rule = await repository.instantiateTemplate("tmpl-27-opening-staff-count", {
+      tenantId: "tenant-opening-test", branchIds: ["branch-1"], createdBy: "admin",
+    });
+    const schedule = { type: "BRANCH_OPENING" as const, start: "08:15", end: "10:45", timezone: "Asia/Kolkata", days: [1] };
+    await repository.updateRule(rule.id, { enabled: false, state: "INACTIVE", schedule });
+    expect(await evaluateBranchOpeningDualControl(repository, engine, event(1),
+      { id: "camera-entrance", branchId: "branch-1" })).toHaveLength(0);
+    expect(await repository.getBranchOpeningCheck(rule.id, "branch-1", "2026-09-21")).toBeNull();
+    await repository.updateRule(rule.id, { enabled: true, state: "ACTIVE" });
+    expect((await repository.getRule(rule.id))?.schedule).toEqual(schedule);
+    expect(await evaluateBranchOpeningDualControl(repository, engine, event(1),
+      { id: "camera-entrance", branchId: "branch-1" })).toHaveLength(1);
   });
 
   it("fails immediately on the first one-person observation and checks again next day", async () => {

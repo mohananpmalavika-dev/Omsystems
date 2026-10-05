@@ -501,6 +501,7 @@ export type AnalyticsRuleInput = Omit<
 >;
 
 export interface AnalyticsAlertFilters {
+  offset?: number | undefined;
   cameraIds?: string[] | undefined;
   priorityFirst?: boolean | undefined;
   cameraId?: string | undefined;

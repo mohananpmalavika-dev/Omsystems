@@ -1,9 +1,13 @@
 "use client";
 
+import { ReportPagination } from "@/components/reports/report-pagination";
+import { ExecutiveManagementReport } from "@/components/reports/executive-management-report";
+import { downloadReportCsv } from "@/lib/report-export";
 import { FieldVisual } from "@/components/field-visual";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { AppLayout } from "@/components/app-layout";
+import { branchOpeningCsv } from "@/lib/branch-opening-csv";
 import {
   ShieldAlert,
   Activity,
@@ -55,7 +59,7 @@ import {
   ReferenceLine,
 } from "recharts";
 
-type TimeRange = "today" | "7d" | "30d" | "90d";
+type TimeRange = "today" | "7d" | "30d" | "90d" | "custom";
 type GroupBy = "organization" | "zone" | "region" | "area" | "branch" | "date" | "time";
 type TabKey = "all-in-one" | "threat" | "health" | "operations" | "attendance" | "sla" | "compliance" | "branch-opening";
 type OpeningRange = "today" | "7d" | "30d" | "90d" | "custom";
@@ -67,6 +71,8 @@ type OpeningEntry = {
   branchId: string;
   branchName: string;
   cameraName: string | null;
+  cameraId?: string | null;
+  locationType?: string | null;
   personCount: number | null;
   outcome: "SUCCESS" | "FAILED" | "NOT_RECORDED";
   photoUrl: string | null;
@@ -77,13 +83,16 @@ type OpeningReport = {
   startDate: string;
   endDate: string;
   truncated: boolean;
+  filterOptions?: {
+    organizations: string[];
+    zones: string[];
+    regions: string[];
+    areas: string[];
+    branches: Array<{ id: string; name: string }>;
+    cameras: Array<{ id: string; name: string; branchId: string; branchName: string; locationType: string }>;
+    locations: string[];
+  };
 };
-
-function openingCsvCell(value: unknown) {
-  const raw = value == null ? "" : String(value);
-  const safe = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
-  return `"${safe.replaceAll('"', '""')}"`;
-}
 
 export default function MisReportsPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("all-in-one");
@@ -93,6 +102,13 @@ export default function MisReportsPage() {
     }
   }, []);
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [openingPage, setOpeningPage] = useState(1);
+  const [openingPageSize, setOpeningPageSize] = useState(25);
+  const misRequest = useRef(0);
   const [groupBy, setGroupBy] = useState<GroupBy>("branch");
 
   // Filters
@@ -102,6 +118,9 @@ export default function MisReportsPage() {
   const [selectedArea, setSelectedArea] = useState("all");
   const [selectedBranch, setSelectedBranch] = useState("all");
   const [selectedShift, setSelectedShift] = useState("all");
+  const [selectedCamera, setSelectedCamera] = useState("all");
+  const [selectedLocation, setSelectedLocation] = useState("all");
+  const openingRequest = useRef(0);
 
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(false);
@@ -131,9 +150,12 @@ export default function MisReportsPage() {
   }, []);
 
   const fetchMisData = useCallback(async () => {
+    const requestId = ++misRequest.current;
+    if (timeRange === 'custom' && (!startDate || !endDate || startDate > endDate)) { setError('Select valid start and end dates.'); setData(null); setLoading(false); return; }
     try {
       setLoading(true);
       const params = new URLSearchParams({ timeRange, groupBy });
+      if (timeRange === 'custom') { params.set('startDate',startDate); params.set('endDate',endDate); }
       for (const [key, value] of Object.entries({
         organization: selectedOrg,
         zone: selectedZone,
@@ -154,33 +176,30 @@ export default function MisReportsPage() {
       if (!res.ok) {
         throw new Error(json?.message || json?.error || "MIS data is currently unavailable.");
       }
+      if (requestId !== misRequest.current) return;
       setData(json);
       setError(null);
     } catch (err) {
       console.error("Failed to load MIS data", err);
+      if (requestId !== misRequest.current) return;
       setData(null);
       setError(err instanceof Error ? err.message : "MIS data is currently unavailable.");
     } finally {
-      setLoading(false);
+      if (requestId === misRequest.current) setLoading(false);
     }
-  }, [timeRange, groupBy, selectedOrg, selectedZone, selectedRegion, selectedArea, selectedBranch, selectedShift, getReportAuthHeaders]);
+  }, [startDate, endDate, timeRange, groupBy, selectedOrg, selectedZone, selectedRegion, selectedArea, selectedBranch, selectedShift, getReportAuthHeaders]);
 
+  useEffect(() => { setPage(1); setOpeningPage(1); }, [timeRange,startDate,endDate,groupBy,selectedOrg,selectedZone,selectedRegion,selectedArea,selectedBranch,openingRange,openingStartDate,openingEndDate]);
   useEffect(() => {
     fetchMisData();
   }, [fetchMisData]);
 
-  useEffect(() => {
-    if (!autoRefresh) return;
-    const interval = setInterval(() => {
-      fetchMisData();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [autoRefresh, fetchMisData]);
-
   const fetchOpenings = useCallback(async () => {
+    const requestId = ++openingRequest.current;
     if (openingRange === "custom" && (!openingStartDate || !openingEndDate || openingStartDate > openingEndDate)) {
       setOpeningReport(null);
       setOpeningError("Select a valid start and end date.");
+      setOpeningLoading(false);
       return;
     }
     setOpeningLoading(true);
@@ -193,6 +212,7 @@ export default function MisReportsPage() {
       for (const [key, value] of Object.entries({
         organization: selectedOrg, zone: selectedZone, region: selectedRegion,
         area: selectedArea, branchId: selectedBranch,
+        cameraId: selectedCamera, locationType: selectedLocation,
       })) {
         if (value !== "all") params.set(key, value);
       }
@@ -200,33 +220,41 @@ export default function MisReportsPage() {
         headers: getReportAuthHeaders(), credentials: "include", cache: "no-store",
       });
       const payload = await response.json().catch(() => null);
+      if (requestId !== openingRequest.current) return;
       if (!response.ok) throw new Error(payload?.message || payload?.error || "Opening report unavailable.");
       setOpeningReport(payload as OpeningReport);
       setOpeningError(null);
     } catch (cause) {
+      if (requestId !== openingRequest.current) return;
       setOpeningReport(null);
       setOpeningError(cause instanceof Error ? cause.message : "Opening report unavailable.");
     } finally {
-      setOpeningLoading(false);
+      if (requestId === openingRequest.current) setOpeningLoading(false);
     }
   }, [openingRange, openingStartDate, openingEndDate, selectedOrg, selectedZone, selectedRegion,
-    selectedArea, selectedBranch, getReportAuthHeaders]);
+    selectedArea, selectedBranch, selectedCamera, selectedLocation, getReportAuthHeaders]);
 
   useEffect(() => {
     if (activeTab === "branch-opening") void fetchOpenings();
   }, [activeTab, fetchOpenings]);
 
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      if (activeTab === "branch-opening") void fetchOpenings();
+      else void fetchMisData();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, activeTab, fetchMisData, fetchOpenings]);
+
+  useEffect(() => {
+    setSelectedCamera("all");
+    setSelectedLocation("all");
+  }, [selectedOrg, selectedZone, selectedRegion, selectedArea, selectedBranch]);
+
   const handleOpeningExportCsv = () => {
     if (!openingReport) return;
-    const records = [
-      ["Opening time (IST)", "Zone", "Branch", "Persons detected", "Result", "Camera", "Photo URL"],
-      ...openingReport.rows.map((row) => [
-        row.occurredAt ? new Date(row.occurredAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : row.localDate,
-        row.zoneName ?? "Unassigned", row.branchName, row.personCount, row.outcome, row.cameraName,
-        row.photoUrl ? `${window.location.origin}${row.photoUrl}` : "Unavailable",
-      ]),
-    ];
-    const blob = new Blob(["\uFEFF", records.map((record) => record.map(openingCsvCell).join(",")).join("\r\n")],
+    const blob = new Blob([branchOpeningCsv(openingReport.rows, window.location.origin)],
       { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -249,24 +277,24 @@ export default function MisReportsPage() {
       "Total Cameras",
       "Uptime %",
       "P1 Critical Threats",
-      "Total Alerts",
+      "Incident cases",
       "Customer Footfall",
       "Avg Wait (Min)",
       "Staff Attendance %",
       "SLA Compliance %",
-      "Retention (Days)",
+      "Configured retention (Days)",
       "Status",
     ];
 
     const rows = data.matrix.map((r: any) => [
-      `"${r.dimension}"`,
+      r.dimension,
       r.branchCount ?? 1,
       r.onlineCameras ?? r.online ?? "-",
       r.totalCameras ?? r.cameras ?? "-",
       r.uptimePercent ?? r.uptime ?? "-",
       r.p1Threats ?? 0,
       r.totalAlerts ?? r.alerts ?? 0,
-      r.footfall ?? 0,
+      r.footfall ?? "",
       r.avgWaitMin ?? "-",
       r.attendancePercent ?? "-",
       r.slaPercent ?? "-",
@@ -274,18 +302,12 @@ export default function MisReportsPage() {
       r.complianceStatus ?? r.status ?? "Optimal",
     ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e: any[]) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `All_In_One_MIS_${groupBy}_wise_${timeRange}_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    downloadReportCsv(data.matrix.map((row: any, index: number) => Object.fromEntries(headers.map((header: string, col: number) => [header, rows[index][col]]))), `MIS_${groupBy}_${timeRange}.csv`, headers);
   };
 
   const summary = data?.summary;
-  const filterOptions = data?.filterOptions;
+  const filterOptions = activeTab === "branch-opening" && openingReport?.filterOptions
+    ? openingReport.filterOptions : data?.filterOptions;
 
   return (
     <AppLayout>
@@ -303,14 +325,14 @@ export default function MisReportsPage() {
               Executive MIS Reports & Multi-Dimensional Analytics
             </h1>
             <p className="text-sm text-slate-400 mt-1 max-w-2xl print:text-slate-600">
-              Unified surveillance and operations intelligence with drilldown across Organizations, Macro Zones, Geographical Regions, City Areas, Branches, Daily Timelines, and Shift Hours.
+              Unified surveillance and operations intelligence with drilldown across Organizations, Zones, Regions, Areas, Branches, Daily Timelines, and Shift Hours.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 print:hidden">
             {/* Time Range Selector */}
             {activeTab !== "branch-opening" && <div className="inline-flex rounded-lg bg-slate-800/80 p-1 border border-slate-700/60">
-              {(["today", "7d", "30d", "90d"] as TimeRange[]).map((tr) => (
+              {(["today", "7d", "30d", "90d", "custom"] as TimeRange[]).map((tr) => (
                 <button
                   key={tr}
                   onClick={() => setTimeRange(tr)}
@@ -320,11 +342,16 @@ export default function MisReportsPage() {
                       : "text-slate-400 hover:text-white"
                   }`}
                 >
-                  {tr === "today" ? "Today" : tr === "7d" ? "7 Days" : tr === "30d" ? "30 Days" : "90 Days"}
+                  {tr === "today" ? "Today" : tr === "7d" ? "7 Days" : tr === "30d" ? "30 Days" : tr === "90d" ? "90 Days" : "Date / range"}
                 </button>
               ))}
             </div>}
 
+            {activeTab !== 'branch-opening' && timeRange === 'custom' && <div className="flex flex-wrap gap-2">
+              <label className="text-xs">From (IST)<input aria-label="MIS start date" type="date" className="input block" value={startDate} onChange={event=>setStartDate(event.target.value)}/></label>
+              <label className="text-xs">To (IST)<input aria-label="MIS end date" type="date" className="input block" value={endDate} min={startDate} onChange={event=>setEndDate(event.target.value)}/></label>
+              <button className="btn-primary" onClick={()=>void fetchMisData()}>Generate report</button>
+            </div>}
             {/* Refresh */}
             <button
               onClick={() => activeTab === "branch-opening" ? fetchOpenings() : fetchMisData()}
@@ -429,7 +456,8 @@ export default function MisReportsPage() {
           {/* Organization Filter */}
           <select
             value={selectedOrg}
-            onChange={(e) => setSelectedOrg(e.target.value)}
+            aria-label="Organization filter"
+            onChange={(e) => { setSelectedOrg(e.target.value); setSelectedZone("all"); setSelectedRegion("all"); setSelectedArea("all"); setSelectedBranch("all"); }}
             className="bg-slate-800 border border-slate-700 text-xs rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-sky-500"
           >
             <option value="all">🏢 All Organizations</option>
@@ -441,7 +469,8 @@ export default function MisReportsPage() {
           {/* Zone Filter */}
           <select
             value={selectedZone}
-            onChange={(e) => setSelectedZone(e.target.value)}
+            aria-label="Zone filter"
+            onChange={(e) => { setSelectedZone(e.target.value); setSelectedRegion("all"); setSelectedArea("all"); setSelectedBranch("all"); }}
             className="bg-slate-800 border border-slate-700 text-xs rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-sky-500"
           >
             <option value="all">🌐 All Zones</option>
@@ -453,7 +482,8 @@ export default function MisReportsPage() {
           {/* Region Filter */}
           <select
             value={selectedRegion}
-            onChange={(e) => setSelectedRegion(e.target.value)}
+            aria-label="Region filter"
+            onChange={(e) => { setSelectedRegion(e.target.value); setSelectedArea("all"); setSelectedBranch("all"); }}
             className="bg-slate-800 border border-slate-700 text-xs rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-sky-500"
           >
             <option value="all">🗺️ All Regions</option>
@@ -465,7 +495,8 @@ export default function MisReportsPage() {
           {/* Area Filter */}
           <select
             value={selectedArea}
-            onChange={(e) => setSelectedArea(e.target.value)}
+            aria-label="Area filter"
+            onChange={(e) => { setSelectedArea(e.target.value); setSelectedBranch("all"); }}
             className="bg-slate-800 border border-slate-700 text-xs rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-sky-500"
           >
             <option value="all">📍 All Areas</option>
@@ -477,6 +508,7 @@ export default function MisReportsPage() {
           {/* Branch Filter */}
           <select
             value={selectedBranch}
+            aria-label="Branch filter"
             onChange={(e) => setSelectedBranch(e.target.value)}
             className="bg-slate-800 border border-slate-700 text-xs rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-sky-500"
           >
@@ -487,6 +519,19 @@ export default function MisReportsPage() {
           </select>
 
           {/* Shift Filter */}
+          {activeTab === "branch-opening" && <>
+            <select aria-label="Camera location filter" value={selectedLocation}
+              onChange={(event) => { setSelectedLocation(event.target.value); setSelectedCamera("all"); }}
+              className="bg-slate-800 border border-slate-700 text-xs rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-sky-500">
+              <option value="all">All Camera Locations</option>
+              {openingReport?.filterOptions?.locations.map((location) => <option key={location} value={location}>{location === "unassigned" ? "Unassigned" : location.replaceAll("-", " ")}</option>)}
+            </select>
+            <select aria-label="Camera filter" value={selectedCamera} onChange={(event) => setSelectedCamera(event.target.value)}
+              className="bg-slate-800 border border-slate-700 text-xs rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-sky-500">
+              <option value="all">All Cameras</option>
+              {openingReport?.filterOptions?.cameras.map((camera) => <option key={camera.id} value={camera.id}>{camera.branchName} — {camera.name}</option>)}
+            </select>
+          </>}
           {activeTab !== "branch-opening" && <select
             value={selectedShift}
             onChange={(e) => setSelectedShift(e.target.value)}
@@ -498,7 +543,7 @@ export default function MisReportsPage() {
             <option value="night">Shift C: Night / Off-Hours (00:00 - 08:00)</option>
           </select>}
 
-          {(selectedOrg !== "all" || selectedZone !== "all" || selectedRegion !== "all" || selectedArea !== "all" || selectedBranch !== "all" || (activeTab !== "branch-opening" && selectedShift !== "all")) && (
+          {(selectedOrg !== "all" || selectedZone !== "all" || selectedRegion !== "all" || selectedArea !== "all" || selectedBranch !== "all" || (activeTab === "branch-opening" && (selectedCamera !== "all" || selectedLocation !== "all")) || (activeTab !== "branch-opening" && selectedShift !== "all")) && (
             <button
               onClick={() => {
                 setSelectedOrg("all");
@@ -507,6 +552,8 @@ export default function MisReportsPage() {
                 setSelectedArea("all");
                 setSelectedBranch("all");
                 setSelectedShift("all");
+                setSelectedCamera("all");
+                setSelectedLocation("all");
               }}
               className="text-xs text-rose-400 hover:text-rose-300 ml-auto font-medium"
             >
@@ -515,12 +562,13 @@ export default function MisReportsPage() {
           )}
         </div>
 
+        {activeTab === 'all-in-one' && data && !loading && <ExecutiveManagementReport branches={data.branchMatrix || []} trend={data.dateWiseBreakdown || []} period={`${data.metadata?.startDate ? new Date(data.metadata.startDate).toLocaleDateString('en-IN',{timeZone:'Asia/Kolkata'}) : ''} – ${data.metadata?.endDate ? new Date(data.metadata.endDate).toLocaleDateString('en-IN',{timeZone:'Asia/Kolkata'}) : ''}`} onBranch={id=>{setSelectedBranch(id);setGroupBy('branch');}}/>}
         {/* Executive Summary Scorecards */}
         {activeTab !== "branch-opening" && summary && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 print:grid-cols-3">
             <div className="bg-slate-900/70 border border-slate-800/80 rounded-xl p-4 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 left-0 h-1 w-full bg-emerald-500" />
-              <span className="text-xs font-medium text-slate-400 block mb-1">Average Uptime</span>
+              <span className="text-xs font-medium text-slate-400 block mb-1">Camera availability now</span>
               <div className="flex items-baseline justify-between">
                 <span className="text-2xl font-bold text-white">{summary.avgUptime != null ? `${summary.avgUptime}%` : "—"}</span>
                 <span className="text-xs text-emerald-400 font-semibold">{summary.onlineCameras ?? 0}/{summary.totalCameras ?? 0} cams</span>
@@ -533,7 +581,7 @@ export default function MisReportsPage() {
               <span className="text-xs font-medium text-slate-400 block mb-1">Open P1 Threats</span>
               <div className="flex items-baseline justify-between">
                 <span className="text-2xl font-bold text-rose-400">{summary.totalP1Threats ?? 0}</span>
-                <span className="text-xs text-slate-400">{summary.totalAlerts ?? 0} total alerts</span>
+                <span className="text-xs text-slate-400">{summary.totalAlerts ?? 0} incident cases</span>
               </div>
               <span className="text-[11px] text-slate-500 mt-1 block">Requires instant review</span>
             </div>
@@ -676,7 +724,7 @@ export default function MisReportsPage() {
                     {groupBy.toUpperCase()}-WISE SURVEILLANCE & PERFORMANCE COMPARISON
                   </h2>
                   <p className="text-xs text-slate-400">
-                    Comparative breakdown of Uptime %, Customer Footfall, and Total Alerts across {groupBy} dimension
+                    Comparative breakdown of Uptime %, Customer Footfall, and Incident cases across {groupBy} dimension
                   </p>
                 </div>
                 <span className="text-xs px-2.5 py-1 bg-sky-500/10 text-sky-400 border border-sky-500/20 rounded font-medium">
@@ -727,7 +775,7 @@ export default function MisReportsPage() {
                       <th className="p-3 text-center">Cameras (On/Tot)</th>
                       <th className="p-3 text-center">Uptime %</th>
                       <th className="p-3 text-center">P1 Threats</th>
-                      <th className="p-3 text-center">Total Alerts</th>
+                      <th className="p-3 text-center">Incident cases</th>
                       <th className="p-3 text-center">Footfall</th>
                       <th className="p-3 text-center">Wait Min</th>
                       <th className="p-3 text-center">Attendance %</th>
@@ -744,7 +792,7 @@ export default function MisReportsPage() {
                         </td>
                       </tr>
                     ) : (
-                      data.matrix.map((row: any, idx: number) => (
+                      data.matrix.slice((Math.min(page,Math.max(1,Math.ceil(data.matrix.length/pageSize)))-1)*pageSize,Math.min(page,Math.max(1,Math.ceil(data.matrix.length/pageSize)))*pageSize).map((row: any, idx: number) => (
                       <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
                         <td className="p-3 font-semibold text-white flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-sky-400" />
@@ -752,7 +800,7 @@ export default function MisReportsPage() {
                         </td>
                         {groupBy === "branch" && (
                           <td className="p-3 text-slate-400">
-                            {row.area} · <span className="text-sky-400">{row.region}</span>
+                            {[row.zone,row.region,row.area].filter(Boolean).join(" / ") || "Direct branch"}
                           </td>
                         )}
                         <td className="p-3 text-center font-medium">{row.branchCount ?? 1}</td>
@@ -786,7 +834,7 @@ export default function MisReportsPage() {
                           {row.retentionDays == null ? "—" : `${row.retentionDays}d`}
                         </td>
                         <td className="p-3 text-center">
-                          <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${(row.complianceStatus === "Compliant" || row.status === "Optimal") ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-amber-500/10 text-amber-400 border border-amber-500/20"}`}>
+                          <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${(row.complianceStatus === "Available" || row.status === "Optimal") ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-amber-500/10 text-amber-400 border border-amber-500/20"}`}>
                             {row.complianceStatus ?? row.status ?? "Optimal"}
                           </span>
                         </td>
@@ -794,6 +842,7 @@ export default function MisReportsPage() {
                     )))}
                   </tbody>
                 </table>
+                <ReportPagination total={data?.matrix?.length || 0} page={page} pageSize={pageSize} onPage={setPage} onPageSize={setPageSize}/>
               </div>
             </div>
           </div>
@@ -940,7 +989,7 @@ export default function MisReportsPage() {
                   <YAxis stroke="#94a3b8" fontSize={11} domain={[70, 100]} unit="d" />
                   <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", borderRadius: 8, fontSize: 12 }} />
                   <ReferenceLine y={90} stroke="#f43f5e" strokeDasharray="3 3" label={{ value: "Mandatory 90 Days", fill: "#f43f5e", fontSize: 10 }} />
-                  <Bar dataKey="retentionDays" name="Retention (Days)" fill="#14b8a6" radius={[4, 4, 0, 0]}>
+                  <Bar dataKey="retentionDays" name="Configured retention (Days)" fill="#14b8a6" radius={[4, 4, 0, 0]}>
                     {(data?.allBranches || []).map((entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={entry.retentionDays >= 90 ? "#14b8a6" : "#f43f5e"} />
                     ))}
@@ -960,6 +1009,7 @@ export default function MisReportsPage() {
                   <p className="mt-1 text-xs text-slate-400">
                     Each branch and day shows its first opening observation, person count and two-person result. Missing observations appear as Not recorded.
                   </p>
+                  <p className="mt-1 text-xs text-slate-400">Camera and location filters match the camera that captured the first opening observation.</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 print:hidden">
                   <button type="button" onClick={handleOpeningExportCsv} disabled={!openingReport}
@@ -1013,23 +1063,26 @@ export default function MisReportsPage() {
                     <th className="p-3">Persons detected</th>
                     <th className="p-3">Result</th>
                     <th className="p-3">Camera</th>
+                    <th className="p-3">Camera location</th>
                     <th className="p-3">Photo at opening</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 text-slate-200">
-                  {openingReport.rows.length === 0 ? <tr><td colSpan={7} className="p-8 text-center text-slate-400">No recorded branch openings for this period and filter.</td></tr> :
-                    openingReport.rows.map((row) => <tr key={`${row.ruleId}:${row.branchId}:${row.localDate}`}>
+                  {openingReport.rows.length === 0 ? <tr><td colSpan={8} className="p-8 text-center text-slate-400">No recorded branch openings for this period and filter.</td></tr> :
+                    openingReport.rows.slice((Math.min(openingPage,Math.max(1,Math.ceil(openingReport.rows.length/openingPageSize)))-1)*openingPageSize,Math.min(openingPage,Math.max(1,Math.ceil(openingReport.rows.length/openingPageSize)))*openingPageSize).map((row) => <tr key={`${row.ruleId}:${row.branchId}:${row.localDate}`}>
                       <td className="p-3 whitespace-nowrap">{row.occurredAt ? new Date(row.occurredAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : `${row.localDate} · Not recorded`}</td>
                       <td className="p-3">{row.zoneName ?? "Unassigned"}</td>
                       <td className="p-3 font-semibold">{row.branchName}</td>
                       <td className="p-3 font-bold">{row.personCount ?? "—"}</td>
                       <td className={`p-3 font-semibold ${row.outcome === "SUCCESS" ? "text-emerald-300" : row.outcome === "FAILED" ? "text-rose-300" : "text-slate-400"}`}>{row.outcome === "SUCCESS" ? "Success" : row.outcome === "FAILED" ? "Failed" : "Not recorded"}</td>
                       <td className="p-3">{row.cameraName ?? "—"}</td>
+                      <td className="p-3">{row.locationType?.replaceAll("-", " ") || "—"}</td>
                       <td className="p-3">{row.outcome === "NOT_RECORDED" ? "—" :
                         <OpeningEvidencePhoto url={row.photoUrl} getHeaders={getReportAuthHeaders} />}</td>
                     </tr>)}
                 </tbody>
               </table>
+              <ReportPagination total={openingReport.rows.length} page={openingPage} pageSize={openingPageSize} onPage={setOpeningPage} onPageSize={setOpeningPageSize}/>
             </div>}
           </section>
         )}
@@ -1045,6 +1098,8 @@ function OpeningEvidencePhoto({ url, getHeaders }: {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(!url);
   useEffect(() => {
+    setImageUrl(null);
+    setUnavailable(!url);
     if (!url) { setUnavailable(true); return; }
     let active = true;
     let objectUrl: string | null = null;

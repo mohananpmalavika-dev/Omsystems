@@ -8,12 +8,11 @@
 }
 
 # Redirect all plain IP HTTP traffic to the HTTPS domain
-http://34.14.220.41, :80 {
-    # Let Caddy handle ACME HTTP-01 challenges automatically
+http://34.14.220.41 {
     redir https://34-14-220-41.sslip.io{uri} permanent
 }
 
-34-14-220-41.sslip.io {
+demo.kryptonlogic.com, 34-14-220-41.sslip.io {
     header {
         -X-Frame-Options
         Content-Security-Policy "frame-ancestors 'self' https://* http://localhost:* https://kryptonlogic-ebe5a.web.app https://kryptonlogic.com https://*.kryptonlogic.com;"

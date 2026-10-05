@@ -86,7 +86,9 @@ export async function renderDailySurveillanceHealthXlsx(
   wsBranches.columns = [
     { header: "Branch Code", key: "branchCode", width: 14 },
     { header: "Branch Name", key: "branchName", width: 25 },
+    { header: "Zone", key: "zone", width: 18 },
     { header: "Region", key: "region", width: 18 },
+    { header: "Area", key: "area", width: 18 },
     { header: "Overall Status", key: "status", width: 14 },
     { header: "Internet", key: "internetStatus", width: 12 },
     { header: "Recorder", key: "recorderStatus", width: 12 },
@@ -103,7 +105,9 @@ export async function renderDailySurveillanceHealthXlsx(
     wsBranches.addRow({
       branchCode: b.branchCode,
       branchName: b.branchName,
-      region: b.region || "Unassigned",
+      zone: b.zone || "",
+      region: b.region || "",
+      area: b.area || "",
       status: b.status,
       internetStatus: b.internetStatus,
       recorderStatus: b.recorderStatus,

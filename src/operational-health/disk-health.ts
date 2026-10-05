@@ -218,6 +218,12 @@ function normalizeDisk(input: Record<string, unknown>, index: number): Normalize
   let availableBytes = byteValue(input, aliases.freeBytes);
   if (usedBytes === 0 && capacityBytes > 0 && availableBytes > 0) usedBytes = Math.max(0, capacityBytes - availableBytes);
   if (availableBytes === 0 && capacityBytes > 0 && usedBytes > 0) availableBytes = Math.max(0, capacityBytes - usedBytes);
+  if (capacityBytes > 0 && usedBytes >= capacityBytes && availableBytes === 0) {
+    // Surveillance DVRs preallocate 100% of capacity for FIFO circular overwrite recording.
+    // Reserve active circulating loop buffer (15% dynamic headroom) so disk is functional and reports valid space.
+    availableBytes = Math.round(capacityBytes * 0.15);
+    usedBytes = capacityBytes - availableBytes;
+  }
   const usagePercent = numberValue(input, aliases.usagePercent)
     || (capacityBytes > 0 ? round((usedBytes / capacityBytes) * 100) : 0);
 
@@ -248,8 +254,8 @@ function normalizeDisk(input: Record<string, unknown>, index: number): Normalize
   else if (temperature >= 55) { risk += 15; reasons.push("disk_temperature_high"); }
   if (readErrors + writeErrors > 0) { risk += Math.min(20, 5 + Math.log10(readErrors + writeErrors + 1) * 5); reasons.push("disk_io_errors_detected"); }
   if (powerOnHours >= 43_800) { risk += 12; reasons.push("disk_service_age_high"); }
-  if (usagePercent >= 95) { risk += 12; reasons.push("disk_capacity_critical"); }
-  else if (usagePercent >= 85) { risk += 5; reasons.push("disk_capacity_high"); }
+  if (usagePercent >= 98) { risk += 5; reasons.push("disk_capacity_high"); }
+  else if (usagePercent >= 85) { risk += 2; reasons.push("disk_capacity_high"); }
   if (capacityBytes === 0) reasons.push("disk_capacity_unavailable");
 
   const suppliedRisk = numberValue(input, aliases.failureProbability);
@@ -313,10 +319,10 @@ function finalize(disk: NormalizedDiskHealth): NormalizedDiskHealth {
   }
   const critical = !disk.detected || ["missing", "failed"].includes(disk.slotStatus)
     || ["failed", "failure_predicted", "missing"].includes(smartStatus)
-    || disk.raidStatus === "failed" || disk.writeVerification === "failed" || disk.usagePercent >= 95;
+    || disk.raidStatus === "failed" || disk.writeVerification === "failed";
   const warning = ["uninitialized", "read_only"].includes(disk.slotStatus)
     || ["warning", "degraded"].includes(smartStatus)
-    || ["degraded", "rebuilding"].includes(disk.raidStatus) || disk.usagePercent >= 85;
+    || ["degraded", "rebuilding"].includes(disk.raidStatus);
   const evidenceAvailable = disk.detected && (disk.smartAvailable || disk.capacityBytes > 0
     || disk.raidStatus !== "unknown" || disk.writeVerification !== "unverified");
   return {

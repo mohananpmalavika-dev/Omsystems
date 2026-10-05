@@ -1,6 +1,9 @@
 "use client";
+import { ReportPagination } from "@/components/reports/report-pagination";
+import { downloadReportCsv } from "@/lib/report-export";
+import { reportDayBounds, reportLocalDate } from "../../../../packages/contracts/src/report-hierarchy";
 
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import Link from "next/link";
 import { PageHero } from "@/components/page-hero";
 import { IncidentMediaModal } from "@/components/incident-media-modal";
@@ -48,6 +51,12 @@ import {
 import { WorkstreamFocus } from "@/components/workstream-focus";
 
 export default function AiAlertsIncidentHubPage() {
+  const [startDay, setStartDay] = useState("");
+  const [endDay, setEndDay] = useState("");
+  const [period, setPeriod] = useState<{from?:string;to?:string}>({});
+  const alertRequest = useRef(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [alerts, setAlerts] = useState<AnalyticsAlert[]>([]);
   const [summary, setSummary] = useState<AnalyticsAlertsAggregateSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,41 +97,45 @@ export default function AiAlertsIncidentHubPage() {
   }
 
   const loadAlerts = useCallback(async () => {
+    const requestId = ++alertRequest.current;
     try {
       setLoading(true);
       setError(null);
       const headers = getAlertsAuthHeaders();
-      let res = await fetch("/v1/analytics/alerts?limit=200", {
-        headers,
-        cache: "no-store",
-        credentials: "include",
-      });
-      if (!res.ok && (res.status === 401 || res.status === 404)) {
-        res = await fetch("/api/control/v1/analytics/alerts?limit=200", {
-          headers,
-          cache: "no-store",
-          credentials: "include",
-        });
+      const cutoff = period.to || new Date().toISOString();
+      const all: AnalyticsAlert[] = [];
+      const seen = new Set<string>();
+      for (let offset = 0; ; offset += 200) {
+        const params = new URLSearchParams({ limit: '200', offset: String(offset), to: cutoff });
+        if (period.from) params.set('from', period.from);
+        let res = await fetch(`/v1/analytics/alerts?${params}`, { headers, cache: 'no-store', credentials: 'include' });
+        if (!res.ok && (res.status === 401 || res.status === 404)) res = await fetch(`/api/control/v1/analytics/alerts?${params}`, { headers, cache: 'no-store', credentials: 'include' });
+        if (!res.ok) throw new Error(`Failed to load alerts: HTTP ${res.status}`);
+        const body = await res.json();
+        if (requestId !== alertRequest.current) return;
+        const batch = (body.data ?? []) as AnalyticsAlert[];
+        if (batch.length && batch.every(alert => seen.has(alert.id))) throw new Error('Report pagination is unavailable. Refresh after the reporting service is updated.');
+        batch.forEach(alert => seen.add(alert.id));
+        all.push(...batch);
+        if (batch.length < 200) break;
       }
-      if (!res.ok) throw new Error(`Failed to load alerts: HTTP ${res.status}`);
-      const body = await res.json();
-      const list = (body.data ?? []) as AnalyticsAlert[];
-      setAlerts(list);
-      if (body.summary) {
-        setSummary(body.summary);
-      }
+      setAlerts([...new Map(all.map(alert => [alert.id, alert])).values()]);
+      setSummary(null);
+
     } catch (err: any) {
+      if (requestId !== alertRequest.current) return;
+      setAlerts([]);
       console.error("Failed to load AI alerts:", err);
       setError(err.message || "Failed to load alerts");
     } finally {
-      setLoading(false);
+      if (requestId === alertRequest.current) setLoading(false);
     }
-  }, []);
+  }, [period]);
 
   useEffect(() => {
     loadAlerts();
-    const interval = setInterval(loadAlerts, 12000);
-    return () => clearInterval(interval);
+    const interval = setInterval(loadAlerts, 60000);
+    return () => { clearInterval(interval); alertRequest.current++; };
   }, [loadAlerts]);
 
   // Handle alertId in URL to automatically select/open incident media modal
@@ -143,8 +156,8 @@ export default function AiAlertsIncidentHubPage() {
   const uniqueBranches = useMemo(() => {
     const set = new Set<string>();
     for (const a of alerts) {
-      if (a.branchName) set.add(a.branchName);
-      set.add(normalizeBranch(a));
+      const label = normalizeBranch(a);
+      if (label) set.add(label);
     }
     return Array.from(set).sort();
   }, [alerts]);
@@ -152,8 +165,8 @@ export default function AiAlertsIncidentHubPage() {
   const uniqueZones = useMemo(() => {
     const set = new Set<string>();
     for (const a of alerts) {
-      if (a.zoneName) set.add(a.zoneName);
-      set.add(normalizeZone(a));
+      const label = normalizeZone(a);
+      if (label) set.add(label);
     }
     return Array.from(set).sort();
   }, [alerts]);
@@ -161,8 +174,8 @@ export default function AiAlertsIncidentHubPage() {
   const uniqueRegions = useMemo(() => {
     const set = new Set<string>();
     for (const a of alerts) {
-      if (a.regionName) set.add(a.regionName);
-      set.add(normalizeRegion(a));
+      const label = normalizeRegion(a);
+      if (label) set.add(label);
     }
     return Array.from(set).sort();
   }, [alerts]);
@@ -170,8 +183,8 @@ export default function AiAlertsIncidentHubPage() {
   const uniqueAreas = useMemo(() => {
     const set = new Set<string>();
     for (const a of alerts) {
-      if (a.areaName) set.add(a.areaName);
-      set.add(normalizeArea(a));
+      const label = normalizeArea(a);
+      if (label) set.add(label);
     }
     return Array.from(set).sort();
   }, [alerts]);
@@ -214,6 +227,8 @@ export default function AiAlertsIncidentHubPage() {
       if (regionFilter !== "all" && alert.regionName !== regionFilter && normalizeRegion(alert) !== regionFilter) return false;
       if (areaFilter !== "all" && alert.areaName !== areaFilter && normalizeArea(alert) !== areaFilter) return false;
       if (alertTypeFilter !== "all" && normalizeAlertType(alert) !== alertTypeFilter) return false;
+      if (period.from && new Date(alert.lastDetectedAt || alert.createdAt).getTime() < Date.parse(period.from)) return false;
+      if (period.to && new Date(alert.lastDetectedAt || alert.createdAt).getTime() > Date.parse(period.to)) return false;
       if (dateFilter !== "all" && normalizeAlertDate(alert) !== dateFilter) return false;
       if (severityFilter !== "all" && alert.severity !== severityFilter) return false;
       if (statusFilter !== "all" && alert.status !== statusFilter) return false;
@@ -239,7 +254,7 @@ export default function AiAlertsIncidentHubPage() {
 
       return true;
     });
-  }, [alerts, branchFilter, zoneFilter, regionFilter, areaFilter, alertTypeFilter, dateFilter, severityFilter, statusFilter, conversionFilter, quickFilter, searchQuery]);
+  }, [period, alerts, branchFilter, zoneFilter, regionFilter, areaFilter, alertTypeFilter, dateFilter, severityFilter, statusFilter, conversionFilter, quickFilter, searchQuery]);
 
   const isFiltered =
     branchFilter !== "all" ||
@@ -254,13 +269,12 @@ export default function AiAlertsIncidentHubPage() {
     quickFilter !== "all" ||
     Boolean(searchQuery.trim());
 
+  useEffect(() => setPage(1), [branchFilter, zoneFilter, regionFilter, areaFilter, alertTypeFilter, dateFilter, severityFilter, statusFilter, conversionFilter, quickFilter, searchQuery, period]);
   // Summary counts - uses accurate PostgreSQL aggregate counts when unfiltered, and filtered slice when filters are applied
   const stats = useMemo(() => {
-    if (!isFiltered && summary) {
-      return summary;
-    }
-    const target = isFiltered ? filteredAlerts : alerts;
-    const total = isFiltered ? target.length : (summary?.total ?? target.length);
+
+    const target = filteredAlerts;
+    const total = target.length;
     const active = target.filter((a) => !["resolved", "false_alarm", "suppressed"].includes(a.status)).length;
     const converted = target.filter((a) => Boolean(a.incidentId || a.incidentNumber)).length;
     const unconverted = target.filter((a) => !a.incidentId && !a.incidentNumber && !["resolved", "false_alarm", "suppressed"].includes(a.status)).length;
@@ -453,6 +467,15 @@ export default function AiAlertsIncidentHubPage() {
 
   return (
     <div className="content p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
+        <section className="card flex flex-wrap items-end gap-3" aria-label="Report date range">
+          <label className="text-xs">From date (IST)<input aria-label="Report start date" type="date" className="input block mt-1" value={startDay} onChange={event => setStartDay(event.target.value)}/></label>
+          <label className="text-xs">To date (IST)<input aria-label="Report end date" type="date" className="input block mt-1" value={endDay} min={startDay} onChange={event => setEndDay(event.target.value)}/></label>
+          <button className="btn-primary" onClick={() => { try { setPeriod(reportDayBounds(startDay,endDay)); setDateFilter('all'); setPage(1); } catch(cause) { setError(cause instanceof Error ? cause.message : 'Select valid dates'); } }}>Generate report</button>
+          <button className="btn-secondary" onClick={() => { const today = reportLocalDate(new Date()); setStartDay(today); setEndDay(today); setPeriod(reportDayBounds(today,today)); setDateFilter('all'); }}>Today</button>
+          <button className="btn-secondary" onClick={() => {setPeriod({});setStartDay('');setEndDay('');setDateFilter('all');}}>All dates</button>
+          <button className="btn-secondary" disabled={loading || !filteredAlerts.length} onClick={() => downloadReportCsv(filteredAlerts.map(alert => ({Zone:normalizeZone(alert),Region:normalizeRegion(alert),Area:normalizeArea(alert),Branch:normalizeBranch(alert),Camera:alert.cameraName || alert.cameraId,Alert:alert.title,Severity:alert.severity,Status:alert.status,DateIST:normalizeAlertDate(alert),FirstDetected:alert.firstDetectedAt,LastDetected:alert.lastDetectedAt,Incident:alert.incidentNumber || alert.incidentId || ''})), 'alerts-report.csv')}>Export all filtered rows</button>
+          <span className="text-xs text-slate-500">{period.from ? `${reportLocalDate(period.from)} to ${reportLocalDate(period.to!)} · IST` : 'All recorded dates · IST'}</span>
+        </section>
         <PageHero
           eyebrow="Vision AI Operations"
           icon={BellRing}
@@ -892,7 +915,7 @@ export default function AiAlertsIncidentHubPage() {
                       </td>
                     </tr>
                   ) : (
-                    filteredAlerts.map((alert) => {
+                    filteredAlerts.slice((Math.min(page,Math.max(1,Math.ceil(filteredAlerts.length/pageSize)))-1)*pageSize,Math.min(page,Math.max(1,Math.ceil(filteredAlerts.length/pageSize)))*pageSize).map((alert) => {
                       const isConverted = Boolean(alert.incidentId || alert.incidentNumber);
                       const isConverting = convertingId === alert.id;
                       const zoneName = alert.zoneName || normalizeZone(alert);
@@ -1077,13 +1100,7 @@ export default function AiAlertsIncidentHubPage() {
               </table>
             </div>
 
-            <div className="py-3 px-4 bg-slate-950/70 border-t border-slate-800 text-slate-400 text-xs flex items-center justify-between">
-              <span>
-                Showing {filteredAlerts.length} of {alerts.length} loaded alerts
-                {summary?.total && summary.total > alerts.length ? ` (${summary.total} total in database)` : ""}
-              </span>
-              <span className="font-mono text-slate-500">Auto-refresh active (12s)</span>
-            </div>
+            <ReportPagination total={filteredAlerts.length} page={page} pageSize={pageSize} onPage={setPage} onPageSize={setPageSize}/>
           </div>
         ) : (
           <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/60 text-center space-y-3">

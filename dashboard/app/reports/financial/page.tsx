@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import { downloadReportCsv } from '@/lib/report-export';
+import { ReportDateControls, type ReportDateRange } from '@/components/reports/report-date-controls';
+import { ReportPagination } from '@/components/reports/report-pagination';
 import { AppLayout } from '@/components/app-layout';
 import { PageHero } from '@/components/page-hero';
 import { 
@@ -78,6 +81,8 @@ interface ROIData {
 }
 
 export default function FinancialTCOPage() {
+  const [page,setPage]=useState(1),[pageSize,setPageSize]=useState(10);
+  const [range,setRange]=useState<ReportDateRange>({});
   const [tcoData, setTcoData] = useState<TCOData | null>(null);
   const [roiData, setRoiData] = useState<ROIData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,6 +91,7 @@ export default function FinancialTCOPage() {
   const [activeTab, setActiveTab] = useState<'tco' | 'roi'>('tco');
 
   const loadData = async () => {
+    const dateParams = new URLSearchParams(range).toString();
     setLoading(true);
     try {
       const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
@@ -95,7 +101,7 @@ export default function FinancialTCOPage() {
       };
 
       // Load TCO data
-      const tcoResponse = await fetch(`/api/control/v1/reports/financial/tco?period=${period}`, {
+      const tcoResponse = await fetch(`/api/control/v1/reports/financial/tco?period=${period}&${dateParams}`, {
         headers,
         credentials: 'include',
       });
@@ -125,10 +131,11 @@ export default function FinancialTCOPage() {
 
   useEffect(() => {
     loadData();
-  }, [period]);
+  }, [period, range]);
 
   const exportReport = async (format: 'pdf' | 'excel') => {
-    alert(`Export to ${format.toUpperCase()} will be available soon`);
+    if(format === 'pdf') { window.print(); return; }
+    if(tcoData) downloadReportCsv(tcoData.branches, 'financial-branch-costs.csv');
   };
 
   if (loading) {
@@ -162,7 +169,8 @@ export default function FinancialTCOPage() {
   return (
     <AppLayout>
       <main className="p-6 space-y-6 max-w-[1800px] mx-auto">
-        <PageHero
+        <ReportDateControls range={range} onGenerate={setRange}/>
+          <PageHero
           eyebrow="Financial MIS"
           title="Total Cost of Ownership & ROI Analysis"
           description="Comprehensive financial analysis of security infrastructure investment and operational costs"
@@ -181,8 +189,9 @@ export default function FinancialTCOPage() {
               <button onClick={loadData} className="btn-secondary">
                 <RefreshCw size={16} /> Refresh
               </button>
+              <button className="btn-secondary" onClick={()=>void exportReport('excel')}>Export branch costs (CSV)</button>
               <button onClick={() => exportReport('pdf')} className="btn-primary">
-                <Download size={16} /> Export PDF
+                <Download size={16} /> Print / PDF
               </button>
             </div>
           }
@@ -374,8 +383,9 @@ export default function FinancialTCOPage() {
                   <BarChart3 size={20} />
                   Cost by Branch
                 </h3>
+                <ReportPagination total={tcoData.branches.length} page={page} pageSize={pageSize} onPage={setPage} onPageSize={setPageSize}/>
                 <div className="space-y-2">
-                  {tcoData.branches.slice(0, 10).map((branch, idx) => (
+                  {tcoData.branches.slice((Math.min(page,Math.max(1,Math.ceil(tcoData.branches.length/pageSize)))-1)*pageSize,Math.min(page,Math.max(1,Math.ceil(tcoData.branches.length/pageSize)))*pageSize).map((branch, idx) => (
                     <div key={idx} className="flex items-center gap-3">
                       <span className="text-sm w-32 text-gray-400 truncate">{branch.branch}</span>
                       <div className="flex-1 bg-gray-800 rounded-full h-8 relative overflow-hidden">
@@ -384,7 +394,7 @@ export default function FinancialTCOPage() {
                           style={{
                             width: `${Math.min(
                               100,
-                              (branch.totalCost / Math.max(...tcoData.branches.map(b => b.totalCost))) * 100
+                              (branch.totalCost / Math.max(1,...tcoData.branches.map(b => b.totalCost))) * 100
                             )}%`
                           }}
                         >

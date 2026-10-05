@@ -10,6 +10,7 @@
  * - Cost optimization recommendations
  */
 
+import { reportCalendarPeriod } from '../../../packages/contracts/src/report-hierarchy.js';
 import { Router, Request, Response } from 'express';
 import { Pool } from 'pg';
 import { activeCamera } from '../../database/active-resource.js';
@@ -36,13 +37,11 @@ export function createFinancialTcoRoutes(pool: Pool): Router {
       }
 
       const period = (req.query.period as string) || 'monthly';
-      const now = new Date();
-      const startDate = req.query.startDate 
-        ? new Date(req.query.startDate as string)
-        : new Date(now.getFullYear(), now.getMonth(), 1);
-      const endDate = req.query.endDate
-        ? new Date(req.query.endDate as string)
-        : new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      let bounds;
+      try { bounds = reportCalendarPeriod(period, req.query.startDate, req.query.endDate); }
+      catch(error) { return res.status(400).json({error:error instanceof Error ? error.message : 'Invalid report dates'}); }
+      const startDate = new Date(bounds.from);
+      const endDate = new Date(bounds.to);
 
       // Capital Expenditure (CapEx)
       const capex = await calculateCapex(pool, tenantId, startDate, endDate);

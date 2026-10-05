@@ -1,3 +1,4 @@
+import { resolveReportHierarchy, reportDayBounds, reportLocalDate, validReportDay } from "../../../packages/contracts/src/report-hierarchy.js";
 /**
  * MIS Unified Report API
  * 
@@ -71,7 +72,7 @@ const misReportQuerySchema = z.object({
 }).superRefine((query, context) => {
   if (query.timeRange !== 'custom') return;
   if (!query.startDate || !query.endDate ||
-      !Number.isFinite(Date.parse(query.startDate)) || !Number.isFinite(Date.parse(query.endDate))) {
+      !validReportDay(query.startDate) || !validReportDay(query.endDate)) {
     context.addIssue({ code: z.ZodIssueCode.custom, message: 'custom reports require valid startDate and endDate' });
     return;
   }
@@ -101,6 +102,11 @@ const openingFailuresQuerySchema = z.object({
   }
 });
 
+const openingReportQuerySchema = openingFailuresQuerySchema.and(z.object({
+  cameraId: reportFilter,
+  locationType: reportFilter,
+}));
+
 function openingReportDateRange(query: z.infer<typeof openingFailuresQuerySchema>) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
     timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -122,29 +128,17 @@ function openingReportDateRange(query: z.infer<typeof openingFailuresQuerySchema
 // ============================================================================
 
 function getDateRange(query: MISReportQuery): { startDate: Date; endDate: Date } {
-  const now = new Date();
-  const endDate = new Date(now);
-  let startDate: Date;
-  
-  if (query.timeRange === 'custom' && query.startDate && query.endDate) {
-    startDate = new Date(query.startDate);
-    endDate.setTime(new Date(query.endDate).getTime());
-  } else if (query.timeRange === 'today') {
-    startDate = new Date(now);
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(23, 59, 59, 999);
-  } else if (query.timeRange === '7d') {
-    startDate = new Date(now);
-    startDate.setDate(now.getDate() - 7);
-  } else if (query.timeRange === '30d') {
-    startDate = new Date(now);
-    startDate.setDate(now.getDate() - 30);
-  } else { // 90d
-    startDate = new Date(now);
-    startDate.setDate(now.getDate() - 90);
-  }
-  
-  return { startDate, endDate };
+  const today = reportLocalDate(new Date());
+  const days = query.timeRange === '7d' ? 7 : query.timeRange === '30d' ? 30 : query.timeRange === '90d' ? 90 : 1;
+  const startDay = query.timeRange === 'custom' ? query.startDate! :
+    new Date(Date.parse(`${today}T00:00:00Z`) - (days - 1) * 86_400_000).toISOString().slice(0, 10);
+  const bounds = reportDayBounds(startDay, query.timeRange === 'custom' ? query.endDate! : today);
+  return { startDate: new Date(bounds.from), endDate: new Date(bounds.to) };
+}
+
+function shiftCondition(shift: string, column: string): string {
+  const hour = `EXTRACT(HOUR FROM ${column} AT TIME ZONE 'Asia/Kolkata')`;
+  return shift === 'morning' ? `${hour} >= 6 AND ${hour} < 14` : shift === 'evening' ? `${hour} >= 14 AND ${hour} < 22` : shift === 'night' ? `(${hour} < 6 OR ${hour} >= 22)` : 'TRUE';
 }
 
 function metricNumber(value: unknown): number | null {
@@ -224,43 +218,15 @@ async function resolveBranchHierarchy(
     return [];
   }
 
-  const nodesById = new Map<string, { id: string; parent_id: string | null; node_type: string; name: string }>();
-  for (const n of rawNodes) {
-    nodesById.set(n.id, n);
-  }
+  const hierarchyNodes = new Map(rawNodes.map(n => [n.id, {id:n.id, parentId:n.parent_id, type:n.node_type, name:n.name}]));
 
   // 3. For every node of type 'branch', resolve its ancestor chain
   const branches: BranchHierarchy[] = [];
   for (const node of rawNodes) {
     if (node.node_type !== 'branch') continue;
 
-    let area_name = 'General Area';
-    let region_name = 'General Region';
-    let zone_name = 'General Zone';
-    let org_name = 'Enterprise Operations';
-
-    let current = node;
-    let depth = 0;
-    while (current.parent_id && depth < 10) {
-      const parent = nodesById.get(current.parent_id);
-      if (!parent) break;
-
-      const pType = (parent.node_type || '').toLowerCase();
-      if (pType === 'area') area_name = parent.name;
-      else if (pType === 'region' || pType === 'division') {
-        if (region_name === 'General Region') region_name = parent.name;
-      }
-      else if (pType === 'zone') zone_name = parent.name;
-      else if (pType === 'company' || pType === 'organization' || pType === 'headquarters') org_name = parent.name;
-
-      current = parent;
-      depth++;
-    }
-
-    // Some estates model a geographical zone as a region node named "... Zone".
-    if (zone_name === 'General Zone' && /\bzone\b/i.test(region_name)) {
-      zone_name = region_name;
-    }
+    const resolved = resolveReportHierarchy(node.id, hierarchyNodes);
+    const { area: area_name, region: region_name, zone: zone_name, organization: org_name } = resolved;
 
     branches.push({
       branch_id: node.id,
@@ -309,7 +275,13 @@ async function generateMISReport(
   }
 
   const branchIds = filteredBranches.map((b) => b.branch_id);
-  const filterOptions = buildFilterOptions(allBranchesInEstate);
+  const filterOptions = {
+    organizations: buildFilterOptions(allBranchesInEstate).organizations,
+    zones: buildFilterOptions(allBranchesInEstate.filter(b => !query.organization || b.org_name === query.organization)).zones,
+    regions: buildFilterOptions(allBranchesInEstate.filter(b => (!query.organization || b.org_name === query.organization) && (!query.zone || b.zone_name === query.zone))).regions,
+    areas: buildFilterOptions(allBranchesInEstate.filter(b => (!query.organization || b.org_name === query.organization) && (!query.zone || b.zone_name === query.zone) && (!query.region || b.region_name === query.region))).areas,
+    branches: buildFilterOptions(filteredBranches.filter(b => !query.branchId || b.branch_id === query.branchId)).branches,
+  };
 
   if (branchIds.length === 0) {
     return {
@@ -320,7 +292,9 @@ async function generateMISReport(
       dateWiseBreakdown: [],
       timeWiseBreakdown: [],
       metadata: {
-        generatedAt: new Date().toISOString(),
+        timezone: 'Asia/Kolkata',
+      healthBasis: 'Current camera and retention snapshot; incident and activity metrics use the selected period',
+      generatedAt: new Date().toISOString(),
         timeRange: query.timeRange,
         groupBy: query.groupBy,
         startDate: startDate.toISOString(),
@@ -411,6 +385,7 @@ async function generateMISReport(
        WHERE i.tenant_id::text = $1
          AND i.branch_id::text = ANY($2::text[])
          AND i.detected_at BETWEEN $3 AND $4
+         AND ${shiftCondition(query.shift, 'i.detected_at')}
        GROUP BY i.branch_id`,
       [tenantId, branchIds, startDate.toISOString(), endDate.toISOString()]
     );
@@ -442,7 +417,7 @@ async function generateMISReport(
          AND fe.branch_id::text = ANY($2::text[])
          AND fe.date BETWEEN $3 AND $4
        GROUP BY fe.branch_id`,
-      [tenantId, branchIds, startDate.toISOString().slice(0, 10), endDate.toISOString().slice(0, 10)]
+      [tenantId, branchIds, reportLocalDate(startDate), reportLocalDate(endDate)]
     );
 
     for (const r of footfallRows) {
@@ -556,8 +531,8 @@ async function generateMISReport(
   // =========================================================================
   // 5. Build Aggregated Dimension Matrix
   // =========================================================================
-  const dateWiseBreakdown = await getDateWiseBreakdown(pool, tenantId, branchIds, startDate, endDate);
-  const timeWiseBreakdown = await getTimeWiseBreakdown(pool, tenantId, branchIds, startDate, endDate);
+  const dateWiseBreakdown = await getDateWiseBreakdown(pool, tenantId, branchIds, startDate, endDate, query.shift);
+  const timeWiseBreakdown = await getTimeWiseBreakdown(pool, tenantId, branchIds, startDate, endDate, query.shift);
 
   const matrix = query.groupBy === 'date'
     ? dateWiseBreakdown
@@ -607,9 +582,12 @@ async function generateMISReport(
     filterOptions,
     matrix,
     allBranches,
+    branchMatrix,
     dateWiseBreakdown,
     timeWiseBreakdown,
     metadata: {
+      timezone: 'Asia/Kolkata',
+      healthBasis: 'Current camera and retention snapshot; incident and activity metrics use the selected period',
       generatedAt: new Date().toISOString(),
       timeRange: query.timeRange,
       groupBy: query.groupBy,
@@ -636,11 +614,11 @@ function aggregateByDimension(
   const groups = new Map<string, BranchHierarchy[]>();
 
   for (const b of branches) {
-    let key = b.branch_name;
-    if (groupBy === 'organization') key = b.org_name || 'Enterprise Operations';
-    else if (groupBy === 'zone') key = b.zone_name || 'General Zone';
-    else if (groupBy === 'region') key = b.region_name || 'General Region';
-    else if (groupBy === 'area') key = b.area_name || 'General Area';
+    let key = b.branch_id;
+    if (groupBy === 'organization') key = b.org_name || b.branch_name;
+    else if (groupBy === 'zone') key = b.zone_name || b.branch_name;
+    else if (groupBy === 'region') key = b.region_name || b.branch_name;
+    else if (groupBy === 'area') key = b.area_name || b.branch_name;
 
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(b);
@@ -720,15 +698,14 @@ function aggregateByDimension(
     const avgSla = slaCount > 0 ? Number((slaSum / slaCount).toFixed(1)) : null;
     const avgRetentionDays = retCount > 0 ? Math.round(retSum / retCount) : null;
 
-    let complianceStatus = 'Optimal';
-    if (avgRetentionDays !== null && avgRetentionDays < 90) {
-      complianceStatus = 'Warning';
-    } else if (uptimePercent < 95) {
+    let complianceStatus = totalCameras > 0 ? 'Available' : 'Not measured';
+    if (totalCameras > 0 && uptimePercent < 95) {
       complianceStatus = 'Attention';
     }
 
     matrix.push({
-      dimension: dimensionKey,
+      dimension: groupBy === 'branch' ? groupBranches[0]!.branch_name : dimensionKey,
+      branchId: groupBy === 'branch' ? groupBranches[0]!.branch_id : undefined,
       branchCount: groupBy === 'branch' ? 1 : groupBranches.length,
       onlineCameras,
       totalCameras,
@@ -819,21 +796,23 @@ async function getDateWiseBreakdown(
   tenantId: string,
   branchIds: string[],
   startDate: Date,
-  endDate: Date
+  endDate: Date,
+  shift = 'all'
 ): Promise<any[]> {
   if (!pool || branchIds.length === 0) return [];
 
   const rows = await safeQuery(
     pool,
     `SELECT 
-       DATE(i.detected_at)::text AS dimension,
+       DATE(i.detected_at AT TIME ZONE 'Asia/Kolkata')::text AS dimension,
        COUNT(*) AS alerts,
        COUNT(*) FILTER (WHERE i.severity = 'P1') AS p1_threats
      FROM incidents i
      WHERE i.tenant_id::text = $1
        AND i.branch_id::text = ANY($2::text[])
        AND i.detected_at BETWEEN $3 AND $4
-     GROUP BY DATE(i.detected_at)
+       AND ${shiftCondition(shift, 'i.detected_at')}
+     GROUP BY DATE(i.detected_at AT TIME ZONE 'Asia/Kolkata')
      ORDER BY dimension`,
     [tenantId, branchIds, startDate.toISOString(), endDate.toISOString()]
   );
@@ -851,21 +830,23 @@ async function getTimeWiseBreakdown(
   tenantId: string,
   branchIds: string[],
   startDate: Date,
-  endDate: Date
+  endDate: Date,
+  shift = 'all'
 ): Promise<any[]> {
   if (!pool || branchIds.length === 0) return [];
 
   const rows = await safeQuery(
     pool,
     `SELECT 
-       EXTRACT(HOUR FROM i.detected_at)::int AS hour,
+       EXTRACT(HOUR FROM i.detected_at AT TIME ZONE 'Asia/Kolkata')::int AS hour,
        COUNT(*) AS alerts,
        COUNT(*) FILTER (WHERE i.severity = 'P1') AS p1_threats
      FROM incidents i
      WHERE i.tenant_id::text = $1
        AND i.branch_id::text = ANY($2::text[])
        AND i.detected_at BETWEEN $3 AND $4
-     GROUP BY EXTRACT(HOUR FROM i.detected_at)
+       AND ${shiftCondition(shift, 'i.detected_at')}
+     GROUP BY EXTRACT(HOUR FROM i.detected_at AT TIME ZONE 'Asia/Kolkata')
      ORDER BY hour`,
     [tenantId, branchIds, startDate.toISOString(), endDate.toISOString()]
   );
@@ -915,6 +896,16 @@ function buildFilterOptions(branches: BranchHierarchy[]) {
 // ============================================================================
 
 export function createMISUnifiedRoutes(instance: FastifyInstance, pool: Pool, store: ControlPlaneStore, openingRepository?: NbfcRuleRepository) {
+  instance.get('/mis/hierarchy', async (request) => {
+    const query = z.object({organization:reportFilter,zone:reportFilter,region:reportFilter,area:reportFilter}).parse(request.query);
+    const allowed = new Set((await store.listAccessibleNodes(request.currentUser, 'live:view', 'branch')).map(node=>node.id));
+    const branches = (await resolveBranchHierarchy(pool, request.currentUser.tenantId, store)).filter(branch=>allowed.has(branch.branch_id));
+    const byOrg = branches.filter(b=>!query.organization || b.org_name===query.organization);
+    const byZone = byOrg.filter(b=>!query.zone || b.zone_name===query.zone);
+    const byRegion = byZone.filter(b=>!query.region || b.region_name===query.region);
+    const byArea = byRegion.filter(b=>!query.area || b.area_name===query.area);
+    return {organizations:buildFilterOptions(branches).organizations,zones:buildFilterOptions(byOrg).zones,regions:buildFilterOptions(byZone).regions,areas:buildFilterOptions(byRegion).areas,branches:buildFilterOptions(byArea).branches};
+  });
   instance.get('/mis/branch-openings/:ruleId/:branchId/:localDate/photo', async (request, reply) => {
     const parsed = z.object({ ruleId: z.string().uuid(), branchId: z.string(),
       localDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).safeParse(request.params);
@@ -964,7 +955,7 @@ export function createMISUnifiedRoutes(instance: FastifyInstance, pool: Pool, st
 
   instance.get('/mis/branch-openings', async (request, reply) => {
     try {
-      const query = openingFailuresQuerySchema.parse(request.query);
+      const query = openingReportQuerySchema.parse(request.query);
       const tenantId = request.currentUser.tenantId;
       const accessibleBranches = await store.listAccessibleNodes(request.currentUser, 'analytics:view', 'branch');
       const allowedBranchIds = new Set(accessibleBranches.map((branch) => branch.id));
@@ -977,14 +968,42 @@ export function createMISUnifiedRoutes(instance: FastifyInstance, pool: Pool, st
         (!query.region || branch.region_name === query.region) &&
         (!query.area || branch.area_name === query.area) &&
         (!query.organization || branch.org_name === query.organization));
-      const selectedById = new Map(selected.map((branch) => [branch.branch_id, branch]));
+      const cameraById = new Map((await store.listCameras(tenantId)).map((camera) => [camera.id, camera]));
+      if (query.cameraId && !allowedBranchIds.has(cameraById.get(query.cameraId)?.branchId || '')) {
+        return reply.code(403).send({ error: 'camera_forbidden' });
+      }
+      const hierarchyBranchIds = new Set(selected.map((branch) => branch.branch_id));
+      const hierarchyCameras = [...cameraById.values()].filter((camera) => hierarchyBranchIds.has(camera.branchId));
+      const locationMatches = (camera: typeof hierarchyCameras[number]) => !query.locationType ||
+        (camera.locationType || 'unassigned') === query.locationType;
+      const cameraChoices = hierarchyCameras.filter(locationMatches);
+      const matchingCameras = cameraChoices.filter((camera) => !query.cameraId || camera.id === query.cameraId);
+      const matchingCameraIds = new Set(matchingCameras.map((camera) => camera.id));
+      const matchingBranchIds = new Set(matchingCameras.map((camera) => camera.branchId));
+      const cameraFiltered = Boolean(query.cameraId || query.locationType);
+      const selectedBranches = cameraFiltered ? selected.filter((branch) => matchingBranchIds.has(branch.branch_id)) : selected;
+      const selectedById = new Map(selectedBranches.map((branch) => [branch.branch_id, branch]));
+      const filterOptions = {
+        organizations: buildFilterOptions(hierarchy).organizations,
+        zones: buildFilterOptions(hierarchy.filter((branch) => !query.organization || branch.org_name === query.organization)).zones,
+        regions: buildFilterOptions(hierarchy.filter((branch) => (!query.organization || branch.org_name === query.organization)
+          && (!query.zone || branch.zone_name === query.zone))).regions,
+        areas: buildFilterOptions(hierarchy.filter((branch) => (!query.organization || branch.org_name === query.organization)
+          && (!query.zone || branch.zone_name === query.zone) && (!query.region || branch.region_name === query.region))).areas,
+        branches: buildFilterOptions(hierarchy.filter((branch) => (!query.organization || branch.org_name === query.organization)
+          && (!query.zone || branch.zone_name === query.zone) && (!query.region || branch.region_name === query.region)
+          && (!query.area || branch.area_name === query.area))).branches,
+        cameras: cameraChoices.map((camera) => ({ id: camera.id, name: camera.name, branchId: camera.branchId,
+          branchName: selected.find((branch) => branch.branch_id === camera.branchId)?.branch_name || '',
+          locationType: camera.locationType || 'unassigned' })),
+        locations: [...new Set(hierarchyCameras.map((camera) => camera.locationType || 'unassigned'))].sort(),
+      };
       const { startDate, endDate, startDay, endDay } = openingReportDateRange(query);
       if (!openingRepository || selectedById.size === 0) {
-        return reply.send({ rows: [], total: 0, startDate: startDay, endDate: endDay, truncated: false });
+        return reply.send({ rows: [], total: 0, startDate: startDay, endDate: endDay, truncated: false, filterOptions });
       }
       const limit = 10_000;
       const states = await openingRepository.listBranchOpeningChecks(tenantId, [...selectedById.keys()], startDay, endDay, limit + 1);
-      const cameraById = new Map((await store.listCameras(tenantId)).map((camera) => [camera.id, camera]));
       const selectedCameraIds = [...cameraById.values()].filter((camera) => selectedById.has(camera.branchId)).map((camera) => camera.id);
       const needsHistoricalPhoto = states.some((state) => state.currentMetrics?.outcome === 'FAILED' &&
         typeof state.currentMetrics?.sourceEventId !== 'string');
@@ -1012,9 +1031,11 @@ export function createMISUnifiedRoutes(instance: FastifyInstance, pool: Pool, st
         return [{
           ruleId: state.ruleId, branchId, localDate: String(metrics.localDate),
           occurredAt: state.firstConditionMetAt,
-          zoneName: branch.zone_name === 'General Zone' ? null : branch.zone_name,
+          zoneName: branch.zone_name || null,
           branchName: branch.branch_name,
           cameraName: cameraById.get(String(metrics.cameraId))?.name || 'Unknown camera',
+          cameraId: String(metrics.cameraId || ''),
+          locationType: cameraById.get(String(metrics.cameraId))?.locationType || 'unassigned',
           personCount: count, outcome: count >= 2 ? 'SUCCESS' : 'FAILED', photoUrl,
         }];
       });
@@ -1023,23 +1044,28 @@ export function createMISUnifiedRoutes(instance: FastifyInstance, pool: Pool, st
         ruleId: string; branchId: string; localDate: string; occurredAt: string | null;
         zoneName: string | null; branchName: string; cameraName: string | null;
         personCount: number | null; outcome: string; photoUrl: string | null;
+        cameraId: string | null; locationType: string | null;
       }> = [];
       let truncated = states.length > limit;
       const startTime = Date.parse(`${startDay}T00:00:00.000Z`);
       for (let timestamp = Date.parse(`${endDay}T00:00:00.000Z`);
         timestamp >= startTime && rows.length < limit; timestamp -= 86_400_000) {
         const day = new Date(timestamp).toISOString().slice(0, 10);
-        for (const branch of selected) {
+        for (const branch of selectedBranches) {
           if (rows.length >= limit) { truncated = true; break; }
-          rows.push(recordedByBranchDay.get(`${branch.branch_id}:${day}`) || {
+          const observation = recordedByBranchDay.get(`${branch.branch_id}:${day}`);
+          // An opening observed by another camera is not an unrecorded opening.
+          if (observation && cameraFiltered && !matchingCameraIds.has(observation.cameraId)) continue;
+          rows.push(observation || {
             ruleId: 'unrecorded', branchId: branch.branch_id, localDate: day,
-            occurredAt: null, zoneName: branch.zone_name === 'General Zone' ? null : branch.zone_name,
+            occurredAt: null, zoneName: branch.zone_name || null,
             branchName: branch.branch_name, cameraName: null, personCount: null,
             outcome: 'NOT_RECORDED', photoUrl: null,
+            cameraId: null, locationType: null,
           });
         }
       }
-      return reply.send({ rows, total: rows.length, startDate: startDay, endDate: endDay, truncated });
+      return reply.send({ rows, total: rows.length, startDate: startDay, endDate: endDay, truncated, filterOptions });
     } catch (error) {
       request.log.error({ error }, 'Failed to generate branch openings report');
       if (error instanceof z.ZodError) return reply.code(400).send({ error: 'invalid_query_parameters', details: error.errors });
@@ -1147,7 +1173,7 @@ export function createMISUnifiedRoutes(instance: FastifyInstance, pool: Pool, st
           eventId: event.id,
           alertId: alert?.id ?? null,
           occurredAt: event.occurredAt,
-          zoneName: branch.zone_name === 'General Zone' ? null : branch.zone_name,
+          zoneName: branch.zone_name || null,
           branchId: branch.branch_id,
           branchName: branch.branch_name,
           cameraName: camera.name,

@@ -682,6 +682,14 @@ function ControlRoomContent() {
     };
   }, [loading, monitoringSignature]);
 
+  if (isWallWindow) {
+    return <div className="control-room operations-stage-room wall-window-room">
+      {loading ? <div className="wall-window-message" role="status">Loading cameras…</div> : filteredCameras.length ? <LiveOperationsStage cameraOnly initialMode="fleet" cameras={filteredCameras} alerts={liveAi.alerts} aiByCamera={aiByCamera} showAiOverlay={showAiOverlays} focusCameraId={focusCameraId} maxConcurrentStreams={Math.max(protectionStreamBudget, CONTROL_ROOM_MAX_CONCURRENT_STREAMS)} analyticsError={liveAi.error} analyticsLoading={liveAi.loading} onRefresh={liveAi.refresh} onCameraLocationChange={(cameraId, locationType) => setCameras(current => current.map(camera => camera.id === cameraId ? { ...camera, locationType } : camera))} onActiveStreamsChange={setActiveStreams} onMonitoredCamerasChange={handleMonitoredCamerasChange} onOpenCameraAi={cameraId => { setSelectedAiCameraId(cameraId); setFocusCameraId(cameraId); setAiPanelOpen(true); }} /> : <div className="wall-window-message" role={cameraDataState === "error" ? "alert" : "status"}>
+        {cameraDataState === "error" ? "Camera inventory is unavailable. Retrying automatically…" : "No cameras match the selected wall scope."}
+      </div>}
+    </div>;
+  }
+
   if (loading) {
     return (
       <div className="control-room-loading" role="status">
@@ -782,7 +790,7 @@ function ControlRoomContent() {
             <span><strong>{stats.unacknowledgedAlerts}</strong> need attention</span>
           </div>
         </div>
-        <div className="los-page-actions">{isWallWindow && <button type="button" onClick={() => window.close()}><X size={15} />Close window</button>}<span className={"los-data-state " + dataMode}><i />{dataMode === "live" ? "Inventory connected" : dataMode === "partial" ? "Partial service availability" : "Services unavailable"}</span><Link href="/operations/alerts">Alert centre <ArrowUpRight size={15} /></Link><button type="button" onClick={() => void loadData()} disabled={refreshing}><RefreshCw size={15} />{refreshing ? "Refreshing…" : "Refresh scope"}</button></div>
+        <div className="los-page-actions">{isWallWindow && <button type="button" onClick={() => window.close()}><X size={15} />Close window</button>}<span className={"los-data-state " + dataMode}><i />{dataMode === "live" ? "Inventory connected" : dataMode === "partial" ? "Partial service availability" : "Services unavailable"}</span><Link href="/reports/mis?tab=branch-opening">Branch opening report <ArrowUpRight size={15} /></Link><Link href="/operations/alerts">Alert centre <ArrowUpRight size={15} /></Link><button type="button" onClick={() => void loadData()} disabled={refreshing}><RefreshCw size={15} />{refreshing ? "Refreshing…" : "Refresh scope"}</button></div>
       </header>
 
       {/* 2. Interactive Zone / Region / Area / Branch Scope Filter Toolbar */}
@@ -998,7 +1006,7 @@ function ControlRoomContent() {
 
       {/* Primary live camera stage */}
       <section className="control-room-content" aria-label="Camera wall">
-        {filteredCameras.length > 0 ? <LiveOperationsStage initialMode={isWallWindow ? "fleet" : "watch"} cameras={filteredCameras} alerts={liveAi.alerts} aiByCamera={aiByCamera} showAiOverlay={showAiOverlays} focusCameraId={focusCameraId} maxConcurrentStreams={Math.max(protectionStreamBudget, CONTROL_ROOM_MAX_CONCURRENT_STREAMS)} analyticsError={liveAi.error} analyticsLoading={liveAi.loading} onRefresh={liveAi.refresh} onActiveStreamsChange={setActiveStreams} onMonitoredCamerasChange={handleMonitoredCamerasChange} onOpenCameraAi={cameraId => { setSelectedAiCameraId(cameraId); setFocusCameraId(cameraId); setAiPanelOpen(true); }} /> : cameras.length > 0 ? (
+        {filteredCameras.length > 0 ? <LiveOperationsStage initialMode="watch" cameras={filteredCameras} alerts={liveAi.alerts} aiByCamera={aiByCamera} showAiOverlay={showAiOverlays} focusCameraId={focusCameraId} maxConcurrentStreams={Math.max(protectionStreamBudget, CONTROL_ROOM_MAX_CONCURRENT_STREAMS)} analyticsError={liveAi.error} analyticsLoading={liveAi.loading} onRefresh={liveAi.refresh} onCameraLocationChange={(cameraId, locationType) => setCameras(current => current.map(camera => camera.id === cameraId ? { ...camera, locationType } : camera))} onActiveStreamsChange={setActiveStreams} onMonitoredCamerasChange={handleMonitoredCamerasChange} onOpenCameraAi={cameraId => { setSelectedAiCameraId(cameraId); setFocusCameraId(cameraId); setAiPanelOpen(true); }} /> : cameras.length > 0 ? (
           <div className="empty-control-room-card">
             <div className="empty-icon-wrap">
               <Filter size={36} />

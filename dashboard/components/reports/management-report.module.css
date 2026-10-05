@@ -1,0 +1,39 @@
+.dashboard { --ink: #14243c; --muted: #657792; --surface: #fff; --line: #dde6f2; color: var(--ink); background: #f3f7fc; padding: 24px; border: 1px solid var(--line); border-radius: 24px; }
+:global([data-theme="dark"]) .dashboard { --ink: #e7eefc; --muted: #9babc4; --surface: #17243a; --line: #2b3c58; background: #101b2d; }
+.heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 18px; margin-bottom: 22px; }
+.eyebrow { font-size: 11px; letter-spacing: .14em; font-weight: 800; color: #087dba; text-transform: uppercase; margin: 0 0 7px; }
+.heading h2 { font-size: clamp(21px, 2vw, 28px); letter-spacing: -.04em; font-weight: 800; margin: 0; color: var(--ink); }
+.heading p { color: var(--muted); font-size: 12px; margin-top: 8px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.actions button, .tabs button { border: 1px solid var(--line); border-radius: 10px; padding: 9px 13px; background: var(--surface); color: var(--ink); font-size: 12px; font-weight: 650; display: inline-flex; align-items: center; gap: 6px; }
+.kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-bottom: 22px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 17px; position: relative; overflow: hidden; }
+.kpi::before { content: ''; position: absolute; left: 0; top: 0; width: 100%; height: 4px; background: var(--accent); }
+.kpi::after { content: ''; position: absolute; height: 90px; width: 90px; border-radius: 50%; background: var(--accent); opacity: .09; top: -24px; right: -24px; }
+.kpi span { display: block; font-size: 11px; color: var(--muted); font-weight: 600; }
+.kpi strong { display: block; margin: 7px 0; font-size: 29px; letter-spacing: -.04em; font-weight: 800; color: var(--accent); }
+.kpi small { color: var(--muted); font-size: 10px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+.tabs button[aria-pressed="true"] { color: #fff; background: #1664dc; border-color: #1664dc; box-shadow: 0 5px 12px #1664dc30; }
+.grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 18px; margin-bottom: 18px; }
+.panel { min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 21px; box-shadow: 0 6px 22px #1c396a06; }
+.panel h3 { color: var(--ink); font-size: 15px; font-weight: 750; margin: 0; }
+.panel p { font-size: 11px; color: var(--muted); margin: 6px 0 17px; }
+.chart { height: 285px; width: 100%; }
+.legend { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; font-size: 11px; color: var(--muted); }
+.legend i { display: inline-block; height: 8px; width: 8px; margin-right: 5px; border-radius: 3px; }
+.notice { padding: 13px 16px; border: 1px solid #5ba5ed50; background: #399cea0d; color: var(--muted); font-size: 12px; border-radius: 12px; margin-bottom: 18px; }
+.tableWrap { overflow-x: auto; }
+.table { width: 100%; font-size: 12px; border-collapse: collapse; white-space: nowrap; }
+.table th { text-align: left; color: var(--muted); font-size: 10px; letter-spacing: .05em; text-transform: uppercase; padding: 12px; background: #7d98ba0a; border-bottom: 1px solid var(--line); }
+.table td { padding: 13px 12px; border-bottom: 1px solid var(--line); color: var(--ink); }
+.table td:first-child { font-weight: 650; }
+.table button { color: #1472d0; font-weight: 650; text-align: left; }
+.meter { display: inline-block; height: 6px; width: 65px; border-radius: 4px; background: #d7e2f1; margin-right: 9px; overflow: hidden; }
+.meter i { display: block; height: 100%; background: #10b981; }
+.empty { text-align: center; padding: 70px 15px; font-size: 13px; color: var(--muted); }
+.attention { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); padding: 12px 0; font-size: 12px; }
+.attention strong { color: #e44f67; }
+@media(max-width: 1100px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media(max-width: 700px) { .dashboard { padding: 14px; border-radius: 16px; } .grid { grid-template-columns: 1fr; } .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kpi { padding: 13px; } .panel { padding: 16px; } .chart { height: 255px; } }
+@media print { .dashboard { background: #fff; color: #14243c; border: 0; } .actions,.tabs { display: none; } .panel,.kpi { break-inside: avoid; box-shadow: none; } .grid { grid-template-columns: 1fr 1fr; } }
