@@ -49,7 +49,10 @@ import { InvestigationFlowNav } from "@/components/investigation-flow-nav";
 import { useLiveAiWall } from "@/hooks/use-live-ai-wall";
 import type { Camera as CameraType } from "@/lib/types";
 import { normalizeCameraStreamProfiles } from "@/lib/camera-stream-profiles";
-import { isLiveWallCameraOnline, selectLiveWallCameras } from "@/lib/live-wall-filters";
+import { isLiveWallCameraOnline, matchesLiveWallSelection, selectLiveWallCameras } from "@/lib/live-wall-filters";
+import { buildLiveWallBranches, liveWallHierarchyOptions, parseLiveWallHierarchy, type LiveWallHierarchyNode } from "@/lib/live-wall-hierarchy";
+import { ScopeMultiSelect } from "@/components/ui/scope-multi-select";
+export type { HierarchyBranchInfo } from "@/lib/live-wall-hierarchy";
 import {
   endControlRoomActivity,
   startControlRoomActivity,
@@ -72,16 +75,6 @@ interface ControlRoomStats {
     raidIssueCount: number;
     writeProbeFailureCount: number;
   };
-}
-
-export interface HierarchyBranchInfo {
-  branchId: string;
-  branchName: string;
-  zone: string;
-  region: string;
-  area: string;
-  cameraCount: number;
-  onlineCount: number;
 }
 
 type DataSection = "cameras" | "health" | "alerts" | "nodes";
@@ -236,65 +229,6 @@ function formatFailedSections(sections: DataSection[]) {
   return sections.map((section) => labels[section]).join(", ");
 }
 
-/** Inferred Geo-Hierarchy heuristic helper for clean grouping */
-function inferHierarchy(branchName: string, cameraName: string = ""): { zone: string; region: string; area: string } {
-  const combined = `${branchName} ${cameraName}`.toLowerCase();
-
-  // Zone Detection
-  let zone = "South Zone";
-  if (combined.includes("north") || combined.includes("delhi") || combined.includes("punjab") || combined.includes("haryana") || combined.includes("up") || combined.includes("noida")) {
-    zone = "North Zone";
-  } else if (combined.includes("west") || combined.includes("mumbai") || combined.includes("pune") || combined.includes("gujarat") || combined.includes("maharashtra") || combined.includes("goa")) {
-    zone = "West Zone";
-  } else if (combined.includes("east") || combined.includes("kolkata") || combined.includes("bengal") || combined.includes("bihar") || combined.includes("assam") || combined.includes("odisha")) {
-    zone = "East Zone";
-  } else if (combined.includes("central") || combined.includes("mp") || combined.includes("bhopal") || combined.includes("indore")) {
-    zone = "Central Zone";
-  }
-
-  // Region Detection
-  let region = "Kerala";
-  if (combined.includes("kerala") || combined.includes("kochi") || combined.includes("ernakulam") || combined.includes("trivandrum") || combined.includes("calicut") || combined.includes("thrissur") || combined.includes("kannur") || combined.includes("kollam") || combined.includes("palakkad") || combined.includes("alappuzha") || combined.includes("kottayam") || combined.includes("krypton")) {
-    region = "Kerala";
-  } else if (combined.includes("karnataka") || combined.includes("bangalore") || combined.includes("bengaluru") || combined.includes("mysore") || combined.includes("mangalore") || combined.includes("hubli")) {
-    region = "Karnataka";
-  } else if (combined.includes("tamil") || combined.includes("chennai") || combined.includes("coimbatore") || combined.includes("madurai") || combined.includes("salem") || combined.includes("trichy")) {
-    region = "Tamil Nadu";
-  } else if (combined.includes("telangana") || combined.includes("hyderabad") || combined.includes("secunderabad") || combined.includes("warangal")) {
-    region = "Telangana";
-  } else if (combined.includes("andhra") || combined.includes("vizag") || combined.includes("vijayawada") || combined.includes("guntur")) {
-    region = "Andhra Pradesh";
-  } else if (combined.includes("maharashtra") || combined.includes("mumbai") || combined.includes("pune") || combined.includes("nagpur") || combined.includes("nashik")) {
-    region = "Maharashtra";
-  } else if (combined.includes("delhi") || combined.includes("ncr") || combined.includes("gurgaon") || combined.includes("noida")) {
-    region = "Delhi NCR";
-  } else {
-    region = "General Region";
-  }
-
-  // Area / District Detection
-  let area = "Main Area";
-  if (combined.includes("ernakulam") || combined.includes("kochi") || combined.includes("edapally") || combined.includes("aluva") || combined.includes("kakkanad") || combined.includes("mg road") || combined.includes("marine drive") || combined.includes("krypton")) {
-    area = "Ernakulam / Kochi";
-  } else if (combined.includes("trivandrum") || combined.includes("thiruvananthapuram") || combined.includes("technopark") || combined.includes("kazhakoottam")) {
-    area = "Trivandrum Metro";
-  } else if (combined.includes("calicut") || combined.includes("kozhikode")) {
-    area = "Kozhikode Area";
-  } else if (combined.includes("thrissur") || combined.includes("round")) {
-    area = "Thrissur Area";
-  } else if (combined.includes("bangalore") || combined.includes("bengaluru") || combined.includes("indiranagar") || combined.includes("whitefield") || combined.includes("koramangala") || combined.includes("electronic city") || combined.includes("mg road blr")) {
-    area = "Bangalore Central";
-  } else if (combined.includes("chennai") || combined.includes("t-nagar") || combined.includes("anna nagar") || combined.includes("velachery") || combined.includes("omr")) {
-    area = "Chennai Metro";
-  } else if (combined.includes("mumbai") || combined.includes("andheri") || combined.includes("bandra") || combined.includes("bkc") || combined.includes("thane") || combined.includes("navi mumbai")) {
-    area = "Mumbai Metro";
-  } else {
-    area = `${region} Central Area`;
-  }
-
-  return { zone, region, area };
-}
-
 function HeaderClock() {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -324,6 +258,7 @@ function ControlRoomContent() {
   const detachedCameraId = searchParams?.get("cameraId");
 
   const [cameras, setCameras] = useState<CameraType[]>([]);
+  const [hierarchyNodes, setHierarchyNodes] = useState<LiveWallHierarchyNode[]>([]);
   const [priorityCameraIds, setPriorityCameraIds] = useState<string[]>([]);
   const [stats, setStats] = useState<ControlRoomStats>(DEFAULT_EMPTY_STATS);
   const [activeStreams, setActiveStreams] = useState(0);
@@ -388,10 +323,12 @@ function ControlRoomContent() {
   }, []);
   
   // Hierarchy & Filter States
-  const [selectedZone, setSelectedZone] = useState<string>("ALL");
-  const [selectedRegion, setSelectedRegion] = useState<string>("ALL");
-  const [selectedArea, setSelectedArea] = useState<string>("ALL");
-  const [selectedBranchId, setSelectedBranchId] = useState<string>(() => (urlBranchId ? urlBranchId.trim() : "ALL"));
+  const [selectedZone, setSelectedZone] = useState<string[]>([]);
+  const [selectedRegion, setSelectedRegion] = useState<string[]>([]);
+  const [selectedArea, setSelectedArea] = useState<string[]>([]);
+  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>(() => urlBranchId ? [urlBranchId.trim()] : []);
+  const selectedBranchId = selectedBranchIds.length === 1 ? selectedBranchIds[0] : "ALL";
+  const resolvedUrlBranchRef = useRef<string | null>(null);
   const [protectionStreamBudget, setProtectionStreamBudget] = useState(CONTROL_ROOM_MAX_CONCURRENT_STREAMS);
   useEffect(() => {
     const controller = new AbortController();
@@ -439,7 +376,7 @@ function ControlRoomContent() {
     else setRefreshing(true);
 
     try {
-      const [cameraResult, statsResult, priorityResult] = await Promise.allSettled([
+      const [cameraResult, statsResult, priorityResult, nodesResult] = await Promise.allSettled([
         loadCameraInventory(async (offset, limit) => {
           const body = await requestJson(`/api/control/v1/cameras?limit=${limit}&offset=${offset}&action=live%3Aview`, controller.signal);
           const total = body && typeof body === "object" ? (body as { total?: number }).total : undefined;
@@ -447,6 +384,7 @@ function ControlRoomContent() {
         }),
         requestJson("/api/control/v1/operations/health/summary", controller.signal),
         requestJson("/api/control/v1/alerts/alert-center?limit=200", controller.signal),
+        requestJson("/api/control/v1/organization/nodes", controller.signal).then(parseLiveWallHierarchy),
       ]);
       if (requestSequence !== requestSequenceRef.current) return;
 
@@ -472,9 +410,12 @@ function ControlRoomContent() {
         failed.push("alerts");
       }
 
+      if (nodesResult.status === "fulfilled") setHierarchyNodes(nodesResult.value);
+      else failed.push("nodes");
+
       setFailedSections(failed);
-      setDataMode(failed.length === 0 ? "live" : failed.length === 3 ? "unavailable" : "partial");
-      if (failed.length < 3) setLastUpdatedAt(new Date());
+      setDataMode(failed.length === 0 ? "live" : failed.length === 4 ? "unavailable" : "partial");
+      if (failed.length < 4) setLastUpdatedAt(new Date());
     } finally {
       if (requestSequence === requestSequenceRef.current) {
         setLoading(false);
@@ -511,101 +452,39 @@ function ControlRoomContent() {
     return result;
   }, [cameras, liveAi.alertsByCamera, liveAi.rulesByCamera]);
 
-  // Extract all Branches with Hierarchy
-  const branchesList = useMemo<HierarchyBranchInfo[]>(() => {
-    const branchMap = new Map<string, HierarchyBranchInfo>();
-    for (const camera of cameras) {
-      const bId = camera.branchId || "default-branch";
-      const bName = camera.branchName || `Branch ${bId}`;
-      const { zone, region, area } = inferHierarchy(bName, camera.name);
+  const branchesList = useMemo(() => buildLiveWallBranches(cameras, hierarchyNodes), [cameras, hierarchyNodes]);
 
-      if (!branchMap.has(bId)) {
-        branchMap.set(bId, {
-          branchId: bId,
-          branchName: bName,
-          zone,
-          region,
-          area,
-          cameraCount: 0,
-          onlineCount: 0,
-        });
-      }
-      const item = branchMap.get(bId)!;
-      item.cameraCount += 1;
-      if (isLiveWallCameraOnline(camera)) {
-        item.onlineCount += 1;
-      }
-    }
-    return Array.from(branchMap.values()).sort((a, b) => a.branchName.localeCompare(b.branchName));
-  }, [cameras]);
-
-  // Auto-select and lock in the branch from URL query parameters (e.g. ?branchId=xxx from Fleet Branches)
+  // Resolve incoming branch links once; refreshing inventory must not reset a user's selection.
   useEffect(() => {
-    if (!urlBranchId) return;
-    const cleanUrlBranch = urlBranchId.trim();
-    const matched = branchesList.find(
-      (b) =>
-        b.branchId.toLowerCase() === cleanUrlBranch.toLowerCase() ||
-        b.branchName.toLowerCase() === cleanUrlBranch.toLowerCase()
-    );
+    if (!urlBranchId) { resolvedUrlBranchRef.current = null; return; }
+    if (resolvedUrlBranchRef.current === urlBranchId) return;
+    const target = urlBranchId.trim().toLowerCase();
+    const matched = branchesList.find(branch => branch.branchId.toLowerCase() === target || branch.branchName.toLowerCase() === target);
     if (matched) {
-      setSelectedBranchId(matched.branchId);
-    } else {
-      setSelectedBranchId(cleanUrlBranch);
+      setSelectedBranchIds([matched.branchId]);
+      resolvedUrlBranchRef.current = urlBranchId;
+    } else if (cameraDataState === "ready" && !loading) {
+      setSelectedBranchIds([urlBranchId.trim()]);
+      resolvedUrlBranchRef.current = urlBranchId;
     }
-  }, [urlBranchId, branchesList]);
+  }, [urlBranchId, branchesList, cameraDataState, loading]);
 
-  // Available Zones
-  const availableZones = useMemo(() => {
-    const set = new Set<string>();
-    branchesList.forEach((b) => set.add(b.zone));
-    return Array.from(set).sort();
-  }, [branchesList]);
-
-  // Available Regions (filtered by Zone)
-  const availableRegions = useMemo(() => {
-    const set = new Set<string>();
-    branchesList.forEach((b) => {
-      if (selectedZone === "ALL" || b.zone === selectedZone) {
-        set.add(b.region);
-      }
-    });
-    return Array.from(set).sort();
-  }, [branchesList, selectedZone]);
-
-  // Available Areas (filtered by Zone and Region)
-  const availableAreas = useMemo(() => {
-    const set = new Set<string>();
-    branchesList.forEach((b) => {
-      if (
-        (selectedZone === "ALL" || b.zone === selectedZone) &&
-        (selectedRegion === "ALL" || b.region === selectedRegion)
-      ) {
-        set.add(b.area);
-      }
-    });
-    return Array.from(set).sort();
-  }, [branchesList, selectedZone, selectedRegion]);
-
-  // Available Branches (filtered by Zone, Region, and Area)
-  const availableBranches = useMemo(() => {
-    return branchesList.filter((b) => {
-      if (selectedZone !== "ALL" && b.zone !== selectedZone) return false;
-      if (selectedRegion !== "ALL" && b.region !== selectedRegion) return false;
-      if (selectedArea !== "ALL" && b.area !== selectedArea) return false;
-      return true;
-    });
-  }, [branchesList, selectedZone, selectedRegion, selectedArea]);
+  const availableZones = useMemo(() => liveWallHierarchyOptions(hierarchyNodes, "zone"), [hierarchyNodes]);
+  const availableRegions = useMemo(() => liveWallHierarchyOptions(hierarchyNodes, "region", selectedZone), [hierarchyNodes, selectedZone]);
+  const availableAreas = useMemo(() => liveWallHierarchyOptions(hierarchyNodes, "area", selectedZone, selectedRegion), [hierarchyNodes, selectedZone, selectedRegion]);
+  const availableBranches = useMemo(() => branchesList.filter(branch =>
+    matchesLiveWallSelection(selectedZone, branch.zone) && matchesLiveWallSelection(selectedRegion, branch.region) && matchesLiveWallSelection(selectedArea, branch.area)
+  ), [branchesList, selectedZone, selectedRegion, selectedArea]);
 
   const wallSelection = useMemo(() => selectLiveWallCameras(
     cameras, branchesList, combinedPriorityCameraIds,
     {
       zone: selectedZone, region: selectedRegion, area: selectedArea,
-      branchId: selectedBranchId, query: searchQuery, status: statusFilter,
+      branchId: selectedBranchIds, query: searchQuery, status: statusFilter,
       hideUnavailable: hideUnavailableChannels,
     },
   ), [cameras, branchesList, combinedPriorityCameraIds, selectedZone, selectedRegion,
-    selectedArea, selectedBranchId, searchQuery, statusFilter, hideUnavailableChannels]);
+    selectedArea, selectedBranchIds, searchQuery, statusFilter, hideUnavailableChannels]);
 
   // Virtual Patrol Timer Effect
   useEffect(() => {
@@ -649,19 +528,19 @@ function ControlRoomContent() {
 
   // Active filter count
   const isFilterActive =
-    selectedZone !== "ALL" ||
-    selectedRegion !== "ALL" ||
-    selectedArea !== "ALL" ||
-    selectedBranchId !== "ALL" ||
+    selectedZone.length > 0 ||
+    selectedRegion.length > 0 ||
+    selectedArea.length > 0 ||
+    selectedBranchIds.length > 0 ||
     statusFilter !== "ALL" ||
     searchQuery.trim().length > 0 ||
     hideUnavailableChannels;
 
   const resetAllFilters = useCallback(() => {
-    setSelectedZone("ALL");
-    setSelectedRegion("ALL");
-    setSelectedArea("ALL");
-    setSelectedBranchId("ALL");
+    setSelectedZone([]);
+    setSelectedRegion([]);
+    setSelectedArea([]);
+    setSelectedBranchIds([]);
     setStatusFilter("ALL");
     setSearchQuery("");
     setHideUnavailableChannels(false);
@@ -892,23 +771,8 @@ function ControlRoomContent() {
               <Globe2 size={13} />
               <span>Zone:</span>
             </label>
-            <select
-              id="zone-select"
-              value={selectedZone}
-              onChange={(e) => {
-                setSelectedZone(e.target.value);
-                setSelectedRegion("ALL");
-                setSelectedArea("ALL");
-                setSelectedBranchId("ALL");
-              }}
-            >
-              <option value="ALL">All Zones ({availableZones.length})</option>
-              {availableZones.map((z) => (
-                <option key={z} value={z}>
-                  {z}
-                </option>
-              ))}
-            </select>
+            <ScopeMultiSelect id="zone-select" label="Zone" plural="Zones" options={availableZones}
+              value={selectedZone} onChange={values => { setSelectedZone(values); setSelectedRegion([]); setSelectedArea([]); setSelectedBranchIds([]); }} />
           </div>
 
           {/* Region Selector */}
@@ -917,22 +781,8 @@ function ControlRoomContent() {
               <MapPin size={13} />
               <span>Region:</span>
             </label>
-            <select
-              id="region-select"
-              value={selectedRegion}
-              onChange={(e) => {
-                setSelectedRegion(e.target.value);
-                setSelectedArea("ALL");
-                setSelectedBranchId("ALL");
-              }}
-            >
-              <option value="ALL">All Regions ({availableRegions.length})</option>
-              {availableRegions.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
+            <ScopeMultiSelect id="region-select" label="Region" plural="Regions" options={availableRegions}
+              value={selectedRegion} onChange={values => { setSelectedRegion(values); setSelectedArea([]); setSelectedBranchIds([]); }} />
           </div>
 
           {/* Area / District Selector */}
@@ -941,21 +791,8 @@ function ControlRoomContent() {
               <Layers size={13} />
               <span>Area / District:</span>
             </label>
-            <select
-              id="area-select"
-              value={selectedArea}
-              onChange={(e) => {
-                setSelectedArea(e.target.value);
-                setSelectedBranchId("ALL");
-              }}
-            >
-              <option value="ALL">All Areas ({availableAreas.length})</option>
-              {availableAreas.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
+            <ScopeMultiSelect id="area-select" label="Area" plural="Areas" options={availableAreas}
+              value={selectedArea} onChange={values => { setSelectedArea(values); setSelectedBranchIds([]); }} />
           </div>
 
           {/* Branch Selector */}
@@ -964,18 +801,8 @@ function ControlRoomContent() {
               <Building2 size={13} />
               <span>Branch:</span>
             </label>
-            <select
-              id="branch-select"
-              value={selectedBranchId}
-              onChange={(e) => setSelectedBranchId(e.target.value)}
-            >
-              <option value="ALL">All Branches ({availableBranches.length})</option>
-              {availableBranches.map((b) => (
-                <option key={b.branchId} value={b.branchId}>
-                  {b.branchName} ({b.cameraCount} cams)
-                </option>
-              ))}
-            </select>
+            <ScopeMultiSelect id="branch-select" label="Branch" plural="Branches" options={availableBranches.map(branch => ({ value: branch.branchId, label: `${branch.branchName} (${branch.cameraCount} cams)` }))}
+              value={selectedBranchIds} onChange={setSelectedBranchIds} />
           </div>
 
           {/* Search Box */}
@@ -1049,8 +876,8 @@ function ControlRoomContent() {
                   Showing <strong>{filteredCameras.length}</strong> of {cameras.length} cameras
                   {activeSingleBranch ? (
                     <> in <em>{activeSingleBranch.branchName}</em></>
-                  ) : selectedRegion !== "ALL" ? (
-                    <> in <em>{selectedRegion}</em></>
+                  ) : selectedRegion.length > 0 ? (
+                    <> in <em>{availableRegions.filter(region => selectedRegion.includes(region.value)).map(region => region.label).join(", ")}</em></>
                   ) : null}
                 </span>
                 <button
@@ -1112,7 +939,7 @@ function ControlRoomContent() {
             <div>
               <h3>{activeSingleBranch.branchName}</h3>
               <p>
-                {activeSingleBranch.zone} &gt; {activeSingleBranch.region} &gt; {activeSingleBranch.area} ·{" "}
+                {activeSingleBranch.zoneName} &gt; {activeSingleBranch.regionName} &gt; {activeSingleBranch.areaName} ·{" "}
                 <strong>{activeSingleBranch.onlineCount}/{activeSingleBranch.cameraCount}</strong> Online
               </p>
             </div>
@@ -1760,6 +1587,7 @@ function ControlRoomContent() {
           display: flex; flex-direction: column; gap: 14px; padding: 16px;
           background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
         }
+        .los-scope-sheet[open] { position: relative; z-index: 20; overflow: visible; }
         .filter-controls-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(200px, 1.4fr); align-items: end; gap: 10px; }
         .filter-select-group { display: flex; min-width: 0; flex-direction: column; gap: 6px; }
         .filter-select-group label { display: flex; align-items: center; gap: 4px; min-height: 18px; font-size: 12px; font-weight: 600; color: var(--muted); }

@@ -1,12 +1,18 @@
 import type { Camera } from "./types";
 
 export type LiveWallStatusFilter = "ALL" | "ONLINE" | "OFFLINE" | "ALERT";
+// An empty selection includes every accessible value at that level.
+export type LiveWallSelection = string | string[];
+
+export function matchesLiveWallSelection(selection: LiveWallSelection, value?: string): boolean {
+  return Array.isArray(selection) ? !selection.length || selection.includes(value ?? "") : selection === "ALL" || selection === value;
+}
 
 export interface LiveWallScope {
-  zone: string;
-  region: string;
-  area: string;
-  branchId: string;
+  zone: LiveWallSelection;
+  region: LiveWallSelection;
+  area: LiveWallSelection;
+  branchId: LiveWallSelection;
   query: string;
   status: LiveWallStatusFilter;
   hideUnavailable: boolean;
@@ -14,6 +20,7 @@ export interface LiveWallScope {
 
 export interface LiveWallBranch {
   branchId: string;
+  branchName?: string;
   zone: string;
   region: string;
   area: string;
@@ -35,16 +42,18 @@ export function selectLiveWallCameras(
   const scoped = cameras.filter((camera) => {
     const branchId = camera.branchId || "default-branch";
     const branch = branchMap.get(branchId);
-    if (scope.branchId !== "ALL") {
+    if (Array.isArray(scope.branchId)) {
+      if (scope.branchId.length && !scope.branchId.includes(branchId)) return false;
+    } else if (scope.branchId !== "ALL") {
       const target = scope.branchId.trim().toLowerCase();
       const matchId = branchId.toLowerCase() === target;
       const matchCameraBranchName = camera.branchName?.trim().toLowerCase() === target;
-      const matchBranchObjName = (branch as any)?.branchName?.trim().toLowerCase() === target;
+      const matchBranchObjName = branch?.branchName?.trim().toLowerCase() === target;
       if (!matchId && !matchCameraBranchName && !matchBranchObjName) return false;
     }
-    if (scope.zone !== "ALL" && branch?.zone !== scope.zone) return false;
-    if (scope.region !== "ALL" && branch?.region !== scope.region) return false;
-    if (scope.area !== "ALL" && branch?.area !== scope.area) return false;
+    if (!matchesLiveWallSelection(scope.zone, branch?.zone)) return false;
+    if (!matchesLiveWallSelection(scope.region, branch?.region)) return false;
+    if (!matchesLiveWallSelection(scope.area, branch?.area)) return false;
     return !query || [
       camera.name, camera.branchName || `Branch ${branchId}`, camera.ipAddress,
       String(camera.channel ?? ""), camera.vendor,

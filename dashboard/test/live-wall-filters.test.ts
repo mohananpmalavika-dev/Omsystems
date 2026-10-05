@@ -16,6 +16,16 @@ const cameras = [
 const select = (overrides: Partial<LiveWallScope> = {}) => selectLiveWallCameras(cameras, branches, ["b", "missing"], { ...scope, ...overrides });
 
 describe("Live Wall filtering", () => {
+  it("combines multiple values within each level and intersects hierarchy levels", () => {
+    expect(select({ zone: ["North", "South"], branchId: ["north", "south"] }).cameras.map(camera => camera.id)).toEqual(["a", "c"]);
+    expect(select({ zone: ["North", "South"], region: ["Kerala"], branchId: ["north", "south"] }).cameras.map(camera => camera.id)).toEqual(["c"]);
+    expect(select({ area: ["Central", "Kochi"], branchId: ["north"], hideUnavailable: false }).counts.total).toBe(3);
+  });
+  it("treats empty selections as all and matches multiple branches by ID", () => {
+    expect(select({ zone: [], region: [], area: [], branchId: [] }).cameras.map(camera => camera.id)).toEqual(["a", "c"]);
+    const sameNames = cameras.map(camera => ({ ...camera, branchName: "Same name" }));
+    expect(selectLiveWallCameras(sameNames, branches, [], { ...scope, branchId: ["south"] }).cameras.map(camera => camera.id)).toEqual(["c"]);
+  });
   it("keeps all cameras in the selected branch hierarchy regardless of their names", () => {
     const result = select({ zone: "North", hideUnavailable: false });
     expect(result.cameras.map((camera) => camera.id)).toEqual(["a", "b", "d"]);

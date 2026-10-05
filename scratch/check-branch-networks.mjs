@@ -1,9 +1,7 @@
 import { execSync } from 'child_process';
 
 const sql = `
-SELECT id, name, code, tenant_id FROM branches;
-SELECT id, name, branch_id, branch_assignments FROM edge_agents;
-SELECT * FROM branch_connectivity_profiles;
+SELECT id, name, hostname, status, branch_node_id, local_media_url, public_media_url FROM edge_agents;
 `;
 
 const base64 = Buffer.from(sql).toString('base64');

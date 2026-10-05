@@ -1,0 +1,15 @@
+.root { position: relative; min-width: 0; }
+.trigger { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 40px; padding: 8px 10px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 8px; color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; }
+.trigger span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trigger svg { flex-shrink: 0; }
+.trigger:focus-visible, .option:focus-within { outline: 2px solid var(--blue); outline-offset: 2px; }
+.panel { position: absolute; top: calc(100% + 6px); left: 0; width: 100%; min-width: 220px; max-width: calc(100vw - 40px); z-index: 80; padding: 8px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px #0003; }
+.search { display: flex; align-items: center; gap: 6px; padding: 6px; border: 1px solid var(--line); border-radius: 6px; }
+.search input { width: 100%; min-width: 0; padding: 4px; background: transparent; color: var(--ink); border: 0; font: inherit; font-size: 13px; }
+.options { max-height: 240px; overflow-y: auto; border-top: 1px solid var(--line); }
+.option { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 7px 6px; cursor: pointer; font-size: 13px; overflow-wrap: anywhere; }
+.option:hover { background: var(--surface-soft); }
+.option input { flex-shrink: 0; width: 16px; height: 16px; accent-color: var(--blue); }
+.footer { display: flex; justify-content: space-between; align-items: center; padding: 8px 4px 0; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.footer button { padding: 5px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-soft); color: var(--ink); cursor: pointer; }
+.empty { padding: 8px; font-size: 13px; color: var(--muted); }
