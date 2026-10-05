@@ -717,9 +717,14 @@ export class CameraRepository {
     const row = route.rows[0];
     let activeAgent = row;
     const lastSeenMs = row?.last_seen_at ? new Date(row.last_seen_at).getTime() : 0;
-    const isStale = (Date.now() - lastSeenMs) > 60 * 60 * 1000;
-    if (!row?.edge_agent_id || row.agent_status === "offline" || isStale || !row.agent_id) {
-      // Auto-heal: Check if the camera's branch has an active online gateway
+    // Treat agent as stale after 5 minutes without a heartbeat (was 60 min — too slow for failover to Hajipur)
+    const isStale = (Date.now() - lastSeenMs) > 5 * 60 * 1000;
+    // Trigger failover when: no agent assigned, agent is not actively online, or no agent row exists at all
+    const agentDown = !row?.edge_agent_id || row.agent_status !== "online" || isStale || !row.agent_id;
+    if (agentDown) {
+      // Fallback: find the healthiest online gateway that serves this camera's branch,
+      // either as home branch or via edge_agent_branch_assignments (e.g. Hajipur linked to PERAVARUNI branch).
+      // Exclude the primary (failing) agent so we always get a different one.
         const fallbackAgent = await this.pool.query<{
           id: string;
           public_media_url: string | null;
@@ -735,11 +740,13 @@ export class CameraRepository {
                AND assignment.branch_node_id = c.branch_node_id
            ))
            WHERE (c.id::text = $1 OR c.resource_node_id::text = $1)
+             AND agent.id != COALESCE($2::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+             AND agent.status = 'online'
              AND agent.credential_revoked_at IS NULL
-             AND agent.last_seen_at >= now() - interval '60 minutes'
+             AND agent.last_seen_at >= now() - interval '5 minutes'
            ORDER BY agent.last_seen_at DESC
            LIMIT 1`,
-          [targetCameraId],
+          [targetCameraId, row?.edge_agent_id ?? null],
         );
         // A camera may only be repaired onto an agent at its own branch.  An
         // earlier fallback selected any recently-seen agent in the fleet and
@@ -758,14 +765,11 @@ export class CameraRepository {
             agent_status: fb.status,
             last_seen_at: fb.last_seen_at,
           };
-          // Persist the healed edge_agent_id so subsequent requests route directly
-          await this.pool.query(
-            `UPDATE cameras SET edge_agent_id = $1 WHERE id::text = $2 OR resource_node_id::text = $2`,
-            [fb.id, targetCameraId],
-          ).catch(() => undefined);
+          // Do NOT permanently reassign cameras.edge_agent_id — this is a session-level failover only.
+          // When PERAVARUNI recovers, it will be preferred again automatically on the next live session.
         } else {
-          // Do not fail live session creation when branch edge agent is offline.
-          // Allow control plane to issue session token so cloud media-gateway can serve standby video.
+          // No healthy linked gateway found. Allow session token to be issued so the
+          // cloud media-gateway can serve standby video if a route is already configured.
           activeAgent = row?.public_media_url ? row : undefined;
         }
       }
@@ -780,7 +784,7 @@ export class CameraRepository {
        VALUES ($1, $2::uuid, $3, $4, $5, $6, $7)`,
       [id, targetCameraId, userId, tokenHash, expiresAt, purpose, profile],
     );
-    const isAgentRecent = activeAgent?.last_seen_at && (Date.now() - new Date(activeAgent.last_seen_at).getTime() < 60 * 60 * 1000);
+    const isAgentRecent = activeAgent?.last_seen_at && (Date.now() - new Date(activeAgent.last_seen_at).getTime() < 5 * 60 * 1000);
     const mediaGatewayUrl = (activeAgent?.public_media_url && (activeAgent.agent_status === "online" || isAgentRecent))
       ? activeAgent.public_media_url
       : undefined;
