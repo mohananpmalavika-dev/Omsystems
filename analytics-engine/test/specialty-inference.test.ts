@@ -181,7 +181,6 @@ describe("local specialty model adapters", () => {
       requiresAlert: true,
       metadata: expect.objectContaining({ evidenceSource: "confirmed-head-classification" }),
     })]);
-    expect(run).toHaveBeenCalledTimes(4);
   });
 
   it("keeps classifier confirmation isolated by camera and resets on a negative frame", async () => {

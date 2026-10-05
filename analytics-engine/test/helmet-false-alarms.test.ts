@@ -15,6 +15,32 @@ const positiveClassifier = () => ({ run: vi.fn(async () => ({
 })) });
 
 describe("helmet false-alarm evidence", () => {
+  it.each([false, true])("rejects the October 5 17:30 Bettaih chair/bare-head standard crops (fast=%s)", async fastAlert => {
+    const boundingBox = { x:0.14346183202889223, y:0.15596347803342586, width:0.32425506419257233, height:0.7520191728435717 };
+    let centeredScore = 0.6186870484580556;
+    const classifier = { run:vi.fn(async (_frame, box) => {
+      const score = box.width === boundingBox.width * 0.4 ? centeredScore : 0.9893;
+      return { wearingHelmet:score > 0.5, confidence:Math.max(score,1-score), wearingHelmetConfidence:score, unwearingHelmetConfidence:1-score };
+    }) };
+    const detector = new HelmetDetector(null,0.88,classifier,fastAlert);
+    await detector.initialize();
+    const candidate = {label:"person",confidence:0.87,boundingBox};
+    for(const seconds of [0,2,4]) expect(await detector.detect(frame(seconds,[candidate]))).toEqual([]);
+    expect(classifier.run).toHaveBeenCalledTimes(9);
+    centeredScore = 0.97;
+    expect((await detector.detect(frame(6,[candidate]))).length).toBe(fastAlert ? 1 : 0);
+    if (!fastAlert) {
+      centeredScore = 0.6186870484580556;
+      expect(await detector.detect(frame(8,[candidate]))).toEqual([]);
+      centeredScore = 0.97;
+      expect(await detector.detect(frame(10,[candidate]))).toEqual([]);
+      expect(await detector.detect(frame(12,[candidate]))).toEqual([]);
+      const results = await detector.detect(frame(14,[candidate]));
+      expect(results).toHaveLength(1);
+      expect(results[0]?.confidence).toBe(0.97);
+    }
+  });
+
   // Highest person score from each supplied annotated incident snapshot.
   // Even an overconfident crop classifier must not promote these to alarms.
   it.each([

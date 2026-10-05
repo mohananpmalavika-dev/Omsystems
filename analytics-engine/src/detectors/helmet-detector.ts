@@ -63,7 +63,7 @@ export class HelmetDetector extends BaseDetector {
     classifier: HelmetClassificationFrameInference | null = null,
     fastAlert = process.env.HELMET_FAST_ALERT === "true",
   ) {
-    super("helmet", "1.1.8");
+    super("helmet", "1.1.9");
     this.inference = inference;
     this.classifier = classifier;
     this.MIN_CONFIDENCE = confidenceThreshold;
@@ -252,6 +252,25 @@ export class HelmetDetector extends BaseDetector {
           ? Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE)
           : Math.max(this.MIN_CONFIDENCE, this.CLASSIFIED_HEAD_CONFIDENCE);
         let classifiedHeadBox = this.headRegion(person.boundingBox);
+        if (!presence && upperResult.wearingHelmet && standardResult.wearingHelmet &&
+            upperResult.wearingHelmetConfidence >= alertThreshold &&
+            standardResult.wearingHelmetConfidence >= alertThreshold) {
+          // Wide standard crops can classify the chairs behind a bare head as
+          // a helmet. Corroborate inside the central head area, excluding the
+          // lateral background. Contradictory central evidence must reject
+          // this observation rather than retrying progressively wider crops.
+          const box = person.boundingBox;
+          const centeredResult = await this.classifier.run(frame, {
+            x: box.x + box.width * 0.3, y: box.y,
+            width: box.width * 0.4, height: box.height * 0.25,
+          });
+          if (!centeredResult.wearingHelmet || centeredResult.wearingHelmetConfidence < alertThreshold) {
+            this.clearPendingHead(frame.cameraId, person.boundingBox);
+            continue;
+          }
+          standardResult = { ...standardResult, wearingHelmetConfidence:
+            Math.min(standardResult.wearingHelmetConfidence, centeredResult.wearingHelmetConfidence) };
+        }
         // A seated person's 35% head region includes much of the pink shirt
         // in the pilot camera. The head classifier rejects that torso crop
         // despite a visible helmet. Require agreement from two compact head

@@ -20,7 +20,7 @@ try {
   for (const sample of samples) {
     const {data, info} = await sharp(sample.image).removeAlpha().raw().toBuffer({resolveWithObject:true});
     const frame = {cameraId: sample.id ?? sample.file, tenantId:'isolated-validation', timestamp:new Date(0), imageData:data, width:info.width, height:info.height};
-    const detections = await objects.run(frame);
+    const detections = sample.observations?.length ? sample.observations : await objects.run(frame);
     if (study) {
       for (const person of detections.filter(d => d.label === 'person' && d.confidence >= .8)) {
         const b=person.boundingBox, scores=[];
@@ -45,7 +45,7 @@ try {
         for (const person of detections.filter(d => d.label === 'person')) {
           const b = person.boundingBox;
           const scores = [];
-          for (const [offset,h,w] of [[0,.55,1.3],[0,.35,.8],[0,.15,1],[0,.15,.8],[-.15,.25,1],[-.15,.25,.8],[0,.25,.6]]) {
+          for (const [offset,h,w] of [[-.15,.55,1.3],[0,.35,.8],[0,.25,.4],[0,.15,1],[0,.15,.8],[-.15,.25,1],[-.15,.25,.8],[0,.25,.6],[-.15,.15,.8],[-.15,.3,.6]]) {
             const y = Math.max(0,b.y+b.height*offset), x = Math.max(0,b.x+b.width*(1-w)/2);
             scores.push({offset,h,w,score:(await classifier.run(frame,{x,y,width:Math.min(1-x,b.width*w),height:Math.min(1-y,b.height*h)})).wearingHelmetConfidence});
           }
@@ -56,5 +56,5 @@ try {
     }
   }
 } finally {await manager.shutdown();}
-console.log('SUMMARY',JSON.stringify({version:'1.1.8',samples:samples.length,checks:samples.length*2,failures,originals,eventsSubmitted:0}));
+console.log('SUMMARY',JSON.stringify({version:process.env.DETECTOR_VERSION??'1.1.8',samples:samples.length,checks:samples.length*2,failures,originals,eventsSubmitted:0}));
 process.exit(failures ? 1 : 0);

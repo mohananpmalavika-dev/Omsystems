@@ -1,0 +1,116 @@
+/**
+ * Base detector interface for all AI detection types
+ */
+/**
+ * Reads normalized detections produced by a local/open model worker. Keeping
+ * this contract on the frame lets model runtimes evolve independently from
+ * tracking, rules, alerts, recording, and the frontend.
+ */
+export function getInferenceObjects(frame, labels) {
+    const raw = frame.metadata?.detections;
+    if (!Array.isArray(raw))
+        return [];
+    const allowed = labels ? new Set(labels) : undefined;
+    return raw.flatMap((value) => {
+        if (!value || typeof value !== "object")
+            return [];
+        const item = value;
+        const box = item.boundingBox;
+        const rawConf = item.confidence;
+        if (typeof item.label !== "string" || !item.label.trim() || typeof rawConf !== "number" || !Number.isFinite(rawConf) || rawConf < 0 || rawConf > 1 ||
+            !box || typeof box.x !== "number" || typeof box.y !== "number" ||
+            typeof box.width !== "number" || typeof box.height !== "number" ||
+            ![box.x, box.y, box.width, box.height].every(Number.isFinite) || box.width <= 0 || box.height <= 0 ||
+            (allowed && !allowed.has(item.label)))
+            return [];
+        const x = Math.max(0, box.x);
+        const y = Math.max(0, box.y);
+        const right = Math.min(1, box.x + box.width);
+        const bottom = Math.min(1, box.y + box.height);
+        if (right <= x || bottom <= y)
+            return [];
+        return [{
+                label: item.label,
+                confidence: rawConf,
+                boundingBox: {
+                    x, y, width: right - x, height: bottom - y,
+                },
+                ...(typeof item.trackId === "string" ? { trackId: item.trackId } : {}),
+                ...(item.attributes && typeof item.attributes === "object"
+                    ? { attributes: item.attributes }
+                    : {}),
+            }];
+    });
+}
+/** Distinguishes an explicitly empty inference result from no inference result. */
+export function hasInferenceObjects(frame) {
+    return Array.isArray(frame.metadata?.detections);
+}
+/** Local frames stay marked after the shared COCO pass adds normalized objects. */
+export function shouldRunLocalSpecialtyInference(frame) {
+    return frame.metadata?.inferenceMode === "local-onnx" || !hasInferenceObjects(frame);
+}
+export class BaseDetector {
+    detectionType;
+    modelVersion;
+    constructor(detectionType, modelVersion) {
+        this.detectionType = detectionType;
+        this.modelVersion = modelVersion;
+    }
+    calculateIoU(box1, box2) {
+        return calculateIoU(box1, box2);
+    }
+}
+/**
+ * Normalize bounding box coordinates to 0-1 range
+ */
+export function normalizeBoundingBox(box, frameWidth, frameHeight) {
+    return {
+        x: box.x / frameWidth,
+        y: box.y / frameHeight,
+        width: box.width / frameWidth,
+        height: box.height / frameHeight,
+    };
+}
+/**
+ * Check if a point is inside a polygon zone
+ */
+export function isPointInPolygon(point, polygon) {
+    let inside = false;
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const xi = polygon[i].x;
+        const yi = polygon[i].y;
+        const xj = polygon[j].x;
+        const yj = polygon[j].y;
+        const intersect = yi > point.y !== yj > point.y &&
+            point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi;
+        if (intersect)
+            inside = !inside;
+    }
+    return inside;
+}
+/**
+ * Calculate center point of bounding box
+ */
+export function getBoundingBoxCenter(box) {
+    return {
+        x: box.x + box.width / 2,
+        y: box.y + box.height / 2,
+    };
+}
+/**
+ * Calculate intersection over union (IoU) for two bounding boxes
+ */
+export function calculateIoU(box1, box2) {
+    const x1 = Math.max(box1.x, box2.x);
+    const y1 = Math.max(box1.y, box2.y);
+    const x2 = Math.min(box1.x + box1.width, box2.x + box2.width);
+    const y2 = Math.min(box1.y + box1.height, box2.y + box2.height);
+    if (x2 < x1 || y2 < y1)
+        return 0;
+    const intersection = (x2 - x1) * (y2 - y1);
+    const area1 = box1.width * box1.height;
+    const area2 = box2.width * box2.height;
+    const union = area1 + area2 - intersection;
+    return union > 0 ? intersection / union : 0;
+}
