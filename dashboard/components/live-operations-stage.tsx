@@ -9,6 +9,7 @@ import { PlaybackController } from "./playback-controller";
 import { CameraInterventionModal } from "./camera-intervention-modal";
 import { analyticsApi } from "@/lib/api-client";
 import type { AnalyticsAlert, AnalyticsRule, Camera } from "@/lib/types";
+import { LIVE_TOUR_INTERVALS } from "@/lib/live-tour-intervals";
 
 type Mode = "watch" | "investigate" | "respond" | "overview" | "fleet";
 type ReplaySegment = { id: string; startTime: string; endTime: string };
@@ -40,6 +41,7 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
   const [fleetPage, setFleetPage] = useState(0);
   const [fleetBranch, setFleetBranch] = useState("all");
   const [fleetRotating, setFleetRotating] = useState(false);
+  const [fleetTourIntervalSec, setFleetTourIntervalSec] = useState(15);
   const [sceneId, setSceneId] = useState("all");
   const [cameraId, setCameraId] = useState<string>();
   const [pinned, setPinned] = useState(false);
@@ -84,9 +86,9 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
   const fleetColumns = Math.min(12, Math.ceil(Math.sqrt(Math.max(1, fleet.cameras.length))));
   useEffect(() => {
     if (mode !== "fleet" || !fleetRotating || fleet.pageCount < 2) return;
-    const timer = window.setInterval(() => { if (document.visibilityState === "visible") setFleetPage(page => (page + 1) % fleet.pageCount); }, 15_000);
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") setFleetPage(page => (page + 1) % fleet.pageCount); }, fleetTourIntervalSec * 1000);
     return () => window.clearInterval(timer);
-  }, [mode, fleetRotating, fleet.pageCount]);
+  }, [mode, fleetRotating, fleet.pageCount, fleetTourIntervalSec]);
   useEffect(() => { if (fleetBranch !== "all" && !branches.some(branch => branch.id === fleetBranch)) { setFleetBranch("all"); setFleetPage(0); } }, [branches, fleetBranch]);
   const stageCameras = useMemo(() => mode === "fleet" ? fleet.cameras : mode === "overview" ? branches.slice(0, 4).map(branch => branch.members[0]) : active ? [active] : [], [mode, active, branches, fleet]);
   const layout = useMemo<GridLayout>(() => ({ name: "Operations stage", gridSize: mode === "fleet" ? `${fleetColumns}x${fleetColumns}` as GridSize : mode === "overview" && stageCameras.length > 1 ? "2x2" : "1x1", positions: stageCameras.map((camera, position) => ({ cameraId: camera.id, position, stream: mode === "overview" || mode === "fleet" ? "sub" : "main" })) }), [mode, stageCameras, fleetColumns]);
@@ -205,7 +207,8 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
           <button type="button" disabled={busy || fleet.currentPage === 0} onClick={() => setFleetPage(fleet.currentPage - 1)}>Previous feeds</button>
           <span role="status">Page {fleet.currentPage + 1} / {fleet.pageCount}</span>
           <button type="button" disabled={busy || fleet.currentPage + 1 === fleet.pageCount} onClick={() => setFleetPage(fleet.currentPage + 1)}>Next feeds</button>
-          <button type="button" aria-pressed={fleetRotating} onClick={() => setFleetRotating(!fleetRotating)}>{fleetRotating ? "Pause rotation" : "Rotate every 15s"}</button>
+          <label>Tour interval<select aria-label="Live tour interval" value={fleetTourIntervalSec} onChange={event => setFleetTourIntervalSec(Number(event.target.value))}>{LIVE_TOUR_INTERVALS.map(interval => <option key={interval.seconds} value={interval.seconds}>{interval.label}</option>)}</select></label>
+          <button type="button" aria-pressed={fleetRotating} onClick={() => setFleetRotating(!fleetRotating)}>{fleetRotating ? "Pause tour" : "Start tour"}</button>
           <small>Substreams use the configured viewer capacity. Select a camera in the dock to investigate it.</small>
         </div>}
         <div ref={monitorRef} className={`los-video-stage ${mode === "fleet" && stageCameras.length > 36 ? "fleet-dense" : ""}`} style={fleetMonitorStyle} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); const id = event.dataTransfer.getData("text/plain"); if (scopedIds.has(id)) { selectCamera(id); setMode("watch"); } }}>

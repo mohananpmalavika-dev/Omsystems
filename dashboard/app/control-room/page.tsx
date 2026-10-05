@@ -54,6 +54,7 @@ import { buildLiveWallBranches, liveWallHierarchyOptions, parseLiveWallHierarchy
 import { ScopeMultiSelect } from "@/components/ui/scope-multi-select";
 import { LiveWallWindows } from "@/components/live-wall-windows";
 import { readLiveWallWindowScope } from "@/lib/live-wall-windows";
+import { LIVE_TOUR_INTERVALS } from "@/lib/live-tour-intervals";
 export type { HierarchyBranchInfo } from "@/lib/live-wall-hierarchy";
 import {
   endControlRoomActivity,
@@ -774,7 +775,7 @@ function ControlRoomContent() {
         <div className="los-hero-copy">
           <span className="los-eyebrow">KRYPTONVISION <span aria-hidden="true">/</span> SIGNAL OBSERVATORY <span aria-hidden="true">/</span> 01</span>
           <div className="los-hero-title"><span className="los-hero-mark" aria-hidden="true"><Radio size={24} /></span><h1>Live Wall<span>.</span><small>Signal Observatory</small></h1></div>
-          <p>{isWallWindow ? `Independent wall window ? ${windowScopeLabel}` : "A living field of feeds, areas and events. Shift focus with a single touch."}</p>
+          <p>{isWallWindow ? `Independent wall window: ${windowScopeLabel}` : "A living field of feeds, areas and events. Shift focus with a single touch."}</p>
           <div className="los-hero-snapshot" aria-label="Current wall coverage">
             <span><strong>{displayedOnlineCameras}</strong> online</span>
             <span><strong>{wallSelection.branchCount}</strong> branches</span>
@@ -1123,22 +1124,17 @@ function ControlRoomContent() {
           )}
         </div>
         <div className="patrol-controls">
-          <div className="interval-pills">
-            <span>Cycle:</span>
-            {[10, 15, 30].map((sec) => (
-              <button
-                key={sec}
-                type="button"
-                className={`interval-btn ${patrolIntervalSec === sec ? "active" : ""}`}
-                onClick={() => {
-                  setPatrolIntervalSec(sec);
-                  setPatrolSecondsLeft(sec);
-                }}
-              >
-                {sec}s
-              </button>
-            ))}
-          </div>
+          <label className="patrol-interval">
+            <span>Tour interval:</span>
+            <select aria-label="Patrol tour interval" value={patrolIntervalSec}
+              onChange={event => {
+                const sec = Number(event.target.value);
+                setPatrolIntervalSec(sec);
+                setPatrolSecondsLeft(sec);
+              }}>
+              {LIVE_TOUR_INTERVALS.map(interval => <option key={interval.seconds} value={interval.seconds}>{interval.label}</option>)}
+            </select>
+          </label>
           <button
             type="button"
             className={`patrol-toggle-btn ${isPatrolActive ? "pause" : "start"}`}
@@ -1560,9 +1556,8 @@ function ControlRoomContent() {
         .stage-tag { padding: 3px 8px; border-radius: 6px; background: #1e1b4b; color: #c7d2fe; border: 1px solid #4338ca; font-weight: 600; }
         .countdown-tag { color: #38bdf8; font-family: monospace; font-size: 11px; }
         .patrol-controls { display: flex; align-items: center; gap: 10px; }
-        .interval-pills { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #94a3b8; }
-        .interval-btn { padding: 3px 7px; border-radius: 5px; border: 1px solid #334155; background: #1e293b; color: #cbd5e1; font-size: 11px; font-weight: 600; cursor: pointer; }
-        .interval-btn.active { background: #3b82f6; color: #fff; border-color: #2563eb; }
+        .patrol-interval { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #94a3b8; }
+        .patrol-interval select { padding: 6px 8px; border-radius: 5px; border: 1px solid #334155; background: #1e293b; color: #cbd5e1; font-size: 12px; cursor: pointer; }
         .patrol-toggle-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; border: 0; }
         .patrol-toggle-btn.start { background: #4f46e5; color: #fff; }
         .patrol-toggle-btn.start:hover { background: #4338ca; }
