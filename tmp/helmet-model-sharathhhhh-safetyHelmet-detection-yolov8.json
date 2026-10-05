@@ -1,0 +1,63 @@
+{
+  "_id": "6879fe45728cca70bf0d2984",
+  "id": "sharathhhhh/safetyHelmet-detection-yolov8",
+  "private": false,
+  "pipeline_tag": "object-detection",
+  "tags": [
+    "yolov8",
+    "object-detection",
+    "computer-vision",
+    "deep-learning",
+    "road-safety-ai",
+    "en",
+    "base_model:Ultralytics/YOLOv8",
+    "base_model:finetune:Ultralytics/YOLOv8",
+    "license:apache-2.0",
+    "region:us"
+  ],
+  "downloads": 0,
+  "likes": 6,
+  "modelId": "sharathhhhh/safetyHelmet-detection-yolov8",
+  "author": "sharathhhhh",
+  "sha": "392680d98fdc6ba6ea4cc818a0e81c86dbfa2edc",
+  "lastModified": "2026-03-24T07:18:37.000Z",
+  "gated": false,
+  "disabled": false,
+  "model-index": null,
+  "config": {},
+  "cardData": {
+    "license": "apache-2.0",
+    "language": [
+      "en"
+    ],
+    "base_model": [
+      "Ultralytics/YOLOv8"
+    ],
+    "tags": [
+      "yolov8",
+      "object-detection",
+      "computer-vision",
+      "deep-learning",
+      "road-safety-ai"
+    ]
+  },
+  "siblings": [
+    {
+      "rfilename": ".gitattributes"
+    },
+    {
+      "rfilename": "README.md"
+    },
+    {
+      "rfilename": "best.pt"
+    }
+  ],
+  "spaces": [
+    "momin206/Helmet_Detection",
+    "lakshya234/drishti-ai",
+    "VJ7-7/Vio_Lens_Backend",
+    "Manu542168/traffic-vision-ai"
+  ],
+  "createdAt": "2025-07-18T07:56:53.000Z",
+  "usedStorage": 6246570
+}

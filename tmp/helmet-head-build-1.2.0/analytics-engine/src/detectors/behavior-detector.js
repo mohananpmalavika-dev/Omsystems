@@ -1,0 +1,742 @@
+/**
+ * Behavior Analysis Detector
+ * Detects unusual or suspicious behaviors
+ */
+import { BaseDetector, getBoundingBoxCenter, } from "./base-detector.js";
+export class BehaviorDetector extends BaseDetector {
+    config;
+    trackedPersons = new Map();
+    poseModel = null;
+    isInitialized = false;
+    TRACKING_TIMEOUT_MS = 5000;
+    previousFrameData = null;
+    constructor(config = {}) {
+        super("behavior", "1.0.0");
+        this.config = {
+            runningSpeedThreshold: config.runningSpeedThreshold ?? 100, // pixels/second
+            fightingMotionThreshold: config.fightingMotionThreshold ?? 50,
+            fallingDurationThreshold: config.fallingDurationThreshold ?? 2,
+            abnormalPostureThreshold: config.abnormalPostureThreshold ?? 0.7,
+            aggressionDetectionEnabled: config.aggressionDetectionEnabled ?? true,
+        };
+    }
+    async initialize() {
+        // TODO: Load pose estimation model
+        // Options:
+        // 1. PoseNet (TensorFlow.js)
+        // 2. MoveNet (faster, more accurate)
+        // 3. OpenPose (comprehensive but slower)
+        // 4. MediaPipe Pose
+        // Example with MoveNet:
+        // import * as poseDetection from '@tensorflow-models/pose-detection';
+        // this.poseModel = await poseDetection.createDetector(
+        //   poseDetection.SupportedModels.MoveNet
+        // );
+        console.log("BehaviorDetector initialized");
+        this.isInitialized = true;
+    }
+    async detect(frame) {
+        if (!this.isInitialized) {
+            return [{
+                    detectionType: "behavior",
+                    status: "NOT_CONFIGURED",
+                    provenance: "HEURISTIC_RULE_ENGINE",
+                    confidence: null,
+                    objects: [],
+                    metadata: {
+                        error: "BehaviorDetector not initialized",
+                    },
+                    executionMetadata: {
+                        status: "NOT_CONFIGURED",
+                        provenance: "HEURISTIC_RULE_ENGINE",
+                        reason: "BehaviorDetector not initialized",
+                        simulated: false,
+                        timestamp: new Date().toISOString(),
+                    },
+                    requiresAlert: false,
+                }];
+        }
+        try {
+            const { getInferenceObjects, hasInferenceObjects } = await import("./base-detector.js");
+            const pipeline = await import('../inference/unified-inference-pipeline.js').then(m => m.getInferencePipeline());
+            let persons;
+            let pipelineError = null;
+            if (hasInferenceObjects(frame)) {
+                persons = getInferenceObjects(frame, ['person']);
+            }
+            else {
+                try {
+                    persons = await pipeline.detectObjects(frame, ['person']);
+                }
+                catch (err) {
+                    pipelineError = err instanceof Error ? err.message : String(err);
+                }
+            }
+            if ((!persons || persons.length === 0) && pipelineError) {
+                return [{
+                        detectionType: "behavior",
+                        status: "INFERENCE_FAILED",
+                        provenance: "LIVE_INFERENCE",
+                        confidence: null,
+                        objects: [],
+                        metadata: {
+                            error: `Inference pipeline failed: ${pipelineError}`,
+                        },
+                        executionMetadata: {
+                            status: "INFERENCE_FAILED",
+                            provenance: "LIVE_INFERENCE",
+                            reason: pipelineError,
+                            simulated: false,
+                            timestamp: new Date().toISOString(),
+                        },
+                        requiresAlert: false,
+                    }];
+            }
+            // Normalize to DetectedObject shape
+            const detected = (persons || []).map((p) => ({
+                label: p.label,
+                confidence: p.confidence,
+                boundingBox: p.boundingBox,
+                trackId: p.trackId,
+            }));
+            // Optionally run pose estimation for each person
+            for (const person of detected) {
+                if (!person.trackId)
+                    continue;
+                try {
+                    const pose = await pipeline.estimatePose(frame, person.boundingBox);
+                    const tracked = this.trackedPersons.get(person.trackId);
+                    if (pose && tracked) {
+                        tracked.poses.push({ keypoints: pose, timestamp: frame.timestamp });
+                    }
+                }
+                catch {
+                    // Pose estimation is optional enhancement over bounding box tracking
+                }
+            }
+            // Delegate to analytic analyzer
+            const results = await this.analyzeBehavior(frame, detected);
+            return results;
+        }
+        catch (error) {
+            console.warn('BehaviorDetector detect failed:', error);
+            const reason = error instanceof Error ? error.message : String(error);
+            return [{
+                    detectionType: "behavior",
+                    status: "INFERENCE_FAILED",
+                    provenance: "HEURISTIC_RULE_ENGINE",
+                    confidence: null,
+                    objects: [],
+                    metadata: {
+                        error: reason,
+                    },
+                    executionMetadata: {
+                        status: "INFERENCE_FAILED",
+                        provenance: "HEURISTIC_RULE_ENGINE",
+                        reason,
+                        simulated: false,
+                        timestamp: new Date().toISOString(),
+                    },
+                    requiresAlert: false,
+                }];
+        }
+    }
+    /**
+     * Analyze behavior from person tracking data
+     */
+    async analyzeBehavior(frame, persons) {
+        const results = [];
+        const now = frame.timestamp;
+        for (const person of persons) {
+            if (!person.trackId)
+                continue;
+            // Update tracking
+            let tracked = this.trackedPersons.get(person.trackId);
+            if (!tracked) {
+                tracked = {
+                    trackId: person.trackId,
+                    positions: [],
+                    poses: [],
+                    lastSeen: now,
+                    behaviorHistory: [],
+                };
+                this.trackedPersons.set(person.trackId, tracked);
+            }
+            const center = getBoundingBoxCenter(person.boundingBox);
+            tracked.positions.push({ x: center.x, y: center.y, timestamp: now });
+            tracked.lastSeen = now;
+            // Keep only recent history (last 10 seconds)
+            tracked.positions = tracked.positions.filter((p) => now.getTime() - p.timestamp.getTime() < 10000);
+            // Detect pose if model is loaded
+            // const pose = await this.detectPose(frame.imageData, person.boundingBox);
+            // if (pose) tracked.poses.push({ keypoints: pose, timestamp: now });
+            // Analyze behaviors
+            if (tracked.positions.length >= 3) {
+                // Running detection
+                const runningResult = this.detectRunning(tracked, frame);
+                if (runningResult)
+                    results.push(runningResult);
+                // Sudden direction change (suspicious behavior)
+                const directionChangeResult = this.detectSuddenDirectionChange(tracked, frame);
+                if (directionChangeResult)
+                    results.push(directionChangeResult);
+                // Erratic movement (potential aggression/distress)
+                const erraticResult = this.detectErraticMovement(tracked, frame);
+                if (erraticResult)
+                    results.push(erraticResult);
+            }
+            // Pose-based behaviors
+            if (tracked.poses.length >= 2) {
+                // Falling detection
+                const fallingResult = this.detectFalling(tracked, frame, person);
+                if (fallingResult)
+                    results.push(fallingResult);
+                // Fighting/aggressive posture
+                if (this.config.aggressionDetectionEnabled) {
+                    const aggressionResult = this.detectAggression(tracked, frame, person);
+                    if (aggressionResult)
+                        results.push(aggressionResult);
+                }
+                // Abnormal posture (person on ground, unconscious)
+                const abnormalResult = this.detectAbnormalPosture(tracked, frame, person);
+                if (abnormalResult)
+                    results.push(abnormalResult);
+            }
+        }
+        // Multi-person behaviors
+        if (persons.length >= 2) {
+            // Fight detection (multiple people with rapid movement)
+            const fightResult = this.detectFighting(frame, persons);
+            if (fightResult)
+                results.push(fightResult);
+            // Crowd unusual movement (stampede, panic)
+            if (persons.length >= 5) {
+                const crowdPanicResult = this.detectCrowdPanic(frame, persons);
+                if (crowdPanicResult)
+                    results.push(crowdPanicResult);
+            }
+        }
+        // Cleanup old tracks
+        this.cleanupOldTracks(now);
+        // Cache current frame image buffer for next optical flow iteration
+        if (frame.imageData && frame.width && frame.height) {
+            this.previousFrameData = {
+                buffer: Buffer.from(frame.imageData),
+                width: frame.width,
+                height: frame.height,
+                timestamp: now.getTime(),
+            };
+        }
+        return results;
+    }
+    /**
+     * Detect running (high speed movement)
+     */
+    detectRunning(tracked, frame) {
+        if (tracked.positions.length < 3)
+            return null;
+        const recentPositions = tracked.positions.slice(-3);
+        const speed = this.calculateSpeed(recentPositions);
+        if (speed > this.config.runningSpeedThreshold) {
+            return {
+                detectionType: "running",
+                confidence: Math.min(0.95, speed / this.config.runningSpeedThreshold / 2),
+                objects: [],
+                metadata: {
+                    trackId: tracked.trackId,
+                    speed: Math.round(speed),
+                    threshold: this.config.runningSpeedThreshold,
+                },
+                requiresAlert: true,
+            };
+        }
+        return null;
+    }
+    /**
+     * Detect sudden direction change (evasive behavior)
+     */
+    detectSuddenDirectionChange(tracked, frame) {
+        if (tracked.positions.length < 4)
+            return null;
+        const positions = tracked.positions.slice(-4);
+        const angles = [];
+        for (let i = 0; i < positions.length - 2; i++) {
+            const angle = this.calculateAngle(positions[i], positions[i + 1], positions[i + 2]);
+            angles.push(angle);
+        }
+        // Detect sharp turn (> 90 degrees)
+        const hasSharpTurn = angles.some((angle) => angle > 90);
+        if (hasSharpTurn) {
+            return {
+                detectionType: "sudden-direction-change",
+                confidence: 0.85,
+                objects: [],
+                metadata: {
+                    trackId: tracked.trackId,
+                    maxAngle: Math.max(...angles),
+                },
+                requiresAlert: true,
+            };
+        }
+        return null;
+    }
+    /**
+     * Detect erratic movement (zigzag, confusion, distress)
+     */
+    detectErraticMovement(tracked, frame) {
+        if (tracked.positions.length < 6)
+            return null;
+        const recentPositions = tracked.positions.slice(-6);
+        const changes = [];
+        for (let i = 0; i < recentPositions.length - 1; i++) {
+            const dx = recentPositions[i + 1].x - recentPositions[i].x;
+            const dy = recentPositions[i + 1].y - recentPositions[i].y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            changes.push(distance);
+        }
+        // Calculate variance in movement
+        const mean = changes.reduce((sum, d) => sum + d, 0) / changes.length;
+        const variance = changes.reduce((sum, d) => sum + Math.pow(d - mean, 2), 0) /
+            changes.length;
+        const stdDev = Math.sqrt(variance);
+        // High variance indicates erratic movement
+        if (stdDev > 30 && mean > 10) {
+            return {
+                detectionType: "erratic-movement",
+                confidence: Math.min(0.9, stdDev / 50),
+                objects: [],
+                metadata: {
+                    trackId: tracked.trackId,
+                    movementVariance: Math.round(variance),
+                },
+                requiresAlert: true,
+            };
+        }
+        return null;
+    }
+    /**
+     * Detect person falling
+     */
+    detectFalling(tracked, frame, person) {
+        // Simple heuristic-based fall detection using bounding box aspect ratio and low movement
+        if (tracked.positions.length < 3)
+            return null;
+        const positions = tracked.positions.slice(-3);
+        const height = person.boundingBox.height;
+        const width = person.boundingBox.width;
+        const aspect = height > 0 ? height / width : 0;
+        const speed = this.calculateSpeed(positions);
+        // Fallen person tends to have low speed and low aspect ratio (more horizontal)
+        if (aspect < 1.0 && speed < 5) {
+            return {
+                detectionType: "falling",
+                confidence: Math.min(0.95, (1.0 - aspect) * 0.9 + (5 - speed) / 10),
+                objects: [],
+                metadata: {
+                    trackId: tracked.trackId,
+                    aspectRatio: aspect,
+                    speed,
+                },
+                requiresAlert: true,
+            };
+        }
+        return null;
+    }
+    /**
+     * Detect aggressive posture or fighting
+     */
+    detectAggression(tracked, frame, person) {
+        // Basic heuristic: if recent pose keypoints show raised wrists above shoulders
+        if (!tracked.poses || tracked.poses.length === 0)
+            return null;
+        const recentPoses = tracked.poses.slice(-3).map(p => p.keypoints);
+        let raisedCount = 0;
+        for (const kp of recentPoses) {
+            try {
+                const leftWrist = kp['leftWrist'];
+                const rightWrist = kp['rightWrist'];
+                const leftShoulder = kp['leftShoulder'];
+                const rightShoulder = kp['rightShoulder'];
+                if (!leftWrist || !rightWrist || !leftShoulder || !rightShoulder)
+                    continue;
+                if ((leftWrist.y ?? 1) < (leftShoulder.y ?? 0) || (rightWrist.y ?? 1) < (rightShoulder.y ?? 0)) {
+                    raisedCount++;
+                }
+            }
+            catch (e) {
+                continue;
+            }
+        }
+        if (raisedCount >= 2) {
+            return {
+                detectionType: "aggressive-posture",
+                confidence: Math.min(0.9, raisedCount / recentPoses.length),
+                objects: [],
+                metadata: { trackId: tracked.trackId },
+                requiresAlert: true,
+            };
+        }
+        return null;
+    }
+    /**
+     * Detect abnormal posture (person on ground)
+     */
+    detectAbnormalPosture(tracked, frame, person) {
+        // Heuristic: if very low movement and pose indicates horizontal layout
+        if (tracked.positions.length < 3 || tracked.poses.length < 1)
+            return null;
+        const speed = this.calculateSpeed(tracked.positions.slice(-3));
+        const lastPose = tracked.poses[tracked.poses.length - 1].keypoints;
+        // Try to estimate vertical spread of keypoints (minY to maxY)
+        try {
+            const ys = [];
+            for (const k of Object.values(lastPose)) {
+                if (k && typeof k.y === 'number')
+                    ys.push(k.y);
+            }
+            if (ys.length === 0)
+                return null;
+            const spread = Math.max(...ys) - Math.min(...ys);
+            // If spread is small (close to horizontal) and very low speed -> abnormal
+            if (spread < 0.15 && speed < 2) {
+                return {
+                    detectionType: 'abnormal-posture',
+                    confidence: Math.min(0.95, (0.15 - spread) * 5 + (2 - speed) / 2),
+                    objects: [],
+                    metadata: { trackId: tracked.trackId },
+                    requiresAlert: true,
+                };
+            }
+        }
+        catch (e) {
+            return null;
+        }
+        return null;
+    }
+    /**
+     * Detect fighting between multiple people
+     */
+    /**
+     * Detect fighting between multiple people using optical flow and
+     * rapid limb acceleration kinematics.
+     */
+    detectFighting(frame, persons) {
+        if (persons.length < 2)
+            return null;
+        for (let i = 0; i < persons.length; i++) {
+            for (let j = i + 1; j < persons.length; j++) {
+                const p1 = persons[i];
+                const p2 = persons[j];
+                const iou = this.calculateIoU(p1.boundingBox, p2.boundingBox);
+                // Compute center distance normalized by mean person height
+                const c1 = getBoundingBoxCenter(p1.boundingBox);
+                const c2 = getBoundingBoxCenter(p2.boundingBox);
+                const dist = Math.hypot(c1.x - c2.x, c1.y - c2.y);
+                const avgHeight = (p1.boundingBox.height + p2.boundingBox.height) / 2;
+                const normDist = avgHeight > 0 ? dist / avgHeight : 999;
+                // Must be in close contact or overlapping
+                if (iou < 0.05 && normDist > 1.8)
+                    continue;
+                const t1 = this.trackedPersons.get(p1.trackId || '');
+                const t2 = this.trackedPersons.get(p2.trackId || '');
+                if (!t1 || !t2)
+                    continue;
+                // Calculate discrete acceleration and speed from positions
+                const m1 = this.calculateSpeed(t1.positions.slice(-5));
+                const m2 = this.calculateSpeed(t2.positions.slice(-5));
+                const a1 = this.calculatePeakAcceleration(t1.positions.slice(-6));
+                const a2 = this.calculatePeakAcceleration(t2.positions.slice(-6));
+                const peakPosAccel = Math.max(a1, a2);
+                // Check limb acceleration from tracked poses if available
+                const limbAccel1 = this.calculateTrackLimbAcceleration(t1);
+                const limbAccel2 = this.calculateTrackLimbAcceleration(t2);
+                const peakLimbAccel = Math.max(limbAccel1, limbAccel2);
+                // Check directional opposition/oscillation (strikes move towards/away rapidly)
+                const oscillationScore = this.calculateMutualOscillation(t1.positions.slice(-5), t2.positions.slice(-5));
+                // Optical flow kinetic energy across interaction bounding box
+                let flowEnergy = 0;
+                let turbulence = 0;
+                if (this.previousFrameData && frame.imageData) {
+                    const unionBox = {
+                        x: Math.min(p1.boundingBox.x, p2.boundingBox.x),
+                        y: Math.min(p1.boundingBox.y, p2.boundingBox.y),
+                        width: Math.max(p1.boundingBox.x + p1.boundingBox.width, p2.boundingBox.x + p2.boundingBox.width) - Math.min(p1.boundingBox.x, p2.boundingBox.x),
+                        height: Math.max(p1.boundingBox.y + p1.boundingBox.height, p2.boundingBox.y + p2.boundingBox.height) - Math.min(p1.boundingBox.y, p2.boundingBox.y),
+                    };
+                    const flow = this.computeOpticalFlowMetrics(this.previousFrameData.buffer, frame.imageData, frame.width, frame.height, unionBox);
+                    flowEnergy = flow.energy;
+                    turbulence = flow.turbulence;
+                }
+                const effectiveAccel = Math.max(peakPosAccel, peakLimbAccel);
+                const isHighAccel = effectiveAccel >= 25 ||
+                    (effectiveAccel >= 0.15 && effectiveAccel < 25 && normDist < 1.6);
+                const isHighSpeed = (m1 > 20 && m2 > 20) || (m1 > 0.15 && m2 > 0.15);
+                const flowScale = effectiveAccel < 25 ? 5.0 : 15.0;
+                const effectiveMotionThreshold = this.config.fightingMotionThreshold > 1.0 && effectiveAccel < 5.0
+                    ? 0.5
+                    : this.config.fightingMotionThreshold;
+                const accelScore = Math.min(1.0, effectiveAccel / effectiveMotionThreshold);
+                const flowScore = flowEnergy > 0 ? Math.min(1.0, flowEnergy / flowScale) : accelScore;
+                const proximityScore = Math.max(0.2, iou * 2.5 + (1 - Math.min(1.0, normDist / 1.8)) * 0.5);
+                // Require genuine physical movement (acceleration, optical flow, or mutual speed)
+                if (isHighAccel || flowEnergy >= 5.0 || isHighSpeed) {
+                    const confidence = Math.min(0.95, Math.max(0.65, 0.2 * proximityScore +
+                        0.35 * accelScore +
+                        0.25 * flowScore +
+                        0.2 * oscillationScore));
+                    return {
+                        detectionType: 'fighting',
+                        confidence: Math.round(confidence * 100) / 100,
+                        objects: [p1, p2],
+                        metadata: {
+                            participants: [p1.trackId, p2.trackId],
+                            peakAcceleration: Math.round(effectiveAccel * 10) / 10,
+                            opticalFlowEnergy: Math.round(flowEnergy * 10) / 10,
+                            turbulenceScore: Math.round(turbulence * 100) / 100,
+                            interactionIoU: Math.round(iou * 100) / 100,
+                        },
+                        requiresAlert: true,
+                    };
+                }
+            }
+        }
+        return null;
+    }
+    /**
+     * Calculate peak discrete numerical acceleration from recent positions
+     */
+    calculatePeakAcceleration(positions) {
+        if (positions.length < 3)
+            return 0;
+        const accels = [];
+        for (let i = 2; i < positions.length; i++) {
+            const p1 = positions[i - 2];
+            const p2 = positions[i - 1];
+            const p3 = positions[i];
+            const dt1 = (p2.timestamp.getTime() - p1.timestamp.getTime()) / 1000;
+            const dt2 = (p3.timestamp.getTime() - p2.timestamp.getTime()) / 1000;
+            if (dt1 <= 0 || dt2 <= 0 || dt1 > 1.0 || dt2 > 1.0)
+                continue;
+            const v1x = (p2.x - p1.x) / dt1;
+            const v1y = (p2.y - p1.y) / dt1;
+            const v2x = (p3.x - p2.x) / dt2;
+            const v2y = (p3.y - p2.y) / dt2;
+            const ax = (v2x - v1x) / dt2;
+            const ay = (v2y - v1y) / dt2;
+            accels.push(Math.hypot(ax, ay));
+        }
+        return accels.length > 0 ? Math.max(...accels) : 0;
+    }
+    /**
+     * Calculate limb acceleration from tracked person poses
+     */
+    calculateTrackLimbAcceleration(track) {
+        const poses = track.poses;
+        if (poses.length < 2)
+            return 0;
+        const accels = [];
+        for (let i = Math.max(1, poses.length - 4); i < poses.length; i++) {
+            const prev = poses[i - 1];
+            const curr = poses[i];
+            const dt = (curr.timestamp.getTime() - prev.timestamp.getTime()) / 1000;
+            if (dt <= 0 || dt > 1.0)
+                continue;
+            const prevKp = prev.keypoints;
+            const currKp = curr.keypoints;
+            if (!prevKp || !currKp)
+                continue;
+            const limbs = [
+                { c: currKp.leftWrist, p: prevKp.leftWrist },
+                { c: currKp.rightWrist, p: prevKp.rightWrist },
+                { c: currKp.leftAnkle, p: prevKp.leftAnkle },
+                { c: currKp.rightAnkle, p: prevKp.rightAnkle },
+            ];
+            for (const { c, p } of limbs) {
+                if (c && p && (c.confidence ?? 1) > 0.25 && (p.confidence ?? 1) > 0.25) {
+                    const vx = (c.x - p.x) / dt;
+                    const vy = (c.y - p.y) / dt;
+                    const speed = Math.hypot(vx, vy);
+                    accels.push(speed / dt);
+                }
+            }
+        }
+        return accels.length > 0 ? Math.max(...accels) : 0;
+    }
+    /**
+     * Calculate mutual distance oscillation (alternating approach/recoil)
+     */
+    calculateMutualOscillation(pos1, pos2) {
+        const len = Math.min(pos1.length, pos2.length);
+        if (len < 3)
+            return 0.5;
+        const distances = [];
+        for (let i = 0; i < len; i++) {
+            distances.push(Math.hypot(pos1[i].x - pos2[i].x, pos1[i].y - pos2[i].y));
+        }
+        let reversals = 0;
+        for (let i = 2; i < distances.length; i++) {
+            const d1 = distances[i - 1] - distances[i - 2];
+            const d2 = distances[i] - distances[i - 1];
+            if (d1 * d2 < 0)
+                reversals++;
+        }
+        return Math.min(1.0, 0.4 + reversals * 0.3);
+    }
+    /**
+     * Regularized Lucas-Kanade optical flow kinetic energy and directional turbulence
+     */
+    computeOpticalFlowMetrics(prevBuf, currBuf, width, height, roi) {
+        const boxX = roi.x <= 1.0 ? roi.x * width : roi.x;
+        const boxY = roi.y <= 1.0 ? roi.y * height : roi.y;
+        const boxW = roi.width <= 1.0 ? roi.width * width : roi.width;
+        const boxH = roi.height <= 1.0 ? roi.height * height : roi.height;
+        const minX = Math.max(1, Math.floor(boxX));
+        const maxX = Math.min(width - 2, Math.ceil(boxX + boxW));
+        const minY = Math.max(1, Math.floor(boxY));
+        const maxY = Math.min(height - 2, Math.ceil(boxY + boxH));
+        if (maxX <= minX + 4 || maxY <= minY + 4) {
+            return { energy: 0, turbulence: 0 };
+        }
+        const step = 4; // Subsampled grid for real-time inference
+        const getLum = (buf, x, y) => {
+            const idx = (y * width + x) * 3;
+            if (idx + 2 >= buf.length)
+                return 0;
+            return 0.299 * buf[idx] + 0.587 * buf[idx + 1] + 0.114 * buf[idx + 2];
+        };
+        let totalEnergy = 0;
+        let validVectors = 0;
+        const octants = new Array(8).fill(0);
+        const lambda = 0.5; // Tikhonov regularization
+        for (let y = minY; y < maxY; y += step) {
+            for (let x = minX; x < maxX; x += step) {
+                const currY = getLum(currBuf, x, y);
+                const prevY = getLum(prevBuf, x, y);
+                const it = currY - prevY;
+                const ix = (getLum(currBuf, x + 1, y) - getLum(currBuf, x - 1, y)) / 2;
+                const iy = (getLum(currBuf, x, y + 1) - getLum(currBuf, x, y - 1)) / 2;
+                const gxx = ix * ix + lambda;
+                const gyy = iy * iy + lambda;
+                const gxy = ix * iy;
+                const det = gxx * gyy - gxy * gxy;
+                if (Math.abs(det) > 1e-4) {
+                    const u = (-gyy * (ix * it) + gxy * (iy * it)) / det;
+                    const v = (gxy * (ix * it) - gxx * (iy * it)) / det;
+                    const magSq = u * u + v * v;
+                    if (magSq > 0.25) {
+                        totalEnergy += magSq;
+                        validVectors++;
+                        let angle = Math.atan2(v, u);
+                        if (angle < 0)
+                            angle += 2 * Math.PI;
+                        const octant = Math.min(7, Math.floor((angle / (2 * Math.PI)) * 8));
+                        octants[octant]++;
+                    }
+                }
+            }
+        }
+        const meanEnergy = validVectors > 0 ? (0.5 * totalEnergy) / validVectors : 0;
+        // Shannon directional entropy
+        let entropy = 0;
+        if (validVectors > 0) {
+            for (const count of octants) {
+                if (count > 0) {
+                    const p = count / validVectors;
+                    entropy -= p * Math.log2(p);
+                }
+            }
+        }
+        const maxEntropy = Math.log2(8); // 3.0
+        const normalizedTurbulence = Math.min(1.0, entropy / maxEntropy);
+        return { energy: meanEnergy, turbulence: normalizedTurbulence };
+    }
+    /**
+     * Detect crowd panic (stampede, mass movement)
+     */
+    detectCrowdPanic(frame, persons) {
+        // Require observed history for most people. This is intentionally
+        // conservative: a crowded still image must never become a panic alert.
+        const speeds = persons.map((person) => {
+            const track = this.trackedPersons.get(person.trackId || '');
+            return track ? this.calculateSpeed(track.positions.slice(-5)) : 0;
+        });
+        const movingFast = speeds.filter((speed) => speed >= 20).length;
+        const fastRatio = movingFast / persons.length;
+        if (persons.length < 5 || fastRatio < 0.7)
+            return null;
+        const centers = persons.map((person) => ({
+            x: person.boundingBox.x + person.boundingBox.width / 2,
+            y: person.boundingBox.y + person.boundingBox.height / 2,
+        }));
+        const meanX = centers.reduce((sum, center) => sum + center.x, 0) / centers.length;
+        const meanY = centers.reduce((sum, center) => sum + center.y, 0) / centers.length;
+        const meanDistance = centers.reduce((sum, center) => sum + Math.hypot(center.x - meanX, center.y - meanY), 0) / centers.length;
+        // Panic classification needs a dense, rapidly moving crowd; broad normal
+        // foot traffic remains unclassified.
+        if (meanDistance > 0.2)
+            return null;
+        const averageSpeed = speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length;
+        return {
+            detectionType: 'crowd-panic',
+            confidence: Math.min(0.9, 0.45 + fastRatio * 0.25 + Math.min(averageSpeed / 100, 0.2)),
+            objects: [],
+            metadata: { persons: persons.length, fastRatio, averageSpeed, meanDistance, evidence: 'tracked-person-motion' },
+            requiresAlert: true,
+        };
+    }
+    /**
+     * Calculate movement speed (pixels per second)
+     */
+    calculateSpeed(positions) {
+        if (positions.length < 2)
+            return 0;
+        let totalDistance = 0;
+        for (let i = 0; i < positions.length - 1; i++) {
+            const dx = positions[i + 1].x - positions[i].x;
+            const dy = positions[i + 1].y - positions[i].y;
+            totalDistance += Math.sqrt(dx * dx + dy * dy);
+        }
+        const timeDelta = (positions[positions.length - 1].timestamp.getTime() -
+            positions[0].timestamp.getTime()) /
+            1000; // seconds
+        return timeDelta > 0 ? totalDistance / timeDelta : 0;
+    }
+    /**
+     * Calculate angle between three points
+     */
+    calculateAngle(p1, p2, p3) {
+        const angle1 = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+        const angle2 = Math.atan2(p3.y - p2.y, p3.x - p2.x);
+        let angleDiff = Math.abs(angle2 - angle1) * (180 / Math.PI);
+        if (angleDiff > 180)
+            angleDiff = 360 - angleDiff;
+        return angleDiff;
+    }
+    /**
+     * Cleanup old tracks
+     */
+    cleanupOldTracks(now) {
+        for (const [trackId, tracked] of this.trackedPersons.entries()) {
+            if (now.getTime() - tracked.lastSeen.getTime() > this.TRACKING_TIMEOUT_MS) {
+                this.trackedPersons.delete(trackId);
+            }
+        }
+    }
+    async cleanup() {
+        this.poseModel = null;
+        this.trackedPersons.clear();
+        this.isInitialized = false;
+    }
+    getHealth() {
+        return {
+            status: this.isInitialized ? "healthy" : "unhealthy",
+            details: this.isInitialized
+                ? `Behavior detector operational (tracking ${this.trackedPersons.size} persons)`
+                : "Behavior detector not initialized",
+            metadata: {
+                trackedPersons: this.trackedPersons.size,
+                aggressionDetection: this.config.aggressionDetectionEnabled,
+            },
+        };
+    }
+}

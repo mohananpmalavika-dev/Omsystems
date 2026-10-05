@@ -1,8 +1,9 @@
 import { Tensor, type InferenceSession, type OnnxValue } from "onnxruntime-node";
+import sharp from "sharp";
 import type { DetectionFrame, InferenceObject } from "../detectors/base-detector.js";
 
 export type YoloDecoder = "yolov8" | "yolov5" | "yolox" | "xyxy";
-export type YoloPreprocessor = "rgb-normalized-stretch" | "yolox-letterbox-bgr";
+export type YoloPreprocessor = "rgb-normalized-stretch" | "rgb-normalized-letterbox" | "yolox-letterbox-bgr";
 
 export interface YoloDetectionOptions {
   labels: readonly string[];
@@ -42,9 +43,11 @@ export class YoloDetectionInference {
     assertRgb24(frame);
     const { width, height } = this.inputDimensions(frame);
     const yoloxInput = this.decoder === "yolox" || this.options.preprocessor === "yolox-letterbox-bgr";
+    const letterbox = this.options.preprocessor === "rgb-normalized-letterbox";
+    const rgbLetterbox = letterbox ? await prepareRgbLetterbox(frame, width, height) : null;
     const prepared = yoloxInput
       ? resizeRgb24ToYoloxChw(frame.imageData, frame.width, frame.height, width, height)
-      : { tensor: resizeRgb24ToChw(frame.imageData, frame.width, frame.height, width, height), scale: 1 };
+      : rgbLetterbox ?? { tensor: resizeRgb24ToChw(frame.imageData, frame.width, frame.height, width, height), scale: 1 };
     const inputName = this.session.inputNames[0];
     if (!inputName) throw new Error("YOLO model has no input tensor");
     const outputs = await this.session.run({
@@ -58,7 +61,15 @@ export class YoloDetectionInference {
       : this.decoder === "yolox"
         ? this.decodeYolox(output, width, height, frame.width, frame.height, prepared.scale)
         : this.decodeRaw(output, width, height);
-    return nonMaximumSuppression(candidates, this.iouThreshold);
+    const located = rgbLetterbox
+      ? candidates.map(candidate => ({ ...candidate, boundingBox: normalizeBox(
+        (candidate.boundingBox.x * width - rgbLetterbox.left) / rgbLetterbox.scale,
+        (candidate.boundingBox.y * height - rgbLetterbox.top) / rgbLetterbox.scale,
+        candidate.boundingBox.width * width / rgbLetterbox.scale,
+        candidate.boundingBox.height * height / rgbLetterbox.scale,
+        frame.width, frame.height,
+      ) })) : candidates;
+    return nonMaximumSuppression(located, this.iouThreshold);
   }
 
   private inputDimensions(frame: DetectionFrame) {
@@ -213,6 +224,20 @@ export class YoloDetectionInference {
     }
     return candidates;
   }
+}
+
+/** Centered RGB/255 letterbox used by Ultralytics exports; undo padding after decoding. */
+async function prepareRgbLetterbox(frame: DetectionFrame, width: number, height: number) {
+  const scale = Math.min(width / frame.width, height / frame.height);
+  const resizedWidth = Math.max(1, Math.round(frame.width * scale));
+  const resizedHeight = Math.max(1, Math.round(frame.height * scale));
+  const left = Math.floor((width - resizedWidth) / 2);
+  const top = Math.floor((height - resizedHeight) / 2);
+  const pixels = await sharp(frame.imageData, { raw: { width: frame.width, height: frame.height, channels: 3 } })
+    .resize(resizedWidth, resizedHeight, { fit: "fill", kernel: "lanczos3" })
+    .extend({ left, top, right: width - resizedWidth - left, bottom: height - resizedHeight - top,
+      background: { r: 114, g: 114, b: 114 } }).raw().toBuffer();
+  return { tensor: resizeRgb24ToChw(pixels, width, height, width, height), scale, left, top };
 }
 
 function assertRgb24(frame: DetectionFrame) {

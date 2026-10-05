@@ -1,0 +1,767 @@
+{
+  "_id": "69e8b025a9632f74ae678b26",
+  "id": "vivekvar/helmet-v5",
+  "private": false,
+  "pipeline_tag": "object-detection",
+  "library_name": "ultralytics",
+  "tags": [
+    "ultralytics",
+    "onnx",
+    "safetensors",
+    "object-detection",
+    "helmet-detection",
+    "yolo",
+    "image-classification",
+    "cctv",
+    "anpr",
+    "india",
+    "license:apache-2.0",
+    "region:us"
+  ],
+  "downloads": 495,
+  "likes": 0,
+  "modelId": "vivekvar/helmet-v5",
+  "author": "vivekvar",
+  "sha": "4ea2eb67301722073555448b477178330e40f7d1",
+  "lastModified": "2026-04-22T11:36:44.000Z",
+  "gated": false,
+  "disabled": false,
+  "model-index": null,
+  "config": {},
+  "cardData": {
+    "license": "apache-2.0",
+    "tags": [
+      "object-detection",
+      "helmet-detection",
+      "yolo",
+      "image-classification",
+      "cctv",
+      "anpr",
+      "india"
+    ],
+    "library_name": "ultralytics",
+    "pipeline_tag": "object-detection"
+  },
+  "siblings": [
+    {
+      "rfilename": ".gitattributes"
+    },
+    {
+      "rfilename": ".gitignore"
+    },
+    {
+      "rfilename": "README.md"
+    },
+    {
+      "rfilename": "backend/__init__.py"
+    },
+    {
+      "rfilename": "backend/cameras.json"
+    },
+    {
+      "rfilename": "backend/config.py"
+    },
+    {
+      "rfilename": "backend/db.py"
+    },
+    {
+      "rfilename": "backend/inference/__init__.py"
+    },
+    {
+      "rfilename": "backend/inference/pipeline.py"
+    },
+    {
+      "rfilename": "backend/inference/plate.py"
+    },
+    {
+      "rfilename": "backend/inference/stage1.py"
+    },
+    {
+      "rfilename": "backend/inference/stage2.py"
+    },
+    {
+      "rfilename": "backend/main.py"
+    },
+    {
+      "rfilename": "backend/stream/__init__.py"
+    },
+    {
+      "rfilename": "backend/stream/live.py"
+    },
+    {
+      "rfilename": "backend/stream/manager.py"
+    },
+    {
+      "rfilename": "backend/stream/recorded.py"
+    },
+    {
+      "rfilename": "frontend/index.html"
+    },
+    {
+      "rfilename": "frontend/package.json"
+    },
+    {
+      "rfilename": "frontend/postcss.config.js"
+    },
+    {
+      "rfilename": "frontend/src/App.jsx"
+    },
+    {
+      "rfilename": "frontend/src/components/CameraSelector.jsx"
+    },
+    {
+      "rfilename": "frontend/src/components/LiveToggle.jsx"
+    },
+    {
+      "rfilename": "frontend/src/components/StatsBar.jsx"
+    },
+    {
+      "rfilename": "frontend/src/components/StreamPlayer.jsx"
+    },
+    {
+      "rfilename": "frontend/src/components/ViolationFeed.jsx"
+    },
+    {
+      "rfilename": "frontend/src/main.jsx"
+    },
+    {
+      "rfilename": "frontend/src/style.css"
+    },
+    {
+      "rfilename": "frontend/tailwind.config.js"
+    },
+    {
+      "rfilename": "frontend/vite.config.js"
+    },
+    {
+      "rfilename": "models/helmet_head_v2.pt"
+    },
+    {
+      "rfilename": "models/helmet_v5.onnx"
+    },
+    {
+      "rfilename": "models/helmet_v5.onnx.data"
+    },
+    {
+      "rfilename": "models/helmet_v5.pt"
+    },
+    {
+      "rfilename": "models/helmet_v5b.onnx"
+    },
+    {
+      "rfilename": "models/helmet_v5b.onnx.data"
+    },
+    {
+      "rfilename": "models/helmet_v5b.pt"
+    },
+    {
+      "rfilename": "models/helmet_v5c.onnx"
+    },
+    {
+      "rfilename": "models/helmet_v5c.onnx.data"
+    },
+    {
+      "rfilename": "models/helmet_v5c.pt"
+    },
+    {
+      "rfilename": "models/helmet_v5e_head.onnx"
+    },
+    {
+      "rfilename": "models/helmet_v5e_head.onnx.data"
+    },
+    {
+      "rfilename": "models/helmet_v5e_head.pt"
+    },
+    {
+      "rfilename": "models/plate_yolo.pt"
+    },
+    {
+      "rfilename": "models/plate_yolo_ft.pt"
+    },
+    {
+      "rfilename": "models/plate_yolo_l.pt"
+    },
+    {
+      "rfilename": "models/plate_yolo_x.pt"
+    },
+    {
+      "rfilename": "models/train_log.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/checkpoint-770/config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/checkpoint-770/generation_config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/checkpoint-770/model.safetensors"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/checkpoint-770/optimizer.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/checkpoint-770/rng_state.pth"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/checkpoint-770/scaler.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/checkpoint-770/scheduler.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/checkpoint-770/trainer_state.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/checkpoint-770/training_args.bin"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/checkpoint-924/config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/checkpoint-924/generation_config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/checkpoint-924/model.safetensors"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/checkpoint-924/optimizer.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/checkpoint-924/rng_state.pth"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/checkpoint-924/scaler.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/checkpoint-924/scheduler.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/checkpoint-924/trainer_state.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/checkpoint-924/training_args.bin"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/final/config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/final/generation_config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/final/model.safetensors"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/final/processor_config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/final/tokenizer.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/final/tokenizer_config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates/final/training_args.bin"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-1760/config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-1760/generation_config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-1760/model.safetensors"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-1760/optimizer.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-1760/rng_state.pth"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-1760/scaler.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-1760/scheduler.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-1760/trainer_state.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-1760/training_args.bin"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-2112/config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-2112/generation_config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-2112/model.safetensors"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-2112/optimizer.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-2112/rng_state.pth"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-2112/scaler.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-2112/scheduler.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-2112/trainer_state.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-2112/training_args.bin"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-2288/config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-2288/generation_config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-2288/model.safetensors"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-2288/optimizer.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-2288/rng_state.pth"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-2288/scaler.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-2288/scheduler.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-2288/trainer_state.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/checkpoint-2288/training_args.bin"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/final/config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/final/generation_config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/final/model.safetensors"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/final/processor_config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/final/tokenizer.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/final/tokenizer_config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/final/training_args.bin"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v2/train.log"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-4298/config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-4298/generation_config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-4298/model.safetensors"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-4298/optimizer.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-4298/rng_state.pth"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-4298/scaler.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-4298/scheduler.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-4298/trainer_state.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-4298/training_args.bin"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-5526/config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-5526/generation_config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-5526/model.safetensors"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-5526/optimizer.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-5526/rng_state.pth"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-5526/scaler.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-5526/scheduler.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-5526/trainer_state.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-5526/training_args.bin"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-6140/config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-6140/generation_config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-6140/model.safetensors"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-6140/optimizer.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-6140/rng_state.pth"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-6140/scaler.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-6140/scheduler.pt"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-6140/trainer_state.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/checkpoint-6140/training_args.bin"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/final/config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/final/generation_config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/final/model.safetensors"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/final/processor_config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/final/tokenizer.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/final/tokenizer_config.json"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/final/training_args.bin"
+    },
+    {
+      "rfilename": "models/trocr_indian_plates_v3/train.log"
+    },
+    {
+      "rfilename": "models/yolo11l_cctv_ft.pt"
+    },
+    {
+      "rfilename": "requirements.txt"
+    },
+    {
+      "rfilename": "runs/head_helmet_v2/log.json"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/BoxF1_curve.png"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/BoxPR_curve.png"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/BoxP_curve.png"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/BoxR_curve.png"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/args.yaml"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/confusion_matrix.png"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/confusion_matrix_normalized.png"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/labels.jpg"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/results.csv"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/results.png"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/train_batch0.jpg"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/train_batch1.jpg"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/train_batch2.jpg"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/train_batch3040.jpg"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/train_batch3041.jpg"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/train_batch3042.jpg"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/val_batch0_labels.jpg"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/val_batch0_pred.jpg"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/val_batch1_labels.jpg"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/val_batch1_pred.jpg"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/val_batch2_labels.jpg"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/val_batch2_pred.jpg"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/weights/best.pt"
+    },
+    {
+      "rfilename": "runs/plate_ft/v2/weights/last.pt"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/BoxF1_curve.png"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/BoxPR_curve.png"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/BoxP_curve.png"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/BoxR_curve.png"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/args.yaml"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/confusion_matrix.png"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/confusion_matrix_normalized.png"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/labels.jpg"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/results.csv"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/results.png"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/train_batch0.jpg"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/train_batch1.jpg"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/train_batch2.jpg"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/train_batch2600.jpg"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/train_batch2601.jpg"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/train_batch2602.jpg"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/val_batch0_labels.jpg"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/val_batch0_pred.jpg"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/val_batch1_labels.jpg"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/val_batch1_pred.jpg"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/val_batch2_labels.jpg"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/val_batch2_pred.jpg"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/weights/best.pt"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/weights/epoch0.pt"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/weights/epoch10.pt"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/weights/epoch15.pt"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/weights/epoch20.pt"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/weights/epoch25.pt"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/weights/epoch30.pt"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/weights/epoch35.pt"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/weights/epoch40.pt"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/weights/epoch45.pt"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/weights/epoch5.pt"
+    },
+    {
+      "rfilename": "runs/yolo_cctv_ft/v1/weights/last.pt"
+    },
+    {
+      "rfilename": "tools/analyze_mp4.py"
+    },
+    {
+      "rfilename": "tools/analyze_tripwire.py"
+    },
+    {
+      "rfilename": "tools/analyze_ui.py"
+    },
+    {
+      "rfilename": "tools/autolabel_frames.py"
+    },
+    {
+      "rfilename": "tools/build_filtered_db.py"
+    },
+    {
+      "rfilename": "tools/build_head_crops.py"
+    },
+    {
+      "rfilename": "tools/build_head_dataset.py"
+    },
+    {
+      "rfilename": "tools/build_plate_dataset.py"
+    },
+    {
+      "rfilename": "tools/build_plate_det_dataset.py"
+    },
+    {
+      "rfilename": "tools/build_training_db.py"
+    },
+    {
+      "rfilename": "tools/capture.py"
+    },
+    {
+      "rfilename": "tools/capture_user.py"
+    },
+    {
+      "rfilename": "tools/claude_labeler.py"
+    },
+    {
+      "rfilename": "tools/crop_stage1.py"
+    },
+    {
+      "rfilename": "tools/download_archive.py"
+    },
+    {
+      "rfilename": "tools/download_clips.py"
+    },
+    {
+      "rfilename": "tools/extract_ft_frames.py"
+    },
+    {
+      "rfilename": "tools/live_tap.py"
+    },
+    {
+      "rfilename": "tools/live_ui.py"
+    },
+    {
+      "rfilename": "tools/plate_match.py"
+    },
+    {
+      "rfilename": "tools/postprocess_dedup.py"
+    },
+    {
+      "rfilename": "tools/probe_mongo.py"
+    },
+    {
+      "rfilename": "tools/rtgs_auth.py"
+    },
+    {
+      "rfilename": "tools/rtgs_downloader.py"
+    },
+    {
+      "rfilename": "tools/sweep_f1.py"
+    },
+    {
+      "rfilename": "tools/train_head_classifier.py"
+    },
+    {
+      "rfilename": "tools/train_helmet_v5.py"
+    },
+    {
+      "rfilename": "tools/train_plate_ocr.py"
+    },
+    {
+      "rfilename": "tools/train_plate_ocr_v2.py"
+    },
+    {
+      "rfilename": "tools/train_plate_ocr_v3.py"
+    },
+    {
+      "rfilename": "tools/train_yolo_ft.py"
+    },
+    {
+      "rfilename": "tools/ui_server.py"
+    },
+    {
+      "rfilename": "yolo11l-pose.pt"
+    },
+    {
+      "rfilename": "yolo11x.pt"
+    },
+    {
+      "rfilename": "yolo26n.pt"
+    }
+  ],
+  "spaces": [],
+  "createdAt": "2026-04-22T11:25:25.000Z",
+  "usedStorage": 8666459053
+}

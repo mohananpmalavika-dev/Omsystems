@@ -477,6 +477,32 @@
         48
       ],
       "notes": "MindSense core emotion detector. 7 basic emotions (Ekman model). Trained on FER2013 dataset. Supports micro-expression analysis, Facial Action Unit estimation, and valence-arousal circumplex mapping. Foundation for deception detection, stress analysis, and behavioral intent recognition."
+    },
+    {
+      "id": "helmet-head-localizer",
+      "name": "Helmet/head localization verifier (YOLOv5)",
+      "path": "safety/helmet-head-localizer.onnx",
+      "sha256": "8afe10f62194df0980aa50d8017588b2936e786b7a467b59d3df572b18f43f32",
+      "sourceUrl": "https://raw.githubusercontent.com/zhaocaimiao1029/AI_HELMET/0dbcbd7fb7d1ab25f5ed507ff49d94768309fe3a/helmet_v2/weights/best.onnx",
+      "sourceProject": "https://github.com/zhaocaimiao1029/AI_HELMET/tree/0dbcbd7fb7d1ab25f5ed507ff49d94768309fe3a",
+      "license": "MIT",
+      "type": "onnx",
+      "priority": "high",
+      "required": false,
+      "useGPU": true,
+      "task": "object-detection",
+      "decoder": "yolov5",
+      "preprocessor": "rgb-normalized-letterbox",
+      "labels": [
+        "helmet",
+        "head"
+      ],
+      "inputShape": [
+        1,
+        3,
+        320,
+        320
+      ]
     }
   ]
 }

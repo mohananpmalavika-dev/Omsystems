@@ -7,16 +7,19 @@
 import { BaseDetector, type DetectionFrame, type DetectionResult, calculateIoU, getInferenceObjects, hasInferenceObjects, shouldRunLocalSpecialtyInference } from "./base-detector.js";
 import {
   loadHelmetClassificationInference,
+  loadObjectInference,
   modelUnavailableReason,
   type HelmetClassificationFrameInference,
   type ObjectFrameInference,
 } from "../inference/configured-model-inference.js";
+import { LocalizedHelmetHeadVerifier, type HelmetHeadVerifier } from "../inference/helmet-head-verification.js";
 
 export interface HelmetDetection {
   personBoundingBox: { x: number; y: number; width: number; height: number };
   helmetBoundingBox?: { x: number; y: number; width: number; height: number };
   helmetDetected: boolean;
-  evidenceSource?: "observed-helmet" | "confirmed-head-classification";
+  evidenceSource?: "observed-helmet" | "confirmed-head-classification" | "localized-head-classification";
+  localizationConfidence?: number;
   confidence: number | null;
   personConfidence?: number;
   vehicleType?: "motorcycle" | "bicycle";
@@ -56,14 +59,16 @@ export class HelmetDetector extends BaseDetector {
     cropMode: "standard" | "raised";
   }>>();
   private readonly fastAlert: boolean;
+  private verificationRequired = false;
 
   constructor(
     inference: ObjectFrameInference | null = null,
     confidenceThreshold = 0.88,
     classifier: HelmetClassificationFrameInference | null = null,
     fastAlert = process.env.HELMET_FAST_ALERT === "true",
+    private headVerifier: HelmetHeadVerifier | null = null,
   ) {
-    super("helmet", "1.1.9");
+    super("helmet", "1.2.0");
     this.inference = inference;
     this.classifier = classifier;
     this.MIN_CONFIDENCE = confidenceThreshold;
@@ -73,7 +78,10 @@ export class HelmetDetector extends BaseDetector {
   async initialize(): Promise<void> {
     try {
       if (!this.inference && !this.classifier) {
+        this.verificationRequired = true;
         this.classifier = await loadHelmetClassificationInference("helmet");
+        this.headVerifier = new LocalizedHelmetHeadVerifier(
+          await loadObjectInference("helmet-head-localizer", 0.25), this.classifier);
       }
       this.isModelLoaded = true;
       this.modelLoadError = null;
@@ -112,7 +120,28 @@ export class HelmetDetector extends BaseDetector {
       }];
     }
 
-    const detections = await this.detectHelmetsInFrame(frame);
+    const candidates = await this.detectHelmetsInFrame(frame);
+    const detections: HelmetDetection[] = [];
+    for (const candidate of candidates) {
+      if (candidate.evidenceSource !== "confirmed-head-classification") {
+        detections.push(candidate);
+        continue;
+      }
+      if (!this.headVerifier) {
+        if (!this.verificationRequired) detections.push(candidate); // Explicitly injected inference providers.
+        else this.clearPendingHead(frame.cameraId, candidate.personBoundingBox);
+        continue;
+      }
+      const verified = await this.headVerifier.verify(frame, candidate.personBoundingBox,
+        Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE));
+      if (!verified) {
+        this.clearPendingHead(frame.cameraId, candidate.personBoundingBox);
+        continue;
+      }
+      detections.push({ ...candidate, helmetBoundingBox: verified.boundingBox,
+        confidence: Math.min(candidate.confidence ?? 0, verified.classificationConfidence),
+        localizationConfidence: verified.localizationConfidence, evidenceSource: "localized-head-classification" });
+    }
     
     const results: DetectionResult[] = [];
 
@@ -145,7 +174,11 @@ export class HelmetDetector extends BaseDetector {
           compliantCount: helmetWearers.length,
           threatType: "helmet_worn_inside_facility",
           evidenceSource: helmetWearers.some((detection) => detection.evidenceSource === "observed-helmet")
-            ? "observed-helmet" : "confirmed-head-classification",
+            ? "observed-helmet" : helmetWearers.some(detection => detection.evidenceSource === "localized-head-classification")
+              ? "localized-head-classification" : "confirmed-head-classification",
+          localizedHeads: helmetWearers.filter(detection => detection.localizationConfidence !== undefined).map(detection => ({
+            boundingBox: detection.helmetBoundingBox, localizationConfidence: detection.localizationConfidence,
+          })),
         },
         executionMetadata: {
           status: "SUCCESS",
@@ -578,6 +611,7 @@ export class HelmetDetector extends BaseDetector {
     this.pendingHeads.clear();
     this.inference = null;
     this.classifier = null;
+    this.headVerifier = null;
     this.isModelLoaded = false;
     console.log("Helmet detector cleaned up");
   }
@@ -586,7 +620,7 @@ export class HelmetDetector extends BaseDetector {
     return {
       status: this.isModelLoaded ? ("healthy" as const) : ("degraded" as const),
       details: this.isModelLoaded
-        ? "Helmet classifier active; helmet-worn alerts require a localized observation or strong person evidence with consecutive confirmed head crops"
+        ? "Helmet classifier active; production crop alerts require independent head localization and classification agreement"
         : `Awaiting local helmet classifier; normalized observations remain supported. ${this.modelLoadError ?? "Model unavailable"}`,
     };
   }

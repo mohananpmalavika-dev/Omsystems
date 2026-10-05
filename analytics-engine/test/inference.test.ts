@@ -8,6 +8,19 @@ import { CtcTextInference, HelmetClassificationInference } from "../src/inferenc
 import { LpdYuNetInference, YuNetFaceInference } from "../src/inference/opencv-specialty-inference.js";
 
 describe("local analytics foundations", () => {
+  it("undoes centered RGB letterbox padding when locating a head", async () => {
+    const run = vi.fn(async (feeds: Record<string, Tensor>) => {
+      expect(feeds.images?.dims).toEqual([1,3,320,320]);
+      expect((feeds.images?.data as Float32Array)[0]).toBeCloseTo(114/255);
+      return { output0:new Tensor("float32",new Float32Array([100,100,140,160,.9,0]),[1,1,6]) };
+    });
+    const model=new YoloDetectionInference({inputNames:["images"],outputNames:["output0"],run} as never,
+      {labels:["head"],decoder:"xyxy",preprocessor:"rgb-normalized-letterbox",inputWidth:320,inputHeight:320});
+    const detections=await model.run({cameraId:"test",tenantId:"test",timestamp:new Date(0),
+      width:640,height:360,imageData:Buffer.alloc(640*360*3)});
+    expect(detections[0]?.boundingBox).toMatchObject({x:expect.closeTo(.3125),y:expect.closeTo(1/6),
+      width:expect.closeTo(.125),height:expect.closeTo(1/3)});
+  });
   it("runs YOLO person inference and suppresses overlapping boxes", async () => {
     // [1, 5, 6]: x, y, width, height, person confidence for six candidates.
     const output = new Tensor("float32", new Float32Array([

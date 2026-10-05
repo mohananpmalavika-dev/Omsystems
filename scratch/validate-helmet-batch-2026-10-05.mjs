@@ -5,6 +5,7 @@ const sharp = createRequire('/app/dist/analytics-engine/src/analytics-pipeline.j
 import {getModelManager} from '/app/dist/analytics-engine/src/model-manager.js';
 import {loadObjectInference,loadHelmetClassificationInference} from '/app/dist/analytics-engine/src/inference/configured-model-inference.js';
 import {HelmetDetector} from '/app/dist/analytics-engine/src/detectors/helmet-detector.js';
+import {LocalizedHelmetHeadVerifier} from '/app/dist/analytics-engine/src/inference/helmet-head-verification.js';
 const originals = process.argv.includes('--originals');
 const study = process.argv.includes('--study');
 const samples = originals
@@ -17,6 +18,7 @@ let failures = 0;
 try {
   const objects = await loadObjectInference('yolov8n', .35);
   const classifier = await loadHelmetClassificationInference('helmet');
+  const headLocalizer = await loadObjectInference('helmet-head-localizer', .25);
   for (const sample of samples) {
     const {data, info} = await sharp(sample.image).removeAlpha().raw().toBuffer({resolveWithObject:true});
     const frame = {cameraId: sample.id ?? sample.file, tenantId:'isolated-validation', timestamp:new Date(0), imageData:data, width:info.width, height:info.height};
@@ -33,8 +35,9 @@ try {
       continue;
     }
     for (const fastAlert of [false, true]) {
-      const detector = new HelmetDetector(null, .88, classifier, fastAlert);
+      const detector = new HelmetDetector(null, .88, null, fastAlert);
       await detector.initialize();
+      assert.equal(detector.getHealth().status, 'healthy', 'Default production detector did not load verified models');
       const counts = [];
       for (const seconds of [0,0,2,4]) counts.push((await detector.detect({...frame, timestamp:new Date(seconds*1000), metadata:{inferenceMode:'local-onnx',detections}})).length);
       const expected = sample.expected ? (fastAlert ? [1,1,1,1] : sample.raised ? [0,0,0,1] : [0,0,1,1]) : [0,0,0,0];

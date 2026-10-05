@@ -1,0 +1,427 @@
+import { randomUUID, timingSafeEqual } from "node:crypto";
+import Fastify from "fastify";
+import { z } from "zod";
+import { AnalyticsPipeline, snapshotCache } from "./analytics-pipeline.js";
+import { NotificationEngine } from "./notification-engine.js";
+import { StreamProcessor } from "./stream-processor.js";
+import { createIncidentIntegration } from './incident-integration.js';
+import { livenessCheckHandler, metricsEndpointHandler, metricsJSONEndpointHandler, registerMonitoringHooks, } from "./monitoring/middleware.js";
+const objectSchema = z.object({
+    label: z.string().trim().min(1).max(100),
+    confidence: z.number().min(0).max(1),
+    trackId: z.string().trim().min(1).max(200).optional(),
+    boundingBox: z.object({
+        x: z.number().min(0).max(1), y: z.number().min(0).max(1),
+        width: z.number().positive().max(1), height: z.number().positive().max(1),
+    }).optional(),
+});
+const frameObjectSchema = objectSchema.extend({
+    boundingBox: z.object({
+        x: z.number().min(0).max(1), y: z.number().min(0).max(1),
+        width: z.number().positive().max(1), height: z.number().positive().max(1),
+    }),
+    attributes: z.record(z.unknown()).optional(),
+});
+const frameRuleSchema = z.object({
+    id: z.string().min(1), cameraId: z.string().min(1), detectionType: z.string().min(1),
+    enabled: z.boolean().default(true), minConfidence: z.number().min(0).max(1).default(0.65),
+    minDurationSeconds: z.number().min(0).default(0), direction: z.string().optional(),
+    objectClasses: z.array(z.string()).optional(),
+    zone: z.object({
+        id: z.string(), name: z.string(), shape: z.enum(["polygon", "line"]),
+        points: z.array(z.object({ x: z.number(), y: z.number() })).min(2),
+    }).optional(),
+});
+const frameSchema = z.object({
+    tenantId: z.string().min(1), cameraId: z.string().min(1),
+    capturedAt: z.string().datetime().default(() => new Date().toISOString()),
+    width: z.number().int().positive(), height: z.number().int().positive(),
+    imageBase64: z.string().default(""),
+    // Omit detections to execute the local ONNX path. Supplying [] explicitly
+    // means an upstream inference worker observed no objects.
+    detections: z.array(frameObjectSchema).max(2_000).optional(),
+    rules: z.array(frameRuleSchema).max(500).default([]),
+    metadata: z.record(z.unknown()).default({}),
+});
+export const detectionSchema = z.object({
+    tenantId: z.string().min(1), cameraId: z.string().min(1),
+    sourceEventId: z.string().trim().min(1).max(300).default(() => randomUUID()),
+    detectionType: z.string().trim().min(1).max(120),
+    occurredAt: z.string().datetime().default(() => new Date().toISOString()),
+    endedAt: z.string().datetime().optional(),
+    confidence: z.number().min(0).max(1),
+    durationSeconds: z.number().min(0).max(86_400).default(0),
+    modelVersion: z.string().trim().min(1).max(160),
+    objects: z.array(objectSchema).max(500).default([]),
+    snapshotReference: z.string().trim().min(1).max(2_000).optional(),
+    clipReference: z.string().trim().min(1).max(2_000).optional(),
+    metadata: z.record(z.unknown()).default({}),
+}).refine((event) => !event.endedAt || Date.parse(event.endedAt) >= Date.parse(event.occurredAt), {
+    path: ["endedAt"], message: "endedAt must not be before occurredAt",
+});
+export function buildAnalyticsEngine(options) {
+    const app = Fastify({ logger: options.logger ?? false });
+    registerMonitoringHooks(app);
+    const state = {
+        received: 0, accepted: 0, failed: 0,
+        lastAcceptedAt: undefined,
+    };
+    app.get("/live", livenessCheckHandler);
+    app.get("/metrics", metricsEndpointHandler);
+    app.get("/metrics/json", metricsJSONEndpointHandler);
+    // Initialize analytics pipeline
+    const controlPlaneUrl = options.controlPlaneUrl || process.env.CONTROL_API_URL || process.env.CONTROL_PLANE_URL;
+    if (!controlPlaneUrl && process.env.NODE_ENV === "production") {
+        throw new Error("CONTROL_API_URL or CONTROL_PLANE_URL is required in production");
+    }
+    const notificationEngine = new NotificationEngine({
+        controlPlaneUrl: controlPlaneUrl || "http://127.0.0.1:3000",
+        sharedKey: options.controlPlaneSharedKey,
+    });
+    const pipeline = options.pipeline ?? new AnalyticsPipeline();
+    // Create incident integration hook if configured
+    let incidentHook = undefined;
+    if (options.incidentIntegration) {
+        try {
+            incidentHook = createIncidentIntegration({
+                incidentApiUrl: options.incidentIntegration.url,
+                apiKey: options.incidentIntegration.apiKey,
+            });
+        }
+        catch (err) {
+            app.log.error({ err }, "Failed to initialize incident integration");
+        }
+    }
+    const streamProcessor = new StreamProcessor(pipeline, options.submit, undefined, incidentHook);
+    // Initialize pipeline on startup
+    let pipelineInitializationError = null;
+    const pipelineReady = pipeline.initialize().catch((error) => {
+        pipelineInitializationError = error instanceof Error ? error.message : String(error);
+        app.log.error({ err: error, initializationError: pipelineInitializationError }, "Failed to initialize analytics pipeline");
+    });
+    // Initialize banking analytics integration after pipeline is ready
+    pipelineReady.then(() => {
+        if (!pipelineInitializationError && process.env.ENABLE_BANKING_ANALYTICS === 'true') {
+            void import("./banking/banking-analytics-activation.js").then(async (module) => {
+                try {
+                    await module.activateBankingAnalytics(pipeline, {
+                        enableVehicleEvents: true,
+                        enableAnprEvents: true,
+                        enablePersonEvents: true,
+                        enableFaceEvents: true,
+                        enableZoneEvents: true,
+                        enableAccessEvents: true,
+                        enableObjectEvents: true,
+                        autoStartWorkflows: true,
+                        preloadMonitors: true,
+                    });
+                    app.log.info('Banking analytics system activated');
+                }
+                catch (error) {
+                    app.log.warn({ err: error }, "Banking analytics activation failed - system will remain inactive");
+                }
+            }).catch((err) => {
+                app.log.warn({ err }, "Failed to import banking analytics module");
+            });
+        }
+    }).catch(() => {
+        // Pipeline initialization already logged the error
+    });
+    // Initialize statistics service (optional - requires DATABASE_URL)
+    void import("./statistics-integration.js").then(async (module) => {
+        try {
+            await module.initializeStatisticsService();
+        }
+        catch (error) {
+            app.log.warn({ err: error }, "Statistics service initialization failed - endpoint will be unavailable");
+        }
+    }).catch((err) => {
+        app.log.warn({ err }, "Failed to import statistics service module");
+    });
+    // Register lazily loaded route modules through Fastify's plugin lifecycle so
+    // app.ready()/listen() cannot complete before their routes exist.
+    app.register(async (instance) => {
+        const module = await import("./routes/detection-api.js");
+        await module.registerDetectionApiRoutes(instance, pipeline);
+    });
+    app.register(async (instance) => {
+        const module = await import("./routes/advanced-analytics-api.js");
+        await module.registerAdvancedAnalyticsRoutes(instance, pipeline);
+    });
+    app.register(async (instance) => {
+        const module = await import("./routes/analog-camera-api.js");
+        await module.registerAnalogCameraApiRoutes(instance, pipeline);
+    });
+    app.register(async (instance) => {
+        const module = await import("./digital-twin/api/index.js");
+        await module.registerDigitalTwinRoutes(instance);
+    });
+    app.register(async (instance) => {
+        const module = await import("./routes/face-recognition.routes.js");
+        // Face recognition routes will be enabled when services are initialized
+        // Services are initialized in the banking analytics activation
+        if (process.env.ENABLE_FACE_RECOGNITION === 'true') {
+            try {
+                const { Pool } = await import('pg');
+                const db = new Pool({ connectionString: process.env.DATABASE_URL });
+                const { FaceRecognitionService } = await import("./face/face-recognition.service.js");
+                const { FaceEnrollmentService } = await import("./face/face-enrollment.service.js");
+                const { FaceSearchService } = await import("./face/face-search.service.js");
+                const { FaceRecognitionGovernanceService } = await import("../../src/banking/governance/face-recognition-governance.service.js");
+                const recognitionService = new FaceRecognitionService(db);
+                const enrollmentService = new FaceEnrollmentService(db, recognitionService);
+                const searchService = new FaceSearchService(db);
+                const governanceService = new FaceRecognitionGovernanceService();
+                await recognitionService.initialize();
+                await module.registerFaceRecognitionRoutes(instance, db, recognitionService, enrollmentService, searchService, governanceService);
+                instance.log.info('Face Recognition API enabled');
+            }
+            catch (error) {
+                instance.log.warn({ err: error }, 'Face Recognition API initialization failed');
+            }
+        }
+    });
+    app.addHook("preHandler", async (request, reply) => {
+        if (request.url === "/health" || request.url === "/live")
+            return;
+        const key = request.headers["x-analytics-source-key"];
+        const trustedSource = typeof key === "string" && same(key, options.sourceSharedKey);
+        const trustedControlPlane = typeof key === "string" && same(key, options.controlPlaneSharedKey);
+        const isFrameIngest = request.url.startsWith("/internal/frames");
+        const isDetectionIngest = request.url.startsWith("/internal/detections");
+        const allowed = isFrameIngest
+            ? trustedSource || trustedControlPlane
+            : isDetectionIngest
+                ? trustedSource
+                : trustedControlPlane;
+        if (!allowed) {
+            return reply.code(401).send({ error: "invalid_analytics_source_identity" });
+        }
+    });
+    app.get("/health", async (_request, reply) => {
+        await pipelineReady;
+        const pipelineHealth = pipeline.getHealth();
+        // Compute explicit AI state
+        // AI_OPERATIONAL: pipeline initialized AND models are ready
+        // AI_DEGRADED: pipeline initialized but models not fully ready (models optional or disabled for test)
+        // AI_UNAVAILABLE: pipeline not initialized
+        const modelsReady = pipelineHealth.models?.ready === true;
+        const initialized = pipelineHealth.initialized === true;
+        let aiState;
+        if (!initialized)
+            aiState = "AI_UNAVAILABLE";
+        else if (initialized && modelsReady)
+            aiState = "AI_OPERATIONAL";
+        else
+            aiState = "AI_DEGRADED";
+        // HTTP status: unavailable -> 503, otherwise 200. Keep compatibility by returning
+        // a status field but ensure it never claims "ok" when models are not loaded.
+        const httpStatus = aiState === "AI_UNAVAILABLE" ? 503 : 200;
+        const statusString = aiState === "AI_OPERATIONAL" ? "ok" : aiState === "AI_DEGRADED" ? "degraded" : "unhealthy";
+        return reply.code(httpStatus).send({
+            status: statusString,
+            aiState,
+            service: "sentinel-analytics-engine",
+            ...state,
+            pipeline: pipelineHealth,
+            initializationError: pipelineInitializationError,
+            notifications: notificationEngine.getStatus(),
+            streams: {
+                active: streamProcessor.getActiveStreams().length,
+                stats: streamProcessor.getStats(),
+            },
+        });
+    });
+    // Per-camera AI status endpoint: exposes an at-a-glance view the UI can use for each camera
+    app.get("/v1/analytics/cameras/:cameraId/status", async (request, reply) => {
+        const { cameraId } = z.object({ cameraId: z.string().min(1) }).parse(request.params);
+        await pipelineReady;
+        const pipelineHealth = pipeline.getHealth();
+        const modelsReady = pipelineHealth.models?.ready === true;
+        const initialized = pipelineHealth.initialized === true;
+        const aiState = !initialized ? "AI_UNAVAILABLE" : (initialized && modelsReady ? "AI_OPERATIONAL" : "AI_DEGRADED");
+        // Camera-level health and runtime info from pipeline
+        const cameraHealth = pipeline.getCameraHealth(cameraId) ||
+            {
+                status: "unknown",
+                streamStatus: undefined,
+                recording: undefined,
+                inferenceMode: undefined,
+                lastInferenceSource: undefined,
+                inferenceFps: undefined,
+                inferenceLatencyMs: undefined,
+                lastDetectionAt: undefined,
+            };
+        // Best-effort runtime metrics - these detector implementations expose lightweight stats
+        const personTracks = pipeline.getPersonTracks();
+        const vehicleTracks = pipeline.getVehicleTracks();
+        const inferenceMode = cameraHealth.inferenceMode ?? (cameraHealth.lastInferenceSource ? cameraHealth.lastInferenceSource : "local-onnx");
+        // Provide the UI with fields the user requested: Model, Inference FPS, GPU, Latency, Detection activity
+        const modelInfo = pipelineHealth.models?.primaryModel ?? { name: null, version: null };
+        const gpuInfo = pipelineHealth.models?.gpu ? pipelineHealth.models.gpu : null;
+        const cameraStatus = {
+            cameraId,
+            stream: cameraHealth.streamStatus ?? cameraHealth.status ?? "unknown",
+            recording: cameraHealth.recording ?? false,
+            aiEngine: aiState,
+            model: modelInfo.name ? `${modelInfo.name} ${modelInfo.version ?? ""}`.trim() : null,
+            inferenceMode,
+            inference: {
+                fps: cameraHealth.inferenceFps ?? null,
+                latencyMs: cameraHealth.inferenceLatencyMs ?? null,
+                gpu: gpuInfo ?? null,
+            },
+            detection: {
+                persons: personTracks.filter((t) => t.cameraId === cameraId).length,
+                vehicles: vehicleTracks.filter((t) => t.cameraId === cameraId).length,
+                lastDetectionAt: cameraHealth.lastDetectionAt ?? null,
+            },
+            pipeline: pipelineHealth,
+        };
+        return reply.code(200).send(cameraStatus);
+    });
+    // GPU scheduler statistics endpoint
+    app.get("/v1/analytics/scheduler/stats", async (_request, reply) => {
+        await pipelineReady;
+        const pipelineHealth = pipeline.getHealth();
+        const schedulerStats = pipelineHealth.scheduler || {};
+        return reply.code(200).send({
+            scheduler: schedulerStats,
+            timestamp: new Date().toISOString(),
+        });
+    });
+    app.get("/internal/analytics/snapshots/:id", async (request, reply) => {
+        const { id } = request.params;
+        const snapshot = snapshotCache.get(id) ?? snapshotCache.get(`camera:${id}`);
+        if (!snapshot) {
+            return reply.code(404).send({ error: "snapshot_not_found" });
+        }
+        reply.header("content-type", "image/jpeg");
+        reply.header("cache-control", "public, max-age=86400");
+        return reply.send(snapshot.buffer);
+    });
+    app.post("/internal/detections", async (request, reply) => {
+        state.received += 1;
+        const event = detectionSchema.parse(request.body);
+        try {
+            const result = await options.submit(event);
+            state.accepted += 1;
+            state.lastAcceptedAt = new Date().toISOString();
+            return reply.code(202).send(result);
+        }
+        catch (error) {
+            state.failed += 1;
+            request.log.error({ error, cameraId: event.cameraId }, "Detection submission failed");
+            return reply.code(502).send({
+                error: "control_plane_unavailable",
+                message: "Detection was not accepted; the camera stream is unaffected.",
+            });
+        }
+    });
+    app.post("/internal/detections/batch", async (request, reply) => {
+        const events = z.array(detectionSchema).min(1).max(100).parse(request.body);
+        state.received += events.length;
+        const results = await Promise.allSettled(events.map(options.submit));
+        const accepted = results.filter((result) => result.status === "fulfilled").length;
+        state.accepted += accepted;
+        state.failed += results.length - accepted;
+        if (accepted > 0)
+            state.lastAcceptedAt = new Date().toISOString();
+        return reply.code(202).send({
+            accepted,
+            failed: results.length - accepted,
+            results: results.map((result, index) => ({
+                sourceEventId: events[index].sourceEventId,
+                status: result.status === "fulfilled" ? "accepted" : "failed",
+            })),
+        });
+    });
+    // An edge/open-model worker can send normalized observations here. Omitting
+    // `detections` executes the provisioned local ONNX model against RGB24
+    // imageBase64; supplying [] explicitly preserves an upstream empty result.
+    app.post("/internal/frames", async (request, reply) => {
+        const input = frameSchema.parse(request.body);
+        await pipelineReady;
+        const imageData = input.imageBase64 ? Buffer.from(input.imageBase64, "base64") : Buffer.alloc(0);
+        if (input.detections === undefined && imageData.length !== input.width * input.height * 3) {
+            return reply.code(400).send({
+                error: "invalid_rgb24_frame",
+                message: "Omit detections only when imageBase64 contains exactly width * height * 3 RGB24 bytes.",
+            });
+        }
+        const events = await pipeline.processFrame({
+            tenantId: input.tenantId,
+            cameraId: input.cameraId,
+            timestamp: new Date(input.capturedAt),
+            imageData,
+            width: input.width,
+            height: input.height,
+            metadata: input.detections === undefined
+                ? input.metadata
+                : { ...input.metadata, detections: input.detections },
+        }, input.rules);
+        const submissions = await Promise.allSettled(events.map(options.submit));
+        const accepted = submissions.filter((item) => item.status === "fulfilled").length;
+        state.received += events.length;
+        state.accepted += accepted;
+        state.failed += events.length - accepted;
+        if (accepted > 0)
+            state.lastAcceptedAt = new Date().toISOString();
+        return reply.code(202).send({
+            cameraId: input.cameraId,
+            inferenceMode: input.detections === undefined ? "local-onnx" : "normalized-observation",
+            detectionsReceived: input.detections?.length ?? 0,
+            eventsGenerated: events.length,
+            accepted,
+            failed: events.length - accepted,
+        });
+    });
+    app.setErrorHandler((error, _request, reply) => {
+        if (error instanceof z.ZodError) {
+            return reply.code(400).send({ error: "invalid_detection", details: error.flatten() });
+        }
+        app.log.error(error);
+        return reply.code(500).send({ error: "analytics_engine_failure" });
+    });
+    // Graceful shutdown
+    app.addHook("onClose", async () => {
+        await streamProcessor.stopAllStreams();
+        await pipeline.cleanup();
+    });
+    return app;
+}
+export function createControlPlaneSubmitter(options) {
+    return async (event) => {
+        let lastError;
+        const sharedKeys = [...new Set([options.sharedKey, options.fallbackSharedKey].filter((key) => Boolean(key)))];
+        for (let attempt = 1; attempt <= 3; attempt += 1) {
+            try {
+                for (const sharedKey of sharedKeys) {
+                    const response = await fetch(new URL("/internal/analytics/events", options.controlPlaneUrl), {
+                        method: "POST", signal: AbortSignal.timeout(10_000),
+                        headers: {
+                            "content-type": "application/json",
+                            "x-analytics-engine-key": sharedKey,
+                        },
+                        body: JSON.stringify(event),
+                    });
+                    if (response.ok)
+                        return await response.json();
+                    lastError = new Error(`control_plane_${response.status}`);
+                }
+                throw lastError;
+            }
+            catch (error) {
+                lastError = error;
+                if (attempt < 3)
+                    await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+            }
+        }
+        throw lastError;
+    };
+}
+function same(left, right) {
+    const a = Buffer.from(left);
+    const b = Buffer.from(right);
+    return a.length === b.length && timingSafeEqual(a, b);
+}

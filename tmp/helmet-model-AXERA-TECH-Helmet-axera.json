@@ -1,0 +1,81 @@
+{
+  "_id": "6a05291783b099c94f682f60",
+  "id": "AXERA-TECH/Helmet-axera",
+  "private": false,
+  "pipeline_tag": "object-detection",
+  "tags": [
+    "Axera",
+    "NPU",
+    "Object Detection",
+    "object-detection",
+    "en",
+    "license:agpl-3.0",
+    "region:us"
+  ],
+  "downloads": 22,
+  "likes": 1,
+  "modelId": "AXERA-TECH/Helmet-axera",
+  "author": "AXERA-TECH",
+  "sha": "c48ec87e8e0c65618560d790d598c1081a857d92",
+  "lastModified": "2026-06-18T06:33:46.000Z",
+  "gated": false,
+  "disabled": false,
+  "model-index": null,
+  "config": {},
+  "cardData": {
+    "license": "agpl-3.0",
+    "language": [
+      "en"
+    ],
+    "pipeline_tag": "object-detection",
+    "tags": [
+      "Axera",
+      "NPU",
+      "Object Detection"
+    ]
+  },
+  "siblings": [
+    {
+      "rfilename": ".gitattributes"
+    },
+    {
+      "rfilename": "AX620E/ax_ax620e_hel_algo_V1.0.0.axmodel"
+    },
+    {
+      "rfilename": "AX620E/ax_ax620e_hel_algo_rgb_nhwc_V1.0.0.axmodel"
+    },
+    {
+      "rfilename": "AX650/ax_ax650_hel_algo_V1.0.0.axmodel"
+    },
+    {
+      "rfilename": "AX650/ax_ax650_hel_algo_rgb_nhwc_V1.0.0.axmodel"
+    },
+    {
+      "rfilename": "README.md"
+    },
+    {
+      "rfilename": "ax_hed_infer.py"
+    },
+    {
+      "rfilename": "config.json"
+    },
+    {
+      "rfilename": "gitattributes"
+    },
+    {
+      "rfilename": "out.jpg"
+    },
+    {
+      "rfilename": "out1.jpg"
+    },
+    {
+      "rfilename": "test.jpg"
+    },
+    {
+      "rfilename": "test1.jpg"
+    }
+  ],
+  "spaces": [],
+  "createdAt": "2026-05-14T01:44:55.000Z",
+  "usedStorage": 2180192
+}

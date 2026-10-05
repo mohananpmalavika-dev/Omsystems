@@ -184,7 +184,7 @@ export function yoloModelOptions(config?: ModelConfig): {
     decoder: decoder === "yolov8" || decoder === "yolov5" || decoder === "yolox" || decoder === "xyxy"
       ? decoder
       : undefined,
-    preprocessor: preprocessor === "rgb-normalized-stretch" || preprocessor === "yolox-letterbox-bgr"
+    preprocessor: preprocessor === "rgb-normalized-stretch" || preprocessor === "rgb-normalized-letterbox" || preprocessor === "yolox-letterbox-bgr"
       ? preprocessor
       : undefined,
     inputWidth: config?.inputShape?.[3],

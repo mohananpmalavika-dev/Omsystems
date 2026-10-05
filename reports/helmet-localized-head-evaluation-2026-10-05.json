@@ -1,0 +1,4431 @@
+[
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198654463.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8331930551141582,
+      "boundingBox": {
+        "x": 0.08327714204788209,
+        "y": 0.4563205824957954,
+        "width": 0.128721022605896,
+        "height": 0.23317674001057936
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.8449207083473796,
+        "wearingHelmetConfidence": 0.1550792916526203,
+        "unwearingHelmetConfidence": 0.8449207083473796
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9352596105910923,
+        "wearingHelmetConfidence": 0.06474038940890764,
+        "unwearingHelmetConfidence": 0.9352596105910923
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.8442547668066822,
+        "wearingHelmetConfidence": 0.15574523319331784,
+        "unwearingHelmetConfidence": 0.8442547668066822
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9021150798300674,
+        "wearingHelmetConfidence": 0.9021150798300674,
+        "unwearingHelmetConfidence": 0.09788492016993267
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198648992.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.841564300086759,
+      "boundingBox": {
+        "x": 0.5917469084262847,
+        "y": 0.4272517204284668,
+        "width": 0.12101572751998901,
+        "height": 0.2380950291951497
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9967959514400476,
+        "wearingHelmetConfidence": 0.0032040485599524,
+        "unwearingHelmetConfidence": 0.9967959514400476
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9978431902767082,
+        "wearingHelmetConfidence": 0.002156809723291687,
+        "unwearingHelmetConfidence": 0.9978431902767082
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9969708231464527,
+        "wearingHelmetConfidence": 0.0030291768535472816,
+        "unwearingHelmetConfidence": 0.9969708231464527
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.9190128819201745,
+        "wearingHelmetConfidence": 0.08098711807982563,
+        "unwearingHelmetConfidence": 0.9190128819201745
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198648992.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.831029252532673,
+      "boundingBox": {
+        "x": 0.2492718756198883,
+        "y": 0.3455039554172092,
+        "width": 0.1069390654563904,
+        "height": 0.2067163255479601
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.8965608136985209,
+        "wearingHelmetConfidence": 0.10343918630147901,
+        "unwearingHelmetConfidence": 0.8965608136985209
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9761467554375024,
+        "wearingHelmetConfidence": 0.023853244562497686,
+        "unwearingHelmetConfidence": 0.9761467554375024
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9897548050631422,
+        "wearingHelmetConfidence": 0.010245194936857965,
+        "unwearingHelmetConfidence": 0.9897548050631422
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.962152172498948,
+        "wearingHelmetConfidence": 0.037847827501051964,
+        "unwearingHelmetConfidence": 0.962152172498948
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198648992.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8157122139175215,
+      "boundingBox": {
+        "x": 0.33257515728473663,
+        "y": 0,
+        "width": 0.09665855765342712,
+        "height": 0.1535115400950114
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9924372886219427,
+        "wearingHelmetConfidence": 0.007562711378057294,
+        "unwearingHelmetConfidence": 0.9924372886219427
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9978136690888288,
+        "wearingHelmetConfidence": 0.002186330911171173,
+        "unwearingHelmetConfidence": 0.9978136690888288
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.998680624186248,
+        "wearingHelmetConfidence": 0.0013193758137519287,
+        "unwearingHelmetConfidence": 0.998680624186248
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.7889604391229552,
+        "wearingHelmetConfidence": 0.7889604391229552,
+        "unwearingHelmetConfidence": 0.2110395608770448
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198648992.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.7750992130377199,
+      "boundingBox": {
+        "x": 0.5642375349998474,
+        "y": 0.07811667654249403,
+        "width": 0.09862358570098873,
+        "height": 0.13286542892456055
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9460324406339783,
+        "wearingHelmetConfidence": 0.053967559366021677,
+        "unwearingHelmetConfidence": 0.9460324406339783
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9692004540649196,
+        "wearingHelmetConfidence": 0.030799545935080448,
+        "unwearingHelmetConfidence": 0.9692004540649196
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9675267215711992,
+        "wearingHelmetConfidence": 0.03247327842880077,
+        "unwearingHelmetConfidence": 0.9675267215711992
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.8994620226241868,
+        "wearingHelmetConfidence": 0.10053797737581328,
+        "unwearingHelmetConfidence": 0.8994620226241868
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198648992.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.6656698901525573,
+      "boundingBox": {
+        "x": 0.16180858612060547,
+        "y": 0.08454225328233507,
+        "width": 0.1409261703491211,
+        "height": 0.23555196126302086
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9423230168630099,
+        "wearingHelmetConfidence": 0.9423230168630099,
+        "unwearingHelmetConfidence": 0.05767698313699018
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.7023393789270437,
+        "wearingHelmetConfidence": 0.2976606210729563,
+        "unwearingHelmetConfidence": 0.7023393789270437
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.8722302447406047,
+        "wearingHelmetConfidence": 0.12776975525939535,
+        "unwearingHelmetConfidence": 0.8722302447406047
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9172322933627987,
+        "wearingHelmetConfidence": 0.9172322933627987,
+        "unwearingHelmetConfidence": 0.08276770663720137
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198638949.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8208295736439375,
+      "boundingBox": {
+        "x": 0.222176194190979,
+        "y": 0.3497649722629123,
+        "width": 0.11873445510864256,
+        "height": 0.21986177232530385
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9892735312786667,
+        "wearingHelmetConfidence": 0.010726468721333336,
+        "unwearingHelmetConfidence": 0.9892735312786667
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9968269144818223,
+        "wearingHelmetConfidence": 0.003173085518177851,
+        "unwearingHelmetConfidence": 0.9968269144818223
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9988185931626815,
+        "wearingHelmetConfidence": 0.0011814068373184768,
+        "unwearingHelmetConfidence": 0.9988185931626815
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.7687112839187457,
+        "wearingHelmetConfidence": 0.2312887160812543,
+        "unwearingHelmetConfidence": 0.7687112839187457
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198638949.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8195423108693589,
+      "boundingBox": {
+        "x": 0.5792048931121826,
+        "y": 0.44399225446912977,
+        "width": 0.10588283538818366,
+        "height": 0.18304600185818148
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9831179517041116,
+        "wearingHelmetConfidence": 0.016882048295888286,
+        "unwearingHelmetConfidence": 0.9831179517041116
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.99975969519899,
+        "wearingHelmetConfidence": 0.00024030480100994294,
+        "unwearingHelmetConfidence": 0.99975969519899
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9997786501074644,
+        "wearingHelmetConfidence": 0.0002213498925355728,
+        "unwearingHelmetConfidence": 0.9997786501074644
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.9715321580663502,
+        "wearingHelmetConfidence": 0.02846784193364987,
+        "unwearingHelmetConfidence": 0.9715321580663502
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198638949.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.7741826286660967,
+      "boundingBox": {
+        "x": 0.16707599759101868,
+        "y": 0.08564586639404297,
+        "width": 0.13319324254989626,
+        "height": 0.2318787892659505
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9249844750015922,
+        "wearingHelmetConfidence": 0.9249844750015922,
+        "unwearingHelmetConfidence": 0.07501552499840781
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.7750664937617532,
+        "wearingHelmetConfidence": 0.7750664937617532,
+        "unwearingHelmetConfidence": 0.2249335062382468
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.9386265979930978,
+        "wearingHelmetConfidence": 0.9386265979930978,
+        "unwearingHelmetConfidence": 0.061373402006902306
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.5572369889202654,
+        "wearingHelmetConfidence": 0.5572369889202654,
+        "unwearingHelmetConfidence": 0.44276301107973465
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198638949.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.7114658836208037,
+      "boundingBox": {
+        "x": 0.3737399160861969,
+        "y": 0.005422634548611111,
+        "width": 0.0886173129081726,
+        "height": 0.10012198554144966
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9674089886330473,
+        "wearingHelmetConfidence": 0.9674089886330473,
+        "unwearingHelmetConfidence": 0.03259101136695281
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9754081440688783,
+        "wearingHelmetConfidence": 0.9754081440688783,
+        "unwearingHelmetConfidence": 0.0245918559311216
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.890306101643883,
+        "wearingHelmetConfidence": 0.10969389835611687,
+        "unwearingHelmetConfidence": 0.890306101643883
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9969452655582661,
+        "wearingHelmetConfidence": 0.9969452655582661,
+        "unwearingHelmetConfidence": 0.0030547344417339384
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198638949.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.6917692720636524,
+      "boundingBox": {
+        "x": 0.8967191815376282,
+        "y": 0.19545813666449652,
+        "width": 0.10245301723480227,
+        "height": 0.23886142306857638
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.8148984842210906,
+        "wearingHelmetConfidence": 0.18510151577890943,
+        "unwearingHelmetConfidence": 0.8148984842210906
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9592884187049193,
+        "wearingHelmetConfidence": 0.9592884187049193,
+        "unwearingHelmetConfidence": 0.04071158129508066
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.8299511554658137,
+        "wearingHelmetConfidence": 0.8299511554658137,
+        "unwearingHelmetConfidence": 0.17004884453418642
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9998278991475374,
+        "wearingHelmetConfidence": 0.9998278991475374,
+        "unwearingHelmetConfidence": 0.00017210085246265725
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198638949.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.4897812718821868,
+      "boundingBox": {
+        "x": 0.7230213046073913,
+        "y": 0.38530764579772947,
+        "width": 0.06026346683502204,
+        "height": 0.11759983698527021
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.7742351506491411,
+        "wearingHelmetConfidence": 0.7742351506491411,
+        "unwearingHelmetConfidence": 0.22576484935085894
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9742512229168429,
+        "wearingHelmetConfidence": 0.9742512229168429,
+        "unwearingHelmetConfidence": 0.02574877708315722
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.9953662390792979,
+        "wearingHelmetConfidence": 0.9953662390792979,
+        "unwearingHelmetConfidence": 0.004633760920702077
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.6012262100658424,
+        "wearingHelmetConfidence": 0.6012262100658424,
+        "unwearingHelmetConfidence": 0.3987737899341576
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198638949.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.3280810905078013,
+      "boundingBox": {
+        "x": 0.7377348840236664,
+        "y": 0.35111890898810494,
+        "width": 0.06619607210159306,
+        "height": 0.12064426210191515
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.8063197862723577,
+        "wearingHelmetConfidence": 0.19368021372764244,
+        "unwearingHelmetConfidence": 0.8063197862723577
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9144819742339515,
+        "wearingHelmetConfidence": 0.9144819742339515,
+        "unwearingHelmetConfidence": 0.0855180257660485
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.917513973105008,
+        "wearingHelmetConfidence": 0.917513973105008,
+        "unwearingHelmetConfidence": 0.08248602689499206
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.918634062271089,
+        "wearingHelmetConfidence": 0.08136593772891099,
+        "unwearingHelmetConfidence": 0.918634062271089
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198631468.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8529904433151572,
+      "boundingBox": {
+        "x": 0.6041163921356201,
+        "y": 0.4315516789754232,
+        "width": 0.10475635528564453,
+        "height": 0.20505460103352863
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9883692705858815,
+        "wearingHelmetConfidence": 0.011630729414118513,
+        "unwearingHelmetConfidence": 0.9883692705858815
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9945914842177577,
+        "wearingHelmetConfidence": 0.005408515782242416,
+        "unwearingHelmetConfidence": 0.9945914842177577
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9751525268296732,
+        "wearingHelmetConfidence": 0.024847473170326744,
+        "unwearingHelmetConfidence": 0.9751525268296732
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.5210178638446538,
+        "wearingHelmetConfidence": 0.47898213615534624,
+        "unwearingHelmetConfidence": 0.5210178638446538
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198631468.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8214264073912432,
+      "boundingBox": {
+        "x": 0.19468819499015808,
+        "y": 0.376151360405816,
+        "width": 0.1258657097816467,
+        "height": 0.22834031846788194
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9988296185199776,
+        "wearingHelmetConfidence": 0.0011703814800224127,
+        "unwearingHelmetConfidence": 0.9988296185199776
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9994812282141441,
+        "wearingHelmetConfidence": 0.0005187717858559699,
+        "unwearingHelmetConfidence": 0.9994812282141441
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9858387685853108,
+        "wearingHelmetConfidence": 0.014161231414689099,
+        "unwearingHelmetConfidence": 0.9858387685853108
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.5940223977687066,
+        "wearingHelmetConfidence": 0.40597760223129337,
+        "unwearingHelmetConfidence": 0.5940223977687066
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198631468.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.7844953798298917,
+      "boundingBox": {
+        "x": 0.5503265529870986,
+        "y": 0.010107755661010742,
+        "width": 0.07496373057365424,
+        "height": 0.11357507705688477
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9999919133422623,
+        "wearingHelmetConfidence": 0.9999919133422623,
+        "unwearingHelmetConfidence": 0.00000808665773757027
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9990968329184823,
+        "wearingHelmetConfidence": 0.9990968329184823,
+        "unwearingHelmetConfidence": 0.0009031670815176837
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.643761613273077,
+        "wearingHelmetConfidence": 0.643761613273077,
+        "unwearingHelmetConfidence": 0.35623838672692293
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9999882690552168,
+        "wearingHelmetConfidence": 0.9999882690552168,
+        "unwearingHelmetConfidence": 0.000011730944783193346
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198631468.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.7379946424845798,
+      "boundingBox": {
+        "x": 0.8938572943210602,
+        "y": 0.19738501442803277,
+        "width": 0.10556200742721555,
+        "height": 0.23962845272488062
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.7764072295674587,
+        "wearingHelmetConfidence": 0.7764072295674587,
+        "unwearingHelmetConfidence": 0.22359277043254125
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.8056083502928758,
+        "wearingHelmetConfidence": 0.8056083502928758,
+        "unwearingHelmetConfidence": 0.19439164970712422
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.7124151637230839,
+        "wearingHelmetConfidence": 0.2875848362769161,
+        "unwearingHelmetConfidence": 0.7124151637230839
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9998639988752203,
+        "wearingHelmetConfidence": 0.9998639988752203,
+        "unwearingHelmetConfidence": 0.00013600112477979594
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198631468.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.7353795846931419,
+      "boundingBox": {
+        "x": 0.16625447273254396,
+        "y": 0.0851967281765408,
+        "width": 0.14559550285339357,
+        "height": 0.24970211452907987
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.7080007784273933,
+        "wearingHelmetConfidence": 0.7080007784273933,
+        "unwearingHelmetConfidence": 0.29199922157260666
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9028115941592645,
+        "wearingHelmetConfidence": 0.09718840584073557,
+        "unwearingHelmetConfidence": 0.9028115941592645
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9051312864669879,
+        "wearingHelmetConfidence": 0.09486871353301206,
+        "unwearingHelmetConfidence": 0.9051312864669879
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.7262845559707966,
+        "wearingHelmetConfidence": 0.27371544402920334,
+        "unwearingHelmetConfidence": 0.7262845559707966
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198631468.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.6027543413662357,
+      "boundingBox": {
+        "x": 0.3731215298175812,
+        "y": 0.012155739466349284,
+        "width": 0.10055345296859741,
+        "height": 0.10940162870619033
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9310759843867003,
+        "wearingHelmetConfidence": 0.9310759843867003,
+        "unwearingHelmetConfidence": 0.06892401561329983
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.8157328019963617,
+        "wearingHelmetConfidence": 0.18426719800363833,
+        "unwearingHelmetConfidence": 0.8157328019963617
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9836394609397726,
+        "wearingHelmetConfidence": 0.016360539060227396,
+        "unwearingHelmetConfidence": 0.9836394609397726
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.998867343084705,
+        "wearingHelmetConfidence": 0.998867343084705,
+        "unwearingHelmetConfidence": 0.001132656915295001
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198631468.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.40370461305013805,
+      "boundingBox": {
+        "x": 0.5295092165470123,
+        "y": 0.4893818908267551,
+        "width": 0.08638209104537964,
+        "height": 0.15586095386081267
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9811441810708978,
+        "wearingHelmetConfidence": 0.01885581892910206,
+        "unwearingHelmetConfidence": 0.9811441810708978
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.991125808010621,
+        "wearingHelmetConfidence": 0.008874191989378864,
+        "unwearingHelmetConfidence": 0.991125808010621
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9937653546690408,
+        "wearingHelmetConfidence": 0.006234645330959201,
+        "unwearingHelmetConfidence": 0.9937653546690408
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.9833527474915132,
+        "wearingHelmetConfidence": 0.016647252508486764,
+        "unwearingHelmetConfidence": 0.9833527474915132
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198624761.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8364806729252265,
+      "boundingBox": {
+        "x": 0.5013605177402496,
+        "y": 0.045693620045979814,
+        "width": 0.1894868731498719,
+        "height": 0.326660516526964
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9999449416863225,
+        "wearingHelmetConfidence": 0.9999449416863225,
+        "unwearingHelmetConfidence": 0.000055058313677620994
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9986586298853005,
+        "wearingHelmetConfidence": 0.9986586298853005,
+        "unwearingHelmetConfidence": 0.0013413701146994343
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.9768466670967143,
+        "wearingHelmetConfidence": 0.9768466670967143,
+        "unwearingHelmetConfidence": 0.023153332903285737
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9990713253967326,
+        "wearingHelmetConfidence": 0.9990713253967326,
+        "unwearingHelmetConfidence": 0.0009286746032673758
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198624761.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8245438388029243,
+      "boundingBox": {
+        "x": 0.17273815274238585,
+        "y": 0.37775523927476673,
+        "width": 0.10698317289352416,
+        "height": 0.202121459113227
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9997829593428139,
+        "wearingHelmetConfidence": 0.00021704065718614429,
+        "unwearingHelmetConfidence": 0.9997829593428139
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9996762122640651,
+        "wearingHelmetConfidence": 0.00032378773593501233,
+        "unwearingHelmetConfidence": 0.9996762122640651
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9973836432560328,
+        "wearingHelmetConfidence": 0.002616356743967082,
+        "unwearingHelmetConfidence": 0.9973836432560328
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.8561203009665381,
+        "wearingHelmetConfidence": 0.14387969903346182,
+        "unwearingHelmetConfidence": 0.8561203009665381
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198624761.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8067698567879589,
+      "boundingBox": {
+        "x": 0.6092908203601837,
+        "y": 0.4339085472954644,
+        "width": 0.11030381917953491,
+        "height": 0.2154160393608941
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9587496387719212,
+        "wearingHelmetConfidence": 0.04125036122807883,
+        "unwearingHelmetConfidence": 0.9587496387719212
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9814772440091794,
+        "wearingHelmetConfidence": 0.01852275599082072,
+        "unwearingHelmetConfidence": 0.9814772440091794
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9913510786978298,
+        "wearingHelmetConfidence": 0.008648921302170185,
+        "unwearingHelmetConfidence": 0.9913510786978298
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.7220673502973437,
+        "wearingHelmetConfidence": 0.7220673502973437,
+        "unwearingHelmetConfidence": 0.2779326497026564
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198624761.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.7224558434078041,
+      "boundingBox": {
+        "x": 0.8926034092903137,
+        "y": 0.19161677890353732,
+        "width": 0.1066932439804078,
+        "height": 0.2490022447374132
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.6160653256910384,
+        "wearingHelmetConfidence": 0.38393467430896155,
+        "unwearingHelmetConfidence": 0.6160653256910384
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.8599174232346681,
+        "wearingHelmetConfidence": 0.14008257676533184,
+        "unwearingHelmetConfidence": 0.8599174232346681
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.8026872952702067,
+        "wearingHelmetConfidence": 0.19731270472979337,
+        "unwearingHelmetConfidence": 0.8026872952702067
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9926835168823037,
+        "wearingHelmetConfidence": 0.9926835168823037,
+        "unwearingHelmetConfidence": 0.007316483117696271
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198624761.jpg",
+    "head": {
+      "label": "helmet",
+      "confidence": 0.6894684842824113,
+      "boundingBox": {
+        "x": 0.337778651714325,
+        "y": 0.038508934444851345,
+        "width": 0.10130679607391357,
+        "height": 0.12381424374050565
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.7299393370837393,
+        "wearingHelmetConfidence": 0.27006066291626085,
+        "unwearingHelmetConfidence": 0.7299393370837393
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9749602347654683,
+        "wearingHelmetConfidence": 0.025039765234531684,
+        "unwearingHelmetConfidence": 0.9749602347654683
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9826786973854206,
+        "wearingHelmetConfidence": 0.01732130261457948,
+        "unwearingHelmetConfidence": 0.9826786973854206
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9995431081415997,
+        "wearingHelmetConfidence": 0.9995431081415997,
+        "unwearingHelmetConfidence": 0.0004568918584003245
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198624761.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.6198019185153569,
+      "boundingBox": {
+        "x": 0.24542577266693116,
+        "y": 0.42020659976535374,
+        "width": 0.09187579154968262,
+        "height": 0.1793028513590495
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9979378006795121,
+        "wearingHelmetConfidence": 0.0020621993204879277,
+        "unwearingHelmetConfidence": 0.9979378006795121
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9992376325296717,
+        "wearingHelmetConfidence": 0.0007623674703283724,
+        "unwearingHelmetConfidence": 0.9992376325296717
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9987201824809853,
+        "wearingHelmetConfidence": 0.0012798175190147291,
+        "unwearingHelmetConfidence": 0.9987201824809853
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.9743122056839427,
+        "wearingHelmetConfidence": 0.025687794316057187,
+        "unwearingHelmetConfidence": 0.9743122056839427
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198624761.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.5855553449440123,
+      "boundingBox": {
+        "x": 0.16161308884620668,
+        "y": 0.0776828236050076,
+        "width": 0.14772819280624389,
+        "height": 0.2491609573364258
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.8257153602710803,
+        "wearingHelmetConfidence": 0.8257153602710803,
+        "unwearingHelmetConfidence": 0.1742846397289197
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.7692171325737567,
+        "wearingHelmetConfidence": 0.7692171325737567,
+        "unwearingHelmetConfidence": 0.23078286742624324
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9804028867633001,
+        "wearingHelmetConfidence": 0.019597113236699937,
+        "unwearingHelmetConfidence": 0.9804028867633001
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.8522546987095034,
+        "wearingHelmetConfidence": 0.8522546987095034,
+        "unwearingHelmetConfidence": 0.14774530129049646
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198624761.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.427252007181778,
+      "boundingBox": {
+        "x": 0.3439074784517288,
+        "y": 0.04609256850348579,
+        "width": 0.09625882506370548,
+        "height": 0.1513154665629069
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9633424325813843,
+        "wearingHelmetConfidence": 0.03665756741861576,
+        "unwearingHelmetConfidence": 0.9633424325813843
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9929961881202868,
+        "wearingHelmetConfidence": 0.007003811879713194,
+        "unwearingHelmetConfidence": 0.9929961881202868
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9399417546597464,
+        "wearingHelmetConfidence": 0.060058245340253606,
+        "unwearingHelmetConfidence": 0.9399417546597464
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9636024854720275,
+        "wearingHelmetConfidence": 0.9636024854720275,
+        "unwearingHelmetConfidence": 0.03639751452797234
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198624761.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.29288007775129543,
+      "boundingBox": {
+        "x": 0.5829999953508377,
+        "y": 0.4769894070095486,
+        "width": 0.06743983626365668,
+        "height": 0.1463189019097222
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.902027142321804,
+        "wearingHelmetConfidence": 0.902027142321804,
+        "unwearingHelmetConfidence": 0.09797285767819594
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9752375910000172,
+        "wearingHelmetConfidence": 0.9752375910000172,
+        "unwearingHelmetConfidence": 0.024762408999982867
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.8885100111765442,
+        "wearingHelmetConfidence": 0.1114899888234558,
+        "unwearingHelmetConfidence": 0.8885100111765442
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.818216694348144,
+        "wearingHelmetConfidence": 0.818216694348144,
+        "unwearingHelmetConfidence": 0.18178330565185594
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198615130.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.829225051842613,
+      "boundingBox": {
+        "x": 0.23605218529701233,
+        "y": 0.31767820782131617,
+        "width": 0.11158493757247923,
+        "height": 0.21827008989122176
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.6031926791990526,
+        "wearingHelmetConfidence": 0.6031926791990526,
+        "unwearingHelmetConfidence": 0.39680732080094727
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9693449809234316,
+        "wearingHelmetConfidence": 0.030655019076568334,
+        "unwearingHelmetConfidence": 0.9693449809234316
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9945152439640811,
+        "wearingHelmetConfidence": 0.005484756035918867,
+        "unwearingHelmetConfidence": 0.9945152439640811
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9822443676035183,
+        "wearingHelmetConfidence": 0.9822443676035183,
+        "unwearingHelmetConfidence": 0.01775563239648179
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198615130.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8040918666034713,
+      "boundingBox": {
+        "x": 0.5961310923099518,
+        "y": 0.4388668166266547,
+        "width": 0.10027092695236206,
+        "height": 0.1864482243855794
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.979194754775121,
+        "wearingHelmetConfidence": 0.02080524522487894,
+        "unwearingHelmetConfidence": 0.979194754775121
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9848187203041998,
+        "wearingHelmetConfidence": 0.015181279695800153,
+        "unwearingHelmetConfidence": 0.9848187203041998
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.995417590277897,
+        "wearingHelmetConfidence": 0.004582409722103097,
+        "unwearingHelmetConfidence": 0.995417590277897
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.929669583595264,
+        "wearingHelmetConfidence": 0.07033041640473617,
+        "unwearingHelmetConfidence": 0.929669583595264
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198615130.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.7143426782596407,
+      "boundingBox": {
+        "x": 0.3583763033151627,
+        "y": 0.009976026746961806,
+        "width": 0.09787923693656919,
+        "height": 0.10670827229817707
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9244997338771761,
+        "wearingHelmetConfidence": 0.07550026612282386,
+        "unwearingHelmetConfidence": 0.9244997338771761
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.7712130779550378,
+        "wearingHelmetConfidence": 0.2287869220449622,
+        "unwearingHelmetConfidence": 0.7712130779550378
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9720661884231045,
+        "wearingHelmetConfidence": 0.027933811576895354,
+        "unwearingHelmetConfidence": 0.9720661884231045
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.6447792010098976,
+        "wearingHelmetConfidence": 0.3552207989901024,
+        "unwearingHelmetConfidence": 0.6447792010098976
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198615130.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.6518358026740501,
+      "boundingBox": {
+        "x": 0.8971574008464813,
+        "y": 0.18682213889227972,
+        "width": 0.10131012201309209,
+        "height": 0.24755187564426
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9866135286879479,
+        "wearingHelmetConfidence": 0.9866135286879479,
+        "unwearingHelmetConfidence": 0.013386471312052041
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.7881754036307196,
+        "wearingHelmetConfidence": 0.7881754036307196,
+        "unwearingHelmetConfidence": 0.21182459636928036
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.5636485862023332,
+        "wearingHelmetConfidence": 0.5636485862023332,
+        "unwearingHelmetConfidence": 0.43635141379766684
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.999857412552646,
+        "wearingHelmetConfidence": 0.999857412552646,
+        "unwearingHelmetConfidence": 0.00014258744735399777
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198615130.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.5783952121480951,
+      "boundingBox": {
+        "x": 0.48637383580207827,
+        "y": 0.06081416871812609,
+        "width": 0.17674688100814817,
+        "height": 0.30047834184434674
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9999846410522286,
+        "wearingHelmetConfidence": 0.9999846410522286,
+        "unwearingHelmetConfidence": 0.000015358947771321434
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9925553771089424,
+        "wearingHelmetConfidence": 0.9925553771089424,
+        "unwearingHelmetConfidence": 0.007444622891057591
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.9295649656430167,
+        "wearingHelmetConfidence": 0.9295649656430167,
+        "unwearingHelmetConfidence": 0.07043503435698335
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9999343153721812,
+        "wearingHelmetConfidence": 0.9999343153721812,
+        "unwearingHelmetConfidence": 0.00006568462781883308
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198615130.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.40044799713848533,
+      "boundingBox": {
+        "x": 0.39474683403968813,
+        "y": 0.358339336183336,
+        "width": 0.07672508955001828,
+        "height": 0.1131227599249946
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.7216284195798466,
+        "wearingHelmetConfidence": 0.2783715804201534,
+        "unwearingHelmetConfidence": 0.7216284195798466
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.743915029509812,
+        "wearingHelmetConfidence": 0.25608497049018797,
+        "unwearingHelmetConfidence": 0.743915029509812
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.5347435489492467,
+        "wearingHelmetConfidence": 0.46525645105075336,
+        "unwearingHelmetConfidence": 0.5347435489492467
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.6528748611187322,
+        "wearingHelmetConfidence": 0.34712513888126784,
+        "unwearingHelmetConfidence": 0.6528748611187322
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198609384.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.829225051842613,
+      "boundingBox": {
+        "x": 0.23605218529701233,
+        "y": 0.31767820782131617,
+        "width": 0.11158493757247923,
+        "height": 0.21827008989122176
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.6031926791990526,
+        "wearingHelmetConfidence": 0.6031926791990526,
+        "unwearingHelmetConfidence": 0.39680732080094727
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9693449809234316,
+        "wearingHelmetConfidence": 0.030655019076568334,
+        "unwearingHelmetConfidence": 0.9693449809234316
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9945152439640811,
+        "wearingHelmetConfidence": 0.005484756035918867,
+        "unwearingHelmetConfidence": 0.9945152439640811
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9822443676035183,
+        "wearingHelmetConfidence": 0.9822443676035183,
+        "unwearingHelmetConfidence": 0.01775563239648179
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198609384.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8040918666034713,
+      "boundingBox": {
+        "x": 0.5961310923099518,
+        "y": 0.4388668166266547,
+        "width": 0.10027092695236206,
+        "height": 0.1864482243855794
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.979194754775121,
+        "wearingHelmetConfidence": 0.02080524522487894,
+        "unwearingHelmetConfidence": 0.979194754775121
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9848187203041998,
+        "wearingHelmetConfidence": 0.015181279695800153,
+        "unwearingHelmetConfidence": 0.9848187203041998
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.995417590277897,
+        "wearingHelmetConfidence": 0.004582409722103097,
+        "unwearingHelmetConfidence": 0.995417590277897
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.929669583595264,
+        "wearingHelmetConfidence": 0.07033041640473617,
+        "unwearingHelmetConfidence": 0.929669583595264
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198609384.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.7143426782596407,
+      "boundingBox": {
+        "x": 0.3583763033151627,
+        "y": 0.009976026746961806,
+        "width": 0.09787923693656919,
+        "height": 0.10670827229817707
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9244997338771761,
+        "wearingHelmetConfidence": 0.07550026612282386,
+        "unwearingHelmetConfidence": 0.9244997338771761
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.7712130779550378,
+        "wearingHelmetConfidence": 0.2287869220449622,
+        "unwearingHelmetConfidence": 0.7712130779550378
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9720661884231045,
+        "wearingHelmetConfidence": 0.027933811576895354,
+        "unwearingHelmetConfidence": 0.9720661884231045
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.6447792010098976,
+        "wearingHelmetConfidence": 0.3552207989901024,
+        "unwearingHelmetConfidence": 0.6447792010098976
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198609384.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.6518358026740501,
+      "boundingBox": {
+        "x": 0.8971574008464813,
+        "y": 0.18682213889227972,
+        "width": 0.10131012201309209,
+        "height": 0.24755187564426
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9866135286879479,
+        "wearingHelmetConfidence": 0.9866135286879479,
+        "unwearingHelmetConfidence": 0.013386471312052041
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.7881754036307196,
+        "wearingHelmetConfidence": 0.7881754036307196,
+        "unwearingHelmetConfidence": 0.21182459636928036
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.5636485862023332,
+        "wearingHelmetConfidence": 0.5636485862023332,
+        "unwearingHelmetConfidence": 0.43635141379766684
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.999857412552646,
+        "wearingHelmetConfidence": 0.999857412552646,
+        "unwearingHelmetConfidence": 0.00014258744735399777
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198609384.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.5783952121480951,
+      "boundingBox": {
+        "x": 0.48637383580207827,
+        "y": 0.06081416871812609,
+        "width": 0.17674688100814817,
+        "height": 0.30047834184434674
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9999846410522286,
+        "wearingHelmetConfidence": 0.9999846410522286,
+        "unwearingHelmetConfidence": 0.000015358947771321434
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9925553771089424,
+        "wearingHelmetConfidence": 0.9925553771089424,
+        "unwearingHelmetConfidence": 0.007444622891057591
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.9295649656430167,
+        "wearingHelmetConfidence": 0.9295649656430167,
+        "unwearingHelmetConfidence": 0.07043503435698335
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9999343153721812,
+        "wearingHelmetConfidence": 0.9999343153721812,
+        "unwearingHelmetConfidence": 0.00006568462781883308
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198609384.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.40044799713848533,
+      "boundingBox": {
+        "x": 0.39474683403968813,
+        "y": 0.358339336183336,
+        "width": 0.07672508955001828,
+        "height": 0.1131227599249946
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.7216284195798466,
+        "wearingHelmetConfidence": 0.2783715804201534,
+        "unwearingHelmetConfidence": 0.7216284195798466
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.743915029509812,
+        "wearingHelmetConfidence": 0.25608497049018797,
+        "unwearingHelmetConfidence": 0.743915029509812
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.5347435489492467,
+        "wearingHelmetConfidence": 0.46525645105075336,
+        "unwearingHelmetConfidence": 0.5347435489492467
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.6528748611187322,
+        "wearingHelmetConfidence": 0.34712513888126784,
+        "unwearingHelmetConfidence": 0.6528748611187322
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198601048.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.48046582050298525,
+      "boundingBox": {
+        "x": 0.009406864643096924,
+        "y": 0.06194464895460341,
+        "width": 0.04104619026184082,
+        "height": 0.0694666862487793
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9476382413324199,
+        "wearingHelmetConfidence": 0.9476382413324199,
+        "unwearingHelmetConfidence": 0.05236175866758013
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9962270194849653,
+        "wearingHelmetConfidence": 0.9962270194849653,
+        "unwearingHelmetConfidence": 0.0037729805150348234
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.9995184653877958,
+        "wearingHelmetConfidence": 0.9995184653877958,
+        "unwearingHelmetConfidence": 0.00048153461220424475
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.7034224481610081,
+        "wearingHelmetConfidence": 0.7034224481610081,
+        "unwearingHelmetConfidence": 0.296577551838992
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198601048.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.4657751257844467,
+      "boundingBox": {
+        "x": 0.11658753156661987,
+        "y": 0.20221067004733614,
+        "width": 0.05353124141693115,
+        "height": 0.10809841156005859
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.6746975943822454,
+        "wearingHelmetConfidence": 0.3253024056177546,
+        "unwearingHelmetConfidence": 0.6746975943822454
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.6267244156997235,
+        "wearingHelmetConfidence": 0.3732755843002766,
+        "unwearingHelmetConfidence": 0.6267244156997235
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.6790726335637745,
+        "wearingHelmetConfidence": 0.32092736643622544,
+        "unwearingHelmetConfidence": 0.6790726335637745
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.7215952040642462,
+        "wearingHelmetConfidence": 0.7215952040642462,
+        "unwearingHelmetConfidence": 0.27840479593575385
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198601048.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.4400022811898765,
+      "boundingBox": {
+        "x": 0.6812690794467926,
+        "y": 0.36083752314249673,
+        "width": 0.1826288104057312,
+        "height": 0.34911403656005857
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.740366148433049,
+        "wearingHelmetConfidence": 0.740366148433049,
+        "unwearingHelmetConfidence": 0.25963385156695096
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.922462913962922,
+        "wearingHelmetConfidence": 0.0775370860370779,
+        "unwearingHelmetConfidence": 0.922462913962922
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.5515047220899015,
+        "wearingHelmetConfidence": 0.44849527791009847,
+        "unwearingHelmetConfidence": 0.5515047220899015
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9976583012271315,
+        "wearingHelmetConfidence": 0.9976583012271315,
+        "unwearingHelmetConfidence": 0.0023416987728685492
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198601048.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.3762782700623575,
+      "boundingBox": {
+        "x": 0.5769863069057465,
+        "y": 0.31510954962836374,
+        "width": 0.15492488145828243,
+        "height": 0.27561467488606767
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9999999876807165,
+        "wearingHelmetConfidence": 0.9999999876807165,
+        "unwearingHelmetConfidence": 1.2319283459208368e-8
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9999999913473,
+        "wearingHelmetConfidence": 0.9999999913473,
+        "unwearingHelmetConfidence": 8.652700136509014e-9
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.9999999944709108,
+        "wearingHelmetConfidence": 0.9999999944709108,
+        "unwearingHelmetConfidence": 5.52908925262449e-9
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9999999747202781,
+        "wearingHelmetConfidence": 0.9999999747202781,
+        "unwearingHelmetConfidence": 2.527972186488076e-8
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198601048.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.37090668999745446,
+      "boundingBox": {
+        "x": 0.16302923560142518,
+        "y": 0.1585132704840766,
+        "width": 0.08636356592178343,
+        "height": 0.13708866967095268
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9999939216620344,
+        "wearingHelmetConfidence": 0.9999939216620344,
+        "unwearingHelmetConfidence": 0.000006078337965633042
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9999609809871004,
+        "wearingHelmetConfidence": 0.9999609809871004,
+        "unwearingHelmetConfidence": 0.000039019012899540445
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.997218979171,
+        "wearingHelmetConfidence": 0.997218979171,
+        "unwearingHelmetConfidence": 0.002781020829000127
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9944820874021194,
+        "wearingHelmetConfidence": 0.9944820874021194,
+        "unwearingHelmetConfidence": 0.00551791259788067
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198601048.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.26689680554000006,
+      "boundingBox": {
+        "x": 0.11965230107307434,
+        "y": 0.17765063179863824,
+        "width": 0.10153890848159791,
+        "height": 0.13384905921088322
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.5533699918311066,
+        "wearingHelmetConfidence": 0.5533699918311066,
+        "unwearingHelmetConfidence": 0.4466300081688934
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9905423255799514,
+        "wearingHelmetConfidence": 0.9905423255799514,
+        "unwearingHelmetConfidence": 0.0094576744200487
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.9826657023385726,
+        "wearingHelmetConfidence": 0.9826657023385726,
+        "unwearingHelmetConfidence": 0.017334297661427384
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.8321655381865435,
+        "wearingHelmetConfidence": 0.8321655381865435,
+        "unwearingHelmetConfidence": 0.16783446181345651
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198591579.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8163851414831527,
+      "boundingBox": {
+        "x": 0.2682453840970993,
+        "y": 0.07901165220472547,
+        "width": 0.07937865853309634,
+        "height": 0.14322986602783203
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9635430980290054,
+        "wearingHelmetConfidence": 0.03645690197099447,
+        "unwearingHelmetConfidence": 0.9635430980290054
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9974671292224374,
+        "wearingHelmetConfidence": 0.0025328707775625135,
+        "unwearingHelmetConfidence": 0.9974671292224374
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9987336439437051,
+        "wearingHelmetConfidence": 0.0012663560562949435,
+        "unwearingHelmetConfidence": 0.9987336439437051
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.9665491043141389,
+        "wearingHelmetConfidence": 0.03345089568586126,
+        "unwearingHelmetConfidence": 0.9665491043141389
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198591579.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8092194362268295,
+      "boundingBox": {
+        "x": 0.8349255561828614,
+        "y": 0.07367059919569227,
+        "width": 0.1290861129760742,
+        "height": 0.22096468607584638
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9333267357299083,
+        "wearingHelmetConfidence": 0.06667326427009154,
+        "unwearingHelmetConfidence": 0.9333267357299083
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.8552115685612073,
+        "wearingHelmetConfidence": 0.14478843143879275,
+        "unwearingHelmetConfidence": 0.8552115685612073
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.8416997309864527,
+        "wearingHelmetConfidence": 0.8416997309864527,
+        "unwearingHelmetConfidence": 0.15830026901354718
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9474164473942859,
+        "wearingHelmetConfidence": 0.9474164473942859,
+        "unwearingHelmetConfidence": 0.052583552605714214
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198591579.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.2948702999532493,
+      "boundingBox": {
+        "x": 0.26622936725616453,
+        "y": 0.47306021054585773,
+        "width": 0.07821712493896488,
+        "height": 0.11465821795993386
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9900033993431007,
+        "wearingHelmetConfidence": 0.9900033993431007,
+        "unwearingHelmetConfidence": 0.009996600656899354
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.701890979404141,
+        "wearingHelmetConfidence": 0.29810902059585886,
+        "unwearingHelmetConfidence": 0.701890979404141
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.9998346418604266,
+        "wearingHelmetConfidence": 0.9998346418604266,
+        "unwearingHelmetConfidence": 0.00016535813957347783
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9989106342980041,
+        "wearingHelmetConfidence": 0.9989106342980041,
+        "unwearingHelmetConfidence": 0.0010893657019960211
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198591579.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.2809805566455239,
+      "boundingBox": {
+        "x": 0.9608590394258499,
+        "y": 0.1251198238796658,
+        "width": 0.03775896430015557,
+        "height": 0.1751063028971354
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.5708974372539464,
+        "wearingHelmetConfidence": 0.5708974372539464,
+        "unwearingHelmetConfidence": 0.4291025627460537
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.6631924997099438,
+        "wearingHelmetConfidence": 0.6631924997099438,
+        "unwearingHelmetConfidence": 0.33680750029005624
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.56500476604438,
+        "wearingHelmetConfidence": 0.43499523395561995,
+        "unwearingHelmetConfidence": 0.56500476604438
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.8863098358797326,
+        "wearingHelmetConfidence": 0.8863098358797326,
+        "unwearingHelmetConfidence": 0.11369016412026745
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198582436.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8163851414831527,
+      "boundingBox": {
+        "x": 0.2682453840970993,
+        "y": 0.07901165220472547,
+        "width": 0.07937865853309634,
+        "height": 0.14322986602783203
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9635430980290054,
+        "wearingHelmetConfidence": 0.03645690197099447,
+        "unwearingHelmetConfidence": 0.9635430980290054
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9974671292224374,
+        "wearingHelmetConfidence": 0.0025328707775625135,
+        "unwearingHelmetConfidence": 0.9974671292224374
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9987336439437051,
+        "wearingHelmetConfidence": 0.0012663560562949435,
+        "unwearingHelmetConfidence": 0.9987336439437051
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.9665491043141389,
+        "wearingHelmetConfidence": 0.03345089568586126,
+        "unwearingHelmetConfidence": 0.9665491043141389
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198582436.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8092194362268295,
+      "boundingBox": {
+        "x": 0.8349255561828614,
+        "y": 0.07367059919569227,
+        "width": 0.1290861129760742,
+        "height": 0.22096468607584638
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9333267357299083,
+        "wearingHelmetConfidence": 0.06667326427009154,
+        "unwearingHelmetConfidence": 0.9333267357299083
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.8552115685612073,
+        "wearingHelmetConfidence": 0.14478843143879275,
+        "unwearingHelmetConfidence": 0.8552115685612073
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.8416997309864527,
+        "wearingHelmetConfidence": 0.8416997309864527,
+        "unwearingHelmetConfidence": 0.15830026901354718
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9474164473942859,
+        "wearingHelmetConfidence": 0.9474164473942859,
+        "unwearingHelmetConfidence": 0.052583552605714214
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198582436.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.2948702999532493,
+      "boundingBox": {
+        "x": 0.26622936725616453,
+        "y": 0.47306021054585773,
+        "width": 0.07821712493896488,
+        "height": 0.11465821795993386
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9900033993431007,
+        "wearingHelmetConfidence": 0.9900033993431007,
+        "unwearingHelmetConfidence": 0.009996600656899354
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.701890979404141,
+        "wearingHelmetConfidence": 0.29810902059585886,
+        "unwearingHelmetConfidence": 0.701890979404141
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.9998346418604266,
+        "wearingHelmetConfidence": 0.9998346418604266,
+        "unwearingHelmetConfidence": 0.00016535813957347783
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9989106342980041,
+        "wearingHelmetConfidence": 0.9989106342980041,
+        "unwearingHelmetConfidence": 0.0010893657019960211
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198582436.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.2809805566455239,
+      "boundingBox": {
+        "x": 0.9608590394258499,
+        "y": 0.1251198238796658,
+        "width": 0.03775896430015557,
+        "height": 0.1751063028971354
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.5708974372539464,
+        "wearingHelmetConfidence": 0.5708974372539464,
+        "unwearingHelmetConfidence": 0.4291025627460537
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.6631924997099438,
+        "wearingHelmetConfidence": 0.6631924997099438,
+        "unwearingHelmetConfidence": 0.33680750029005624
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.56500476604438,
+        "wearingHelmetConfidence": 0.43499523395561995,
+        "unwearingHelmetConfidence": 0.56500476604438
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.8863098358797326,
+        "wearingHelmetConfidence": 0.8863098358797326,
+        "unwearingHelmetConfidence": 0.11369016412026745
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198577964.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8207868220046919,
+      "boundingBox": {
+        "x": 0.672942578792572,
+        "y": 0.33810452355278864,
+        "width": 0.1498357057571411,
+        "height": 0.27572102016872824
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9702977201405005,
+        "wearingHelmetConfidence": 0.029702279859499525,
+        "unwearingHelmetConfidence": 0.9702977201405005
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9980844332196598,
+        "wearingHelmetConfidence": 0.0019155667803401797,
+        "unwearingHelmetConfidence": 0.9980844332196598
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9820319498978316,
+        "wearingHelmetConfidence": 0.01796805010216831,
+        "unwearingHelmetConfidence": 0.9820319498978316
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.894255572930901,
+        "wearingHelmetConfidence": 0.894255572930901,
+        "unwearingHelmetConfidence": 0.10574442706909902
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198577964.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8077957863232399,
+      "boundingBox": {
+        "x": 0.758344441652298,
+        "y": 0.17691279517279732,
+        "width": 0.1113335013389587,
+        "height": 0.18928226894802516
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9993622016481427,
+        "wearingHelmetConfidence": 0.9993622016481427,
+        "unwearingHelmetConfidence": 0.0006377983518572009
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9987256014888262,
+        "wearingHelmetConfidence": 0.9987256014888262,
+        "unwearingHelmetConfidence": 0.001274398511173807
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.7621698685628312,
+        "wearingHelmetConfidence": 0.7621698685628312,
+        "unwearingHelmetConfidence": 0.23783013143716883
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.999975694046206,
+        "wearingHelmetConfidence": 0.999975694046206,
+        "unwearingHelmetConfidence": 0.000024305953793984784
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198577964.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.790207352588908,
+      "boundingBox": {
+        "x": 0.2518460601568222,
+        "y": 0.02240957154168023,
+        "width": 0.09749644398689272,
+        "height": 0.1506439103020562
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9977884162986767,
+        "wearingHelmetConfidence": 0.9977884162986767,
+        "unwearingHelmetConfidence": 0.002211583701323217
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.757877155259312,
+        "wearingHelmetConfidence": 0.757877155259312,
+        "unwearingHelmetConfidence": 0.24212284474068796
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9068972725021631,
+        "wearingHelmetConfidence": 0.09310272749783678,
+        "unwearingHelmetConfidence": 0.9068972725021631
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.994573205925058,
+        "wearingHelmetConfidence": 0.994573205925058,
+        "unwearingHelmetConfidence": 0.00542679407494195
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198577964.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.6950074456823501,
+      "boundingBox": {
+        "x": 0,
+        "y": 0.08991783989800348,
+        "width": 0.048140138387680054,
+        "height": 0.1896244472927517
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.8299894777268201,
+        "wearingHelmetConfidence": 0.17001052227317986,
+        "unwearingHelmetConfidence": 0.8299894777268201
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.5614639365984851,
+        "wearingHelmetConfidence": 0.43853606340151485,
+        "unwearingHelmetConfidence": 0.5614639365984851
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.6477972116151932,
+        "wearingHelmetConfidence": 0.3522027883848068,
+        "unwearingHelmetConfidence": 0.6477972116151932
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.6777441557188938,
+        "wearingHelmetConfidence": 0.6777441557188938,
+        "unwearingHelmetConfidence": 0.32225584428110615
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198565877.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.7604587891853498,
+      "boundingBox": {
+        "x": 0.47629013657569885,
+        "y": 0.177131281958686,
+        "width": 0.11441086530685429,
+        "height": 0.1875193913777669
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9970306831699488,
+        "wearingHelmetConfidence": 0.0029693168300511264,
+        "unwearingHelmetConfidence": 0.9970306831699488
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.996943722974769,
+        "wearingHelmetConfidence": 0.003056277025230996,
+        "unwearingHelmetConfidence": 0.996943722974769
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9997187843265466,
+        "wearingHelmetConfidence": 0.0002812156734532889,
+        "unwearingHelmetConfidence": 0.9997187843265466
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.7710885661796179,
+        "wearingHelmetConfidence": 0.22891143382038215,
+        "unwearingHelmetConfidence": 0.7710885661796179
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198565877.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.6419960901009887,
+      "boundingBox": {
+        "x": 0.41147689521312714,
+        "y": 0.6303486929999458,
+        "width": 0.07619972825050353,
+        "height": 0.14148479037814665
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.5871496352050705,
+        "wearingHelmetConfidence": 0.5871496352050705,
+        "unwearingHelmetConfidence": 0.41285036479492965
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9633476943828786,
+        "wearingHelmetConfidence": 0.9633476943828786,
+        "unwearingHelmetConfidence": 0.03665230561712136
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.8370575763542458,
+        "wearingHelmetConfidence": 0.8370575763542458,
+        "unwearingHelmetConfidence": 0.16294242364575415
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.573534099373681,
+        "wearingHelmetConfidence": 0.42646590062631906,
+        "unwearingHelmetConfidence": 0.573534099373681
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198565877.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.43713601428821747,
+      "boundingBox": {
+        "x": 0.38902139365673066,
+        "y": 0.10547769864400228,
+        "width": 0.05896320939064026,
+        "height": 0.11245667139689128
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.5355556761279542,
+        "wearingHelmetConfidence": 0.4644443238720457,
+        "unwearingHelmetConfidence": 0.5355556761279542
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.8560364423380037,
+        "wearingHelmetConfidence": 0.14396355766199628,
+        "unwearingHelmetConfidence": 0.8560364423380037
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9602737027327437,
+        "wearingHelmetConfidence": 0.039726297267256176,
+        "unwearingHelmetConfidence": 0.9602737027327437
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9802882029968679,
+        "wearingHelmetConfidence": 0.9802882029968679,
+        "unwearingHelmetConfidence": 0.019711797003132112
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198565877.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.3947346277306707,
+      "boundingBox": {
+        "x": 0.27957143187522887,
+        "y": 0,
+        "width": 0.06833292245864869,
+        "height": 0.052747620476616755
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9457675897276993,
+        "wearingHelmetConfidence": 0.054232410272300795,
+        "unwearingHelmetConfidence": 0.9457675897276993
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9330181100689054,
+        "wearingHelmetConfidence": 0.06698188993109452,
+        "unwearingHelmetConfidence": 0.9330181100689054
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9897371631848598,
+        "wearingHelmetConfidence": 0.010262836815140135,
+        "unwearingHelmetConfidence": 0.9897371631848598
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.8233897829914749,
+        "wearingHelmetConfidence": 0.17661021700852517,
+        "unwearingHelmetConfidence": 0.8233897829914749
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198565877.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.2949701640489373,
+      "boundingBox": {
+        "x": 0.34752394556999205,
+        "y": 0.0755117416381836,
+        "width": 0.041849815845489524,
+        "height": 0.08548995123969184
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9700858482916745,
+        "wearingHelmetConfidence": 0.9700858482916745,
+        "unwearingHelmetConfidence": 0.0299141517083255
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9943263957377932,
+        "wearingHelmetConfidence": 0.9943263957377932,
+        "unwearingHelmetConfidence": 0.00567360426220663
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.9474530957281986,
+        "wearingHelmetConfidence": 0.9474530957281986,
+        "unwearingHelmetConfidence": 0.052546904271801545
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9809185357784381,
+        "wearingHelmetConfidence": 0.9809185357784381,
+        "unwearingHelmetConfidence": 0.019081464221561897
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198560177.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.872175186267441,
+      "boundingBox": {
+        "x": 0.3389294922351837,
+        "y": 0.3538646592034234,
+        "width": 0.17595647573471068,
+        "height": 0.3212294896443684
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.661663238778008,
+        "wearingHelmetConfidence": 0.661663238778008,
+        "unwearingHelmetConfidence": 0.338336761221992
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.7043009684973806,
+        "wearingHelmetConfidence": 0.2956990315026194,
+        "unwearingHelmetConfidence": 0.7043009684973806
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.9543549244618799,
+        "wearingHelmetConfidence": 0.9543549244618799,
+        "unwearingHelmetConfidence": 0.04564507553812016
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9991197834306933,
+        "wearingHelmetConfidence": 0.9991197834306933,
+        "unwearingHelmetConfidence": 0.0008802165693067844
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198560177.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8197575826584398,
+      "boundingBox": {
+        "x": 0.5944693386554718,
+        "y": 0.3318629052903917,
+        "width": 0.10967916250228882,
+        "height": 0.21113211313883468
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9990233388901253,
+        "wearingHelmetConfidence": 0.0009766611098748436,
+        "unwearingHelmetConfidence": 0.9990233388901253
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9996395133333336,
+        "wearingHelmetConfidence": 0.00036048666666639925,
+        "unwearingHelmetConfidence": 0.9996395133333336
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9994116539899541,
+        "wearingHelmetConfidence": 0.0005883460100458863,
+        "unwearingHelmetConfidence": 0.9994116539899541
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9888596719324042,
+        "wearingHelmetConfidence": 0.9888596719324042,
+        "unwearingHelmetConfidence": 0.01114032806759587
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198560177.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.7715340289845471,
+      "boundingBox": {
+        "x": 0.5810861349105835,
+        "y": 0.7444731924268935,
+        "width": 0.1928560733795166,
+        "height": 0.2446929719712999
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.8385512167471834,
+        "wearingHelmetConfidence": 0.16144878325281667,
+        "unwearingHelmetConfidence": 0.8385512167471834
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.6622038984650735,
+        "wearingHelmetConfidence": 0.33779610153492645,
+        "unwearingHelmetConfidence": 0.6622038984650735
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.5431647786176229,
+        "wearingHelmetConfidence": 0.5431647786176229,
+        "unwearingHelmetConfidence": 0.45683522138237714
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.9423072318296661,
+        "wearingHelmetConfidence": 0.05769276817033395,
+        "unwearingHelmetConfidence": 0.9423072318296661
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198549081.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.3245213897887389,
+      "boundingBox": {
+        "x": 0.4397550255060196,
+        "y": 0.19790381325615777,
+        "width": 0.07532421946525575,
+        "height": 0.1252415339152018
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.5619257731774353,
+        "wearingHelmetConfidence": 0.5619257731774353,
+        "unwearingHelmetConfidence": 0.43807422682256475
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.7012231030740675,
+        "wearingHelmetConfidence": 0.7012231030740675,
+        "unwearingHelmetConfidence": 0.2987768969259324
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.7811559950399729,
+        "wearingHelmetConfidence": 0.21884400496002707,
+        "unwearingHelmetConfidence": 0.7811559950399729
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.5259152420449573,
+        "wearingHelmetConfidence": 0.4740847579550427,
+        "unwearingHelmetConfidence": 0.5259152420449573
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198529305.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.6472641263231083,
+      "boundingBox": {
+        "x": 0.4017425775527954,
+        "y": 0.0687083191341824,
+        "width": 0.08872466087341307,
+        "height": 0.14977954228719076
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9208235349543932,
+        "wearingHelmetConfidence": 0.07917646504560687,
+        "unwearingHelmetConfidence": 0.9208235349543932
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9605815543193298,
+        "wearingHelmetConfidence": 0.03941844568067013,
+        "unwearingHelmetConfidence": 0.9605815543193298
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9960744542942834,
+        "wearingHelmetConfidence": 0.0039255457057166205,
+        "unwearingHelmetConfidence": 0.9960744542942834
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.927606507888205,
+        "wearingHelmetConfidence": 0.07239349211179513,
+        "unwearingHelmetConfidence": 0.927606507888205
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198529305.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.5797530503057544,
+      "boundingBox": {
+        "x": 0,
+        "y": 0.2353797091378106,
+        "width": 0.023449257016181946,
+        "height": 0.07938952445983888
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.7791108265994149,
+        "wearingHelmetConfidence": 0.22088917340058514,
+        "unwearingHelmetConfidence": 0.7791108265994149
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.8779275663583158,
+        "wearingHelmetConfidence": 0.12207243364168417,
+        "unwearingHelmetConfidence": 0.8779275663583158
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9097149911024225,
+        "wearingHelmetConfidence": 0.0902850088975776,
+        "unwearingHelmetConfidence": 0.9097149911024225
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.655363211176723,
+        "wearingHelmetConfidence": 0.34463678882327686,
+        "unwearingHelmetConfidence": 0.655363211176723
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198529305.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.5570946639576846,
+      "boundingBox": {
+        "x": 0.016427072882652282,
+        "y": 0.0939391056696574,
+        "width": 0.04577329754829407,
+        "height": 0.08029483689202203
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9846702541912074,
+        "wearingHelmetConfidence": 0.9846702541912074,
+        "unwearingHelmetConfidence": 0.01532974580879279
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9999988436698153,
+        "wearingHelmetConfidence": 0.9999988436698153,
+        "unwearingHelmetConfidence": 0.000001156330184777689
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.9997484979645218,
+        "wearingHelmetConfidence": 0.9997484979645218,
+        "unwearingHelmetConfidence": 0.00025150203547829073
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9341719494870002,
+        "wearingHelmetConfidence": 0.9341719494870002,
+        "unwearingHelmetConfidence": 0.0658280505129997
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198529305.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.5342170642762198,
+      "boundingBox": {
+        "x": 0,
+        "y": 0.10356574058532715,
+        "width": 0.026556695997714996,
+        "height": 0.07683551576402452
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.6121097105749257,
+        "wearingHelmetConfidence": 0.6121097105749257,
+        "unwearingHelmetConfidence": 0.3878902894250743
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.7821459174143149,
+        "wearingHelmetConfidence": 0.7821459174143149,
+        "unwearingHelmetConfidence": 0.21785408258568506
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.986714900388004,
+        "wearingHelmetConfidence": 0.986714900388004,
+        "unwearingHelmetConfidence": 0.013285099611996113
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.5879486142717827,
+        "wearingHelmetConfidence": 0.5879486142717827,
+        "unwearingHelmetConfidence": 0.41205138572821737
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198447042.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.3245213897887389,
+      "boundingBox": {
+        "x": 0.4397550255060196,
+        "y": 0.19790381325615777,
+        "width": 0.07532421946525575,
+        "height": 0.1252415339152018
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.5619257731774353,
+        "wearingHelmetConfidence": 0.5619257731774353,
+        "unwearingHelmetConfidence": 0.43807422682256475
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.7012231030740675,
+        "wearingHelmetConfidence": 0.7012231030740675,
+        "unwearingHelmetConfidence": 0.2987768969259324
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.7811559950399729,
+        "wearingHelmetConfidence": 0.21884400496002707,
+        "unwearingHelmetConfidence": 0.7811559950399729
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.5259152420449573,
+        "wearingHelmetConfidence": 0.4740847579550427,
+        "unwearingHelmetConfidence": 0.5259152420449573
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198062802.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.7604587891853498,
+      "boundingBox": {
+        "x": 0.47629013657569885,
+        "y": 0.177131281958686,
+        "width": 0.11441086530685429,
+        "height": 0.1875193913777669
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9970306831699488,
+        "wearingHelmetConfidence": 0.0029693168300511264,
+        "unwearingHelmetConfidence": 0.9970306831699488
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.996943722974769,
+        "wearingHelmetConfidence": 0.003056277025230996,
+        "unwearingHelmetConfidence": 0.996943722974769
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9997187843265466,
+        "wearingHelmetConfidence": 0.0002812156734532889,
+        "unwearingHelmetConfidence": 0.9997187843265466
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.7710885661796179,
+        "wearingHelmetConfidence": 0.22891143382038215,
+        "unwearingHelmetConfidence": 0.7710885661796179
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198062802.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.6419960901009887,
+      "boundingBox": {
+        "x": 0.41147689521312714,
+        "y": 0.6303486929999458,
+        "width": 0.07619972825050353,
+        "height": 0.14148479037814665
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.5871496352050705,
+        "wearingHelmetConfidence": 0.5871496352050705,
+        "unwearingHelmetConfidence": 0.41285036479492965
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9633476943828786,
+        "wearingHelmetConfidence": 0.9633476943828786,
+        "unwearingHelmetConfidence": 0.03665230561712136
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.8370575763542458,
+        "wearingHelmetConfidence": 0.8370575763542458,
+        "unwearingHelmetConfidence": 0.16294242364575415
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.573534099373681,
+        "wearingHelmetConfidence": 0.42646590062631906,
+        "unwearingHelmetConfidence": 0.573534099373681
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198062802.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.43713601428821747,
+      "boundingBox": {
+        "x": 0.38902139365673066,
+        "y": 0.10547769864400228,
+        "width": 0.05896320939064026,
+        "height": 0.11245667139689128
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.5355556761279542,
+        "wearingHelmetConfidence": 0.4644443238720457,
+        "unwearingHelmetConfidence": 0.5355556761279542
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.8560364423380037,
+        "wearingHelmetConfidence": 0.14396355766199628,
+        "unwearingHelmetConfidence": 0.8560364423380037
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9602737027327437,
+        "wearingHelmetConfidence": 0.039726297267256176,
+        "unwearingHelmetConfidence": 0.9602737027327437
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9802882029968679,
+        "wearingHelmetConfidence": 0.9802882029968679,
+        "unwearingHelmetConfidence": 0.019711797003132112
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198062802.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.3947346277306707,
+      "boundingBox": {
+        "x": 0.27957143187522887,
+        "y": 0,
+        "width": 0.06833292245864869,
+        "height": 0.052747620476616755
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9457675897276993,
+        "wearingHelmetConfidence": 0.054232410272300795,
+        "unwearingHelmetConfidence": 0.9457675897276993
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9330181100689054,
+        "wearingHelmetConfidence": 0.06698188993109452,
+        "unwearingHelmetConfidence": 0.9330181100689054
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9897371631848598,
+        "wearingHelmetConfidence": 0.010262836815140135,
+        "unwearingHelmetConfidence": 0.9897371631848598
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.8233897829914749,
+        "wearingHelmetConfidence": 0.17661021700852517,
+        "unwearingHelmetConfidence": 0.8233897829914749
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198062802.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.2949701640489373,
+      "boundingBox": {
+        "x": 0.34752394556999205,
+        "y": 0.0755117416381836,
+        "width": 0.041849815845489524,
+        "height": 0.08548995123969184
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9700858482916745,
+        "wearingHelmetConfidence": 0.9700858482916745,
+        "unwearingHelmetConfidence": 0.0299141517083255
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9943263957377932,
+        "wearingHelmetConfidence": 0.9943263957377932,
+        "unwearingHelmetConfidence": 0.00567360426220663
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.9474530957281986,
+        "wearingHelmetConfidence": 0.9474530957281986,
+        "unwearingHelmetConfidence": 0.052546904271801545
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9809185357784381,
+        "wearingHelmetConfidence": 0.9809185357784381,
+        "unwearingHelmetConfidence": 0.019081464221561897
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791197215378.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8207868220046919,
+      "boundingBox": {
+        "x": 0.672942578792572,
+        "y": 0.33810452355278864,
+        "width": 0.1498357057571411,
+        "height": 0.27572102016872824
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9702977201405005,
+        "wearingHelmetConfidence": 0.029702279859499525,
+        "unwearingHelmetConfidence": 0.9702977201405005
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9980844332196598,
+        "wearingHelmetConfidence": 0.0019155667803401797,
+        "unwearingHelmetConfidence": 0.9980844332196598
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9820319498978316,
+        "wearingHelmetConfidence": 0.01796805010216831,
+        "unwearingHelmetConfidence": 0.9820319498978316
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.894255572930901,
+        "wearingHelmetConfidence": 0.894255572930901,
+        "unwearingHelmetConfidence": 0.10574442706909902
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791197215378.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8077957863232399,
+      "boundingBox": {
+        "x": 0.758344441652298,
+        "y": 0.17691279517279732,
+        "width": 0.1113335013389587,
+        "height": 0.18928226894802516
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9993622016481427,
+        "wearingHelmetConfidence": 0.9993622016481427,
+        "unwearingHelmetConfidence": 0.0006377983518572009
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9987256014888262,
+        "wearingHelmetConfidence": 0.9987256014888262,
+        "unwearingHelmetConfidence": 0.001274398511173807
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.7621698685628312,
+        "wearingHelmetConfidence": 0.7621698685628312,
+        "unwearingHelmetConfidence": 0.23783013143716883
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.999975694046206,
+        "wearingHelmetConfidence": 0.999975694046206,
+        "unwearingHelmetConfidence": 0.000024305953793984784
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791197215378.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.790207352588908,
+      "boundingBox": {
+        "x": 0.2518460601568222,
+        "y": 0.02240957154168023,
+        "width": 0.09749644398689272,
+        "height": 0.1506439103020562
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9977884162986767,
+        "wearingHelmetConfidence": 0.9977884162986767,
+        "unwearingHelmetConfidence": 0.002211583701323217
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.757877155259312,
+        "wearingHelmetConfidence": 0.757877155259312,
+        "unwearingHelmetConfidence": 0.24212284474068796
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9068972725021631,
+        "wearingHelmetConfidence": 0.09310272749783678,
+        "unwearingHelmetConfidence": 0.9068972725021631
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.994573205925058,
+        "wearingHelmetConfidence": 0.994573205925058,
+        "unwearingHelmetConfidence": 0.00542679407494195
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791197215378.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.6950074456823501,
+      "boundingBox": {
+        "x": 0,
+        "y": 0.08991783989800348,
+        "width": 0.048140138387680054,
+        "height": 0.1896244472927517
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.8299894777268201,
+        "wearingHelmetConfidence": 0.17001052227317986,
+        "unwearingHelmetConfidence": 0.8299894777268201
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.5614639365984851,
+        "wearingHelmetConfidence": 0.43853606340151485,
+        "unwearingHelmetConfidence": 0.5614639365984851
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.6477972116151932,
+        "wearingHelmetConfidence": 0.3522027883848068,
+        "unwearingHelmetConfidence": 0.6477972116151932
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.6777441557188938,
+        "wearingHelmetConfidence": 0.6777441557188938,
+        "unwearingHelmetConfidence": 0.32225584428110615
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791190779442.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8163851414831527,
+      "boundingBox": {
+        "x": 0.2682453840970993,
+        "y": 0.07901165220472547,
+        "width": 0.07937865853309634,
+        "height": 0.14322986602783203
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9635430980290054,
+        "wearingHelmetConfidence": 0.03645690197099447,
+        "unwearingHelmetConfidence": 0.9635430980290054
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9974671292224374,
+        "wearingHelmetConfidence": 0.0025328707775625135,
+        "unwearingHelmetConfidence": 0.9974671292224374
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9987336439437051,
+        "wearingHelmetConfidence": 0.0012663560562949435,
+        "unwearingHelmetConfidence": 0.9987336439437051
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.9665491043141389,
+        "wearingHelmetConfidence": 0.03345089568586126,
+        "unwearingHelmetConfidence": 0.9665491043141389
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791190779442.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8092194362268295,
+      "boundingBox": {
+        "x": 0.8349255561828614,
+        "y": 0.07367059919569227,
+        "width": 0.1290861129760742,
+        "height": 0.22096468607584638
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9333267357299083,
+        "wearingHelmetConfidence": 0.06667326427009154,
+        "unwearingHelmetConfidence": 0.9333267357299083
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.8552115685612073,
+        "wearingHelmetConfidence": 0.14478843143879275,
+        "unwearingHelmetConfidence": 0.8552115685612073
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.8416997309864527,
+        "wearingHelmetConfidence": 0.8416997309864527,
+        "unwearingHelmetConfidence": 0.15830026901354718
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9474164473942859,
+        "wearingHelmetConfidence": 0.9474164473942859,
+        "unwearingHelmetConfidence": 0.052583552605714214
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791190779442.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.2948702999532493,
+      "boundingBox": {
+        "x": 0.26622936725616453,
+        "y": 0.47306021054585773,
+        "width": 0.07821712493896488,
+        "height": 0.11465821795993386
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9900033993431007,
+        "wearingHelmetConfidence": 0.9900033993431007,
+        "unwearingHelmetConfidence": 0.009996600656899354
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.701890979404141,
+        "wearingHelmetConfidence": 0.29810902059585886,
+        "unwearingHelmetConfidence": 0.701890979404141
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.9998346418604266,
+        "wearingHelmetConfidence": 0.9998346418604266,
+        "unwearingHelmetConfidence": 0.00016535813957347783
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9989106342980041,
+        "wearingHelmetConfidence": 0.9989106342980041,
+        "unwearingHelmetConfidence": 0.0010893657019960211
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791190779442.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.2809805566455239,
+      "boundingBox": {
+        "x": 0.9608590394258499,
+        "y": 0.1251198238796658,
+        "width": 0.03775896430015557,
+        "height": 0.1751063028971354
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.5708974372539464,
+        "wearingHelmetConfidence": 0.5708974372539464,
+        "unwearingHelmetConfidence": 0.4291025627460537
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.6631924997099438,
+        "wearingHelmetConfidence": 0.6631924997099438,
+        "unwearingHelmetConfidence": 0.33680750029005624
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.56500476604438,
+        "wearingHelmetConfidence": 0.43499523395561995,
+        "unwearingHelmetConfidence": 0.56500476604438
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.8863098358797326,
+        "wearingHelmetConfidence": 0.8863098358797326,
+        "unwearingHelmetConfidence": 0.11369016412026745
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791190768950.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8163851414831527,
+      "boundingBox": {
+        "x": 0.2682453840970993,
+        "y": 0.07901165220472547,
+        "width": 0.07937865853309634,
+        "height": 0.14322986602783203
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9635430980290054,
+        "wearingHelmetConfidence": 0.03645690197099447,
+        "unwearingHelmetConfidence": 0.9635430980290054
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9974671292224374,
+        "wearingHelmetConfidence": 0.0025328707775625135,
+        "unwearingHelmetConfidence": 0.9974671292224374
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9987336439437051,
+        "wearingHelmetConfidence": 0.0012663560562949435,
+        "unwearingHelmetConfidence": 0.9987336439437051
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.9665491043141389,
+        "wearingHelmetConfidence": 0.03345089568586126,
+        "unwearingHelmetConfidence": 0.9665491043141389
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791190768950.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8092194362268295,
+      "boundingBox": {
+        "x": 0.8349255561828614,
+        "y": 0.07367059919569227,
+        "width": 0.1290861129760742,
+        "height": 0.22096468607584638
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9333267357299083,
+        "wearingHelmetConfidence": 0.06667326427009154,
+        "unwearingHelmetConfidence": 0.9333267357299083
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.8552115685612073,
+        "wearingHelmetConfidence": 0.14478843143879275,
+        "unwearingHelmetConfidence": 0.8552115685612073
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.8416997309864527,
+        "wearingHelmetConfidence": 0.8416997309864527,
+        "unwearingHelmetConfidence": 0.15830026901354718
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9474164473942859,
+        "wearingHelmetConfidence": 0.9474164473942859,
+        "unwearingHelmetConfidence": 0.052583552605714214
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791190768950.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.2948702999532493,
+      "boundingBox": {
+        "x": 0.26622936725616453,
+        "y": 0.47306021054585773,
+        "width": 0.07821712493896488,
+        "height": 0.11465821795993386
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9900033993431007,
+        "wearingHelmetConfidence": 0.9900033993431007,
+        "unwearingHelmetConfidence": 0.009996600656899354
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.701890979404141,
+        "wearingHelmetConfidence": 0.29810902059585886,
+        "unwearingHelmetConfidence": 0.701890979404141
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.9998346418604266,
+        "wearingHelmetConfidence": 0.9998346418604266,
+        "unwearingHelmetConfidence": 0.00016535813957347783
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9989106342980041,
+        "wearingHelmetConfidence": 0.9989106342980041,
+        "unwearingHelmetConfidence": 0.0010893657019960211
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791190768950.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.2809805566455239,
+      "boundingBox": {
+        "x": 0.9608590394258499,
+        "y": 0.1251198238796658,
+        "width": 0.03775896430015557,
+        "height": 0.1751063028971354
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.5708974372539464,
+        "wearingHelmetConfidence": 0.5708974372539464,
+        "unwearingHelmetConfidence": 0.4291025627460537
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.6631924997099438,
+        "wearingHelmetConfidence": 0.6631924997099438,
+        "unwearingHelmetConfidence": 0.33680750029005624
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.56500476604438,
+        "wearingHelmetConfidence": 0.43499523395561995,
+        "unwearingHelmetConfidence": 0.56500476604438
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.8863098358797326,
+        "wearingHelmetConfidence": 0.8863098358797326,
+        "unwearingHelmetConfidence": 0.11369016412026745
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791120703973.jpg",
+    "head": {
+      "label": "helmet",
+      "confidence": 0.27409021188695704,
+      "boundingBox": {
+        "x": 0.473941308259964,
+        "y": 0.06914348602294922,
+        "width": 0.11838105916976932,
+        "height": 0.17920638190375432
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9999707424445142,
+        "wearingHelmetConfidence": 0.9999707424445142,
+        "unwearingHelmetConfidence": 0.00002925755548574219
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9999997853288717,
+        "wearingHelmetConfidence": 0.9999997853288717,
+        "unwearingHelmetConfidence": 2.146711282054441e-7
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.999952311212631,
+        "wearingHelmetConfidence": 0.999952311212631,
+        "unwearingHelmetConfidence": 0.00004768878736907662
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.999985148735,
+        "wearingHelmetConfidence": 0.999985148735,
+        "unwearingHelmetConfidence": 0.000014851264999897703
+      }
+    ]
+  },
+  {
+    "file": "scratch/helmet-alert-ch6.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.7060828786081856,
+      "boundingBox": {
+        "x": 0.44510601460933685,
+        "y": 0.2528352949354384,
+        "width": 0.09926989674568176,
+        "height": 0.17317428588867184
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9953832372349629,
+        "wearingHelmetConfidence": 0.004616762765037099,
+        "unwearingHelmetConfidence": 0.9953832372349629
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.8366985556150013,
+        "wearingHelmetConfidence": 0.16330144438499872,
+        "unwearingHelmetConfidence": 0.8366985556150013
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.794879305607357,
+        "wearingHelmetConfidence": 0.794879305607357,
+        "unwearingHelmetConfidence": 0.20512069439264294
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9605988250633275,
+        "wearingHelmetConfidence": 0.9605988250633275,
+        "unwearingHelmetConfidence": 0.03940117493667252
+      }
+    ]
+  },
+  {
+    "file": "scratch/helmet-alert-ch6.jpg",
+    "head": {
+      "label": "helmet",
+      "confidence": 0.3653410366583465,
+      "boundingBox": {
+        "x": 0.4475298851728439,
+        "y": 0.2552133666144477,
+        "width": 0.09585009217262269,
+        "height": 0.16666999393039278
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9899334690412187,
+        "wearingHelmetConfidence": 0.010066530958781355,
+        "unwearingHelmetConfidence": 0.9899334690412187
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.7225255246613939,
+        "wearingHelmetConfidence": 0.27747447533860625,
+        "unwearingHelmetConfidence": 0.7225255246613939
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.8149166717200457,
+        "wearingHelmetConfidence": 0.8149166717200457,
+        "unwearingHelmetConfidence": 0.18508332827995433
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9940229685888246,
+        "wearingHelmetConfidence": 0.9940229685888246,
+        "unwearingHelmetConfidence": 0.005977031411175354
+      }
+    ]
+  },
+  {
+    "file": "tmp/helmet-channel-6.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8402697201999274,
+      "boundingBox": {
+        "x": 0.3540926516056061,
+        "y": 0.18231630325317383,
+        "width": 0.1535752177238464,
+        "height": 0.2786030027601454
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.9999992307561263,
+        "wearingHelmetConfidence": 0.9999992307561263,
+        "unwearingHelmetConfidence": 7.69243873704318e-7
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9999997499098537,
+        "wearingHelmetConfidence": 0.9999997499098537,
+        "unwearingHelmetConfidence": 2.500901462429476e-7
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.999999824032041,
+        "wearingHelmetConfidence": 0.999999824032041,
+        "unwearingHelmetConfidence": 1.7596795899593029e-7
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9999998794001365,
+        "wearingHelmetConfidence": 0.9999998794001365,
+        "unwearingHelmetConfidence": 1.2059986356885254e-7
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791202017341.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.7760474317775703,
+      "boundingBox": {
+        "x": 0.18678754568099976,
+        "y": 0.141949462890625,
+        "width": 0.20136759281158445,
+        "height": 0.4039120144314236
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.958709758556101,
+        "wearingHelmetConfidence": 0.958709758556101,
+        "unwearingHelmetConfidence": 0.041290241443899006
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9989699873327548,
+        "wearingHelmetConfidence": 0.9989699873327548,
+        "unwearingHelmetConfidence": 0.0010300126672452526
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.9998314861309536,
+        "wearingHelmetConfidence": 0.9998314861309536,
+        "unwearingHelmetConfidence": 0.0001685138690463759
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9996993117666553,
+        "wearingHelmetConfidence": 0.9996993117666553,
+        "unwearingHelmetConfidence": 0.00030068823334472887
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791204590121.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.833188340831768,
+      "boundingBox": {
+        "x": 0.6005883365869522,
+        "y": 0.20521244472927516,
+        "width": 0.08575722575187683,
+        "height": 0.16729346381293406
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9939286500723341,
+        "wearingHelmetConfidence": 0.006071349927665772,
+        "unwearingHelmetConfidence": 0.9939286500723341
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9972034813071265,
+        "wearingHelmetConfidence": 0.002796518692873571,
+        "unwearingHelmetConfidence": 0.9972034813071265
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9991171266212578,
+        "wearingHelmetConfidence": 0.0008828733787422276,
+        "unwearingHelmetConfidence": 0.9991171266212578
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": false,
+        "confidence": 0.822346909611729,
+        "wearingHelmetConfidence": 0.1776530903882711,
+        "unwearingHelmetConfidence": 0.822346909611729
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791204590121.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.8108472398499771,
+      "boundingBox": {
+        "x": 0.2105445683002472,
+        "y": 0.2920790778266059,
+        "width": 0.13921345472335817,
+        "height": 0.2516277737087673
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": true,
+        "confidence": 0.8152114077095586,
+        "wearingHelmetConfidence": 0.8152114077095586,
+        "unwearingHelmetConfidence": 0.1847885922904414
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": true,
+        "confidence": 0.9046315514572046,
+        "wearingHelmetConfidence": 0.9046315514572046,
+        "unwearingHelmetConfidence": 0.09536844854279547
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": true,
+        "confidence": 0.975468264469358,
+        "wearingHelmetConfidence": 0.975468264469358,
+        "unwearingHelmetConfidence": 0.024531735530642043
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.9973998876381955,
+        "wearingHelmetConfidence": 0.9973998876381955,
+        "unwearingHelmetConfidence": 0.0026001123618044288
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791204562457.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.7149798491202404,
+      "boundingBox": {
+        "x": 0.4562561273574829,
+        "y": 0.09827600055270724,
+        "width": 0.08122067451477055,
+        "height": 0.1177122539944119
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9711121560630702,
+        "wearingHelmetConfidence": 0.02888784393692966,
+        "unwearingHelmetConfidence": 0.9711121560630702
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9943989342470203,
+        "wearingHelmetConfidence": 0.00560106575297975,
+        "unwearingHelmetConfidence": 0.9943989342470203
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9457401784850421,
+        "wearingHelmetConfidence": 0.05425982151495794,
+        "unwearingHelmetConfidence": 0.9457401784850421
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.6730451641980144,
+        "wearingHelmetConfidence": 0.6730451641980144,
+        "unwearingHelmetConfidence": 0.3269548358019856
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791204562457.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.6090435273941353,
+      "boundingBox": {
+        "x": 0.2570808917284012,
+        "y": 0.4545414235856798,
+        "width": 0.09073886275291443,
+        "height": 0.14446329540676545
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.7948479719987275,
+        "wearingHelmetConfidence": 0.20515202800127263,
+        "unwearingHelmetConfidence": 0.7948479719987275
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.7907142569358004,
+        "wearingHelmetConfidence": 0.20928574306419953,
+        "unwearingHelmetConfidence": 0.7907142569358004
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.8520613198713266,
+        "wearingHelmetConfidence": 0.14793868012867342,
+        "unwearingHelmetConfidence": 0.8520613198713266
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.7869353077290054,
+        "wearingHelmetConfidence": 0.7869353077290054,
+        "unwearingHelmetConfidence": 0.21306469227099456
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791204562457.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.5059117860731703,
+      "boundingBox": {
+        "x": 0.22649688720703126,
+        "y": 0.526876958211263,
+        "width": 0.12064604759216307,
+        "height": 0.2566574944390191
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.6477559234722285,
+        "wearingHelmetConfidence": 0.3522440765277715,
+        "unwearingHelmetConfidence": 0.6477559234722285
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.8346711817614587,
+        "wearingHelmetConfidence": 0.1653288182385412,
+        "unwearingHelmetConfidence": 0.8346711817614587
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.8907682293568246,
+        "wearingHelmetConfidence": 0.10923177064317542,
+        "unwearingHelmetConfidence": 0.8907682293568246
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.5396746345758426,
+        "wearingHelmetConfidence": 0.5396746345758426,
+        "unwearingHelmetConfidence": 0.4603253654241575
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791204377566.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.7149798491202404,
+      "boundingBox": {
+        "x": 0.4562561273574829,
+        "y": 0.09827600055270724,
+        "width": 0.08122067451477055,
+        "height": 0.1177122539944119
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.9711121560630702,
+        "wearingHelmetConfidence": 0.02888784393692966,
+        "unwearingHelmetConfidence": 0.9711121560630702
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.9943989342470203,
+        "wearingHelmetConfidence": 0.00560106575297975,
+        "unwearingHelmetConfidence": 0.9943989342470203
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.9457401784850421,
+        "wearingHelmetConfidence": 0.05425982151495794,
+        "unwearingHelmetConfidence": 0.9457401784850421
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.6730451641980144,
+        "wearingHelmetConfidence": 0.6730451641980144,
+        "unwearingHelmetConfidence": 0.3269548358019856
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791204377566.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.6090435273941353,
+      "boundingBox": {
+        "x": 0.2570808917284012,
+        "y": 0.4545414235856798,
+        "width": 0.09073886275291443,
+        "height": 0.14446329540676545
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.7948479719987275,
+        "wearingHelmetConfidence": 0.20515202800127263,
+        "unwearingHelmetConfidence": 0.7948479719987275
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.7907142569358004,
+        "wearingHelmetConfidence": 0.20928574306419953,
+        "unwearingHelmetConfidence": 0.7907142569358004
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.8520613198713266,
+        "wearingHelmetConfidence": 0.14793868012867342,
+        "unwearingHelmetConfidence": 0.8520613198713266
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.7869353077290054,
+        "wearingHelmetConfidence": 0.7869353077290054,
+        "unwearingHelmetConfidence": 0.21306469227099456
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791204377566.jpg",
+    "head": {
+      "label": "head",
+      "confidence": 0.5059117860731703,
+      "boundingBox": {
+        "x": 0.22649688720703126,
+        "y": 0.526876958211263,
+        "width": 0.12064604759216307,
+        "height": 0.2566574944390191
+      }
+    },
+    "scores": [
+      {
+        "padding": 0,
+        "wearingHelmet": false,
+        "confidence": 0.6477559234722285,
+        "wearingHelmetConfidence": 0.3522440765277715,
+        "unwearingHelmetConfidence": 0.6477559234722285
+      },
+      {
+        "padding": 0.15,
+        "wearingHelmet": false,
+        "confidence": 0.8346711817614587,
+        "wearingHelmetConfidence": 0.1653288182385412,
+        "unwearingHelmetConfidence": 0.8346711817614587
+      },
+      {
+        "padding": 0.3,
+        "wearingHelmet": false,
+        "confidence": 0.8907682293568246,
+        "wearingHelmetConfidence": 0.10923177064317542,
+        "unwearingHelmetConfidence": 0.8907682293568246
+      },
+      {
+        "padding": "crown",
+        "wearingHelmet": true,
+        "confidence": 0.5396746345758426,
+        "wearingHelmetConfidence": 0.5396746345758426,
+        "unwearingHelmetConfidence": 0.4603253654241575
+      }
+    ]
+  }
+]

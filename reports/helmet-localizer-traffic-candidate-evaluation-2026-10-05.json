@@ -1,0 +1,165 @@
+[
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198654463.jpg",
+    "detections": [
+      {
+        "label": "plate",
+        "confidence": 0.25768035650253296,
+        "boundingBox": {
+          "x": 0.28668167591094973,
+          "y": 0.22029120922088624,
+          "width": 0.05115201473236081,
+          "height": 0.046238398551940896
+        }
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198648992.jpg",
+    "detections": []
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198638949.jpg",
+    "detections": []
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198631468.jpg",
+    "detections": []
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198624761.jpg",
+    "detections": [
+      {
+        "label": "helmet",
+        "confidence": 0.5003372430801392,
+        "boundingBox": {
+          "x": 0.18154728412628174,
+          "y": 0.583994722366333,
+          "width": 0.1819070100784302,
+          "height": 0.09906783103942873
+        }
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198615130.jpg",
+    "detections": []
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198609384.jpg",
+    "detections": []
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198601048.jpg",
+    "detections": []
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198591579.jpg",
+    "detections": []
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198582436.jpg",
+    "detections": []
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198577964.jpg",
+    "detections": []
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198565877.jpg",
+    "detections": []
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198560177.jpg",
+    "detections": []
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198549081.jpg",
+    "detections": []
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198529305.jpg",
+    "detections": [
+      {
+        "label": "plate",
+        "confidence": 0.533123791217804,
+        "boundingBox": {
+          "x": 0.08640801906585693,
+          "y": 0.3511852741241455,
+          "width": 0.05354206562042235,
+          "height": 0.04867851734161377
+        }
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198447042.jpg",
+    "detections": []
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198062802.jpg",
+    "detections": []
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791197215378.jpg",
+    "detections": []
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791190779442.jpg",
+    "detections": []
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791190768950.jpg",
+    "detections": []
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791120703973.jpg",
+    "detections": []
+  },
+  {
+    "file": "scratch/helmet-alert-ch6.jpg",
+    "detections": []
+  },
+  {
+    "file": "tmp/helmet-channel-6.jpg",
+    "detections": [
+      {
+        "label": "helmet",
+        "confidence": 0.5417772531509399,
+        "boundingBox": {
+          "x": 0.3678588390350342,
+          "y": 0.33538477420806884,
+          "width": 0.12088718414306637,
+          "height": 0.11661059856414796
+        }
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791202017341.jpg",
+    "detections": []
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791204590121.jpg",
+    "detections": [
+      {
+        "label": "bare-head",
+        "confidence": 0.8224998712539673,
+        "boundingBox": {
+          "x": 0.21654887199401857,
+          "y": 0.3939979076385498,
+          "width": 0.12805573940277098,
+          "height": 0.13516564369201656
+        }
+      }
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791204562457.jpg",
+    "detections": []
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791204377566.jpg",
+    "detections": []
+  }
+]

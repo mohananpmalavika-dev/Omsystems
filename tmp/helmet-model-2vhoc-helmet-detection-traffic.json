@@ -1,0 +1,59 @@
+{
+  "_id": "6a2e1640748a502c229f5cda",
+  "id": "2vhoc/helmet-detection-traffic",
+  "private": false,
+  "tags": [
+    "onnx",
+    "region:us"
+  ],
+  "downloads": 0,
+  "likes": 1,
+  "modelId": "2vhoc/helmet-detection-traffic",
+  "author": "2vhoc",
+  "sha": "7e46b9388b05c497ed776026108b5ee7f08f0a41",
+  "lastModified": "2026-06-15T16:01:10.000Z",
+  "gated": false,
+  "disabled": false,
+  "config": {},
+  "siblings": [
+    {
+      "rfilename": ".gitattributes"
+    },
+    {
+      "rfilename": "README.md"
+    },
+    {
+      "rfilename": "stage1/args.yaml"
+    },
+    {
+      "rfilename": "stage1/detect_vehicle.onnx"
+    },
+    {
+      "rfilename": "stage1/detect_vehicle.pt"
+    },
+    {
+      "rfilename": "stage2/args.yaml"
+    },
+    {
+      "rfilename": "stage2/mu_bien_so_stage2.onnx"
+    },
+    {
+      "rfilename": "stage2/mu_bien_so_stage2.pt"
+    },
+    {
+      "rfilename": "stage3/args.yaml"
+    },
+    {
+      "rfilename": "stage3/ocr_plate.onnx"
+    },
+    {
+      "rfilename": "stage3/ocr_plate.pt"
+    },
+    {
+      "rfilename": "stage3/ocr_plate_640.onnx"
+    }
+  ],
+  "spaces": [],
+  "createdAt": "2026-06-14T02:47:28.000Z",
+  "usedStorage": 661183650
+}
