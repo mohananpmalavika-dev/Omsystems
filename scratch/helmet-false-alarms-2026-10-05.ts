@@ -10,7 +10,7 @@ try {
  const objects=await loadObjectInference('yolov8n',.35);
  const classifier=await loadHelmetClassificationInference('helmet');
  const output=[];
- const files=[...['1791186559923','1791184490611','1791184490611 (1)','1791120703973'].map(id=>'C:/Users/Dhanya/Downloads/incident-snapshot-'+id+'.jpg'),'scratch/helmet-new-false-alert-raw.jpg','scratch/helmet-alert-ch6.jpg','scratch/helmet-alert-ch2.jpg','scratch/helmet-alert-ch8.jpg','tmp/helmet-channel-6.jpg'];
+ const files=[...['f5781a86-8527-4a30-a94a-3f256555fbcb','f0b4f55e-00c0-442c-a0e1-3d6a05150bdf','6fbdbee4-1d81-40f9-835d-33e8a93a7486'].map(id=>'scratch/helmet-false-'+id+'.jpg'),...['1791186559923','1791184490611','1791184490611 (1)','1791120703973'].map(id=>'C:/Users/Dhanya/Downloads/incident-snapshot-'+id+'.jpg'),'scratch/helmet-new-false-alert-raw.jpg','scratch/helmet-alert-ch6.jpg','scratch/helmet-alert-ch2.jpg','scratch/helmet-alert-ch8.jpg','tmp/helmet-channel-6.jpg'];
  for(const file of files){
   const {data,info}=await sharp(file).removeAlpha().raw().toBuffer({resolveWithObject:true});
   const frame={cameraId:file,tenantId:'isolated-replay',timestamp:new Date(0),imageData:data,width:info.width,height:info.height};

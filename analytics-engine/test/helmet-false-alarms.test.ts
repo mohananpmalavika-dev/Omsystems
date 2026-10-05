@@ -6,7 +6,7 @@ const personBox = { x: 0.1, y: 0.1, width: 0.4, height: 0.8 };
 const person = (confidence: number): InferenceObject => ({ label: "person", confidence, boundingBox: personBox });
 const frame = (seconds: number, detections: InferenceObject[]): DetectionFrame => ({
   cameraId: "hajipur", tenantId: "test", timestamp: new Date(seconds * 1000),
-  imageData: Buffer.alloc(100 * 100 * 3), width: 100, height: 100,
+  imageData: Buffer.alloc(400 * 400 * 3), width: 400, height: 400,
   metadata: { inferenceMode: "local-onnx", detections },
 });
 const positiveClassifier = () => ({ run: vi.fn(async () => ({
@@ -80,7 +80,7 @@ describe("helmet false-alarm evidence", () => {
 
   it("confirms a seated wearer when both compact head crops pass and torso crops fail", async () => {
     const classifier = { run: vi.fn(async (_frame, box) => {
-      const positive = box.height <= personBox.height * 0.15;
+      const positive = box.height <= personBox.height * 0.15 || box.y < personBox.y;
       return { wearingHelmet: positive, confidence: 0.99,
         wearingHelmetConfidence: positive ? 0.99 : 0.01,
         unwearingHelmetConfidence: positive ? 0.01 : 0.99 };
@@ -159,5 +159,39 @@ describe("helmet false-alarm evidence", () => {
     expect(results).toHaveLength(1);
     expect(results[0]?.objects.find(o => o.label === "person")?.confidence).toBe(0.83);
     expect(results[0]?.objects.find(o => o.label === "helmet")?.confidence).toBeGreaterThanOrEqual(0.95);
+  });
+
+  it.each([
+    [0.9034892092718678, { x: 0.3789148269597444, y: 0.09051363099414342, width: 0.1716856161669464, height: 0.27892995047613534 }],
+    [0.9003163773819054, { x: 0.11666304935568958, y: 0.11102304201441744, width: 0.16910959374567322, height: 0.3479518909211893 }],
+  ])("rejects undersized compact crops from the October 5 incidents (%f), including fast alerts", async (confidence, boundingBox) => {
+    const classifier = { run: vi.fn(async (_frame, box) => {
+      const positive = box.height <= boundingBox.height * 0.15 || box.height === boundingBox.height * 0.25;
+      return { wearingHelmet: positive, confidence: 0.99999,
+        wearingHelmetConfidence: positive ? 0.99999 : 0.00001,
+        unwearingHelmetConfidence: positive ? 0.00001 : 0.99999 };
+    }) };
+    for (const fastAlert of [false, true]) {
+      const detector = new HelmetDetector(null, 0.88, classifier, fastAlert);
+      await detector.initialize();
+      for (const seconds of [0, 2, 4]) expect(await detector.detect({
+        ...frame(seconds, [{ label: "person", confidence, boundingBox }]),
+        imageData: Buffer.alloc(640 * 360 * 3), width: 640, height: 360,
+      })).toEqual([]);
+    }
+  });
+
+  it("rejects compact head agreement when raised head context contradicts it, including fast alerts", async () => {
+    const classifier = { run: vi.fn(async (_frame, box) => {
+      const positive = box.height <= personBox.height * 0.15;
+      return { wearingHelmet: positive, confidence: 0.99,
+        wearingHelmetConfidence: positive ? 0.99 : 0.01,
+        unwearingHelmetConfidence: positive ? 0.01 : 0.99 };
+    }) };
+    for (const fastAlert of [false, true]) {
+      const detector = new HelmetDetector(null, 0.88, classifier, fastAlert);
+      await detector.initialize();
+      for (const seconds of [0, 2, 4]) expect(await detector.detect(frame(seconds, [person(0.95)]))).toEqual([]);
+    }
   });
 });

@@ -45,6 +45,10 @@ export class HelmetDetector extends BaseDetector {
   // A person crop is only an approximate helmet location. Require a second
   // independent frame when no helmet box is supplied.
   private readonly CLASSIFIED_HEAD_CONFIDENCE = 0.9167;
+  // Upscaling a thin, distant hair/forehead strip to 224px produced the
+  // Hajipur bare-head alarms. Compact fallback needs usable source pixels
+  // and agreement from a crop including the area above the person's box.
+  private readonly MIN_COMPACT_HEAD_PIXELS = 24;
   private readonly pendingHeads = new Map<string, Array<{
     personBox: HelmetDetection["personBoundingBox"];
     lastSeenAt: number;
@@ -59,7 +63,7 @@ export class HelmetDetector extends BaseDetector {
     classifier: HelmetClassificationFrameInference | null = null,
     fastAlert = process.env.HELMET_FAST_ALERT === "true",
   ) {
-    super("helmet", "1.1.6");
+    super("helmet", "1.1.7");
     this.inference = inference;
     this.classifier = classifier;
     this.MIN_CONFIDENCE = confidenceThreshold;
@@ -253,10 +257,27 @@ export class HelmetDetector extends BaseDetector {
             x: box.x + box.width * 0.1, y: box.y,
             width: box.width * 0.8, height: box.height * 0.15,
           };
+          if (classifiedHeadBox.width * frame.width < this.MIN_COMPACT_HEAD_PIXELS ||
+              classifiedHeadBox.height * frame.height < this.MIN_COMPACT_HEAD_PIXELS) {
+            this.clearPendingHead(frame.cameraId, person.boundingBox);
+            continue;
+          }
           upperResult = await this.classifier.run(frame, {
             x: box.x, y: box.y, width: box.width, height: box.height * 0.15,
           });
           standardResult = await this.classifier.run(frame, classifiedHeadBox);
+          const contextY = Math.max(0, box.y - box.height * 0.15);
+          const contextResult = await this.classifier.run(frame, {
+            x: classifiedHeadBox.x, y: contextY, width: classifiedHeadBox.width,
+            height: Math.min(1 - contextY, box.height * 0.25),
+          });
+          if (!contextResult.wearingHelmet || contextResult.wearingHelmetConfidence < alertThreshold) {
+            this.clearPendingHead(frame.cameraId, person.boundingBox);
+            continue;
+          }
+          // Retain the weakest score from all supporting crops in the event.
+          standardResult = { ...standardResult, wearingHelmetConfidence:
+            Math.min(standardResult.wearingHelmetConfidence, contextResult.wearingHelmetConfidence) };
         }
         if (!upperResult.wearingHelmet || !standardResult.wearingHelmet ||
             upperResult.wearingHelmetConfidence < alertThreshold ||
