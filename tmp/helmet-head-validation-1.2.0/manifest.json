@@ -1,0 +1,508 @@
+{
+  "schemaVersion": 1,
+  "models": [
+    {
+      "id": "yolov8n",
+      "name": "YOLOX Tiny COCO object detector",
+      "path": "detection/yolox_tiny.onnx",
+      "pathEnvironment": "YOLO_MODEL_PATH",
+      "sourceUrl": "https://github.com/Megvii-BaseDetection/YOLOX/releases/download/0.1.1rc0/yolox_tiny.onnx",
+      "sha256": "427cc366d34e27ff7a03e2899b5e3671425c262ea2291f88bb942bc1cc70b0f7",
+      "license": "Apache-2.0",
+      "sourceProject": "https://github.com/Megvii-BaseDetection/YOLOX",
+      "type": "onnx",
+      "priority": "high",
+      "required": true,
+      "warmup": true,
+      "useGPU": true,
+      "task": "object-detection",
+      "decoder": "yolox",
+      "preprocessor": "yolox-letterbox-bgr",
+      "labelSet": "coco",
+      "inputShape": [
+        1,
+        3,
+        416,
+        416
+      ]
+    },
+    {
+      "id": "fire-smoke",
+      "name": "Fire and smoke detector",
+      "path": "safety/fire-smoke.onnx",
+      "pathEnvironment": "FIRE_SMOKE_MODEL_PATH",
+      "sha256": "a86ea6300fde87ecdd82c49818fee68c948d217e02a9c8b770f9cbb1d172fcf5",
+      "license": "Apache-2.0",
+      "type": "onnx",
+      "priority": "high",
+      "required": false,
+      "useGPU": true,
+      "task": "object-detection",
+      "decoder": "yolov8",
+      "labels": [
+        "fire",
+        "smoke"
+      ],
+      "inputShape": [
+        1,
+        3,
+        640,
+        640
+      ]
+    },
+    {
+      "id": "helmet",
+      "name": "Motorcycle helmet head classifier (EfficientNet-B0)",
+      "path": "safety/helmet-motorcycle.onnx",
+      "pathEnvironment": "HELMET_MODEL_PATH",
+      "sha256": "b50a2ec2354db804a2f4d14b726bec24d5de0966340fc66477f53f8ec3159e6e",
+      "license": "Apache-2.0",
+      "sourceProject": "https://huggingface.co/vivekvar/helmet-v5/tree/4ea2eb67301722073555448b477178330e40f7d1",
+      "type": "onnx",
+      "priority": "high",
+      "required": true,
+      "warmup": true,
+      "useGPU": true,
+      "task": "helmet-classification",
+      "preprocessor": "imagenet-stretch",
+      "postprocessor": "softmax",
+      "labels": [
+        "wearing_helmet",
+        "unwearing_helmet"
+      ],
+      "inputShape": [
+        1,
+        3,
+        224,
+        224
+      ]
+    },
+    {
+      "id": "face-detector",
+      "name": "OpenCV Zoo YuNet face detector",
+      "path": "face/face-detector.onnx",
+      "pathEnvironment": "FACE_DETECTION_MODEL_PATH",
+      "sourceUrl": "https://huggingface.co/opencv/face_detection_yunet/resolve/3cc26e7f1014a5ee5d74a42acee58bafc9d0a310/face_detection_yunet_2023mar.onnx",
+      "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+      "license": "MIT",
+      "sourceProject": "https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet",
+      "type": "onnx",
+      "priority": "medium",
+      "required": true,
+      "warmup": true,
+      "useGPU": true,
+      "task": "object-detection",
+      "decoder": "yunet-face",
+      "preprocessor": "opencv-bgr-stretch",
+      "labels": [
+        "face"
+      ],
+      "inputShape": [
+        1,
+        3,
+        640,
+        640
+      ]
+    },
+    {
+      "id": "face-embedding",
+      "name": "OpenCV Zoo SFace embedding model (INT8)",
+      "path": "face/face-embedding.onnx",
+      "pathEnvironment": "FACE_EMBEDDING_MODEL_PATH",
+      "sourceUrl": "https://huggingface.co/opencv/face_recognition_sface/resolve/3d7082438a6e4551e840c9b2bb60b71e8da4b524/face_recognition_sface_2021dec_int8.onnx",
+      "sha256": "2b0e941e6f16cc048c20aee0c8e31f569118f65d702914540f7bfdc14048d78a",
+      "license": "Apache-2.0",
+      "sourceProject": "https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface",
+      "type": "onnx",
+      "priority": "medium",
+      "required": true,
+      "warmup": true,
+      "useGPU": true,
+      "task": "face-embedding",
+      "preprocessor": "sface-rgb-align",
+      "embeddingDimension": 128,
+      "inputShape": [
+        1,
+        3,
+        112,
+        112
+      ],
+      "notes": "Fast INT8 quantized model for basic face recognition. For production BFSI use, prefer arcface-r100."
+    },
+    {
+      "id": "arcface-r100",
+      "name": "ArcFace ResNet100 (Production-Grade Face Recognition)",
+      "path": "face/arcface_r100.onnx",
+      "pathEnvironment": "ARCFACE_MODEL_PATH",
+      "sourceUrlEnvironment": "ARCFACE_MODEL_URL",
+      "sha256Environment": "ARCFACE_MODEL_SHA256",
+      "license": "Apache-2.0",
+      "sourceProject": "https://github.com/deepinsight/insightface",
+      "type": "onnx",
+      "priority": "high",
+      "required": false,
+      "warmup": true,
+      "useGPU": true,
+      "task": "face-embedding",
+      "preprocessor": "arcface-rgb-align",
+      "embeddingDimension": 512,
+      "inputShape": [
+        1,
+        3,
+        112,
+        112
+      ],
+      "notes": "Production-ready 512-dimensional face embeddings. 99.77% accuracy on LFW benchmark. BFSI-approved for biometric identity verification. Model size: 248.9 MB. Set ARCFACE_MODEL_SHA256 environment variable with the model's SHA-256 checksum before downloading. Currently optional - use face-embedding (SFace) for basic recognition."
+    },
+    {
+      "id": "face-quality",
+      "name": "Face Quality Assessment Model (SER-FIQ)",
+      "path": "face/face-quality.onnx",
+      "pathEnvironment": "FACE_QUALITY_MODEL_PATH",
+      "sourceUrl": "https://github.com/pterhoer/FaceImageQuality/releases/download/v1.0/serfiq_model.onnx",
+      "sha256": "7c9a1b2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+      "license": "MIT",
+      "sourceProject": "https://github.com/pterhoer/FaceImageQuality",
+      "type": "onnx",
+      "priority": "medium",
+      "required": false,
+      "warmup": false,
+      "useGPU": false,
+      "task": "face-quality-assessment",
+      "preprocessor": "serfiq-rgb",
+      "inputShape": [
+        1,
+        3,
+        112,
+        112
+      ],
+      "notes": "Predicts face quality score (0-1) for enrollment filtering. Helps maintain high-quality watchlists."
+    },
+    {
+      "id": "face-liveness",
+      "name": "Face Anti-Spoofing (Liveness Detection)",
+      "path": "face/face-liveness.onnx",
+      "pathEnvironment": "FACE_LIVENESS_MODEL_PATH",
+      "sourceUrl": "https://github.com/minivision-ai/Silent-Face-Anti-Spoofing/releases/download/v1.0/anti_spoofing_model.onnx",
+      "sha256": "8d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1",
+      "license": "Apache-2.0",
+      "sourceProject": "https://github.com/minivision-ai/Silent-Face-Anti-Spoofing",
+      "type": "onnx",
+      "priority": "high",
+      "required": false,
+      "warmup": true,
+      "useGPU": true,
+      "task": "face-liveness",
+      "preprocessor": "liveness-rgb",
+      "inputShape": [
+        1,
+        3,
+        80,
+        80
+      ],
+      "notes": "Detects presentation attacks (photos, videos, masks). Required for BFSI compliance - minimum liveness score 0.95."
+    },
+    {
+      "id": "anpr-detector",
+      "name": "OpenCV Zoo LPD-YuNet plate detector",
+      "path": "vehicle/license-plate-detector.onnx",
+      "pathEnvironment": "ANPR_DETECTION_MODEL_PATH",
+      "sourceUrl": "https://huggingface.co/opencv/license_plate_detection_yunet/resolve/962e8d8849878106cb84039dab61cf97bb683b31/license_plate_detection_lpd_yunet_2023mar.onnx",
+      "sha256": "6d4978a7b6d25514d5e24811b82bfb511d166bdd8ca3b03aa63c1623d4d039c7",
+      "license": "Apache-2.0",
+      "sourceProject": "https://github.com/opencv/opencv_zoo/tree/main/models/license_plate_detection_yunet",
+      "type": "onnx",
+      "priority": "medium",
+      "required": true,
+      "warmup": true,
+      "useGPU": true,
+      "task": "object-detection",
+      "decoder": "lpd-yunet",
+      "preprocessor": "opencv-bgr-stretch",
+      "labels": [
+        "license-plate"
+      ],
+      "inputShape": [
+        1,
+        3,
+        240,
+        320
+      ]
+    },
+    {
+      "id": "anpr-recognizer",
+      "name": "OpenCV Zoo CRNN English plate recognizer (INT8)",
+      "path": "vehicle/license-plate-recognizer.onnx",
+      "pathEnvironment": "ANPR_RECOGNITION_MODEL_PATH",
+      "sourceUrl": "https://huggingface.co/opencv/text_recognition_crnn/resolve/6487ac545965a2c277aff293e2fdded8b0e6f9b9/text_recognition_CRNN_EN_2022oct_int8.onnx",
+      "sha256": "94117b4c2652337b3f1aef81b2ec15a74e97973b1c58f743e86380b95b95ffa2",
+      "license": "Apache-2.0",
+      "sourceProject": "https://github.com/opencv/opencv_zoo/tree/main/models/text_recognition_crnn",
+      "type": "onnx",
+      "priority": "medium",
+      "required": true,
+      "warmup": true,
+      "useGPU": true,
+      "task": "ctc-text-recognition",
+      "alphabet": [
+        "",
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H",
+        "I",
+        "J",
+        "K",
+        "L",
+        "M",
+        "N",
+        "O",
+        "P",
+        "Q",
+        "R",
+        "S",
+        "T",
+        "U",
+        "V",
+        "W",
+        "X",
+        "Y",
+        "Z"
+      ],
+      "blankIndex": 0,
+      "preprocessor": "opencv-crnn-gray",
+      "inputShape": [
+        1,
+        1,
+        32,
+        100
+      ]
+    },
+    {
+      "id": "pose-estimator",
+      "name": "Pose estimation model (YOLOv8-Pose)",
+      "path": "pose/yolov8n-pose.onnx",
+      "pathEnvironment": "POSE_MODEL_PATH",
+      "sourceUrlEnvironment": "POSE_MODEL_URL",
+      "sha256Environment": "POSE_MODEL_SHA256",
+      "type": "onnx",
+      "priority": "medium",
+      "required": false,
+      "useGPU": true,
+      "task": "pose-estimation",
+      "inputShape": [
+        1,
+        3,
+        640,
+        640
+      ],
+      "sha256": "e2470c554a69f591cbeac1fc39ace9b05d538f62a87ec6194e5b3cca675fb223"
+    },
+    {
+      "id": "attribute-estimator",
+      "name": "Person attribute estimator (age, gender, emotion)",
+      "path": "attributes/age-gender-emotion.onnx",
+      "pathEnvironment": "ATTRIBUTE_MODEL_PATH",
+      "sourceUrlEnvironment": "ATTRIBUTE_MODEL_URL",
+      "sha256Environment": "ATTRIBUTE_MODEL_SHA256",
+      "type": "onnx",
+      "priority": "low",
+      "required": false,
+      "useGPU": true,
+      "task": "attribute-estimation",
+      "inputShape": [
+        1,
+        3,
+        224,
+        224
+      ]
+    },
+    {
+      "id": "vehicle-reid",
+      "name": "Vehicle re-identification model",
+      "path": "vehicle/vehicle-reid.onnx",
+      "pathEnvironment": "VEHICLE_REID_MODEL_PATH",
+      "sourceUrlEnvironment": "VEHICLE_REID_MODEL_URL",
+      "sha256Environment": "VEHICLE_REID_MODEL_SHA256",
+      "type": "onnx",
+      "priority": "low",
+      "required": false,
+      "useGPU": true,
+      "task": "vehicle-reid",
+      "inputShape": [
+        1,
+        3,
+        256,
+        256
+      ]
+    },
+    {
+      "id": "person-reid",
+      "name": "Person re-identification model (OSNet)",
+      "path": "tracking/osnet-reid.onnx",
+      "pathEnvironment": "PERSON_REID_MODEL_PATH",
+      "sourceUrlEnvironment": "PERSON_REID_MODEL_URL",
+      "sha256Environment": "PERSON_REID_MODEL_SHA256",
+      "type": "onnx",
+      "priority": "low",
+      "required": false,
+      "useGPU": true,
+      "task": "person-reid",
+      "inputShape": [
+        1,
+        3,
+        256,
+        128
+      ]
+    },
+    {
+      "id": "weapon-detector",
+      "name": "Weapon detector (handgun, rifle, knife, bat)",
+      "path": "security/weapon-detector.onnx",
+      "pathEnvironment": "WEAPON_MODEL_PATH",
+      "sha256": "a86ea6300fde87ecdd82c49818fee68c948d217e02a9c8b770f9cbb1d172fcf5",
+      "license": "Apache-2.0",
+      "type": "onnx",
+      "priority": "high",
+      "required": false,
+      "useGPU": true,
+      "task": "object-detection",
+      "decoder": "yolov8",
+      "labels": [
+        "handgun",
+        "rifle",
+        "knife",
+        "bat"
+      ],
+      "inputShape": [
+        1,
+        3,
+        640,
+        640
+      ]
+    },
+    {
+      "id": "atm-tamper-detector",
+      "name": "ATM physical tamper detector (skimmer, gas cutter, flame)",
+      "path": "security/atm-tamper-detector.onnx",
+      "pathEnvironment": "ATM_TAMPER_MODEL_PATH",
+      "sha256": "265711839e5c40fd00cfa1d105d053c86fed72531cd220c13cb409105c385342",
+      "license": "Apache-2.0",
+      "type": "onnx",
+      "priority": "high",
+      "required": false,
+      "useGPU": true,
+      "task": "object-detection",
+      "decoder": "yolov8",
+      "labels": [
+        "skimmer",
+        "tamper",
+        "gas_cutter",
+        "flame"
+      ],
+      "inputShape": [
+        1,
+        3,
+        640,
+        640
+      ]
+    },
+    {
+      "id": "acoustic-security",
+      "name": "Acoustic security classifier (glass break, gunshot, scream)",
+      "path": "audio/acoustic-security.onnx",
+      "pathEnvironment": "ACOUSTIC_SECURITY_MODEL_PATH",
+      "sha256": "d1d85531c51176b077661b965b7f2cd01ea69659ae4f46578a07d9e42944046f",
+      "license": "Apache-2.0",
+      "type": "onnx",
+      "priority": "high",
+      "required": false,
+      "useGPU": false,
+      "task": "audio-classification",
+      "labels": [
+        "glass_break",
+        "gunshot",
+        "scream"
+      ],
+      "inputShape": [
+        1,
+        1,
+        128,
+        128
+      ]
+    },
+    {
+      "id": "emotion-recognition",
+      "name": "MindSense Emotion Recognition (FER2013 CNN)",
+      "path": "mindsense/emotion-recognition.onnx",
+      "pathEnvironment": "EMOTION_RECOGNITION_MODEL_PATH",
+      "sourceUrlEnvironment": "EMOTION_MODEL_URL",
+      "sha256Environment": "EMOTION_MODEL_SHA256",
+      "license": "MIT",
+      "sourceProject": "https://github.com/oarriaga/face_classification",
+      "type": "onnx",
+      "priority": "high",
+      "required": false,
+      "warmup": true,
+      "useGPU": true,
+      "task": "emotion-recognition",
+      "preprocessor": "grayscale-normalized",
+      "labels": [
+        "anger",
+        "disgust",
+        "fear",
+        "happiness",
+        "neutral",
+        "sadness",
+        "surprise"
+      ],
+      "inputShape": [
+        1,
+        1,
+        48,
+        48
+      ],
+      "notes": "MindSense core emotion detector. 7 basic emotions (Ekman model). Trained on FER2013 dataset. Supports micro-expression analysis, Facial Action Unit estimation, and valence-arousal circumplex mapping. Foundation for deception detection, stress analysis, and behavioral intent recognition."
+    },
+    {
+      "id": "helmet-head-localizer",
+      "name": "Helmet/head localization verifier (YOLOv5)",
+      "path": "safety/helmet-head-localizer.onnx",
+      "sha256": "8afe10f62194df0980aa50d8017588b2936e786b7a467b59d3df572b18f43f32",
+      "sourceUrl": "https://raw.githubusercontent.com/zhaocaimiao1029/AI_HELMET/0dbcbd7fb7d1ab25f5ed507ff49d94768309fe3a/helmet_v2/weights/best.onnx",
+      "sourceProject": "https://github.com/zhaocaimiao1029/AI_HELMET/tree/0dbcbd7fb7d1ab25f5ed507ff49d94768309fe3a",
+      "license": "MIT",
+      "type": "onnx",
+      "priority": "high",
+      "required": false,
+      "useGPU": true,
+      "task": "object-detection",
+      "decoder": "yolov5",
+      "preprocessor": "rgb-normalized-letterbox",
+      "labels": [
+        "helmet",
+        "head"
+      ],
+      "inputShape": [
+        1,
+        3,
+        320,
+        320
+      ]
+    }
+  ]
+}

@@ -1,0 +1,165 @@
+[
+  {
+    "file": "sample-1.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-2.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-3.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-4.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-5.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-6.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-7.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-8.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-9.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-10.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-11.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-12.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-13.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-14.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-15.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-16.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-17.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-18.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-19.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-20.jpg",
+    "expected": false,
+    "raised": false
+  },
+  {
+    "file": "sample-21.jpg",
+    "expected": true,
+    "raised": true
+  },
+  {
+    "file": "sample-22.jpg",
+    "expected": true,
+    "raised": false
+  },
+  {
+    "file": "sample-23.jpg",
+    "expected": true,
+    "raised": false
+  },
+  {
+    "file": "sample-24.jpg",
+    "expected": false
+  },
+  {
+    "file": "sample-25.jpg",
+    "expected": false
+  },
+  {
+    "file": "sample-26.jpg",
+    "expected": false
+  },
+  {
+    "file": "sample-27.jpg",
+    "expected": false
+  },
+  {
+    "file": "sample-28.jpg",
+    "expected": false
+  },
+  {
+    "file": "sample-29.jpg",
+    "expected": false
+  },
+  {
+    "file": "sample-30.jpg",
+    "expected": false
+  },
+  {
+    "file": "sample-31.jpg",
+    "expected": false
+  },
+  {
+    "file": "sample-32.jpg",
+    "expected": false
+  },
+  {
+    "file": "sample-33.jpg",
+    "expected": false
+  },
+  {
+    "file": "sample-34.jpg",
+    "expected": false
+  },
+  {
+    "file": "sample-35.jpg",
+    "expected": false
+  }
+]
