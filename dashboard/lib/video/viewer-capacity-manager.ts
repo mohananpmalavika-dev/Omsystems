@@ -206,7 +206,8 @@ export class ViewerCapacityManager {
     if (this.capacity.activeDecoders <= 1) return false;
 
     const ceiling = this.getDecoderCeiling(maxDecoderLimit);
-    const minFloor = ceiling >= 16 ? Math.min(ceiling, Math.max(MIN_DECODER_LIMIT, 16)) : 2;
+    // Never degrade below the active wall ceiling (e.g. 12, 16, 36, 144)
+    const minFloor = ceiling >= 8 ? ceiling : 2;
     const current = Math.min(
       this.capacity.recommendedDecoderLimit,
       ceiling,
@@ -350,27 +351,21 @@ export class ViewerCapacityManager {
       pixelCapacity = 200_000_000;
     }
 
-    // Check available memory
+    // Check available memory - only boost when memory is plentiful, do not clamp below 144
     const memory = (performance as Performance & {
       memory?: { jsHeapSizeLimit: number };
     }).memory;
     if (memory) {
       const availableGB = memory.jsHeapSizeLimit / (1024 * 1024 * 1024);
-      
-      if (availableGB < 2) {
-        estimatedCapacity = Math.min(estimatedCapacity, 16);
-      } else if (availableGB > 4) {
+      if (availableGB > 4) {
         estimatedCapacity = Math.min(estimatedCapacity + 8, MAX_DECODER_LIMIT);
       }
     }
 
-    // Check CPU cores (if available)
+    // Check CPU cores (if available) - do not clamp below 144
     if (typeof navigator !== "undefined" && "hardwareConcurrency" in navigator) {
       const cores = navigator.hardwareConcurrency || 4;
-      
-      if (cores <= 2) {
-        estimatedCapacity = Math.min(estimatedCapacity, 12);
-      } else if (cores >= 8) {
+      if (cores >= 8) {
         estimatedCapacity = Math.min(estimatedCapacity + 4, MAX_DECODER_LIMIT);
       }
     }
