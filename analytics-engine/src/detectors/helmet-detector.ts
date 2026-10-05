@@ -63,7 +63,7 @@ export class HelmetDetector extends BaseDetector {
     classifier: HelmetClassificationFrameInference | null = null,
     fastAlert = process.env.HELMET_FAST_ALERT === "true",
   ) {
-    super("helmet", "1.1.7");
+    super("helmet", "1.1.8");
     this.inference = inference;
     this.classifier = classifier;
     this.MIN_CONFIDENCE = confidenceThreshold;
@@ -211,7 +211,9 @@ export class HelmetDetector extends BaseDetector {
         // A seated person's COCO box may begin at the visor/neck. For a large
         // independently observed person, inspect above that box without
         // relaxing the existing torso/compact classification gates. This
-        // separate path needs both raised crops >= 0.98 and three frames.
+        // Background above a bare head can make both raised crops positive.
+        // Also require agreement from the head anchored inside the person
+        // box; raised context alone cannot establish helmet evidence.
         if (this.hasRaisedHeadCandidate(person) && helmets.length === 0 && runLocal &&
             this.classifier && frame.imageData?.length) {
           const box = person.boundingBox;
@@ -220,9 +222,15 @@ export class HelmetDetector extends BaseDetector {
           const narrow = { ...wide, x: box.x + box.width * 0.1, width: box.width * 0.8 };
           const wideResult = await this.classifier.run(frame, wide);
           const narrowResult = await this.classifier.run(frame, narrow);
-          const confidence = Math.min(wideResult.wearingHelmetConfidence, narrowResult.wearingHelmetConfidence);
+          const anchoredResult = await this.classifier.run(frame, {
+            x: box.x + box.width * 0.2, y: box.y,
+            width: box.width * 0.6, height: box.height * 0.25,
+          });
+          const confidence = Math.min(wideResult.wearingHelmetConfidence,
+            narrowResult.wearingHelmetConfidence, anchoredResult.wearingHelmetConfidence);
           if (wideResult.wearingHelmet && narrowResult.wearingHelmet &&
-              confidence >= Math.max(this.MIN_CONFIDENCE, this.fastAlert ? 0.95 : 0.98)) {
+              anchoredResult.wearingHelmet &&
+              confidence >= Math.max(this.MIN_CONFIDENCE, 0.98)) {
             const requiredConfirmations = this.fastAlert ? 1 : 3;
             if (this.confirmClassifiedHead(frame.cameraId, box, frame.timestamp.getTime(), requiredConfirmations, "raised")) {
               indoorHelmetDetections.push({ personBoundingBox: box, helmetBoundingBox: narrow,
@@ -271,13 +279,27 @@ export class HelmetDetector extends BaseDetector {
             x: classifiedHeadBox.x, y: contextY, width: classifiedHeadBox.width,
             height: Math.min(1 - contextY, box.height * 0.25),
           });
-          if (!contextResult.wearingHelmet || contextResult.wearingHelmetConfidence < alertThreshold) {
+          // Hair and dark gates can agree on the short compact/context pair.
+          // Validate the crown above the person box and a narrower, taller
+          // crop spanning crown through face. Neither isolated hair strips
+          // nor background alone should establish a compact helmet alert.
+          const crownResult = await this.classifier.run(frame, {
+            x: classifiedHeadBox.x, y: contextY, width: classifiedHeadBox.width,
+            height: Math.min(1 - contextY, box.height * 0.15),
+          });
+          const centeredContextResult = await this.classifier.run(frame, {
+            x: box.x + box.width * 0.2, y: contextY, width: box.width * 0.6,
+            height: Math.min(1 - contextY, box.height * 0.3),
+          });
+          if ([contextResult, crownResult, centeredContextResult].some(result =>
+              !result.wearingHelmet || result.wearingHelmetConfidence < alertThreshold)) {
             this.clearPendingHead(frame.cameraId, person.boundingBox);
             continue;
           }
           // Retain the weakest score from all supporting crops in the event.
           standardResult = { ...standardResult, wearingHelmetConfidence:
-            Math.min(standardResult.wearingHelmetConfidence, contextResult.wearingHelmetConfidence) };
+            Math.min(standardResult.wearingHelmetConfidence, contextResult.wearingHelmetConfidence,
+              crownResult.wearingHelmetConfidence, centeredContextResult.wearingHelmetConfidence) };
         }
         if (!upperResult.wearingHelmet || !standardResult.wearingHelmet ||
             upperResult.wearingHelmetConfidence < alertThreshold ||

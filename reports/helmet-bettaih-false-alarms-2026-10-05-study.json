@@ -1,0 +1,1181 @@
+[
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198447042.jpg",
+    "scores": [
+      {
+        "person": {
+          "label": "person",
+          "confidence": 0.8916622701765107,
+          "boundingBox": {
+            "x": 0.3472418250327511,
+            "y": 0.17523730440989174,
+            "width": 0.2001030964437563,
+            "height": 0.7117586395077489
+          }
+        },
+        "crops": [
+          {
+            "offset": 0,
+            "h": 0.55,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.9855073007048055,
+            "wearingHelmetConfidence": 0.014492699295194433,
+            "unwearingHelmetConfidence": 0.9855073007048055
+          },
+          {
+            "offset": 0,
+            "h": 0.35,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.6711153235428061,
+            "wearingHelmetConfidence": 0.328884676457194,
+            "unwearingHelmetConfidence": 0.6711153235428061
+          },
+          {
+            "offset": 0,
+            "h": 0.15,
+            "w": 1,
+            "wearingHelmet": true,
+            "confidence": 0.678941363788451,
+            "wearingHelmetConfidence": 0.678941363788451,
+            "unwearingHelmetConfidence": 0.321058636211549
+          },
+          {
+            "offset": 0,
+            "h": 0.15,
+            "w": 0.8,
+            "wearingHelmet": true,
+            "confidence": 0.6383662949912013,
+            "wearingHelmetConfidence": 0.6383662949912013,
+            "unwearingHelmetConfidence": 0.3616337050087986
+          },
+          {
+            "offset": -0.15,
+            "h": 0.25,
+            "w": 1,
+            "wearingHelmet": true,
+            "confidence": 0.9977301366768928,
+            "wearingHelmetConfidence": 0.9977301366768928,
+            "unwearingHelmetConfidence": 0.0022698633231070884
+          },
+          {
+            "offset": -0.15,
+            "h": 0.25,
+            "w": 0.8,
+            "wearingHelmet": true,
+            "confidence": 0.9974095276668935,
+            "wearingHelmetConfidence": 0.9974095276668935,
+            "unwearingHelmetConfidence": 0.0025904723331064646
+          },
+          {
+            "offset": 0,
+            "h": 0.25,
+            "w": 0.8,
+            "wearingHelmet": true,
+            "confidence": 0.5285723087776086,
+            "wearingHelmetConfidence": 0.5285723087776086,
+            "unwearingHelmetConfidence": 0.4714276912223914
+          },
+          {
+            "offset": 0,
+            "h": 0.2,
+            "w": 0.6,
+            "wearingHelmet": false,
+            "confidence": 0.5766882239517146,
+            "wearingHelmetConfidence": 0.4233117760482854,
+            "unwearingHelmetConfidence": 0.5766882239517146
+          },
+          {
+            "offset": 0,
+            "h": 0.3,
+            "w": 0.6,
+            "wearingHelmet": false,
+            "confidence": 0.6969370187434554,
+            "wearingHelmetConfidence": 0.30306298125654463,
+            "unwearingHelmetConfidence": 0.6969370187434554
+          }
+        ]
+      },
+      {
+        "person": {
+          "label": "person",
+          "confidence": 0.6975677055064082,
+          "boundingBox": {
+            "x": 0.4733134637709263,
+            "y": 0.5500628701323315,
+            "width": 0.3886783597459328,
+            "height": 0.44993712986766854
+          }
+        },
+        "crops": [
+          {
+            "offset": 0,
+            "h": 0.55,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.9991092283421598,
+            "wearingHelmetConfidence": 0.0008907716578401629,
+            "unwearingHelmetConfidence": 0.9991092283421598
+          },
+          {
+            "offset": 0,
+            "h": 0.35,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.9856194519553574,
+            "wearingHelmetConfidence": 0.01438054804464269,
+            "unwearingHelmetConfidence": 0.9856194519553574
+          },
+          {
+            "offset": 0,
+            "h": 0.15,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.9818323927251903,
+            "wearingHelmetConfidence": 0.018167607274809667,
+            "unwearingHelmetConfidence": 0.9818323927251903
+          },
+          {
+            "offset": 0,
+            "h": 0.15,
+            "w": 0.8,
+            "wearingHelmet": false,
+            "confidence": 0.9641190281759024,
+            "wearingHelmetConfidence": 0.035880971824097475,
+            "unwearingHelmetConfidence": 0.9641190281759024
+          },
+          {
+            "offset": -0.15,
+            "h": 0.25,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.9643031151352143,
+            "wearingHelmetConfidence": 0.03569688486478573,
+            "unwearingHelmetConfidence": 0.9643031151352143
+          },
+          {
+            "offset": -0.15,
+            "h": 0.25,
+            "w": 0.8,
+            "wearingHelmet": false,
+            "confidence": 0.6758278691924553,
+            "wearingHelmetConfidence": 0.3241721308075447,
+            "unwearingHelmetConfidence": 0.6758278691924553
+          },
+          {
+            "offset": 0,
+            "h": 0.25,
+            "w": 0.8,
+            "wearingHelmet": false,
+            "confidence": 0.9937302147822911,
+            "wearingHelmetConfidence": 0.006269785217708865,
+            "unwearingHelmetConfidence": 0.9937302147822911
+          },
+          {
+            "offset": 0,
+            "h": 0.2,
+            "w": 0.6,
+            "wearingHelmet": false,
+            "confidence": 0.8534061424028111,
+            "wearingHelmetConfidence": 0.14659385759718888,
+            "unwearingHelmetConfidence": 0.8534061424028111
+          },
+          {
+            "offset": 0,
+            "h": 0.3,
+            "w": 0.6,
+            "wearingHelmet": false,
+            "confidence": 0.9885720223538169,
+            "wearingHelmetConfidence": 0.01142797764618314,
+            "unwearingHelmetConfidence": 0.9885720223538169
+          }
+        ]
+      }
+    ],
+    "alerts": [
+      [
+        {
+          "detectionType": "helmet-worn",
+          "status": "SUCCESS",
+          "provenance": "LIVE_INFERENCE",
+          "confidence": 0.9974095276668935,
+          "durationSeconds": 1,
+          "objects": [
+            {
+              "label": "helmet",
+              "confidence": 0.9974095276668935,
+              "boundingBox": {
+                "x": 0.3672521346771267,
+                "y": 0.06847350848372942,
+                "width": 0.16008247715500504,
+                "height": 0.17793965987693722
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.8916622701765107,
+              "boundingBox": {
+                "x": 0.3472418250327511,
+                "y": 0.17523730440989174,
+                "width": 0.2001030964437563,
+                "height": 0.7117586395077489
+              }
+            }
+          ],
+          "metadata": {
+            "compliantCount": 1,
+            "threatType": "helmet_worn_inside_facility",
+            "evidenceSource": "confirmed-head-classification"
+          },
+          "executionMetadata": {
+            "status": "SUCCESS",
+            "provenance": "LIVE_INFERENCE",
+            "modelId": "helmet-classifier",
+            "modelVersion": "1.1.7",
+            "simulated": false,
+            "timestamp": "2026-10-05T11:09:35.438Z"
+          },
+          "requiresAlert": true
+        }
+      ],
+      [
+        {
+          "detectionType": "helmet-worn",
+          "status": "SUCCESS",
+          "provenance": "LIVE_INFERENCE",
+          "confidence": 0.9974095276668935,
+          "durationSeconds": 1,
+          "objects": [
+            {
+              "label": "helmet",
+              "confidence": 0.9974095276668935,
+              "boundingBox": {
+                "x": 0.3672521346771267,
+                "y": 0.06847350848372942,
+                "width": 0.16008247715500504,
+                "height": 0.17793965987693722
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.8916622701765107,
+              "boundingBox": {
+                "x": 0.3472418250327511,
+                "y": 0.17523730440989174,
+                "width": 0.2001030964437563,
+                "height": 0.7117586395077489
+              }
+            }
+          ],
+          "metadata": {
+            "compliantCount": 1,
+            "threatType": "helmet_worn_inside_facility",
+            "evidenceSource": "confirmed-head-classification"
+          },
+          "executionMetadata": {
+            "status": "SUCCESS",
+            "provenance": "LIVE_INFERENCE",
+            "modelId": "helmet-classifier",
+            "modelVersion": "1.1.7",
+            "simulated": false,
+            "timestamp": "2026-10-05T11:09:35.582Z"
+          },
+          "requiresAlert": true
+        }
+      ],
+      [
+        {
+          "detectionType": "helmet-worn",
+          "status": "SUCCESS",
+          "provenance": "LIVE_INFERENCE",
+          "confidence": 0.9974095276668935,
+          "durationSeconds": 1,
+          "objects": [
+            {
+              "label": "helmet",
+              "confidence": 0.9974095276668935,
+              "boundingBox": {
+                "x": 0.3672521346771267,
+                "y": 0.06847350848372942,
+                "width": 0.16008247715500504,
+                "height": 0.17793965987693722
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.8916622701765107,
+              "boundingBox": {
+                "x": 0.3472418250327511,
+                "y": 0.17523730440989174,
+                "width": 0.2001030964437563,
+                "height": 0.7117586395077489
+              }
+            }
+          ],
+          "metadata": {
+            "compliantCount": 1,
+            "threatType": "helmet_worn_inside_facility",
+            "evidenceSource": "confirmed-head-classification"
+          },
+          "executionMetadata": {
+            "status": "SUCCESS",
+            "provenance": "LIVE_INFERENCE",
+            "modelId": "helmet-classifier",
+            "modelVersion": "1.1.7",
+            "simulated": false,
+            "timestamp": "2026-10-05T11:09:35.649Z"
+          },
+          "requiresAlert": true
+        }
+      ]
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791198062802.jpg",
+    "scores": [
+      {
+        "person": {
+          "label": "person",
+          "confidence": 0.8559417505216516,
+          "boundingBox": {
+            "x": 0.36146968311310057,
+            "y": 0.1397908041420247,
+            "width": 0.3283375422448329,
+            "height": 0.669469784100015
+          }
+        },
+        "crops": [
+          {
+            "offset": 0,
+            "h": 0.55,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.997231284701637,
+            "wearingHelmetConfidence": 0.0027687152983631095,
+            "unwearingHelmetConfidence": 0.997231284701637
+          },
+          {
+            "offset": 0,
+            "h": 0.35,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.9955623086511717,
+            "wearingHelmetConfidence": 0.004437691348828357,
+            "unwearingHelmetConfidence": 0.9955623086511717
+          },
+          {
+            "offset": 0,
+            "h": 0.15,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.8131502155328169,
+            "wearingHelmetConfidence": 0.1868497844671831,
+            "unwearingHelmetConfidence": 0.8131502155328169
+          },
+          {
+            "offset": 0,
+            "h": 0.15,
+            "w": 0.8,
+            "wearingHelmet": false,
+            "confidence": 0.8655356921720595,
+            "wearingHelmetConfidence": 0.13446430782794053,
+            "unwearingHelmetConfidence": 0.8655356921720595
+          },
+          {
+            "offset": -0.15,
+            "h": 0.25,
+            "w": 1,
+            "wearingHelmet": true,
+            "confidence": 0.9953407543434805,
+            "wearingHelmetConfidence": 0.9953407543434805,
+            "unwearingHelmetConfidence": 0.00465924565651962
+          },
+          {
+            "offset": -0.15,
+            "h": 0.25,
+            "w": 0.8,
+            "wearingHelmet": true,
+            "confidence": 0.9961400719760413,
+            "wearingHelmetConfidence": 0.9961400719760413,
+            "unwearingHelmetConfidence": 0.0038599280239586527
+          },
+          {
+            "offset": 0,
+            "h": 0.25,
+            "w": 0.8,
+            "wearingHelmet": false,
+            "confidence": 0.8533332298565409,
+            "wearingHelmetConfidence": 0.14666677014345902,
+            "unwearingHelmetConfidence": 0.8533332298565409
+          },
+          {
+            "offset": 0,
+            "h": 0.2,
+            "w": 0.6,
+            "wearingHelmet": true,
+            "confidence": 0.6748815046510632,
+            "wearingHelmetConfidence": 0.6748815046510632,
+            "unwearingHelmetConfidence": 0.32511849534893683
+          },
+          {
+            "offset": 0,
+            "h": 0.3,
+            "w": 0.6,
+            "wearingHelmet": false,
+            "confidence": 0.9972075374478452,
+            "wearingHelmetConfidence": 0.002792462552154814,
+            "unwearingHelmetConfidence": 0.9972075374478452
+          }
+        ]
+      }
+    ],
+    "alerts": [
+      [],
+      [],
+      []
+    ]
+  },
+  {
+    "file": "C:/Users/Dhanya/Downloads/incident-snapshot-1791197215378.jpg",
+    "scores": [
+      {
+        "person": {
+          "label": "person",
+          "confidence": 0.8416150624384073,
+          "boundingBox": {
+            "x": 0.2604518846367613,
+            "y": 0.03776868512452957,
+            "width": 0.20742098560650224,
+            "height": 0.4498631012344812
+          }
+        },
+        "crops": [
+          {
+            "offset": 0,
+            "h": 0.55,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.8543837957952998,
+            "wearingHelmetConfidence": 0.14561620420470012,
+            "unwearingHelmetConfidence": 0.8543837957952998
+          },
+          {
+            "offset": 0,
+            "h": 0.35,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.5270036922007649,
+            "wearingHelmetConfidence": 0.47299630779923507,
+            "unwearingHelmetConfidence": 0.5270036922007649
+          },
+          {
+            "offset": 0,
+            "h": 0.15,
+            "w": 1,
+            "wearingHelmet": true,
+            "confidence": 0.858961655354873,
+            "wearingHelmetConfidence": 0.858961655354873,
+            "unwearingHelmetConfidence": 0.14103834464512693
+          },
+          {
+            "offset": 0,
+            "h": 0.15,
+            "w": 0.8,
+            "wearingHelmet": true,
+            "confidence": 0.8186501861381967,
+            "wearingHelmetConfidence": 0.8186501861381967,
+            "unwearingHelmetConfidence": 0.1813498138618033
+          },
+          {
+            "offset": -0.15,
+            "h": 0.25,
+            "w": 1,
+            "wearingHelmet": true,
+            "confidence": 0.9706596138413238,
+            "wearingHelmetConfidence": 0.9706596138413238,
+            "unwearingHelmetConfidence": 0.029340386158676235
+          },
+          {
+            "offset": -0.15,
+            "h": 0.25,
+            "w": 0.8,
+            "wearingHelmet": true,
+            "confidence": 0.9939688249549743,
+            "wearingHelmetConfidence": 0.9939688249549743,
+            "unwearingHelmetConfidence": 0.006031175045025797
+          },
+          {
+            "offset": 0,
+            "h": 0.25,
+            "w": 0.8,
+            "wearingHelmet": true,
+            "confidence": 0.5596665391423971,
+            "wearingHelmetConfidence": 0.5596665391423971,
+            "unwearingHelmetConfidence": 0.440333460857603
+          },
+          {
+            "offset": 0,
+            "h": 0.2,
+            "w": 0.6,
+            "wearingHelmet": true,
+            "confidence": 0.9154058120172649,
+            "wearingHelmetConfidence": 0.9154058120172649,
+            "unwearingHelmetConfidence": 0.08459418798273513
+          },
+          {
+            "offset": 0,
+            "h": 0.3,
+            "w": 0.6,
+            "wearingHelmet": true,
+            "confidence": 0.9777200346540352,
+            "wearingHelmetConfidence": 0.9777200346540352,
+            "unwearingHelmetConfidence": 0.022279965345964804
+          }
+        ]
+      },
+      {
+        "person": {
+          "label": "person",
+          "confidence": 0.7706274098914463,
+          "boundingBox": {
+            "x": 0.6697237307444469,
+            "y": 0.34423462618443007,
+            "width": 0.2777791758378604,
+            "height": 0.65576537381557
+          }
+        },
+        "crops": [
+          {
+            "offset": 0,
+            "h": 0.55,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.9993646578467724,
+            "wearingHelmetConfidence": 0.0006353421532277146,
+            "unwearingHelmetConfidence": 0.9993646578467724
+          },
+          {
+            "offset": 0,
+            "h": 0.35,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.989273905705938,
+            "wearingHelmetConfidence": 0.010726094294061978,
+            "unwearingHelmetConfidence": 0.989273905705938
+          },
+          {
+            "offset": 0,
+            "h": 0.15,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.7781652130231688,
+            "wearingHelmetConfidence": 0.2218347869768312,
+            "unwearingHelmetConfidence": 0.7781652130231688
+          },
+          {
+            "offset": 0,
+            "h": 0.15,
+            "w": 0.8,
+            "wearingHelmet": false,
+            "confidence": 0.8960835090571666,
+            "wearingHelmetConfidence": 0.10391649094283341,
+            "unwearingHelmetConfidence": 0.8960835090571666
+          },
+          {
+            "offset": -0.15,
+            "h": 0.25,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.9209178706035719,
+            "wearingHelmetConfidence": 0.07908212939642824,
+            "unwearingHelmetConfidence": 0.9209178706035719
+          },
+          {
+            "offset": -0.15,
+            "h": 0.25,
+            "w": 0.8,
+            "wearingHelmet": false,
+            "confidence": 0.9181416239946673,
+            "wearingHelmetConfidence": 0.08185837600533268,
+            "unwearingHelmetConfidence": 0.9181416239946673
+          },
+          {
+            "offset": 0,
+            "h": 0.25,
+            "w": 0.8,
+            "wearingHelmet": true,
+            "confidence": 0.7713652632260897,
+            "wearingHelmetConfidence": 0.7713652632260897,
+            "unwearingHelmetConfidence": 0.2286347367739104
+          },
+          {
+            "offset": 0,
+            "h": 0.2,
+            "w": 0.6,
+            "wearingHelmet": false,
+            "confidence": 0.9690131113964192,
+            "wearingHelmetConfidence": 0.030986888603580787,
+            "unwearingHelmetConfidence": 0.9690131113964192
+          },
+          {
+            "offset": 0,
+            "h": 0.3,
+            "w": 0.6,
+            "wearingHelmet": false,
+            "confidence": 0.9825473298427445,
+            "wearingHelmetConfidence": 0.0174526701572554,
+            "unwearingHelmetConfidence": 0.9825473298427445
+          }
+        ]
+      },
+      {
+        "person": {
+          "label": "person",
+          "confidence": 0.6681431331373915,
+          "boundingBox": {
+            "x": 0,
+            "y": 0.09036424692455605,
+            "width": 0.11439643463668166,
+            "height": 0.7841549681275505
+          }
+        },
+        "crops": [
+          {
+            "offset": 0,
+            "h": 0.55,
+            "w": 1,
+            "wearingHelmet": true,
+            "confidence": 0.9593312148628836,
+            "wearingHelmetConfidence": 0.9593312148628836,
+            "unwearingHelmetConfidence": 0.04066878513711635
+          },
+          {
+            "offset": 0,
+            "h": 0.35,
+            "w": 1,
+            "wearingHelmet": true,
+            "confidence": 0.9943563845337141,
+            "wearingHelmetConfidence": 0.9943563845337141,
+            "unwearingHelmetConfidence": 0.005643615466285902
+          },
+          {
+            "offset": 0,
+            "h": 0.15,
+            "w": 1,
+            "wearingHelmet": true,
+            "confidence": 0.9972558772994656,
+            "wearingHelmetConfidence": 0.9972558772994656,
+            "unwearingHelmetConfidence": 0.002744122700534396
+          },
+          {
+            "offset": 0,
+            "h": 0.15,
+            "w": 0.8,
+            "wearingHelmet": true,
+            "confidence": 0.9886760780861031,
+            "wearingHelmetConfidence": 0.9886760780861031,
+            "unwearingHelmetConfidence": 0.011323921913896846
+          },
+          {
+            "offset": -0.15,
+            "h": 0.25,
+            "w": 1,
+            "wearingHelmet": true,
+            "confidence": 0.9774876363984536,
+            "wearingHelmetConfidence": 0.9774876363984536,
+            "unwearingHelmetConfidence": 0.022512363601546487
+          },
+          {
+            "offset": -0.15,
+            "h": 0.25,
+            "w": 0.8,
+            "wearingHelmet": true,
+            "confidence": 0.6470298454541777,
+            "wearingHelmetConfidence": 0.6470298454541777,
+            "unwearingHelmetConfidence": 0.35297015454582237
+          },
+          {
+            "offset": 0,
+            "h": 0.25,
+            "w": 0.8,
+            "wearingHelmet": true,
+            "confidence": 0.5026561591501981,
+            "wearingHelmetConfidence": 0.5026561591501981,
+            "unwearingHelmetConfidence": 0.4973438408498018
+          },
+          {
+            "offset": 0,
+            "h": 0.2,
+            "w": 0.6,
+            "wearingHelmet": true,
+            "confidence": 0.7562626482464005,
+            "wearingHelmetConfidence": 0.7562626482464005,
+            "unwearingHelmetConfidence": 0.24373735175359948
+          },
+          {
+            "offset": 0,
+            "h": 0.3,
+            "w": 0.6,
+            "wearingHelmet": false,
+            "confidence": 0.7607578835151134,
+            "wearingHelmetConfidence": 0.23924211648488655,
+            "unwearingHelmetConfidence": 0.7607578835151134
+          }
+        ]
+      }
+    ],
+    "alerts": [
+      [],
+      [],
+      []
+    ]
+  },
+  {
+    "file": "scratch/helmet-alert-ch6.jpg",
+    "scores": [
+      {
+        "person": {
+          "label": "person",
+          "confidence": 0.9073691705806937,
+          "boundingBox": {
+            "x": 0.42754830512771863,
+            "y": 0.27247770281110933,
+            "width": 0.19828404415294415,
+            "height": 0.6625133282060731
+          }
+        },
+        "crops": [
+          {
+            "offset": 0,
+            "h": 0.55,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.997906300583342,
+            "wearingHelmetConfidence": 0.0020936994166580085,
+            "unwearingHelmetConfidence": 0.997906300583342
+          },
+          {
+            "offset": 0,
+            "h": 0.35,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.9883711368751446,
+            "wearingHelmetConfidence": 0.011628863124855482,
+            "unwearingHelmetConfidence": 0.9883711368751446
+          },
+          {
+            "offset": 0,
+            "h": 0.15,
+            "w": 1,
+            "wearingHelmet": true,
+            "confidence": 0.9909043083957585,
+            "wearingHelmetConfidence": 0.9909043083957585,
+            "unwearingHelmetConfidence": 0.009095691604241517
+          },
+          {
+            "offset": 0,
+            "h": 0.15,
+            "w": 0.8,
+            "wearingHelmet": true,
+            "confidence": 0.9575283175077834,
+            "wearingHelmetConfidence": 0.9575283175077834,
+            "unwearingHelmetConfidence": 0.0424716824922165
+          },
+          {
+            "offset": -0.15,
+            "h": 0.25,
+            "w": 1,
+            "wearingHelmet": true,
+            "confidence": 0.8384072784279673,
+            "wearingHelmetConfidence": 0.8384072784279673,
+            "unwearingHelmetConfidence": 0.16159272157203278
+          },
+          {
+            "offset": -0.15,
+            "h": 0.25,
+            "w": 0.8,
+            "wearingHelmet": true,
+            "confidence": 0.9935160983122392,
+            "wearingHelmetConfidence": 0.9935160983122392,
+            "unwearingHelmetConfidence": 0.006483901687760915
+          },
+          {
+            "offset": 0,
+            "h": 0.25,
+            "w": 0.8,
+            "wearingHelmet": false,
+            "confidence": 0.8826367836406819,
+            "wearingHelmetConfidence": 0.11736321635931798,
+            "unwearingHelmetConfidence": 0.8826367836406819
+          },
+          {
+            "offset": 0,
+            "h": 0.2,
+            "w": 0.6,
+            "wearingHelmet": true,
+            "confidence": 0.8622472711005652,
+            "wearingHelmetConfidence": 0.8622472711005652,
+            "unwearingHelmetConfidence": 0.13775272889943474
+          },
+          {
+            "offset": 0,
+            "h": 0.3,
+            "w": 0.6,
+            "wearingHelmet": false,
+            "confidence": 0.9698712441102465,
+            "wearingHelmetConfidence": 0.03012875588975343,
+            "unwearingHelmetConfidence": 0.9698712441102465
+          }
+        ]
+      }
+    ],
+    "alerts": [
+      [
+        {
+          "detectionType": "helmet-worn",
+          "status": "SUCCESS",
+          "provenance": "LIVE_INFERENCE",
+          "confidence": 0.9575283175077834,
+          "durationSeconds": 1,
+          "objects": [
+            {
+              "label": "helmet",
+              "confidence": 0.9575283175077834,
+              "boundingBox": {
+                "x": 0.44737670954301306,
+                "y": 0.27247770281110933,
+                "width": 0.15862723532235534,
+                "height": 0.09937699923091096
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.9073691705806937,
+              "boundingBox": {
+                "x": 0.42754830512771863,
+                "y": 0.27247770281110933,
+                "width": 0.19828404415294415,
+                "height": 0.6625133282060731
+              }
+            }
+          ],
+          "metadata": {
+            "compliantCount": 1,
+            "threatType": "helmet_worn_inside_facility",
+            "evidenceSource": "confirmed-head-classification"
+          },
+          "executionMetadata": {
+            "status": "SUCCESS",
+            "provenance": "LIVE_INFERENCE",
+            "modelId": "helmet-classifier",
+            "modelVersion": "1.1.7",
+            "simulated": false,
+            "timestamp": "2026-10-05T11:09:39.537Z"
+          },
+          "requiresAlert": true
+        }
+      ],
+      [
+        {
+          "detectionType": "helmet-worn",
+          "status": "SUCCESS",
+          "provenance": "LIVE_INFERENCE",
+          "confidence": 0.9575283175077834,
+          "durationSeconds": 1,
+          "objects": [
+            {
+              "label": "helmet",
+              "confidence": 0.9575283175077834,
+              "boundingBox": {
+                "x": 0.44737670954301306,
+                "y": 0.27247770281110933,
+                "width": 0.15862723532235534,
+                "height": 0.09937699923091096
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.9073691705806937,
+              "boundingBox": {
+                "x": 0.42754830512771863,
+                "y": 0.27247770281110933,
+                "width": 0.19828404415294415,
+                "height": 0.6625133282060731
+              }
+            }
+          ],
+          "metadata": {
+            "compliantCount": 1,
+            "threatType": "helmet_worn_inside_facility",
+            "evidenceSource": "confirmed-head-classification"
+          },
+          "executionMetadata": {
+            "status": "SUCCESS",
+            "provenance": "LIVE_INFERENCE",
+            "modelId": "helmet-classifier",
+            "modelVersion": "1.1.7",
+            "simulated": false,
+            "timestamp": "2026-10-05T11:09:39.822Z"
+          },
+          "requiresAlert": true
+        }
+      ],
+      [
+        {
+          "detectionType": "helmet-worn",
+          "status": "SUCCESS",
+          "provenance": "LIVE_INFERENCE",
+          "confidence": 0.9575283175077834,
+          "durationSeconds": 1,
+          "objects": [
+            {
+              "label": "helmet",
+              "confidence": 0.9575283175077834,
+              "boundingBox": {
+                "x": 0.44737670954301306,
+                "y": 0.27247770281110933,
+                "width": 0.15862723532235534,
+                "height": 0.09937699923091096
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.9073691705806937,
+              "boundingBox": {
+                "x": 0.42754830512771863,
+                "y": 0.27247770281110933,
+                "width": 0.19828404415294415,
+                "height": 0.6625133282060731
+              }
+            }
+          ],
+          "metadata": {
+            "compliantCount": 1,
+            "threatType": "helmet_worn_inside_facility",
+            "evidenceSource": "confirmed-head-classification"
+          },
+          "executionMetadata": {
+            "status": "SUCCESS",
+            "provenance": "LIVE_INFERENCE",
+            "modelId": "helmet-classifier",
+            "modelVersion": "1.1.7",
+            "simulated": false,
+            "timestamp": "2026-10-05T11:09:40.073Z"
+          },
+          "requiresAlert": true
+        }
+      ]
+    ]
+  },
+  {
+    "file": "scratch/helmet-alert-ch2.jpg",
+    "scores": [
+      {
+        "person": {
+          "label": "person",
+          "confidence": 0.8792403807951814,
+          "boundingBox": {
+            "x": 0.6163041299778478,
+            "y": 0.09402704398046124,
+            "width": 0.17594596391186756,
+            "height": 0.7142621522030274
+          }
+        },
+        "crops": [
+          {
+            "offset": 0,
+            "h": 0.55,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.9969628384036671,
+            "wearingHelmetConfidence": 0.0030371615963328898,
+            "unwearingHelmetConfidence": 0.9969628384036671
+          },
+          {
+            "offset": 0,
+            "h": 0.35,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.9996987999080159,
+            "wearingHelmetConfidence": 0.0003012000919840847,
+            "unwearingHelmetConfidence": 0.9996987999080159
+          },
+          {
+            "offset": 0,
+            "h": 0.15,
+            "w": 1,
+            "wearingHelmet": true,
+            "confidence": 0.6612110204593614,
+            "wearingHelmetConfidence": 0.6612110204593614,
+            "unwearingHelmetConfidence": 0.3387889795406387
+          },
+          {
+            "offset": 0,
+            "h": 0.15,
+            "w": 0.8,
+            "wearingHelmet": true,
+            "confidence": 0.6960554125767277,
+            "wearingHelmetConfidence": 0.6960554125767277,
+            "unwearingHelmetConfidence": 0.30394458742327235
+          },
+          {
+            "offset": -0.15,
+            "h": 0.25,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.9570144511918535,
+            "wearingHelmetConfidence": 0.042985548808146506,
+            "unwearingHelmetConfidence": 0.9570144511918535
+          },
+          {
+            "offset": -0.15,
+            "h": 0.25,
+            "w": 0.8,
+            "wearingHelmet": false,
+            "confidence": 0.7368079467130619,
+            "wearingHelmetConfidence": 0.263192053286938,
+            "unwearingHelmetConfidence": 0.7368079467130619
+          },
+          {
+            "offset": 0,
+            "h": 0.25,
+            "w": 0.8,
+            "wearingHelmet": false,
+            "confidence": 0.9860916417024523,
+            "wearingHelmetConfidence": 0.013908358297547671,
+            "unwearingHelmetConfidence": 0.9860916417024523
+          },
+          {
+            "offset": 0,
+            "h": 0.2,
+            "w": 0.6,
+            "wearingHelmet": false,
+            "confidence": 0.8482657321032744,
+            "wearingHelmetConfidence": 0.15173426789672573,
+            "unwearingHelmetConfidence": 0.8482657321032744
+          },
+          {
+            "offset": 0,
+            "h": 0.3,
+            "w": 0.6,
+            "wearingHelmet": false,
+            "confidence": 0.970862870420033,
+            "wearingHelmetConfidence": 0.02913712957996685,
+            "unwearingHelmetConfidence": 0.970862870420033
+          }
+        ]
+      }
+    ],
+    "alerts": [
+      [],
+      [],
+      []
+    ]
+  },
+  {
+    "file": "scratch/helmet-alert-ch8.jpg",
+    "scores": [
+      {
+        "person": {
+          "label": "person",
+          "confidence": 0.7701293525499011,
+          "boundingBox": {
+            "x": 0.47619278992377534,
+            "y": 0.3613882527647653,
+            "width": 0.18298630691932316,
+            "height": 0.6322714051118707
+          }
+        },
+        "crops": [
+          {
+            "offset": 0,
+            "h": 0.55,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.9231937390073233,
+            "wearingHelmetConfidence": 0.07680626099267672,
+            "unwearingHelmetConfidence": 0.9231937390073233
+          },
+          {
+            "offset": 0,
+            "h": 0.35,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.9719788234104368,
+            "wearingHelmetConfidence": 0.028021176589563112,
+            "unwearingHelmetConfidence": 0.9719788234104368
+          },
+          {
+            "offset": 0,
+            "h": 0.15,
+            "w": 1,
+            "wearingHelmet": false,
+            "confidence": 0.5089484359714272,
+            "wearingHelmetConfidence": 0.4910515640285728,
+            "unwearingHelmetConfidence": 0.5089484359714272
+          },
+          {
+            "offset": 0,
+            "h": 0.15,
+            "w": 0.8,
+            "wearingHelmet": true,
+            "confidence": 0.8693952821585567,
+            "wearingHelmetConfidence": 0.8693952821585567,
+            "unwearingHelmetConfidence": 0.13060471784144334
+          },
+          {
+            "offset": -0.15,
+            "h": 0.25,
+            "w": 1,
+            "wearingHelmet": true,
+            "confidence": 0.9675964336048692,
+            "wearingHelmetConfidence": 0.9675964336048692,
+            "unwearingHelmetConfidence": 0.03240356639513065
+          },
+          {
+            "offset": -0.15,
+            "h": 0.25,
+            "w": 0.8,
+            "wearingHelmet": true,
+            "confidence": 0.9998486783265957,
+            "wearingHelmetConfidence": 0.9998486783265957,
+            "unwearingHelmetConfidence": 0.00015132167340435254
+          },
+          {
+            "offset": 0,
+            "h": 0.25,
+            "w": 0.8,
+            "wearingHelmet": false,
+            "confidence": 0.672478224445128,
+            "wearingHelmetConfidence": 0.32752177555487205,
+            "unwearingHelmetConfidence": 0.672478224445128
+          },
+          {
+            "offset": 0,
+            "h": 0.2,
+            "w": 0.6,
+            "wearingHelmet": true,
+            "confidence": 0.996241936992571,
+            "wearingHelmetConfidence": 0.996241936992571,
+            "unwearingHelmetConfidence": 0.0037580630074290663
+          },
+          {
+            "offset": 0,
+            "h": 0.3,
+            "w": 0.6,
+            "wearingHelmet": true,
+            "confidence": 0.920348782968197,
+            "wearingHelmetConfidence": 0.920348782968197,
+            "unwearingHelmetConfidence": 0.07965121703180293
+          }
+        ]
+      }
+    ],
+    "alerts": [
+      [],
+      [],
+      []
+    ]
+  }
+]

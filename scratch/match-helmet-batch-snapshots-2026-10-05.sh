@@ -1,0 +1,4 @@
+set -e
+sudo docker exec -i sentinel-gcp-postgres psql -Aqt -v ON_ERROR_STOP=1 -U sentinel_admin -d sentinel_grid <<'SQL'
+SELECT e.id,e.occurred_at,md5(decode(e.metadata->>'annotatedSnapshotBase64','base64')) AS hash FROM analytics_events e WHERE e.detection_type='helmet-worn' AND e.occurred_at BETWEEN '2026-10-05 00:00:00+00' AND '2026-10-06 00:00:00+00' AND md5(decode(e.metadata->>'annotatedSnapshotBase64','base64')) IN ('e72cbb6eca3c18ab652cbbd4ab77d5ab','b602e19363ec15ce581da2202dace68e','cba5de5160aaa17332d158d10c1719af','3291003573a75cae8036356a7da77221','511e51b1edce43dec85be9b6c014d58b','f76370686abb648b34d8fe7fbbe81302','262196417895c13b7d25a9cec9b31fa8','800c93568aa5c1fea77fc4196d0d232f','babb26536ffa10ee414e2dbf33542bea','4f3c8dce62e84bed4622fcf5612d31e6','728f803ee02ba5989a4201b04e683ba9','d38a27c5fd760fd841722587970296af','79316880a581374808579b261c2e3ee8');
+SQL

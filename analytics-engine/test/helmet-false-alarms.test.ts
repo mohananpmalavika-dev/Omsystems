@@ -137,6 +137,59 @@ describe("helmet false-alarm evidence", () => {
     expect(results[0]?.objects.find(o=>o.label==='helmet')?.boundingBox.y).toBeCloseTo(0.07945);
   });
 
+  it.each([false, true])("rejects Bettaih background positives when the anchored bare head disagrees (fast=%s)", async fastAlert => {
+    const boundingBox = { x: 0.347241825, y: 0.1752373044, width: 0.2001030964, height: 0.7117586395 };
+    let anchoredScore = 0.294035;
+    const classifier = { run: vi.fn(async (_frame, box) => {
+      const score = box.y < boundingBox.y ? 0.99741 : anchoredScore;
+      return { wearingHelmet: score > 0.5, confidence: Math.max(score, 1 - score),
+        wearingHelmetConfidence: score, unwearingHelmetConfidence: 1 - score };
+    }) };
+    const detector = new HelmetDetector(null, 0.88, classifier, fastAlert);
+    await detector.initialize();
+    const candidate = { label: "person", confidence: 0.89166227, boundingBox };
+    for (const seconds of [0, 2, 4]) expect(await detector.detect(frame(seconds, [candidate]))).toEqual([]);
+    anchoredScore = 0.99;
+    expect((await detector.detect(frame(6, [candidate]))).length).toBe(fastAlert ? 1 : 0);
+    if (!fastAlert) {
+      anchoredScore = 0.294035;
+      expect(await detector.detect(frame(8, [candidate]))).toEqual([]);
+      anchoredScore = 0.99;
+      expect(await detector.detect(frame(10, [candidate]))).toEqual([]);
+      expect(await detector.detect(frame(12, [candidate]))).toEqual([]);
+      const results = await detector.detect(frame(14, [candidate]));
+      expect(results).toHaveLength(1);
+      expect(results[0]?.confidence).toBe(0.99);
+    }
+  });
+
+  it("retains the raised evidence floor in fast mode when the anchored head is only 0.9683", async () => {
+    const classifier = { run: vi.fn(async (_frame, box) => {
+      const score = box.y < personBox.y ? 0.99998 : 0.968346;
+      return { wearingHelmet:true, confidence:score, wearingHelmetConfidence:score, unwearingHelmetConfidence:1-score };
+    }) };
+    const detector = new HelmetDetector(null, 0.88, classifier, true);
+    await detector.initialize();
+    for (const seconds of [0,2,4]) expect(await detector.detect(frame(seconds,[person(0.80925)]))).toEqual([]);
+  });
+
+  it.each(["crown", "centered context"])("rejects compact positives when the %s contradicts helmet evidence", async rejectedCrop => {
+    const classifier = { run: vi.fn(async (_frame, box) => {
+      const compact = box.height <= personBox.height * 0.15;
+      const raised = box.y < personBox.y;
+      const contradiction = rejectedCrop === "crown"
+        ? raised && box.height === personBox.height * 0.15
+        : raised && box.width === personBox.width * 0.6;
+      const score = contradiction ? (rejectedCrop === "crown" ? 0.8558 : 0.6805) : compact || raised ? 0.9999 : 0.01;
+      return { wearingHelmet:score > 0.5, confidence:Math.max(score,1-score), wearingHelmetConfidence:score, unwearingHelmetConfidence:1-score };
+    }) };
+    for (const fastAlert of [false,true]) {
+      const detector = new HelmetDetector(null,0.88,classifier,fastAlert);
+      await detector.initialize();
+      for (const seconds of [0,2,4]) expect(await detector.detect(frame(seconds,[person(0.95)]))).toEqual([]);
+    }
+  });
+
   it.each([0.97,0.97999])("requires the stricter raised crop confidence on both crops (%f)",async score=>{
     const classifier={run:vi.fn(async (_frame,box)=>{const p=box.width===personBox.width?0.99999:score;return {wearingHelmet:true,confidence:p,wearingHelmetConfidence:p,unwearingHelmetConfidence:1-p};})};
     const detector=new HelmetDetector(null,0.88,classifier);await detector.initialize();
