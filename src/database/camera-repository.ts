@@ -729,7 +729,11 @@ export class CameraRepository {
         }>(
           `SELECT agent.id, agent.public_media_url, agent.local_media_url, agent.status, agent.last_seen_at
            FROM edge_agents agent
-           JOIN cameras c ON c.branch_node_id = agent.branch_node_id
+           JOIN cameras c ON (c.branch_node_id = agent.branch_node_id OR EXISTS (
+             SELECT 1 FROM edge_agent_branch_assignments assignment
+             WHERE assignment.edge_agent_id = agent.id
+               AND assignment.branch_node_id = c.branch_node_id
+           ))
            WHERE (c.id::text = $1 OR c.resource_node_id::text = $1)
              AND agent.credential_revoked_at IS NULL
              AND agent.last_seen_at >= now() - interval '60 minutes'

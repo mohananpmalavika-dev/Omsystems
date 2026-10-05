@@ -52,6 +52,8 @@ import { normalizeCameraStreamProfiles } from "@/lib/camera-stream-profiles";
 import { isLiveWallCameraOnline, matchesLiveWallSelection, selectLiveWallCameras } from "@/lib/live-wall-filters";
 import { buildLiveWallBranches, liveWallHierarchyOptions, parseLiveWallHierarchy, type LiveWallHierarchyNode } from "@/lib/live-wall-hierarchy";
 import { ScopeMultiSelect } from "@/components/ui/scope-multi-select";
+import { LiveWallWindows } from "@/components/live-wall-windows";
+import { readLiveWallWindowScope } from "@/lib/live-wall-windows";
 export type { HierarchyBranchInfo } from "@/lib/live-wall-hierarchy";
 import {
   endControlRoomActivity,
@@ -253,7 +255,9 @@ const PATROL_STAGES = [
 
 function ControlRoomContent() {
   const searchParams = useSearchParams();
-  const urlBranchId = searchParams?.get("branchId") || searchParams?.get("branch") || null;
+  const isWallWindow = searchParams?.get("wallWindow") === "true";
+  const incomingScope = readLiveWallWindowScope(searchParams);
+  const urlBranchId = !isWallWindow && incomingScope.branches.length === 1 ? incomingScope.branches[0] : null;
   const isDetached = searchParams?.get("detached") === "true";
   const detachedCameraId = searchParams?.get("cameraId");
 
@@ -270,9 +274,9 @@ function ControlRoomContent() {
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [monitoredCameraIds, setMonitoredCameraIds] = useState<string[]>([]);
-  const [showAiOverlays, setShowAiOverlays] = useState(true);
-  const [prioritizeAiAlerts, setPrioritizeAiAlerts] = useState(false);
-  const [hideUnavailableChannels, setHideUnavailableChannels] = useState(true);
+  const [showAiOverlays, setShowAiOverlays] = useState(incomingScope.showAiOverlays);
+  const [prioritizeAiAlerts, setPrioritizeAiAlerts] = useState(incomingScope.prioritizeAiAlerts);
+  const [hideUnavailableChannels, setHideUnavailableChannels] = useState(incomingScope.hideUnavailable);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [selectedAiCameraId, setSelectedAiCameraId] = useState<string>();
   const [focusCameraId, setFocusCameraId] = useState<string>();
@@ -323,10 +327,10 @@ function ControlRoomContent() {
   }, []);
   
   // Hierarchy & Filter States
-  const [selectedZone, setSelectedZone] = useState<string[]>([]);
-  const [selectedRegion, setSelectedRegion] = useState<string[]>([]);
-  const [selectedArea, setSelectedArea] = useState<string[]>([]);
-  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>(() => urlBranchId ? [urlBranchId.trim()] : []);
+  const [selectedZone, setSelectedZone] = useState<string[]>(incomingScope.zones);
+  const [selectedRegion, setSelectedRegion] = useState<string[]>(incomingScope.regions);
+  const [selectedArea, setSelectedArea] = useState<string[]>(incomingScope.areas);
+  const [selectedBranchIds, setSelectedBranchIds] = useState<string[]>(incomingScope.branches);
   const selectedBranchId = selectedBranchIds.length === 1 ? selectedBranchIds[0] : "ALL";
   const resolvedUrlBranchRef = useRef<string | null>(null);
   const [protectionStreamBudget, setProtectionStreamBudget] = useState(CONTROL_ROOM_MAX_CONCURRENT_STREAMS);
@@ -351,8 +355,8 @@ function ControlRoomContent() {
     }).catch(() => undefined);
     return () => controller.abort();
   }, [selectedBranchId]);
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "ONLINE" | "OFFLINE" | "ALERT">("ALL");
+  const [searchQuery, setSearchQuery] = useState<string>(incomingScope.query);
+  const [statusFilter, setStatusFilter] = useState(incomingScope.status);
 
   const monitoredCameraSignatureRef = useRef("");
   const monitoredCamerasRef = useRef<CameraType[]>([]);
@@ -475,6 +479,24 @@ function ControlRoomContent() {
   const availableBranches = useMemo(() => branchesList.filter(branch =>
     matchesLiveWallSelection(selectedZone, branch.zone) && matchesLiveWallSelection(selectedRegion, branch.region) && matchesLiveWallSelection(selectedArea, branch.area)
   ), [branchesList, selectedZone, selectedRegion, selectedArea]);
+
+  const windowScopeLabel = selectedBranchIds.length
+    ? branchesList.filter(branch => selectedBranchIds.includes(branch.branchId)).map(branch => branch.branchName).join(", ") || `${selectedBranchIds.length} selected branches`
+    : selectedArea.length ? availableAreas.filter(area => selectedArea.includes(area.value)).map(area => area.label).join(", ") || `${selectedArea.length} selected areas`
+    : selectedRegion.length ? availableRegions.filter(region => selectedRegion.includes(region.value)).map(region => region.label).join(", ") || `${selectedRegion.length} selected regions`
+    : selectedZone.length ? availableZones.filter(zone => selectedZone.includes(zone.value)).map(zone => zone.label).join(", ") || `${selectedZone.length} selected zones`
+    : "All locations";
+  useEffect(() => {
+    if (!isWallWindow) return;
+    const previousTitle = document.title;
+    const title = `Live Wall · ${windowScopeLabel}`;
+    const updateTitle = () => { if (document.title !== title) document.title = title; };
+    // Next may finish streaming the layout metadata after this window mounts.
+    const observer = new MutationObserver(updateTitle);
+    observer.observe(document.head, { childList: true, subtree: true, characterData: true });
+    updateTitle();
+    return () => { observer.disconnect(); document.title = previousTitle; };
+  }, [isWallWindow, windowScopeLabel]);
 
   const wallSelection = useMemo(() => selectLiveWallCameras(
     cameras, branchesList, combinedPriorityCameraIds,
@@ -752,18 +774,18 @@ function ControlRoomContent() {
         <div className="los-hero-copy">
           <span className="los-eyebrow">KRYPTONVISION <span aria-hidden="true">/</span> SIGNAL OBSERVATORY <span aria-hidden="true">/</span> 01</span>
           <div className="los-hero-title"><span className="los-hero-mark" aria-hidden="true"><Radio size={24} /></span><h1>Live Wall<span>.</span><small>Signal Observatory</small></h1></div>
-          <p>A living field of feeds, areas and events. Shift focus with a single touch.</p>
+          <p>{isWallWindow ? `Independent wall window ? ${windowScopeLabel}` : "A living field of feeds, areas and events. Shift focus with a single touch."}</p>
           <div className="los-hero-snapshot" aria-label="Current wall coverage">
             <span><strong>{displayedOnlineCameras}</strong> online</span>
             <span><strong>{wallSelection.branchCount}</strong> branches</span>
             <span><strong>{stats.unacknowledgedAlerts}</strong> need attention</span>
           </div>
         </div>
-        <div className="los-page-actions"><span className={"los-data-state " + dataMode}><i />{dataMode === "live" ? "Inventory connected" : dataMode === "partial" ? "Partial service availability" : "Services unavailable"}</span><Link href="/operations/alerts">Alert centre <ArrowUpRight size={15} /></Link><button type="button" onClick={() => void loadData()} disabled={refreshing}><RefreshCw size={15} />{refreshing ? "Refreshing…" : "Refresh scope"}</button></div>
+        <div className="los-page-actions">{isWallWindow && <button type="button" onClick={() => window.close()}><X size={15} />Close window</button>}<span className={"los-data-state " + dataMode}><i />{dataMode === "live" ? "Inventory connected" : dataMode === "partial" ? "Partial service availability" : "Services unavailable"}</span><Link href="/operations/alerts">Alert centre <ArrowUpRight size={15} /></Link><button type="button" onClick={() => void loadData()} disabled={refreshing}><RefreshCw size={15} />{refreshing ? "Refreshing…" : "Refresh scope"}</button></div>
       </header>
 
       {/* 2. Interactive Zone / Region / Area / Branch Scope Filter Toolbar */}
-      <details className="los-scope-sheet"><summary><span><Globe2 size={17} />Wall scope & filters</span><strong>{activeSingleBranch?.branchName ?? "Across branches"} · {filteredCameras.length} cameras</strong><ChevronRight size={16} /></summary><section className="hierarchy-filter-bar" aria-label="Live Wall Scope Selection">
+      <details className="los-scope-sheet"><summary><span><Globe2 size={17} />Wall scope & filters</span><strong>{windowScopeLabel} · {filteredCameras.length} cameras</strong><ChevronRight size={16} /></summary><section className="hierarchy-filter-bar" aria-label="Live Wall Scope Selection">
         <div className="filter-controls-row">
           {/* Zone Selector */}
           <div className="filter-select-group">
@@ -931,6 +953,11 @@ function ControlRoomContent() {
         </div>
       </section></details>
 
+      <LiveWallWindows scope={{ zones: selectedZone, regions: selectedRegion, areas: selectedArea, branches: selectedBranchIds,
+        query: searchQuery, status: statusFilter, hideUnavailable: hideUnavailableChannels,
+        showAiOverlays, prioritizeAiAlerts }} label={windowScopeLabel} cameraCount={filteredCameras.length}
+        disabled={loading || cameraDataState !== "ready"} />
+
       {/* Single branch context */}
       {activeSingleBranch && (
         <div className="single-branch-banner">
@@ -970,7 +997,7 @@ function ControlRoomContent() {
 
       {/* Primary live camera stage */}
       <section className="control-room-content" aria-label="Camera wall">
-        {filteredCameras.length > 0 ? <LiveOperationsStage cameras={filteredCameras} alerts={liveAi.alerts} aiByCamera={aiByCamera} showAiOverlay={showAiOverlays} focusCameraId={focusCameraId} maxConcurrentStreams={Math.max(protectionStreamBudget, CONTROL_ROOM_MAX_CONCURRENT_STREAMS)} analyticsError={liveAi.error} analyticsLoading={liveAi.loading} onRefresh={liveAi.refresh} onActiveStreamsChange={setActiveStreams} onMonitoredCamerasChange={handleMonitoredCamerasChange} onOpenCameraAi={cameraId => { setSelectedAiCameraId(cameraId); setFocusCameraId(cameraId); setAiPanelOpen(true); }} /> : cameras.length > 0 ? (
+        {filteredCameras.length > 0 ? <LiveOperationsStage initialMode={isWallWindow ? "fleet" : "watch"} cameras={filteredCameras} alerts={liveAi.alerts} aiByCamera={aiByCamera} showAiOverlay={showAiOverlays} focusCameraId={focusCameraId} maxConcurrentStreams={Math.max(protectionStreamBudget, CONTROL_ROOM_MAX_CONCURRENT_STREAMS)} analyticsError={liveAi.error} analyticsLoading={liveAi.loading} onRefresh={liveAi.refresh} onActiveStreamsChange={setActiveStreams} onMonitoredCamerasChange={handleMonitoredCamerasChange} onOpenCameraAi={cameraId => { setSelectedAiCameraId(cameraId); setFocusCameraId(cameraId); setAiPanelOpen(true); }} /> : cameras.length > 0 ? (
           <div className="empty-control-room-card">
             <div className="empty-icon-wrap">
               <Filter size={36} />

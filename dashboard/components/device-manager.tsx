@@ -103,7 +103,7 @@ const emptyCameraForm: CameraForm = {
   rtspPort: "554",
   channel: "1",
   protocol: "onvif-t",
-  connectionTransport: "vpn",
+  connectionTransport: "edge-gateway",
   sourceType: "ip-camera",
   recorderId: "",
   recorderChannel: "1",

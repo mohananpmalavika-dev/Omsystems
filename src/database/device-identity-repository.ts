@@ -82,8 +82,14 @@ export class DeviceIdentityRepository {
        FROM resource_nodes branch
        JOIN edge_agents agent
          ON agent.id = $2::uuid
-        AND agent.branch_node_id = branch.id
         AND agent.tenant_id = branch.tenant_id
+        AND agent.credential_revoked_at IS NULL
+        AND (agent.branch_node_id = branch.id OR EXISTS (
+          SELECT 1 FROM edge_agent_branch_assignments assignment
+          WHERE assignment.edge_agent_id = agent.id
+            AND assignment.branch_node_id = branch.id
+            AND assignment.tenant_id = branch.tenant_id
+        ))
        WHERE branch.id = $1::uuid AND branch.node_type = 'branch'`,
       [branchId, input.edgeAgentId],
     );

@@ -29,12 +29,13 @@ function matchesScene(camera: Camera, keywords: readonly string[]) {
 function eventTime(alert: AnalyticsAlert) { return alert.firstDetectedAt || alert.createdAt || alert.lastDetectedAt; }
 function timeLabel(value?: string) { return value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "Time unavailable"; }
 
-export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay, focusCameraId, maxConcurrentStreams, analyticsError, analyticsLoading, onRefresh, onActiveStreamsChange, onMonitoredCamerasChange, onOpenCameraAi }: {
+export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay, focusCameraId, maxConcurrentStreams, analyticsError, analyticsLoading, onRefresh, onActiveStreamsChange, onMonitoredCamerasChange, onOpenCameraAi, initialMode = "watch" }: {
   cameras: Camera[]; alerts: AnalyticsAlert[]; aiByCamera: ReadonlyMap<string, { rules: AnalyticsRule[]; alerts: AnalyticsAlert[] }>;
   showAiOverlay: boolean; focusCameraId?: string; maxConcurrentStreams: number; analyticsError?: string; analyticsLoading: boolean;
   onRefresh: () => Promise<void>; onActiveStreamsChange: (count: number) => void; onMonitoredCamerasChange: (ids: string[]) => void; onOpenCameraAi: (id: string) => void;
+  initialMode?: Mode;
 }) {
-  const [mode, setMode] = useState<Mode>("watch");
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [fleetTileCount, setFleetTileCount] = useState<number | "all">("all");
   const [fleetPage, setFleetPage] = useState(0);
   const [fleetBranch, setFleetBranch] = useState("all");
