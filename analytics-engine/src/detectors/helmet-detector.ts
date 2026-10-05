@@ -77,10 +77,10 @@ export class HelmetDetector extends BaseDetector {
 
   async initialize(): Promise<void> {
     try {
-      if (!this.inference && !this.classifier) {
+      if ((!this.inference && !this.classifier) || this.verificationRequired) {
         this.verificationRequired = true;
-        this.classifier = await loadHelmetClassificationInference("helmet");
-        this.headVerifier = new LocalizedHelmetHeadVerifier(
+        this.classifier ??= await loadHelmetClassificationInference("helmet");
+        this.headVerifier ??= new LocalizedHelmetHeadVerifier(
           await loadObjectInference("helmet-head-localizer", 0.25), this.classifier);
       }
       this.isModelLoaded = true;

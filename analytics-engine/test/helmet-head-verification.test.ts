@@ -73,4 +73,19 @@ describe("independent helmet head verification", () => {
     expect(detector.getHealth().status).toBe("degraded");
     expect((await detector.detect(frame())).some(result=>result.requiresAlert)).toBe(false);
   });
+  it("retries failed verification initialization instead of reporting healthy without it", async () => {
+    loaders.classifier.mockResolvedValue({run:vi.fn(async()=>score(.999))});
+    loaders.objects.mockRejectedValueOnce(new Error("Missing head model")).mockResolvedValueOnce({run:vi.fn(async()=>[])});
+    const detector=new HelmetDetector(null,.88,null,true);
+    await detector.initialize();expect(detector.getHealth().status).toBe("degraded");
+    await detector.initialize();expect(detector.getHealth().status).toBe("healthy");
+    expect(loaders.objects).toHaveBeenCalledTimes(2);
+    expect(await detector.detect(frame())).toEqual([]);
+  });
+  it("rejects an undersized crown rather than enlarging a thin strip into helmet evidence", async () => {
+    const small={...box,height:.06};
+    const classifier={run:vi.fn(async(_frame,crop)=>score(crop.height<small.height?.999:.01))};
+    expect(await new LocalizedHelmetHeadVerifier(localizer("helmet",small),classifier).verify(frame(),person,.9167)).toBeNull();
+    expect(classifier.run).toHaveBeenCalledTimes(2);
+  });
 });
