@@ -1,8 +1,10 @@
 import { execSync } from 'child_process';
 
 const sql = `
-SELECT * FROM camera_discoveries WHERE id = '6e325f8d-fbaa-4a00-89d7-68231e1850ef';
-SELECT * FROM central_stream_secrets WHERE reference LIKE '%6e325f8d%';
+SELECT id, ip_address, model, camera_id, status, branch_id, channel
+FROM camera_discoveries
+WHERE id = '58b83ac6-6273-4dab-9c75-2848d7775ca2'
+   OR id = '53a705b5-3f1a-447a-ab59-3d953517a438';
 `;
 
 const base64 = Buffer.from(sql).toString('base64');

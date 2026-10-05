@@ -618,6 +618,7 @@ export type AnalyticsAlertStatus =
   | "resolved" | "false_alarm" | "suppressed";
 
 export interface AnalyticsRule {
+  shutterConfig?: import("../../packages/contracts/src/shutter.js").ShutterConfig;
   id: string;
   tenantId: string;
   cameraId: string;

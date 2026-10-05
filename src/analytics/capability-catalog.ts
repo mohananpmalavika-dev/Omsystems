@@ -24,6 +24,11 @@ const c = (
 ): AiCapability => ({ id, name, stage, defaultSeverity, description });
 
 export const AI_CAPABILITY_DOMAINS: AiCapabilityDomain[] = [
+  {id:"shutter",name:"Shutter monitoring",description:"Camera-calibrated opening and closing alerts",capabilities:[
+    c("shutter-state","Shutter opening and closing","derived","P3","Confirmed changes between calibrated open and closed shutter views"),
+    c("shutter-opened","Shutter opened","derived","P3"),
+    c("shutter-closed","Shutter closed","derived","P3"),
+  ]},
   { id: "human", name: "Human analytics", description: "People, behaviour, identity continuity, and PPE", capabilities: [
     c("person", "Person detection", "core"), c("person-tracking", "Cross-frame person tracking", "derived"),
     c("person-reidentification", "Cross-camera person re-identification"), c("person-counting", "Person counting", "derived"),

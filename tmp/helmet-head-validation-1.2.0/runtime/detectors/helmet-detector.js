@@ -46,10 +46,10 @@ export class HelmetDetector extends BaseDetector {
     }
     async initialize() {
         try {
-            if (!this.inference && !this.classifier) {
+            if ((!this.inference && !this.classifier) || this.verificationRequired) {
                 this.verificationRequired = true;
-                this.classifier = await loadHelmetClassificationInference("helmet");
-                this.headVerifier = new LocalizedHelmetHeadVerifier(await loadObjectInference("helmet-head-localizer", 0.25), this.classifier);
+                this.classifier ??= await loadHelmetClassificationInference("helmet");
+                this.headVerifier ??= new LocalizedHelmetHeadVerifier(await loadObjectInference("helmet-head-localizer", 0.25), this.classifier);
             }
             this.isModelLoaded = true;
             this.modelLoadError = null;
@@ -87,29 +87,7 @@ export class HelmetDetector extends BaseDetector {
                     requiresAlert: false,
                 }];
         }
-        const candidates = await this.detectHelmetsInFrame(frame);
-        const detections = [];
-        for (const candidate of candidates) {
-            if (candidate.evidenceSource !== "confirmed-head-classification") {
-                detections.push(candidate);
-                continue;
-            }
-            if (!this.headVerifier) {
-                if (!this.verificationRequired)
-                    detections.push(candidate); // Explicitly injected inference providers.
-                else
-                    this.clearPendingHead(frame.cameraId, candidate.personBoundingBox);
-                continue;
-            }
-            const verified = await this.headVerifier.verify(frame, candidate.personBoundingBox, Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE));
-            if (!verified) {
-                this.clearPendingHead(frame.cameraId, candidate.personBoundingBox);
-                continue;
-            }
-            detections.push({ ...candidate, helmetBoundingBox: verified.boundingBox,
-                confidence: Math.min(candidate.confidence ?? 0, verified.classificationConfidence),
-                localizationConfidence: verified.localizationConfidence, evidenceSource: "localized-head-classification" });
-        }
+        const detections = await this.detectHelmetsInFrame(frame);
         const results = [];
         // An observed helmet box alerts immediately; classifier-only head crops
         // must agree across two frames before they become helmet evidence.
@@ -221,11 +199,16 @@ export class HelmetDetector extends BaseDetector {
                     if (wideResult.wearingHelmet && narrowResult.wearingHelmet &&
                         anchoredResult.wearingHelmet &&
                         confidence >= Math.max(this.MIN_CONFIDENCE, 0.98)) {
+                        const candidate = await this.verifyClassifiedHead(frame, {
+                            personBoundingBox: box, helmetBoundingBox: narrow,
+                            helmetDetected: true, evidenceSource: "confirmed-head-classification", confidence,
+                            personConfidence: person.confidence ?? 0, riskLevel: "violation",
+                        });
+                        if (!candidate)
+                            continue;
                         const requiredConfirmations = this.fastAlert ? 1 : 3;
                         if (this.confirmClassifiedHead(frame.cameraId, box, frame.timestamp.getTime(), requiredConfirmations, "raised")) {
-                            indoorHelmetDetections.push({ personBoundingBox: box, helmetBoundingBox: narrow,
-                                helmetDetected: true, evidenceSource: "confirmed-head-classification", confidence,
-                                personConfidence: person.confidence ?? 0, riskLevel: "violation" });
+                            indoorHelmetDetections.push(candidate);
                         }
                         continue;
                     }
@@ -315,12 +298,7 @@ export class HelmetDetector extends BaseDetector {
                 }
                 const confidence = Math.min(presence?.confidence ?? 1, upperResult.wearingHelmetConfidence, standardResult.wearingHelmetConfidence);
                 if (!presence) {
-                    const confirmations = this.fastAlert
-                        ? 1
-                        : ((person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ? 2 : 3);
-                    if (!this.confirmClassifiedHead(frame.cameraId, person.boundingBox, frame.timestamp.getTime(), confirmations))
-                        continue;
-                    presence = {
+                    const candidate = await this.verifyClassifiedHead(frame, {
                         personBoundingBox: person.boundingBox,
                         helmetBoundingBox: classifiedHeadBox,
                         helmetDetected: true,
@@ -328,7 +306,15 @@ export class HelmetDetector extends BaseDetector {
                         confidence,
                         personConfidence: person.confidence ?? 0,
                         riskLevel: "violation",
-                    };
+                    });
+                    if (!candidate)
+                        continue;
+                    const confirmations = this.fastAlert
+                        ? 1
+                        : ((person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ? 2 : 3);
+                    if (!this.confirmClassifiedHead(frame.cameraId, person.boundingBox, frame.timestamp.getTime(), confirmations))
+                        continue;
+                    presence = candidate;
                 }
                 else {
                     presence.confidence = confidence;
@@ -342,6 +328,22 @@ export class HelmetDetector extends BaseDetector {
     hasClassifiablePerson(person) {
         return (person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ||
             ((person.confidence ?? 0) >= this.FULL_PERSON_CONFIDENCE && person.boundingBox.height >= 0.75);
+    }
+    async verifyClassifiedHead(frame, candidate) {
+        if (!this.headVerifier) {
+            if (!this.verificationRequired)
+                return candidate; // Explicitly injected inference providers.
+            this.clearPendingHead(frame.cameraId, candidate.personBoundingBox);
+            return null;
+        }
+        const verified = await this.headVerifier.verify(frame, candidate.personBoundingBox, Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE));
+        if (!verified) {
+            this.clearPendingHead(frame.cameraId, candidate.personBoundingBox);
+            return null;
+        }
+        return { ...candidate, helmetBoundingBox: verified.boundingBox,
+            confidence: Math.min(candidate.confidence ?? 0, verified.classificationConfidence),
+            localizationConfidence: verified.localizationConfidence, evidenceSource: "localized-head-classification" };
     }
     hasRaisedHeadCandidate(person) {
         return (person.confidence ?? 0) >= 0.8 && person.boundingBox.height >= 0.7;

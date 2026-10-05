@@ -59,7 +59,7 @@ export const CAMERA_AI_RULE_BUNDLE: readonly CameraAiRuleDefinition[] = [
 // Footfall rules are safe to provision, but emit counts only from a configured
 // line crossing. A frame-level person snapshot is never converted into an
 // entry or exit.
-export const CAMERA_AI_SETUP_REQUIRED: readonly string[] = [];
+export const CAMERA_AI_SETUP_REQUIRED: readonly string[] = ["shutter-state"];
 
 export function cameraAiRuleInput(
   definition: CameraAiRuleDefinition,

@@ -1185,6 +1185,11 @@ export const cameraInventoryApi = {
         : `/v1/cameras/${encodeURIComponent(cameraId)}`,
       { method: 'DELETE' }
     ),
+  deleteAllByBranch: (branchId: string) =>
+    fetchApi<{ success: boolean; deletedCount: number; message: string }>(
+      `/v1/branches/${encodeURIComponent(branchId)}/cameras`,
+      { method: 'DELETE' }
+    ),
 };
 
 export const edgeAgentBranchesApi = {

@@ -49,6 +49,7 @@ import {
   analyticsAlertTitle,
   isTerminalAlertStatus,
   sortedMatchingRules,
+  isConfirmedShutterTransition,
 } from "./analytics/rule-engine.js";
 import { moreSevere, resolveAlertSeverity } from "./analytics/severity-policy.js";
 import { buildFalseAlarmSignature, matchesFalseAlarm, type FalseAlarmSignature } from "./analytics/false-alarm-feedback.js";
@@ -3746,7 +3747,7 @@ export class MemoryStore {
         durationSeconds: input.durationSeconds,
         correlatedDetectionCount: correlationCount(input.metadata),
       });
-      const recent = this.analyticsAlerts.find((alert) => {
+      const recent = isConfirmedShutterTransition(input) ? undefined : this.analyticsAlerts.find((alert) => {
         return alert.ruleId === rule.id && alert.cameraId === input.cameraId &&
             (input.detectionType !== "dual-control-verification" ||
               alert.correlationKey === input.metadata?.correlationKey) &&
@@ -3761,7 +3762,7 @@ export class MemoryStore {
         alerts.push(recent);
         continue;
       }
-      const recentlyResolved = this.analyticsAlerts.find((alert) => {
+      const recentlyResolved = isConfirmedShutterTransition(input) ? undefined : this.analyticsAlerts.find((alert) => {
         if (alert.ruleId !== rule.id || alert.cameraId !== input.cameraId || alert.status !== "resolved" || !alert.resolvedAt) return false;
         const elapsed = Date.parse(input.occurredAt) - Date.parse(alert.resolvedAt);
         return elapsed >= 0 && elapsed <= rule.cooldownSeconds * 1_000;

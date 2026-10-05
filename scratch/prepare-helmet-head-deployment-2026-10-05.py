@@ -1,4 +1,4 @@
-import json,pathlib,shutil,tarfile
+import json,pathlib,shutil,tarfile,sys
 root=pathlib.Path(__file__).resolve().parent.parent
 stage=root/'tmp/helmet-head-validation-1.2.0';stage.mkdir(exist_ok=True)
 previous=json.loads((root/'reports/helmet-batch-false-alarms-2026-10-05-study.json').read_text())
@@ -7,7 +7,9 @@ for source in ['scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg','
  rows.append({'source':source,'expected':False})
 samples=[]
 for i,row in enumerate(rows):
- file=f'sample-{i+1}.jpg';shutil.copyfile(row.pop('source'),stage/file);samples.append({'file':file,**row})
+ file=f'sample-{i+1}.jpg';source=row.pop('source')
+ if '--local-fixtures' in sys.argv: shutil.copyfile(source,stage/file)
+ samples.append({'file':file,**row})
 (stage/'samples.json').write_text(json.dumps(samples,indent=2),newline='\n')
 files=['detectors/helmet-detector','inference/configured-model-inference','inference/yolo-detection-inference','inference/helmet-head-verification']
 for file in files:
@@ -23,4 +25,4 @@ with tarfile.open(root/'scratch/helmet-head-code-1.2.0-20261005.tar.gz','w:gz') 
   archive.add(stage/name,arcname=name)
 with tarfile.open(root/'scratch/helmet-head-code-1.2.0-20261005.tar.gz') as archive:
  assert not any(member.name.endswith(('.jpg','.png','.jpeg')) for member in archive.getmembers())
-print(f'Prepared code/public-model-only archive; {len(samples)} image fixtures remain local')
+print(f'Prepared code/public-model-only archive; image copying requires --local-fixtures')

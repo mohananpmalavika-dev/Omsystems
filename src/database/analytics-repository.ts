@@ -23,6 +23,7 @@ import {
   eventDetectionTypes,
   isTerminalAlertStatus,
   sortedMatchingRules,
+  isConfirmedShutterTransition,
 } from "../analytics/rule-engine.js";
 import { moreSevere, resolveAlertSeverity } from "../analytics/severity-policy.js";
 import { buildFalseAlarmSignature, matchesFalseAlarm, type FalseAlarmSignature } from "../analytics/false-alarm-feedback.js";
@@ -143,10 +144,10 @@ export class AnalyticsRepository {
            enabled, schedule, object_classes, min_confidence,
            min_duration_seconds, direction, severity, cooldown_seconds,
            recipients, escalate_after_seconds, recording_policy,
-           pre_roll_seconds, post_roll_seconds, created_by
+           pre_roll_seconds, post_roll_seconds, created_by, shutter_config
          )
          SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
-                $16,$17,$18,$19,$20,$21
+                $16,$17,$18,$19,$20,$21,$22
           FROM cameras camera
           JOIN resource_nodes node ON node.id=camera.resource_node_id
           WHERE camera.id=$3
@@ -163,6 +164,7 @@ export class AnalyticsRepository {
           input.cooldownSeconds, JSON.stringify(input.recipients),
           input.escalateAfterSeconds ?? null, input.recordingPolicy,
           input.preRollSeconds, input.postRollSeconds, createdBy ?? null,
+          input.shutterConfig ? JSON.stringify(input.shutterConfig) : null,
         ],
       );
       if (!result.rows[0]) throw new Error("camera_not_found");
@@ -212,7 +214,7 @@ export class AnalyticsRepository {
            min_duration_seconds=$12, direction=$13, severity=$14,
            cooldown_seconds=$15, recipients=$16, escalate_after_seconds=$17,
            recording_policy=$18, pre_roll_seconds=$19, post_roll_seconds=$20,
-           updated_at=now()
+           shutter_config=$21, updated_at=now()
          WHERE id=$1 AND tenant_id=$2 AND camera_id=$3`,
         [
           id, tenantId, cameraId, zoneId, next.modelId ?? null, next.name,
@@ -223,6 +225,7 @@ export class AnalyticsRepository {
           next.cooldownSeconds, JSON.stringify(next.recipients),
           next.escalateAfterSeconds ?? null, next.recordingPolicy,
           next.preRollSeconds, next.postRollSeconds,
+          next.shutterConfig ? JSON.stringify(next.shutterConfig) : null,
         ],
       );
       const updated = await selectRule(client, id);
@@ -356,7 +359,7 @@ export class AnalyticsRepository {
           correlatedDetectionCount: correlationCount(input.metadata),
         });
         const cooldownSeconds = Math.max(rule.cooldownSeconds || 60, 30);
-        const recent = await client.query(
+        const recent = isConfirmedShutterTransition(input) ? {rows:[]} : await client.query(
           `SELECT * FROM analytics_alerts
            WHERE rule_id=$1 AND camera_id=$2
              AND status NOT IN ('resolved', 'false_alarm', 'suppressed')
@@ -379,7 +382,7 @@ export class AnalyticsRepository {
 
         // If an alert for this rule/camera was recently resolved within cooldownSeconds,
         // suppress creating a new alert to prevent flutter.
-        const recentlyResolved = await client.query(
+        const recentlyResolved = isConfirmedShutterTransition(input) ? {rows:[]} : await client.query(
           `SELECT id FROM analytics_alerts
            WHERE rule_id=$1 AND camera_id=$2
              AND status = 'resolved'
@@ -1061,6 +1064,7 @@ function mapRule(row: any): AnalyticsRule {
   return {
     id: row.id, tenantId: row.tenant_id, cameraId: row.camera_id,
     name: row.name, detectionType: row.detection_type, enabled: row.enabled,
+    ...(row.shutter_config ? {shutterConfig:json(row.shutter_config,undefined)} : {}),
     ...(row.zone_join_id ? { zone: {
       id: row.zone_join_id, name: row.zone_name, shape: row.zone_shape,
       points: json(row.zone_points, []),

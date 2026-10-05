@@ -1,6 +1,8 @@
 "use client";
 
 import { FieldVisual } from "@/components/field-visual";
+import { ShutterCalibration } from "@/components/shutter-calibration";
+import type { ShutterConfig } from "../../packages/contracts/src/shutter.js";
 import {
   Activity, AlertTriangle, ArrowLeft, BellRing, BrainCircuit, Camera, Box,
   Check, ChevronRight, CircleDot, Clock3, ExternalLink, Plus, RefreshCw,
@@ -25,6 +27,7 @@ const detectionOptions: Array<{ value: AnalyticsDetectionType; label: string }> 
   { value: "loitering", label: "Loitering" },
   { value: "crowd-density", label: "Crowd density" },
   { value: "camera-tampering", label: "Camera tampering" },
+  { value: "shutter-state", label: "Shutter opening and closing" },
   { value: "video-loss", label: "Video loss" },
   { value: "fire-smoke", label: "Fire / smoke" },
   { value: "face-recognition", label: "Known face recognition" },
@@ -380,7 +383,7 @@ export function AnalyticsConsole() {
 
       {setupRequiredCount > 0 && (
         <p className="analytics-deployment-note">
-          {setupRequiredCount} location-sensitive capabilities (zones, lines, recognition, and watchlists) remain camera-specific so the system does not guess restricted areas or biometric policy.
+          {setupRequiredCount} capabilities require camera-specific setup before enabling. For shutter monitoring, select the shutter area and provide open and closed reference snapshots when creating the rule.
         </p>
       )}
 
@@ -538,10 +541,10 @@ function RuleForm({ cameraId, saving, initialDetection, detectionOptions: availa
   onCancel: () => void;
   onSave: (payload: Record<string, unknown>) => Promise<void>;
 }) {
-  const [name, setName] = useState("Person in restricted area");
+  const [name, setName] = useState(initialDetection.startsWith("shutter-")?"Shutter opening and closing":"Person in restricted area");
   const [detectionType, setDetectionType] = useState<AnalyticsDetectionType>(initialDetection);
   const [severity, setSeverity] = useState<AnalyticsSeverity>("P2");
-  const [confidence, setConfidence] = useState(70);
+  const [confidence, setConfidence] = useState(initialDetection.startsWith("shutter-")?90:70);
   const [duration, setDuration] = useState(2);
   const [cooldown, setCooldown] = useState(60);
   const [classes, setClasses] = useState("person");
@@ -556,11 +559,14 @@ function RuleForm({ cameraId, saving, initialDetection, detectionOptions: availa
   const [scheduleEnd, setScheduleEnd] = useState("18:00");
   const [scheduleTimezone, setScheduleTimezone] = useState("Asia/Kolkata");
   const [formError, setFormError] = useState<string>();
+  const [shutterConfig,setShutterConfig]=useState<ShutterConfig>();
+  const isShutter=["shutter-state","shutter-opened","shutter-closed"].includes(detectionType);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setFormError(undefined);
     try {
+      if(isShutter&&!shutterConfig)throw new Error("Select open and closed reference snapshots and mark the shutter area.");
       const zonePoints = points.split(";").map((value) => {
         const [x, y] = value.trim().split(",").map(Number);
         if (!Number.isFinite(x) || !Number.isFinite(y) || x! < 0 || x! > 1 || y! < 0 || y! > 1) {
@@ -568,17 +574,18 @@ function RuleForm({ cameraId, saving, initialDetection, detectionOptions: availa
         }
         return { x, y };
       });
-      if (zoneEnabled && ((zoneShape === "line" && zonePoints.length !== 2) ||
+      if (!isShutter && zoneEnabled && ((zoneShape === "line" && zonePoints.length !== 2) ||
           (zoneShape === "polygon" && zonePoints.length < 3))) {
         throw new Error(zoneShape === "line" ? "A line needs exactly two points." : "A polygon needs at least three points.");
       }
       await onSave({
         name, detectionType, enabled: true, severity,
         minConfidence: confidence / 100, minDurationSeconds: duration,
-        cooldownSeconds: cooldown, direction: "any",
-        objectClasses: csv(classes), recipients: csv(recipients),
+        cooldownSeconds: isShutter?0:cooldown, direction: "any",
+        objectClasses: isShutter?["shutter"]:csv(classes), recipients: csv(recipients),
+        ...(isShutter?{shutterConfig}:{}),
         recordingPolicy, preRollSeconds: 30, postRollSeconds: 120,
-        ...(zoneEnabled ? { zone: { name: `${name} zone`, shape: zoneShape, points: zonePoints } } : {}),
+        ...(!isShutter && zoneEnabled ? { zone: { name: `${name} zone`, shape: zoneShape, points: zonePoints } } : {}),
         ...(scheduleEnabled ? { schedule: {
           days: scheduleDays, start: scheduleStart, end: scheduleEnd, timezone: scheduleTimezone,
         } } : {}),
@@ -598,17 +605,25 @@ function RuleForm({ cameraId, saving, initialDetection, detectionOptions: availa
         {formError && <div className="analytics-message error"><AlertTriangle size={15} />{formError}</div>}
         <div className="analytics-form-grid">
           <label className="wide">Rule name<input value={name} onChange={(event) => setName(event.target.value)} required minLength={2} /></label>
-          <label>Detection<select value={detectionType} onChange={(event) => setDetectionType(event.target.value as AnalyticsDetectionType)}>{availableDetections.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          <label>Detection<select value={detectionType} onChange={(event) => {
+            const value=event.target.value as AnalyticsDetectionType;
+            setDetectionType(value);
+            if(value.startsWith("shutter-")) {
+              setName(availableDetections.find(option=>option.value===value)?.label??"Shutter monitoring");
+              setConfidence(90);setDuration(2);setZoneEnabled(false);setScheduleEnabled(false);
+            }
+          }}>{availableDetections.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
           <label>Priority<select value={severity} onChange={(event) => setSeverity(event.target.value as AnalyticsSeverity)}>{["P1", "P2", "P3", "P4", "P5"].map((value) => <option key={value}>{value}</option>)}</select></label>
-          <label>Confidence (%)<input type="number" min="1" max="100" value={confidence} onChange={(event) => setConfidence(Number(event.target.value))} /></label>
-          <label>Minimum duration (s)<input type="number" min="0" max="86400" value={duration} onChange={(event) => setDuration(Number(event.target.value))} /></label>
-          <label>Cooldown (s)<input type="number" min="0" max="86400" value={cooldown} onChange={(event) => setCooldown(Number(event.target.value))} /></label>
+          <label>{isShutter?"Reference match (%)":"Confidence (%)"}<input type="number" min={isShutter?90:1} max="100" value={confidence} onChange={(event) => setConfidence(Number(event.target.value))} /></label>
+          <label>{isShutter?"State confirmation (s)":"Minimum duration (s)"}<input type="number" min={isShutter?2:0} max="86400" value={duration} onChange={(event) => setDuration(Number(event.target.value))} /></label>
+          {!isShutter&&<label>Cooldown (s)<input type="number" min="0" max="86400" value={cooldown} onChange={(event) => setCooldown(Number(event.target.value))} /></label>}
           <label>Recording policy<select value={recordingPolicy} onChange={(event) => setRecordingPolicy(event.target.value as AnalyticsRule["recordingPolicy"])}><option value="none">Alert only</option><option value="event-recording">Trigger event recording</option><option value="protect-window">Create protected incident</option></select></label>
-          <label className="wide">Object classes (comma separated)<input value={classes} onChange={(event) => setClasses(event.target.value)} placeholder="person, vehicle" /></label>
+          {!isShutter&&<label className="wide">Object classes (comma separated)<input value={classes} onChange={(event) => setClasses(event.target.value)} placeholder="person, vehicle" /></label>}
           <label className="wide">Recipients (comma separated)<input value={recipients} onChange={(event) => setRecipients(event.target.value)} placeholder="soc@example.com, branch-manager" /></label>
         </div>
+        {isShutter&&<ShutterCalibration onChange={setShutterConfig}/>}
         <div className="analytics-form-options">
-          <label><input type="checkbox" checked={zoneEnabled} onChange={(event) => setZoneEnabled(event.target.checked)} /> Use line / polygon region</label>
+          {!isShutter&&<label><input type="checkbox" checked={zoneEnabled} onChange={(event) => setZoneEnabled(event.target.checked)} /> Use line / polygon region</label>}
           <label><input type="checkbox" checked={scheduleEnabled} onChange={(event) => setScheduleEnabled(event.target.checked)} /> Weekdays, 09:00–18:00 IST</label>
         </div>
         {zoneEnabled && <div className="analytics-zone-row"><select value={zoneShape} onChange={(event) => setZoneShape(event.target.value as "polygon" | "line")}><option value="polygon">Polygon</option><option value="line">Line</option></select><input value={points} onChange={(event) => setPoints(event.target.value)} aria-label="Normalized zone points" /><small>Format: x,y; x,y using 0–1 frame coordinates</small></div>}
@@ -620,7 +635,7 @@ function RuleForm({ cameraId, saving, initialDetection, detectionOptions: availa
         </div>}
         <div className="modal-actions">
           <button type="button" className="secondary-button" onClick={onCancel}>Cancel</button>
-          <button type="submit" className="primary-action" disabled={saving}><Save size={14} />{saving ? "Saving..." : "Create rule"}</button>
+          <button type="submit" className="primary-action" disabled={saving || isShutter&&!shutterConfig}><Save size={14} />{saving ? "Saving..." : "Create rule"}</button>
         </div>
       </form>
     </div>

@@ -39,6 +39,7 @@ export async function markHelmetSnapshot(
 }
 import { CameraHealthDetector } from "./detectors/camera-health-detector.js";
 import { CameraTamperDetector } from "./detectors/camera-tamper-detector.js";
+import { ShutterDetector } from "./detectors/shutter-detector.js";
 import { MotionDetector } from "./detectors/motion-detector.js";
 import { ObjectDetector } from "./detectors/object-detector.js";
 import { ZoneDetector } from "./detectors/zone-detector.js";
@@ -76,6 +77,7 @@ import { getModelManager, resetModelManager } from "./model-manager.js";
 import { getConditionalScheduler, type ConditionalScheduler } from "./inference/conditional-scheduler.js";
 
 export interface AnalyticsRule {
+  shutterConfig?: import("../../packages/contracts/src/shutter.js").ShutterConfig;
   id: string;
   cameraId: string;
   detectionType: string;
@@ -99,6 +101,7 @@ export class AnalyticsPipeline {
   private zoneDetector: ZoneDetector;
   private healthDetector: CameraHealthDetector;
   private cameraTamperDetector: CameraTamperDetector;
+  private shutterDetector = new ShutterDetector();
   
   // Enhanced detectors
   private personDetector: PersonDetector;
@@ -216,6 +219,7 @@ export class AnalyticsPipeline {
       this.zoneDetector,
       this.healthDetector,
       this.cameraTamperDetector,
+      this.shutterDetector,
       this.personDetector,
       this.vehicleDetector,
       this.helmetDetector,
@@ -319,6 +323,11 @@ export class AnalyticsPipeline {
 
     const events: Array<z.infer<typeof detectionSchema>> = [];
     const localInferenceRequested = !hasInferenceObjects(frame);
+
+    // State transitions also need quiet/static frames; bypass motion/GPU gating.
+    for (const result of await this.shutterDetector.detectRules(frame, rules)) {
+      events.push(await this.createEvent(frame, result));
+    }
 
     // Step 1: Camera health check (always run - cheap)
     const healthResults = await this.healthDetector.detect(frame);

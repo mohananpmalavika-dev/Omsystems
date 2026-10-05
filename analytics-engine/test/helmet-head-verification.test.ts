@@ -88,4 +88,16 @@ describe("independent helmet head verification", () => {
     expect(await new LocalizedHelmetHeadVerifier(localizer("helmet",small),classifier).verify(frame(),person,.9167)).toBeNull();
     expect(classifier.run).toHaveBeenCalledTimes(2);
   });
+  it("does not count unverified frames toward consecutive confirmation", async () => {
+    const verify=vi.fn().mockResolvedValueOnce(null).mockResolvedValue({boundingBox:box,
+      classificationConfidence:.99,localizationConfidence:.8});
+    const detector=new HelmetDetector(null,.88,{run:vi.fn(async()=>score(.999))},false,{verify});
+    await detector.initialize();
+    expect(await detector.detect(frame())).toEqual([]);
+    expect(await detector.detect({...frame(),timestamp:new Date(2000)})).toEqual([]);
+    const results=await detector.detect({...frame(),timestamp:new Date(4000)});
+    expect(results).toHaveLength(1);
+    expect(results[0]?.metadata.evidenceSource).toBe("localized-head-classification");
+    expect(results[0]?.objects.find(object=>object.label==="helmet")?.boundingBox).toEqual(box);
+  });
 });

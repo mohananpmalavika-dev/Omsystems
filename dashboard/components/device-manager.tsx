@@ -309,6 +309,12 @@ export function DeviceManager() {
   const [inventoryRevision, setInventoryRevision] = useState(0);
   const [cameraToDelete, setCameraToDelete] = useState<CameraRecord | null>(null);
   const [deletingCamera, setDeletingCamera] = useState(false);
+  const [showRemoveAllModal, setShowRemoveAllModal] = useState(false);
+  const [removingAllInventory, setRemovingAllInventory] = useState(false);
+  const [includeStorageInRemoveAll, setIncludeStorageInRemoveAll] = useState(true);
+  const [selectedInventoryIds, setSelectedInventoryIds] = useState<Set<string>>(new Set());
+  const [showRemoveSelectedModal, setShowRemoveSelectedModal] = useState(false);
+  const [removingSelected, setRemovingSelected] = useState(false);
   const [removingStorageId, setRemovingStorageId] = useState<string | null>(null);
   const [removingDiskId, setRemovingDiskId] = useState<string | null>(null);
   const [addingDiscoveredStorageId, setAddingDiscoveredStorageId] = useState<string | null>(null);
@@ -499,6 +505,149 @@ export function DeviceManager() {
       setError(messageOf(reason, `Failed to remove storage device "${label}".`));
     } finally {
       setRemovingDiskId(null);
+    }
+  }
+
+  const registeredStorage = inventoryRecords.filter((record) => record.deviceType === "storage-device"
+    && !storageDisks.some((disk) => disk.id.toLowerCase() === record.deviceId.toLowerCase()));
+  const totalInventoryCount = cameras.length + storageDisks.length + registeredStorage.length;
+  const allInventorySelected = totalInventoryCount > 0 && selectedInventoryIds.size === totalInventoryCount;
+  const someInventorySelected = selectedInventoryIds.size > 0 && selectedInventoryIds.size < totalInventoryCount;
+
+  function toggleSelectAllInventory() {
+    if (allInventorySelected) {
+      setSelectedInventoryIds(new Set());
+    } else {
+      const allIds = new Set<string>();
+      cameras.forEach((c) => allIds.add(c.id));
+      storageDisks.forEach((d) => allIds.add(`disk:${d.id}`));
+      registeredStorage.forEach((r) => allIds.add(`storage:${r.id}`));
+      setSelectedInventoryIds(allIds);
+    }
+  }
+
+  function toggleInventoryItem(id: string) {
+    setSelectedInventoryIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  async function handleRemoveAllInventory() {
+    if (!selectedBranch || removingAllInventory) return;
+    setRemovingAllInventory(true);
+    setError(undefined);
+    let removedCamerasCount = 0;
+    let removedStorageCount = 0;
+
+    try {
+      if (cameras.length > 0) {
+        try {
+          const res = await cameraInventoryApi.deleteAllByBranch(selectedBranch);
+          removedCamerasCount = res?.deletedCount ?? cameras.length;
+        } catch {
+          const results = await Promise.allSettled(
+            cameras.map((c) => cameraInventoryApi.deleteCamera(c.id, selectedBranch))
+          );
+          removedCamerasCount = results.filter((r) => r.status === "fulfilled").length;
+        }
+      }
+
+      if (includeStorageInRemoveAll) {
+        for (const disk of storageDisks) {
+          try {
+            await fetch(
+              `/api/control/v1/operations/health/disks?diskId=${encodeURIComponent(disk.id)}&branchId=${encodeURIComponent(selectedBranch)}`,
+              { method: "DELETE", credentials: "include", headers: getPortableAuthHeaders() },
+            );
+            removedStorageCount++;
+          } catch {
+            // best-effort
+          }
+        }
+        for (const record of registeredStorage) {
+          try {
+            await fetch(
+              `/api/control/v1/operations/health/disks?diskId=${encodeURIComponent(record.deviceId)}&branchId=${encodeURIComponent(selectedBranch)}`,
+              { method: "DELETE", credentials: "include", headers: getPortableAuthHeaders() },
+            );
+            removedStorageCount++;
+          } catch {
+            // best-effort
+          }
+        }
+      }
+
+      setSelectedInventoryIds(new Set());
+      setShowRemoveAllModal(false);
+      await refreshBranch(selectedBranch);
+
+      const parts: string[] = [];
+      if (removedCamerasCount > 0) parts.push(`${removedCamerasCount} camera${removedCamerasCount !== 1 ? "s" : ""}`);
+      if (removedStorageCount > 0) parts.push(`${removedStorageCount} storage device${removedStorageCount !== 1 ? "s" : ""}`);
+      setNotice(`Successfully removed all ${parts.join(" and ") || "devices"} from branch inventory.`);
+    } catch (reason) {
+      setError(messageOf(reason, "Failed to remove all devices from branch inventory."));
+    } finally {
+      setRemovingAllInventory(false);
+    }
+  }
+
+  async function handleRemoveSelected() {
+    if (!selectedBranch || removingSelected || selectedInventoryIds.size === 0) return;
+    setRemovingSelected(true);
+    setError(undefined);
+    let removedCount = 0;
+
+    try {
+      const selectedCameras = cameras.filter((c) => selectedInventoryIds.has(c.id));
+      const selectedDisks = storageDisks.filter((d) => selectedInventoryIds.has(`disk:${d.id}`));
+      const selectedRegStorage = registeredStorage.filter((r) => selectedInventoryIds.has(`storage:${r.id}`));
+
+      if (selectedCameras.length > 0) {
+        const results = await Promise.allSettled(
+          selectedCameras.map((c) => cameraInventoryApi.deleteCamera(c.id, selectedBranch))
+        );
+        removedCount += results.filter((r) => r.status === "fulfilled").length;
+      }
+
+      for (const disk of selectedDisks) {
+        try {
+          await fetch(
+            `/api/control/v1/operations/health/disks?diskId=${encodeURIComponent(disk.id)}&branchId=${encodeURIComponent(selectedBranch)}`,
+            { method: "DELETE", credentials: "include", headers: getPortableAuthHeaders() },
+          );
+          removedCount++;
+        } catch {
+          // best-effort
+        }
+      }
+
+      for (const record of selectedRegStorage) {
+        try {
+          await fetch(
+            `/api/control/v1/operations/health/disks?diskId=${encodeURIComponent(record.deviceId)}&branchId=${encodeURIComponent(selectedBranch)}`,
+            { method: "DELETE", credentials: "include", headers: getPortableAuthHeaders() },
+          );
+          removedCount++;
+        } catch {
+          // best-effort
+        }
+      }
+
+      setSelectedInventoryIds(new Set());
+      setShowRemoveSelectedModal(false);
+      await refreshBranch(selectedBranch);
+      setNotice(`Successfully removed ${removedCount} selected device${removedCount !== 1 ? "s" : ""} from branch inventory.`);
+    } catch (reason) {
+      setError(messageOf(reason, "Failed to remove selected devices from branch inventory."));
+    } finally {
+      setRemovingSelected(false);
     }
   }
 
@@ -1016,6 +1165,9 @@ export function DeviceManager() {
     setRevokedPortableDevices([]);
     setSelectedPortableDevice(null);
     setCameraToDelete(null);
+    setShowRemoveAllModal(false);
+    setShowRemoveSelectedModal(false);
+    setSelectedInventoryIds(new Set());
     setShowQrModal(false);
     setQrLoading(false);
     setQrDataUrl("");
@@ -2066,9 +2218,6 @@ export function DeviceManager() {
     }
   }
 
-  const registeredStorage = inventoryRecords.filter((record) => record.deviceType === "storage-device"
-    && !storageDisks.some((disk) => disk.id.toLowerCase() === record.deviceId.toLowerCase()));
-
   return (
     <div className="device-manager">
       <div className="device-toolbar">
@@ -2250,12 +2399,72 @@ export function DeviceManager() {
           </section>
 
           <section className="device-card">
-            <div className="device-card-heading"><Database size={18} /><div><h3>Inventory</h3><p>{cameras.length} cameras · {storageDisks.length + registeredStorage.length} storage devices</p></div></div>
+            <div className="device-card-heading">
+              <Database size={18} />
+              <div>
+                <h3>Inventory</h3>
+                <p>{cameras.length} cameras · {storageDisks.length + registeredStorage.length} storage devices</p>
+              </div>
+              {totalInventoryCount > 0 && (
+                <div style={{ marginLeft: "auto", display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                  {selectedInventoryIds.size > 0 && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => setShowRemoveSelectedModal(true)}
+                      disabled={saving || deletingCamera || removingAllInventory || removingSelected}
+                      title={`Remove ${selectedInventoryIds.size} selected device${selectedInventoryIds.size !== 1 ? "s" : ""} from branch inventory`}
+                      style={{ color: "#ef4444", borderColor: "rgba(239, 68, 68, 0.4)", display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", padding: "4px 10px" }}
+                    >
+                      <Trash2 size={13} /> Remove selected ({selectedInventoryIds.size})
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => {
+                      setIncludeStorageInRemoveAll(storageDisks.length > 0 || registeredStorage.length > 0);
+                      setShowRemoveAllModal(true);
+                    }}
+                    disabled={saving || deletingCamera || removingAllInventory || removingSelected}
+                    title="Remove all devices from this branch inventory"
+                    style={{ color: "#ef4444", borderColor: "rgba(239, 68, 68, 0.4)", display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", padding: "4px 10px" }}
+                  >
+                    <Trash2 size={13} /> Remove all
+                  </button>
+                </div>
+              )}
+            </div>
             {storageLoadError ? <p className="device-message" role="alert">{storageLoadError}</p> : null}
+            {totalInventoryCount > 0 && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0 6px", borderBottom: "1px solid #edf0f4", fontSize: "11px", color: "var(--muted, #64748b)" }}>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: "pointer", userSelect: "none" }}>
+                  <input
+                    type="checkbox"
+                    checked={allInventorySelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someInventorySelected && !allInventorySelected;
+                    }}
+                    onChange={toggleSelectAllInventory}
+                  />
+                  <span>Select all items ({totalInventoryCount})</span>
+                </label>
+                {selectedInventoryIds.size > 0 && (
+                  <span>{selectedInventoryIds.size} of {totalInventoryCount} selected</span>
+                )}
+              </div>
+            )}
             {cameras.length === 0 && storageDisks.length === 0 && registeredStorage.length === 0 ? (
               <div className="device-empty"><Database size={25} /><strong>No cameras or storage yet</strong><span>Add a camera or storage device. Disk health appears when a gateway reports hardware telemetry.</span></div>
             ) : cameras.map((camera) => (
               <article className="camera-inventory-row" key={camera.id}>
+                <input
+                  type="checkbox"
+                  checked={selectedInventoryIds.has(camera.id)}
+                  onChange={() => toggleInventoryItem(camera.id)}
+                  aria-label={`Select ${camera.name}`}
+                  style={{ cursor: "pointer", marginRight: "2px" }}
+                />
                 <span className="camera-device-icon"><Camera size={15} /></span>
                 <div><strong>{camera.name}</strong><small>{storageLoadError ? "Storage status unavailable" : storageForCameraLabel(camera, storageDisks)}</small><small>{[
                   camera.sourceType === "analog-dvr-channel" ? `Analog via DVR ${camera.recorderId ?? ""}`.trim()
@@ -2293,6 +2502,13 @@ export function DeviceManager() {
               const status = diskStatus(disk);
               const owner = cameras.find((camera) => storageForCamera(disk, camera));
               return <article className="camera-inventory-row" key={`disk:${disk.id}`}>
+                <input
+                  type="checkbox"
+                  checked={selectedInventoryIds.has(`disk:${disk.id}`)}
+                  onChange={() => toggleInventoryItem(`disk:${disk.id}`)}
+                  aria-label={`Select ${disk.model || disk.id}`}
+                  style={{ cursor: "pointer", marginRight: "2px" }}
+                />
                 <span className="camera-device-icon"><HardDrive size={15} /></span>
                 <div><strong>{disk.model && disk.model !== "Unknown disk" ? disk.model : disk.devicePath || disk.id}</strong><small>{owner ? `Storage for ${owner.name}` : "Branch storage"} · {diskCapacity(disk.capacityBytes)}</small></div>
                 <span className={`inventory-status ${status.tone}`}>{status.label}</span>
@@ -2313,6 +2529,13 @@ export function DeviceManager() {
             })}
             {registeredStorage.map((record) => (
               <article className="camera-inventory-row" key={`registered-storage:${record.id}`}>
+                <input
+                  type="checkbox"
+                  checked={selectedInventoryIds.has(`storage:${record.id}`)}
+                  onChange={() => toggleInventoryItem(`storage:${record.id}`)}
+                  aria-label={`Select ${record.manufacturer} ${record.model}`}
+                  style={{ cursor: "pointer", marginRight: "2px" }}
+                />
                 <span className="camera-device-icon"><HardDrive size={15} /></span>
                 <div><strong>{record.manufacturer} {record.model}</strong><small>Registered storage · {record.deviceId} · hardware telemetry pending</small></div>
                 <span className="inventory-status degraded">Unverified</span>
@@ -3565,6 +3788,152 @@ export function DeviceManager() {
                   style={{ background: "#dc2626", borderColor: "#ef4444", color: "#ffffff" }}
                 >
                   {deletingCamera ? "Removing…" : "Remove Camera"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRemoveAllModal && (
+        <div className="modal-overlay">
+          <div className="modal-container" role="dialog" aria-modal="true" aria-labelledby="remove-all-inventory-modal-title">
+            <div className="modal-header">
+              <h2 id="remove-all-inventory-modal-title" style={{ color: "#ef4444", display: "flex", alignItems: "center", gap: "8px" }}>
+                <Trash2 size={20} /> Remove All from Branch Inventory
+              </h2>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Close remove all dialog"
+                onClick={() => setShowRemoveAllModal(false)}
+                disabled={removingAllInventory}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ padding: "16px 20px" }}>
+              <div className="form-info-banner" style={{ background: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)", color: "#f87171" }}>
+                <AlertTriangle size={20} />
+                <div>
+                  <strong>Are you sure you want to remove ALL devices from this branch inventory?</strong>
+                  <p style={{ margin: "4px 0 0", fontSize: "0.85rem", opacity: 0.9 }}>
+                    All active cameras will be stopped and removed from monitoring for branch {activeBranch?.name ?? selectedBranch}.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ margin: "16px 0", fontSize: "0.9rem", color: "var(--text-secondary, #94a3b8)" }}>
+                <p><b>Branch Inventory Summary:</b></p>
+                <ul style={{ listStyle: "none", padding: 0, margin: "8px 0", fontSize: "0.85rem", display: "grid", gap: "4px" }}>
+                  <li>• <b>Cameras to remove:</b> {cameras.length} active camera{cameras.length !== 1 ? "s" : ""}</li>
+                  {(storageDisks.length > 0 || registeredStorage.length > 0) && (
+                    <li>• <b>Storage devices in branch:</b> {storageDisks.length + registeredStorage.length} device{storageDisks.length + registeredStorage.length !== 1 ? "s" : ""}</li>
+                  )}
+                </ul>
+
+                {(storageDisks.length > 0 || registeredStorage.length > 0) && (
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "12px", cursor: "pointer", fontSize: "0.85rem" }}>
+                    <input
+                      type="checkbox"
+                      checked={includeStorageInRemoveAll}
+                      onChange={(e) => setIncludeStorageInRemoveAll(e.target.checked)}
+                      disabled={removingAllInventory}
+                    />
+                    <span>Also remove storage devices from branch inventory</span>
+                  </label>
+                )}
+
+                <div style={{ marginTop: "12px", padding: "10px", borderRadius: "6px", background: "rgba(99, 102, 241, 0.1)", border: "1px solid rgba(99, 102, 241, 0.2)", color: "#a5b4fc", fontSize: "0.85rem" }}>
+                  💡 <b>Need to add them back later?</b> You can re-add them at any time using <b>Scan cameras</b>, <b>Direct IP Probe</b>, or <b>Add camera manually</b>. All duplicate locks are cleared automatically.
+                </div>
+              </div>
+
+              <div className="modal-actions" style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setShowRemoveAllModal(false)}
+                  disabled={removingAllInventory}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => void handleRemoveAllInventory()}
+                  disabled={removingAllInventory}
+                  style={{ background: "#dc2626", borderColor: "#ef4444", color: "#ffffff", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                >
+                  {removingAllInventory ? (
+                    <>
+                      <RefreshCw size={14} className="spin" /> Removing all…
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 size={14} /> Remove All ({cameras.length + (includeStorageInRemoveAll ? storageDisks.length + registeredStorage.length : 0)} items)
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRemoveSelectedModal && (
+        <div className="modal-overlay">
+          <div className="modal-container" role="dialog" aria-modal="true" aria-labelledby="remove-selected-inventory-modal-title">
+            <div className="modal-header">
+              <h2 id="remove-selected-inventory-modal-title" style={{ color: "#ef4444", display: "flex", alignItems: "center", gap: "8px" }}>
+                <Trash2 size={20} /> Remove Selected Devices
+              </h2>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Close remove selected dialog"
+                onClick={() => setShowRemoveSelectedModal(false)}
+                disabled={removingSelected}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ padding: "16px 20px" }}>
+              <div className="form-info-banner" style={{ background: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)", color: "#f87171" }}>
+                <AlertTriangle size={20} />
+                <div>
+                  <strong>Are you sure you want to remove the {selectedInventoryIds.size} selected device{selectedInventoryIds.size !== 1 ? "s" : ""}?</strong>
+                  <p style={{ margin: "4px 0 0", fontSize: "0.85rem", opacity: 0.9 }}>
+                    Selected cameras will be stopped and removed from active monitoring for branch {activeBranch?.name ?? selectedBranch}.
+                  </p>
+                </div>
+              </div>
+
+              <div className="modal-actions" style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setShowRemoveSelectedModal(false)}
+                  disabled={removingSelected}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => void handleRemoveSelected()}
+                  disabled={removingSelected}
+                  style={{ background: "#dc2626", borderColor: "#ef4444", color: "#ffffff", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                >
+                  {removingSelected ? (
+                    <>
+                      <RefreshCw size={14} className="spin" /> Removing…
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 size={14} /> Remove ({selectedInventoryIds.size} selected)
+                    </>
+                  )}
                 </button>
               </div>
             </div>

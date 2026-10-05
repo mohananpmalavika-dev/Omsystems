@@ -421,6 +421,55 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
     return handleDeleteCameraEndpoint(id, request, reply);
   });
 
+  app.delete('/v1/branches/:branchId/cameras', async (request, reply) => {
+    const { branchId } = request.params as { branchId: string };
+    if (!branchId) {
+      return reply.code(400).send({ error: "missing_branch_id", message: "Branch ID is required" });
+    }
+    const user = request.currentUser;
+    if (!user) {
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
+    const isAdminRole = Boolean(user.role && cameraAdminRoles.has(user.role));
+    const decision = await store.checkAccess(user, "device:configure", branchId);
+    if (!decision || (!decision.allowed && !isAdminRole)) {
+      return reply.code(403).send({ error: "forbidden", reason: decision?.reason ?? "insufficient_permissions" });
+    }
+    if (!hasDbPool(store)) {
+      return reply.code(501).send({ error: 'not_implemented', message: 'This endpoint requires PostgreSQL store support' });
+    }
+    let client: Awaited<ReturnType<typeof store.db.connect>> | undefined;
+    try {
+      client = await store.db.connect();
+      await client.query('BEGIN');
+      const camerasRes = await client.query('SELECT id, name FROM cameras WHERE branch_node_id = $1', [branchId]);
+      let deletedCount = 0;
+      for (const row of camerasRes.rows) {
+        const deletion = await deleteCamera(client, row.id, app);
+        if (deletion.found) {
+          deletedCount++;
+        }
+      }
+      await client.query('COMMIT');
+      app.log.info({ branchId, deletedCount }, 'All branch cameras deleted successfully');
+      return reply.code(200).send({
+        success: true,
+        deletedCount,
+        message: `Successfully removed ${deletedCount} camera${deletedCount !== 1 ? 's' : ''} from branch inventory.`,
+      });
+    } catch (error) {
+      if (client) {
+        await client.query('ROLLBACK').catch(() => undefined);
+      }
+      app.log.error({ error, branchId }, 'Failed to remove cameras for branch');
+      return reply.code(500).send({ error: 'camera_deletion_failed', message: 'Failed to remove cameras from branch' });
+    } finally {
+      if (client) {
+        client.release();
+      }
+    }
+  });
+
   app.delete('/v1/branches/:branchId/cameras/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
     return handleDeleteCameraEndpoint(id, request, reply);

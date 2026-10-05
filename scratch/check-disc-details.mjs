@@ -1,10 +1,13 @@
 import { execSync } from 'child_process';
 
-function runSql(sql) {
-  const cleanSql = sql.replace(/"/g, '\\"');
-  const cmd = `gcloud compute ssh kryptovision-server --zone=asia-south1-b --command="sudo docker exec sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid -c \\"${cleanSql}\\""`;
-  return execSync(cmd, { encoding: 'utf8' });
-}
+const sql = `
+SELECT id, ip_address, brand, model, recorder_channel, branch_id, status, camera_id
+FROM discovered_devices
+WHERE id = '58b83ac6-6273-4dab-9c75-2848d7775ca2'
+   OR id = '53a705b5-3f1a-447a-ab59-3d953517a438';
+`;
 
-console.log('=== DISCOVERY DETAILS FOR 172.29.91.100 ===');
-console.log(runSql("SELECT id, display_name, recorder_channel, rtsp_port, status, stream_verified, credentials_required FROM camera_discoveries WHERE ip_address = '172.29.91.100' ORDER BY recorder_channel ASC;"));
+const b64 = Buffer.from(sql).toString('base64');
+const cmd = `gcloud compute ssh kryptovision-server --zone=asia-south1-b --project=project-7866fc3f-5dd5-4495-804 --quiet --command="echo ${b64} | base64 -d | sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid"`;
+
+console.log(execSync(cmd, { encoding: 'utf8' }));

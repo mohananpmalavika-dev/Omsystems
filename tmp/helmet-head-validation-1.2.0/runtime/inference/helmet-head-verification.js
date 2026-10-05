@@ -27,7 +27,7 @@ export class LocalizedHelmetHeadVerifier {
             // A helmet shell may occupy the crown while the exposed face makes the
             // whole-head classifier negative. Only a separate helmet-labelled box
             // can support this path; bare-head localization cannot retry hair strips.
-            if (candidate.label === "helmet") {
+            if (candidate.label === "helmet" && box.height * 0.65 * frame.height >= 20) {
                 const crown = { ...box, height: box.height * 0.65 };
                 const result = await this.classifier.run(frame, crown);
                 if (result.wearingHelmet && result.wearingHelmetConfidence >= threshold) {

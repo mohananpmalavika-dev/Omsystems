@@ -13,6 +13,8 @@ export function sortedMatchingRules(
   const detectionTypes = new Set(eventDetectionTypes(event));
   const matches = rules
     .filter((rule) => rule.enabled && rule.detectionType !== "no-helmet" && detectionTypes.has(rule.detectionType))
+    .filter(rule=>!["shutter-opened","shutter-closed"].includes(event.detectionType) ||
+      isConfirmedShutterTransition(event) && event.metadata?.shutterRuleId===rule.id)
     .filter((rule) => event.confidence >= rule.minConfidence)
     .filter((rule) => event.durationSeconds >= rule.minDurationSeconds)
     .filter((rule) => objectClassesMatch(rule, event))
@@ -30,6 +32,7 @@ export function sortedMatchingRules(
 
 export function eventDetectionTypes(event: AnalyticsEventInput): string[] {
   const types = [event.detectionType];
+  if(event.detectionType==="shutter-opened"||event.detectionType==="shutter-closed")types.push("shutter-state");
   if (event.detectionType === "helmet" || event.detectionType === "helmet-worn") {
     types.push("helmet", "helmet-worn");
   }
@@ -49,11 +52,23 @@ export function eventDetectionTypes(event: AnalyticsEventInput): string[] {
   return types;
 }
 
+export function isConfirmedShutterTransition(event: AnalyticsEventInput) {
+  const opened = event.detectionType === "shutter-opened";
+  const closed = event.detectionType === "shutter-closed";
+  return (opened || closed) && event.metadata?.transitionConfirmed === true &&
+    typeof event.metadata?.shutterRuleId === "string" &&
+    event.metadata?.shutterState === (opened ? "open" : "closed") &&
+    event.metadata?.previousShutterState === (opened ? "closed" : "open");
+}
+
 export function isTerminalAlertStatus(status: AnalyticsAlertStatus) {
   return status === "resolved" || status === "false_alarm" || status === "suppressed";
 }
 
 export function analyticsAlertTitle(rule: AnalyticsRule, metadata?: Record<string, unknown>) {
+  if(rule.detectionType==="shutter-state")return metadata?.shutterState==="open"?"Shutter opened":"Shutter closed";
+  if(rule.detectionType==="shutter-opened")return "Shutter opened";
+  if(rule.detectionType==="shutter-closed")return "Shutter closed";
   if (rule.detectionType === "face-recognition") {
     const identity = faceIdentity(metadata);
     const name = identity && typeof identity === "object" && !Array.isArray(identity)
@@ -68,6 +83,7 @@ export function analyticsAlertTitle(rule: AnalyticsRule, metadata?: Record<strin
 }
 
 export function analyticsAlertDescription(rule: AnalyticsRule, metadata?: Record<string, unknown>) {
+  if(rule.detectionType==="shutter-state")return `Shutter confirmed ${metadata?.shutterState==="open"?"open":"closed"} for rule "${rule.name}".`;
   if (rule.detectionType === "face-recognition") {
     const identity = faceIdentity(metadata);
     const name = identity && typeof identity === "object" && !Array.isArray(identity)

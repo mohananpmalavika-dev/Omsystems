@@ -13,7 +13,8 @@ a positive crown classification and usable source pixels. Bare-head observations
 cannot retry crown strips. The existing person and crop checks remain in place.
 Alert snapshots use the verified location and metadata retains the independent
 localization confidence. Missing verification models fail closed, including on
-repeated initialization attempts.
+repeated initialization attempts. Verification happens before a frame can
+advance consecutive confirmation; a rejected head clears the pending count.
 
 ## Validation
 
@@ -24,8 +25,12 @@ repeated initialization attempts.
   initialization retries. Verification checks cover contrary head evidence,
   another person's head, tiny crops, context disagreement and frame isolation.
 - RGB letterbox decoding is checked against known source-image coordinates.
-- TypeScript compilation and the analytics test suite are recorded in
-  `tmp/helmet-head-final-tests.log` and `tmp/helmet-head-build-1.2.0/`.
+- The focused detector/inference run passed 80 tests. Full-suite runs had one
+  application-test timeout at the default 20-second limit while initializing
+  the ONNX models; that test passed when run alone. The sequential suite is
+  rerun with a 60-second test limit to accommodate model cold start passed all
+  93 tests across six files; output is in `tmp/helmet-head-final-cold-start-tests.log`.
+- TypeScript compilation output is in `tmp/helmet-head-build-1.2.0/`.
 
 The localization model is pinned to `zhaocaimiao1029/AI_HELMET` revision
 `0dbcbd7fb7d1ab25f5ed507ff49d94768309fe3a`, with SHA-256
@@ -43,3 +48,5 @@ contained private snapshots, and rejected the revised code/public-model archive
 because destination authorization was not established. The user subsequently
 selected “Keep the fix local.” Neither archive was transferred. Server-original
 validation and deployment were therefore not run for this version.
+Temporary validation JPEG copies and the image-containing archive were removed;
+the user's original files were retained.

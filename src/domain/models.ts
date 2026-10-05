@@ -1476,6 +1476,7 @@ export interface AnalyticsSchedule {
 }
 
 export interface AnalyticsRule {
+  shutterConfig?: import("../../packages/contracts/src/shutter.js").ShutterConfig | undefined;
   id: string;
   tenantId: string;
   cameraId: string;

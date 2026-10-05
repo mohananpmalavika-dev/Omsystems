@@ -1,6 +1,7 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { shutterConfigSchema } from "../../packages/contracts/src/shutter.js";
 import {
   hasExtendedInfrastructure,
   type AnalyticsEventInput,
@@ -91,6 +92,7 @@ const scheduleSchema = z.object({
   timezone: z.string().trim().min(1).max(100).default("Asia/Kolkata"),
 });
 const ruleSchema = z.object({
+  shutterConfig: shutterConfigSchema.optional(),
   name: z.string().trim().min(2).max(160),
   detectionType: detectionTypeSchema,
   enabled: z.boolean().default(true),
@@ -495,10 +497,14 @@ export async function registerAnalyticsRoutes(
 
   app.post("/v1/cameras/:id/analytics/rules", async (request, reply) => {
     const { id } = cameraParams.parse(request.params);
-    const parsedInput = ruleSchema.parse(request.body);
+    const parsed = ruleSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({error:"invalid_analytics_rule",details:parsed.error.issues});
+    const parsedInput = parsed.data;
     const input = { ...parsedInput, severity: parsedInput.severity ?? defaultSeverityForDetection(parsedInput.detectionType) };
     const camera = await authorizedCamera(request, reply, store, id, "analytics:configure");
     if (!camera) return;
+    if (["shutter-state","shutter-opened","shutter-closed"].includes(input.detectionType) && !input.shutterConfig)
+      return reply.code(400).send({error:"shutter_calibration_required",message:"Select the shutter area and open/closed reference views."});
     
     // Filter out undefined values to match AnalyticsRuleInput interface
     const ruleInput: any = Object.fromEntries(
@@ -516,9 +522,17 @@ export async function registerAnalyticsRoutes(
 
   app.patch("/v1/cameras/:id/analytics/rules/:ruleId", async (request, reply) => {
     const { id, ruleId } = ruleParams.parse(request.params);
-    const input = ruleSchema.partial().parse(request.body);
+    const parsed = ruleSchema.partial().safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({error:"invalid_analytics_rule",details:parsed.error.issues});
+    const input = parsed.data;
     const camera = await authorizedCamera(request, reply, store, id, "analytics:configure");
     if (!camera) return;
+    const existing = (await store.listAnalyticsRules(id)).find(rule => rule.id === ruleId && rule.tenantId === request.currentUser.tenantId);
+    if (!existing) return reply.code(404).send({ error: "analytics_rule_not_found" });
+    if (["shutter-state", "shutter-opened", "shutter-closed"].includes(input.detectionType ?? existing.detectionType) &&
+        !(input.shutterConfig ?? existing.shutterConfig)) {
+      return reply.code(400).send({ error: "shutter_calibration_required", message: "Select the shutter area and open/closed reference views." });
+    }
     const rule = await store.updateAnalyticsRule(
       ruleId, request.currentUser.tenantId, id,
       Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)),

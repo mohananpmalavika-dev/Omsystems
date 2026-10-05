@@ -1,6 +1,7 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import Fastify from "fastify";
 import { z } from "zod";
+import { shutterConfigSchema } from "../../packages/contracts/src/shutter.js";
 import { AnalyticsPipeline, snapshotCache } from "./analytics-pipeline.js";
 import type { AnalyticsRule } from "./analytics-pipeline.js";
 import { NotificationEngine } from "./notification-engine.js";
@@ -30,6 +31,7 @@ const frameObjectSchema = objectSchema.extend({
   attributes: z.record(z.unknown()).optional(),
 });
 const frameRuleSchema = z.object({
+  shutterConfig: shutterConfigSchema.optional(),
   id: z.string().min(1), cameraId: z.string().min(1), detectionType: z.string().min(1),
   enabled: z.boolean().default(true), minConfidence: z.number().min(0).max(1).default(0.65),
   minDurationSeconds: z.number().min(0).default(0), direction: z.string().optional(),

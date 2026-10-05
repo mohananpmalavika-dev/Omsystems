@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { MemoryStore } from "../src/store.js";
+import { CAMERA_AI_RULE_BUNDLE } from "../src/analytics/camera-ai-bundle.js";
 
 const engineKey = "analytics-engine-key-long-enough-for-testing";
 const admin = { "x-user-id": "user-global-admin" };
@@ -55,12 +56,12 @@ describe("video analytics and alert workflow", () => {
     expect(first.statusCode).toBe(200);
     expect(first.json()).toMatchObject({
       cameraCount: 10,
-      capabilityCount: 35,
-      created: 350,
+      capabilityCount: CAMERA_AI_RULE_BUNDLE.length,
+      created: 10 * CAMERA_AI_RULE_BUNDLE.length,
       enabled: 0,
       unchanged: 0,
     });
-    expect(first.json().setupRequired).toEqual([]);
+    expect(first.json().setupRequired).toEqual(["shutter-state"]);
 
     const second = await app.inject({
       method: "POST",
@@ -71,10 +72,10 @@ describe("video analytics and alert workflow", () => {
     expect(second.statusCode).toBe(200);
     expect(second.json()).toMatchObject({
       cameraCount: 10,
-      capabilityCount: 35,
+      capabilityCount: CAMERA_AI_RULE_BUNDLE.length,
       created: 0,
       enabled: 0,
-      unchanged: 350,
+      unchanged: 10 * CAMERA_AI_RULE_BUNDLE.length,
     });
     const rules = await store.listAnalyticsRules("cam-001");
     expect(rules.filter((rule) => rule.detectionType === "atm-skimming" || rule.detectionType === "person-in-vault-after-hours"))
