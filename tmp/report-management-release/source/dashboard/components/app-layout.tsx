@@ -1,0 +1,1248 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import type { LucideIcon } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  ArrowUpRight,
+  BarChart3,
+  Bell,
+  BellRing,
+  Boxes,
+  Building2,
+  CalendarClock,
+  Bookmark,
+  Camera,
+  CarFront,
+  ChevronDown,
+  ChevronRight,
+  CircleUserRound,
+  ClipboardCheck,
+  Command,
+  Cpu,
+  Database,
+  DoorClosed,
+  EyeOff,
+  Factory,
+  FileCheck2,
+  FileClock,
+  FileSearch,
+  FileSpreadsheet,
+  FileText,
+  FileVideo2,
+
+  Gauge,
+  Globe2,
+  Grid2X2,
+  Handshake,
+  HardDrive,
+  HeartPulse,
+  HelpCircle,
+  Landmark,
+  Layers,
+  LayoutDashboard,
+  LayoutGrid,
+  Library,
+  LockKeyhole,
+  LogOut,
+  Menu,
+  MonitorPlay,
+  Network,
+  Package,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Phone,
+  PhoneCall,
+  Play,
+  Plus,
+  Radar,
+  Radio,
+  RefreshCw,
+  Route,
+  ScanFace,
+  Search,
+  Server,
+  Settings,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  ShoppingBag,
+  Siren,
+  SlidersHorizontal,
+  Snowflake,
+  Sparkles as SparklesIcon,
+  ToggleLeft,
+  TrendingUp,
+  Truck,
+  UserRoundCog,
+  Users,
+  Video,
+  Volume2,
+
+  Workflow,
+  Wrench,
+  X,
+} from "lucide-react";
+import { createContext, Suspense, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/use-dialog-focus";
+import { logout } from "@/lib/auth-manager";
+import { authApi } from "@/lib/api-client";
+import { AlertAudioIndicator } from "@/components/alerts/alert-audio-indicator";
+import { AlertNotificationTray } from "@/components/alerts/alert-notification-tray";
+import { defaultRoleWorkspace } from "@/lib/role-workspaces";
+import { hasUnrestrictedMenuAccess } from "@/lib/navigation-access";
+import { markInAppNavigation } from "@/lib/session-guard";
+import { sectionHubs, sectionHubHref } from "@/lib/section-hubs";
+import { CommandWorkspaceNav } from "@/components/command-workspace-nav";
+
+interface AppLayoutProps {
+  children: React.ReactNode;
+  incidentCount?: number;
+}
+
+export type NavItem = {
+  label: string;
+  href: string;
+  icon: LucideIcon;
+  badge?: "cameras" | "incidents";
+};
+
+export type MenuAccessUser = {
+  username?: string;
+  role?: string;
+  customRoleId?: string;
+  customRoleName?: string;
+  menuAccess?: unknown;
+  menu_access?: unknown;
+  preferences?: { menuAccess?: unknown; menu_access?: unknown };
+};
+
+export type NavGroup = {
+  label: string;
+  icon: LucideIcon;
+  items: NavItem[];
+};
+
+function sectionLabel(label: string) {
+  const labels: Record<string, string> = {
+    "WORKSPACE": "Branch operations",
+    "SURVEILLANCE & INVESTIGATION": "Investigate & respond",
+    "COMMUNICATIONS": "Communications & Intercom",
+    "DEVICE HEALTH & MAINTENANCE": "Branch uptime",
+    "INTELLIGENCE & AI": "Risk intelligence",
+    "AUDIT, MIS & COMPLIANCE": "Evidence & assurance",
+    "ADMINISTRATION": "Administration",
+    "OTHERS": "Others",
+  };
+  return labels[label] || label.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+export const navigation: NavGroup[] = [
+  {
+    label: "WORKSPACE",
+    icon: LayoutGrid,
+    items: [
+      { label: "Bank & NBFC security operations", href: "/nbfc-operations", icon: Landmark },
+      { label: "Command Center", href: "/", icon: LayoutDashboard },
+      { label: "Executive dashboard", href: "/dashboards", icon: BarChart3 },
+      { label: "My workspace", href: "/role-dashboard", icon: BarChart3 },
+      { label: "Module directory", href: "/modules", icon: LayoutGrid },
+    ],
+  },
+  {
+    label: "SURVEILLANCE & INVESTIGATION",
+    icon: MonitorPlay,
+    items: [
+      { label: "Live branch coverage", href: "/control-room", icon: MonitorPlay },
+      { label: "Investigate video", href: "/video-search", icon: Search },
+      { label: "Synchronized playback", href: "/playback/synced", icon: Play },
+      { label: "Recording continuity", href: "/recordings", icon: FileVideo2 },
+      { label: "Evidence integrity & custody", href: "/evidence", icon: FileCheck2 },
+      { label: "Security alerts", href: "/analytics/alerts", icon: BellRing },
+      { label: "Device health alerts", href: "/operations/alerts", icon: Radio },
+      { label: "Incident Response", href: "/incidents", icon: Siren, badge: "incidents" },
+    ],
+  },
+  {
+    label: "COMMUNICATIONS",
+    icon: PhoneCall,
+    items: [
+      { label: "Voice Calling & Intercom", href: "/communications/calls", icon: PhoneCall },
+      { label: "KryptoVision Connect", href: "/communications/connect", icon: Radio },
+      { label: "Device Management", href: "/communications/admin/devices", icon: Settings },
+    ],
+  },
+  {
+    label: "INTELLIGENCE & AI",
+    icon: SparklesIcon,
+    items: [
+      { label: "Branch risk intelligence", href: "/analytics", icon: Activity },
+      { label: "AI ROI Calculator", href: "/reports/ai-analytics/roi", icon: TrendingUp },
+      { label: "AI Capability Comparison", href: "/reports/ai-analytics/compare", icon: BarChart3 },
+      { label: "Face Recognition & Watchlists", href: "/analytics/face-recognition", icon: ScanFace },
+      { label: "ANPR & Vehicle Telemetry", href: "/analytics/anpr", icon: CarFront },
+      { label: "Rules & automation", href: "/analytics/rules", icon: SlidersHorizontal },
+      { label: "Investigation workspace", href: "/analytics/investigation", icon: Route },
+      { label: "Predictive operations", href: "/analytics/predictions", icon: TrendingUp },
+      { label: "Retail Analytics", href: "/analytics/retail", icon: ShoppingBag },
+      { label: "Cash, vault & perimeter risk", href: "/analytics/banking", icon: Landmark },
+      { label: "Digital Twin & 3D spatial", href: "/digital-twin", icon: Boxes },
+    ],
+  },
+  {
+    label: "DEVICE HEALTH & MAINTENANCE",
+    icon: HeartPulse,
+    items: [
+      { label: "Camera & device uptime", href: "/operations/cameras", icon: Camera, badge: "cameras" },
+      { label: "Branch operations & estate", href: "/operations/branches", icon: Building2 },
+      { label: "Security & IoT devices", href: "/security-devices", icon: Shield },
+      { label: "Recording continuity", href: "/operations/recording", icon: FileVideo2 },
+      { label: "Storage & Disks", href: "/operations/storage", icon: HardDrive },
+      { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },
+      { label: "Hardware Asset Registry", href: "/maintenance/assets", icon: Library },
+      { label: "Camera Location Map", href: "/maintenance/camera-map", icon: Globe2 },
+      { label: "Maintenance Work Orders", href: "/maintenance/workorders", icon: ClipboardCheck },
+    ],
+  },
+  {
+    label: "AUDIT, MIS & COMPLIANCE",
+    icon: FileText,
+    items: [
+      { label: "Report studio", href: "/reports", icon: FileText },
+      { label: "Management overview", href: "/reports/mis", icon: FileSpreadsheet },
+      { label: "Date-wise reports", href: "/reports/mis?groupBy=date", icon: CalendarClock },
+      { label: "Zone-wise reports", href: "/reports/mis?groupBy=zone", icon: Globe2 },
+      { label: "Region-wise reports", href: "/reports/mis?groupBy=region", icon: Network },
+      { label: "Area-wise reports", href: "/reports/mis?groupBy=area", icon: Building2 },
+      { label: "Branch-wise reports", href: "/reports/mis?groupBy=branch", icon: Building2 },
+      { label: "Branch opening reports", href: "/reports/mis?tab=branch-opening", icon: CalendarClock },
+      { label: "AI alert graphical reports", href: "/analytics/alerts", icon: BarChart3 },
+      { label: "Branch benchmarking", href: "/reports/benchmarking", icon: TrendingUp },
+      { label: "Compliance scorecard", href: "/reports/compliance", icon: ShieldCheck },
+      { label: "Cost & value analysis", href: "/reports/financial", icon: TrendingUp },
+      { label: "Compliance Frameworks", href: "/compliance", icon: ShieldCheck },
+      { label: "Compliance Controls", href: "/compliance/controls", icon: SlidersHorizontal },
+      { label: "Evidence assurance", href: "/compliance/evidence", icon: FileCheck2 },
+      { label: "Branch Compliance Audit", href: "/audit/branch-compliance", icon: Building2 },
+      { label: "Camera Health Audit", href: "/audit/health", icon: Gauge },
+      { label: "Activity & Access Logs", href: "/activity-report", icon: UserRoundCog },
+    ],
+  },
+  {
+    label: "ADMINISTRATION",
+    icon: Settings,
+    items: [
+      { label: "Administration", href: "/admin", icon: Settings },
+      { label: "Shared edge agents", href: "/admin/edge-agent-branches", icon: Network },
+    ],
+  },
+  {
+    label: "OTHERS",
+    icon: Grid2X2,
+    items: [
+      { label: "Fleet diagnostics", href: "/admin/zero-touch/diagnostics", icon: Activity },
+      { label: "Feature Management", href: "/admin/features", icon: ToggleLeft },
+      { label: "Alert Controls & Toggles", href: "/settings/alerts", icon: Bell },
+      { label: "Account & Security Settings", href: "/account/security", icon: LockKeyhole },
+    ],
+  },
+];
+
+const legacyRoleWorkspacePaths: Record<string, string[]> = {
+  operator: [
+    "/",
+    "/modules",
+    "/control-room",
+    "/operations/alerts",
+    "/analytics/alerts",
+    "/incidents",
+    "/video-search",
+    "/playback/synced",
+    "/recordings",
+    "/operations/storage",
+    "/operations/cameras",
+    "/operations/recording",
+    "/communications/calls",
+    "/communications/connect",
+  ],
+  security_officer: [
+    "/",
+    "/modules",
+    "/control-room",
+    "/operations/alerts",
+    "/analytics/alerts",
+    "/incidents",
+    "/video-search",
+    "/playback/synced",
+    "/evidence",
+    "/digital-twin",
+    "/security-devices",
+    "/operations/branches",
+    "/operations/storage",
+    "/operations/cameras",
+    "/operations/recording",
+    "/recordings",
+    "/communications/calls",
+    "/communications/connect",
+  ],
+  viewer: ["/", "/modules", "/control-room", "/video-search", "/playback/synced", "/recordings", "/communications/calls"],
+  branch_manager: [
+    "/",
+    "/modules",
+    "/operations/branches",
+    "/operations/cameras",
+    "/security-devices",
+    "/analytics/alerts",
+    "/operations/recording",
+    "/operations/storage",
+    "/operations/network",
+    "/operations/edge-agents",
+    "/maintenance/workorders",
+    "/maintenance/health",
+    "/communications/calls",
+    "/communications/connect",
+  ],
+  zone_manager: [
+    "/",
+    "/modules",
+    "/operations/branches",
+    "/operations/cameras",
+    "/security-devices",
+    "/analytics/alerts",
+    "/operations/recording",
+    "/operations/storage",
+    "/operations/network",
+    "/operations/edge-agents",
+    "/maintenance/workorders",
+    "/maintenance/health",
+    "/reports",
+    "/communications/calls",
+    "/communications/connect",
+  ],
+  region_manager: [
+    "/",
+    "/modules",
+    "/operations/branches",
+    "/operations/cameras",
+    "/security-devices",
+    "/analytics/alerts",
+    "/operations/recording",
+    "/operations/storage",
+    "/operations/network",
+    "/operations/edge-agents",
+    "/maintenance/workorders",
+    "/maintenance/health",
+    "/reports",
+    "/communications/calls",
+    "/communications/connect",
+  ],
+  area_manager: [
+    "/",
+    "/modules",
+    "/operations/branches",
+    "/operations/cameras",
+    "/security-devices",
+    "/analytics/alerts",
+    "/operations/recording",
+    "/operations/storage",
+    "/operations/network",
+    "/operations/edge-agents",
+    "/maintenance/workorders",
+    "/maintenance/health",
+    "/communications/calls",
+    "/communications/connect",
+  ],
+  auditor: [
+    "/",
+    "/modules",
+    "/evidence",
+    "/analytics/alerts",
+    "/compliance",
+    "/compliance/assessments",
+    "/compliance/controls",
+    "/compliance/risks",
+    "/activity-report",
+    "/audit/branch-compliance",
+    "/audit/health",
+    "/audit/maintenance",
+    "/reports",
+    "/communications/calls",
+  ],
+  admin: [
+    "/",
+    "/modules",
+    "/analytics/alerts",
+    "/digital-twin",
+    "/security-devices",
+    "/operations/branches",
+    "/operations/storage",
+    "/operations/cameras",
+    "/operations/recording",
+    "/recordings",
+    "/admin",
+    "/admin/organization",
+    "/admin/organization?tab=hierarchy",
+    "/admin/organization?tab=employees",
+    "/admin/organization?tab=roles",
+    "/admin/branch-onboarding",
+    "/admin/edge-agent-branches",
+    "/admin/zero-touch",
+    "/admin/zero-touch/diagnostics",
+    "/admin/camera-import-export",
+    "/maintenance/device-configuration",
+    "/maintenance/device-management",
+    "/admin/system",
+    "/account/security",
+    "/communications/calls",
+    "/communications/connect",
+    "/communications/admin/devices",
+    "/settings/alerts",
+  ],
+};
+
+const roleAliases: Record<string, string> = {
+  super_admin: "admin",
+  company_admin: "admin",
+  hq_admin: "admin",
+  superadmin: "admin",
+};
+
+export function menuKey(item: NavItem) {
+  return item.href;
+}
+
+export function defaultMenuAccessForRole(role?: string) {
+  return defaultRoleWorkspace(role);
+}
+
+function filterNavigationByAllowed(navigationItems: NavGroup[], allowed: Set<string>) {
+  return navigationItems
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => {
+        const key = menuKey(item);
+        const path = routePath(item.href);
+        return allowed.has(key) || allowed.has(path);
+      }),
+    }))
+    .filter((group) => group.items.length > 0);
+}
+
+export function getAuthorizedNavigation(user: MenuAccessUser | null | undefined) {
+  return filterNavigationByAllowed(navigation, effectiveMenuAccess(user));
+}
+
+export function getVisibleNavigation(user: MenuAccessUser | null | undefined) {
+  if (!user) return filterNavigationByAllowed(navigation, new Set(defaultMenuAccessForRole("operator")));
+  // A custom role is an explicit restriction, including when its base role is
+  // administrative. Never let the broad base role silently override menus
+  // selected by a tenant administrator.
+  if (hasCustomMenuConfiguration(user)) return getAuthorizedNavigation(user);
+  if (hasUnrestrictedMenuAccess(user)) {
+    return navigation;
+  }
+  return getAuthorizedNavigation(user);
+}
+
+export function hasCustomMenuConfiguration(user: MenuAccessUser | null | undefined) {
+  // A custom role is a restriction. If its menu list is absent or malformed,
+  // fail closed rather than accidentally falling back to the broad base role.
+  return Boolean(user?.customRoleId);
+}
+
+function menuAccessValue(user: MenuAccessUser | null | undefined): unknown {
+  return user?.menuAccess
+    ?? (user as any)?.menu_access
+    ?? user?.preferences?.menuAccess
+    ?? user?.preferences?.menu_access;
+}
+
+function effectiveMenuAccess(user: MenuAccessUser | null | undefined): Set<string> {
+  const allMenuKeys = new Set(navigation.flatMap((group) => group.items.flatMap((item) => [menuKey(item), routePath(item.href)])));
+  if (!user) return new Set(defaultMenuAccessForRole("operator"));
+  const configured = menuAccessValue(user);
+  if (hasCustomMenuConfiguration(user)) {
+    const selected = new Set((Array.isArray(configured) ? configured : [])
+      .filter((value): value is string => typeof value === "string" && allMenuKeys.has(value)));
+    // For users with custom roles, honor all explicitly assigned menus that exist in the system navigation.
+    return selected;
+  }
+  return hasUnrestrictedMenuAccess(user)
+    ? allMenuKeys
+    : new Set(defaultMenuAccessForRole(user.role));
+}
+
+
+export const quickActions: NavItem[] = [
+  { label: "Voice Calling & Intercom", href: "/communications/calls", icon: PhoneCall },
+  { label: "Security alert intelligence", href: "/analytics/alerts", icon: BarChart3 },
+  { label: "Predictive operations", href: "/analytics/predictions", icon: TrendingUp },
+  { label: "Investigation workspace", href: "/analytics/investigation", icon: Route },
+  { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },
+  { label: "Feature Management", href: "/admin/features", icon: ToggleLeft },
+  { label: "Role vs Menu Permissions", href: "/admin/organization?tab=roles", icon: Shield },
+  { label: "Report an incident", href: "/incidents/create", icon: Siren },
+  { label: "Create work order", href: "/maintenance/workorders/new", icon: ClipboardCheck },
+  { label: "Onboard a branch", href: "/admin/branch-onboarding", icon: Building2 },
+  { label: "Connect branches to agent", href: "/admin/edge-agent-branches", icon: Network },
+  { label: "Register hardware asset", href: "/maintenance/assets/new", icon: Library },
+  { label: "Add an AMC contract", href: "/maintenance/amc/new", icon: FileClock },
+  { label: "Add a vendor / OEM", href: "/maintenance/vendors/new", icon: Handshake },
+  { label: "Hardware Compatibility Lab", href: "/maintenance/compatibility", icon: SlidersHorizontal },
+  { label: "Smart Video Search", href: "/video-search", icon: Search },
+  { label: "Multi-camera playback", href: "/playback/synced", icon: Play },
+  { label: "Create a face watchlist", href: "/analytics/face-recognition?create=watchlist", icon: ScanFace },
+  { label: "Create an ANPR watchlist", href: "/analytics/anpr?create=watchlist", icon: CarFront },
+  { label: "Add compliance requirement", href: "/compliance/requirements/new", icon: FileCheck2 },
+  { label: "Add compliance risk", href: "/compliance/risks/new", icon: ShieldAlert },
+  { label: "Add privacy purpose", href: "/maintenance/privacy/purposes/new", icon: LockKeyhole },
+  { label: "Report a privacy breach", href: "/maintenance/privacy/breaches/new", icon: ShieldAlert },
+];
+
+const pageMeta = [
+  ...navigation.flatMap((group) => group.items.map((item) => ({
+    path: item.href,
+    section: group.label,
+    title: item.label,
+  }))),
+  ...sectionHubs.map((hub) => ({ path: `/workspaces/${hub.slug}`, section: hub.group, title: sectionLabel(hub.group) })),
+  { path: "/communications", section: "Communications", title: "Communications" },
+  { path: "/communications/calls", section: "Communications", title: "Voice Calling & Intercom" },
+  { path: "/communications/connect", section: "Communications", title: "KryptoVision Connect" },
+  { path: "/operations/branches", section: "Operations", title: "Branch health" },
+  { path: "/camera-detail", section: "Infrastructure health", title: "Camera details" },
+  { path: "/maintenance/camera-map", section: "Fleet maintenance", title: "Camera Location Map" },
+  { path: "/maintenance/assets/new", section: "Fleet maintenance", title: "Register asset" },
+  { path: "/maintenance/vendors/new", section: "Fleet maintenance", title: "Add vendor" },
+  { path: "/maintenance/amc/new", section: "Fleet maintenance", title: "Add AMC contract" },
+  { path: "/maintenance/privacy/purposes/new", section: "Privacy", title: "Add processing purpose" },
+  { path: "/maintenance/privacy/breaches/new", section: "Privacy", title: "Report privacy breach" },
+  { path: "/compliance/requirements/new", section: "Assurance", title: "Add requirement" },
+  { path: "/compliance/risks/new", section: "Assurance", title: "Add risk" },
+  { path: "/support", section: "Help", title: "Support center" },
+  { path: "/privacy", section: "Legal", title: "Privacy policy" },
+  { path: "/terms", section: "Legal", title: "Terms of service" },
+];
+
+import { ThemeSwitcher } from "@/components/ui/theme-switcher";
+import { OrgBrandingProvider, useOrgBranding } from "@/components/ui/org-branding-provider";
+
+const AppLayoutContext = createContext(false);
+const RECENT_MODULES_STORAGE_KEY = "sentinel-grid-recent-modules";
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "sentinel-grid-sidebar-collapsed";
+
+function routePath(href: string) {
+  return href.split(/[?#]/)[0] || "/";
+}
+
+function routeMatches(
+  href: string,
+  pathname: string,
+  searchParams: Pick<URLSearchParams, "get"> | null,
+) {
+  const path = routePath(href);
+  const pathMatches = path === "/"
+    ? pathname === "/"
+    : pathname === path || pathname.startsWith(`${path}/`);
+  if (!pathMatches) return false;
+
+  const query = href.split("?")[1]?.split("#")[0];
+  if (!query) return true;
+  let matches = true;
+  new URLSearchParams(query).forEach((value, key) => {
+    const currentVal = searchParams?.get(key);
+    if (key === "tab" && value === "hierarchy" && (!currentVal || currentVal === "hierarchy")) {
+      return;
+    }
+    if (currentVal !== value) matches = false;
+  });
+  return matches;
+}
+
+function routeSpecificity(href: string) {
+  const query = href.split("?")[1]?.split("#")[0];
+  return routePath(href).length + (query ? 10_000 + query.length : 0);
+}
+
+export function AppLayout({ children, incidentCount = 0 }: AppLayoutProps) {
+  const alreadyInsideAppLayout = useContext(AppLayoutContext);
+  if (alreadyInsideAppLayout) return <>{children}</>;
+
+  return (
+    <AppLayoutContext.Provider value>
+      <Suspense fallback={children}>
+        <AppLayoutFrame incidentCount={incidentCount}>{children}</AppLayoutFrame>
+      </Suspense>
+    </AppLayoutContext.Provider>
+  );
+}
+
+function AppLayoutFrame({ children, incidentCount = 0 }: AppLayoutProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { branding } = useOrgBranding();
+  const mainNavRef = useRef<HTMLElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const commandDialogRef = useRef<HTMLElement>(null);
+  const [compactViewport, setCompactViewport] = useState(false);
+  const NAV_SCROLL_KEY = "sentinel-grid-nav-scroll-top";
+
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  useDialogFocus(commandDialogRef, commandOpen);
+  useDialogFocus(sidebarRef, compactViewport && sidebarOpen && !commandOpen);
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 991px)");
+    const update = () => { setCompactViewport(query.matches); if (!query.matches) setSidebarOpen(false); };
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  const [commandQuery, setCommandQuery] = useState("");
+  const [activeCommandIndex, setActiveCommandIndex] = useState(0);
+  const [recentHrefs, setRecentHrefs] = useState<string[]>([]);
+  const [operator, setOperator] = useState<(MenuAccessUser & {
+    displayName?: string;
+    username?: string;
+    email?: string;
+  }) | null>(null);
+  const [operatorResolved, setOperatorResolved] = useState(false);
+
+  useEffect(() => {
+    try {
+      const storedUser = sessionStorage.getItem("user") || localStorage.getItem("user");
+      if (storedUser) setOperator(JSON.parse(storedUser));
+    } catch {}
+    authApi
+      .getCurrentUser()
+      .then((fresh) => {
+        if (fresh) {
+          setOperator(fresh);
+          try {
+            sessionStorage.setItem("user", JSON.stringify(fresh));
+          } catch {}
+        }
+      })
+      .catch(() => {})
+      .finally(() => setOperatorResolved(true));
+
+  }, []);
+
+  const handleNavScroll = () => {
+    if (mainNavRef.current) {
+      try {
+        sessionStorage.setItem(NAV_SCROLL_KEY, String(mainNavRef.current.scrollTop));
+      } catch {}
+    }
+  };
+
+  const pathname = usePathname() || "/";
+  const visibleNavigation = useMemo(() => getVisibleNavigation(operator), [operator]);
+  const visibleHrefs = useMemo(
+    () => new Set(visibleNavigation.flatMap((group) => group.items.map(menuKey))),
+    [visibleNavigation],
+  );
+  const visibleQuickActions = quickActions.filter((action) => visibleHrefs.has(menuKey(action)));
+
+  const isExemptRoute =
+    pathname === "/" ||
+    // These hubs were reachable before they became sidebar entries. Keep
+    // existing direct-link access while menu visibility remains role-scoped.
+    pathname === "/dashboards" ||
+    pathname === "/reports" ||
+    pathname === "/login" ||
+    pathname === "/account/security" ||
+    pathname === "/modules" ||
+    pathname === "/support" ||
+    pathname.startsWith("/auth/");
+
+  const isKnownNavRoute = useMemo(() => {
+    return navigation.some((group) =>
+      group.items.some((item) =>
+        // Report studio is a hub, not an access rule for every /reports/* page.
+        !(item.href === "/reports" && pathname !== "/reports") &&
+        routeMatches(item.href, pathname, searchParams)
+      )
+    );
+  }, [pathname, searchParams]);
+
+  const isRouteAuthorized = useMemo(() => {
+    if (isExemptRoute) return true;
+    if (!operatorResolved) return true;
+    if (hasUnrestrictedMenuAccess(operator)) return true;
+    if (!isKnownNavRoute) return true;
+    return visibleNavigation.some((group) =>
+      group.items.some((item) => routeMatches(item.href, pathname, searchParams))
+    );
+  }, [isExemptRoute, operatorResolved, operator, isKnownNavRoute, visibleNavigation, pathname, searchParams]);
+  const currentPage = pageMeta
+    .filter((item) => routeMatches(item.path, pathname, searchParams))
+    .sort((left, right) => routeSpecificity(right.path) - routeSpecificity(left.path))[0]
+    ?? { path: pathname, section: "Workspace", title: "KryptonVision" };
+
+  const activeRoute = visibleNavigation
+    .flatMap((group) => group.items)
+    .map((item) => item.href)
+    .filter((href) => routeMatches(href, pathname, searchParams))
+    .sort((left, right) => routeSpecificity(right) - routeSpecificity(left))[0];
+  const isActive = (href: string) => href === activeRoute;
+  const activeGroup = visibleNavigation.find((group) =>
+    sectionHubHref(group.label) === pathname || group.items.some((item) => isActive(item.href)));
+  const moduleCount = visibleNavigation.reduce((total, group) => total + group.items.length, 0);
+
+  const searchableModules = useMemo(() => visibleNavigation.flatMap((group) =>
+    group.items.map((item) => ({ ...item, section: group.label }))), [visibleNavigation]);
+
+  const commandResults = useMemo(() => {
+    const query = commandQuery.trim().toLowerCase();
+    const searchAliases: Record<string, string[]> = {
+      "/communications/calls": ["call", "calling", "phone", "voice", "audio", "intercom", "dial", "soc", "operator call", "telephone"],
+      "/communications/connect": ["enroll", "connect", "device", "terminal", "pairing", "handset"],
+      "/maintenance/device-configuration": ["golden", "templates", "hardware", "onvif", "ptz", "ntp", "imaging", "profiles", "standard"],
+      "/control-room": ["wall", "tour", "grid", "presentation", "matrix", "cctv", "auto-rotation"],
+      "/evidence": ["redaction", "blur", "custody", "forensic", "court", "export", "hash", "tamper"],
+      "/incidents": ["sop", "checklist", "false alarm", "intrusion", "alerts", "workflow", "review"],
+      "/admin/organization?tab=hierarchy": ["branches", "kochi", "mumbai", "delhi", "bkc", "zones", "facility"],
+    };
+
+    if (!query) {
+      const recentItems = recentHrefs
+        .map((href) => searchableModules.find((item) => item.href === href))
+        .filter((item): item is (typeof searchableModules)[number] => Boolean(item))
+        .map((item) => ({ ...item, recent: true }));
+      const recentSet = new Set(recentHrefs);
+      return [
+        ...recentItems,
+        ...searchableModules
+          .filter((item) => !recentSet.has(item.href))
+          .map((item) => ({ ...item, recent: false })),
+      ].slice(0, 12);
+    }
+    return searchableModules.filter((item) => {
+      const extra = (searchAliases[item.href] || []).join(" ");
+      return `${item.label} ${item.section} ${item.href} ${extra}`.toLowerCase().includes(query);
+    }).slice(0, 12).map((item) => ({ ...item, recent: false }));
+  }, [commandQuery, recentHrefs, searchableModules]);
+
+  useEffect(() => {
+    if (commandOpen) document.getElementById(`command-result-${activeCommandIndex}`)?.scrollIntoView({ block: "nearest" });
+  }, [activeCommandIndex, commandOpen]);
+
+  // Hiding a link is not access control. Keep custom-role users out of a
+  // managed page when they paste or restore a URL that is not on their menu.
+  useEffect(() => {
+    if (!operatorResolved || !operator || !hasCustomMenuConfiguration(operator)) return;
+    const requested = navigation
+      .flatMap((group) => group.items)
+      .find((item) => routeMatches(item.href, pathname, searchParams));
+    if (!requested || visibleHrefs.has(requested.href)) return;
+    const fallback = visibleNavigation.flatMap((group) => group.items)[0]?.href;
+    if (fallback) router.replace(fallback);
+  }, [operator, operatorResolved, pathname, router, searchParams, visibleHrefs, visibleNavigation]);
+
+  // Restore sidebar navigation scroll position so the menu stays in position
+  useEffect(() => {
+    const nav = mainNavRef.current;
+    if (!nav) return;
+    try {
+      const saved = sessionStorage.getItem(NAV_SCROLL_KEY);
+      if (saved !== null) {
+        const top = parseInt(saved, 10);
+        if (!isNaN(top)) {
+          nav.scrollTop = top;
+          requestAnimationFrame(() => {
+            if (nav) nav.scrollTop = top;
+          });
+        }
+      }
+    } catch {}
+  }, [pathname]);
+
+  useEffect(() => {
+    try {
+      const storedRecents = JSON.parse(window.localStorage.getItem(RECENT_MODULES_STORAGE_KEY) || "[]");
+      const validRecents = Array.isArray(storedRecents)
+        ? storedRecents.filter((href): href is string => searchableModules.some((item) => item.href === href))
+        : [];
+      const currentHref = searchableModules.find((item) => item.href === activeRoute)?.href;
+      const next = currentHref
+        ? [currentHref, ...validRecents.filter((href) => href !== currentHref)].slice(0, 5)
+        : validRecents.slice(0, 5);
+      setRecentHrefs(next);
+      window.localStorage.setItem(RECENT_MODULES_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      setRecentHrefs([]);
+    }
+  }, [activeRoute, searchableModules]);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY);
+      if (stored !== null) {
+        setSidebarCollapsed(stored === "true");
+      }
+    } catch {}
+  }, []);
+
+  const toggleSidebarCollapse = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const operatorName = operator?.displayName?.trim()
+    || operator?.username?.trim()
+    || operator?.email?.trim()
+    || "Signed-in user";
+  const operatorRole = operator?.role
+    ? operator.role.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
+    : "Protected enterprise session";
+  const operatorInitials = operatorName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "U";
+
+  useEffect(() => {
+    setActiveCommandIndex(0);
+  }, [commandOpen, commandQuery]);
+
+  useEffect(() => {
+    setCreateMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!createMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      const createMenu = document.querySelector(".create-menu");
+      if (createMenu && !createMenu.contains(target)) {
+        setCreateMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [createMenuOpen]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandOpen((open) => !open);
+      }
+      if ((event.ctrlKey || event.metaKey) && (event.key.toLowerCase() === "b" || event.key === "\\")) {
+        event.preventDefault();
+        toggleSidebarCollapse();
+      }
+      if (event.key === "Escape") {
+        setCommandOpen(false);
+        setSidebarOpen(false);
+        setCreateMenuOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const closeSidebar = () => setSidebarOpen(false);
+  const handleNavClick = (href: string) => (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+      return; // Allow opening in new tab
+    }
+    e.preventDefault();
+    closeSidebar();
+
+    // Preserve the menu's scroll position before navigating
+    if (mainNavRef.current) {
+      try {
+        sessionStorage.setItem(NAV_SCROLL_KEY, String(mainNavRef.current.scrollTop));
+      } catch {}
+    }
+
+    const targetPath = routePath(href);
+    const currentPath = routePath(pathname);
+    if (targetPath === currentPath && (href === activeRoute || (href === pathname && !searchParams?.toString()))) {
+      return; // Already on this exact page
+    }
+
+    // The Live Video Wall (/control-room) runs many concurrent streams and AbortControllers.
+    // router.push() can silently fail to navigate away from resource-heavy pages.
+    // Use hard navigation from /control-room to guarantee menu links always work.
+    if (currentPath === "/control-room") {
+      markInAppNavigation();
+      window.location.assign(href);
+      return;
+    }
+
+    try {
+      router.push(href);
+      // Fallback: if router.push doesn't navigate within 1.5s (e.g. intercepted by
+      // a streaming page), force a hard navigation to ensure the link always works.
+      const fallbackTimer = setTimeout(() => {
+        if (routePath(window.location.pathname) === currentPath) {
+          markInAppNavigation();
+          window.location.assign(href);
+        }
+      }, 1500);
+      // Clean up the timer if we successfully navigate away
+      const cleanup = () => clearTimeout(fallbackTimer);
+      window.addEventListener("popstate", cleanup, { once: true });
+    } catch {
+      markInAppNavigation();
+      window.location.assign(href);
+      return;
+    }
+  };
+
+  const createMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (createMenuRef.current && !createMenuRef.current.contains(event.target as Node)) {
+        setCreateMenuOpen(false);
+      }
+    }
+    if (createMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [createMenuOpen]);
+
+
+  const openCommandResult = (href: string) => {
+    setCommandOpen(false);
+    setCommandQuery("");
+    closeSidebar();
+
+    if (mainNavRef.current) {
+      try {
+        sessionStorage.setItem(NAV_SCROLL_KEY, String(mainNavRef.current.scrollTop));
+      } catch {}
+    }
+
+    const targetPath = routePath(href);
+    try {
+      router.push(href);
+    } catch {
+      window.location.assign(href);
+      return;
+    }
+
+  };
+
+  return (
+    <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+      <a href="#workspace-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-blue-600 focus:px-4 focus:py-3 focus:text-white">Skip to main content</a>
+      <button
+        className={`sidebar-scrim ${sidebarOpen ? "visible" : ""}`}
+        aria-label="Close navigation"
+        onClick={closeSidebar}
+      />
+      <aside ref={sidebarRef} id="workspace-navigation" className={`sidebar ${sidebarOpen ? "open" : ""}`} aria-label="Workspace navigation" inert={commandOpen || (compactViewport && !sidebarOpen) || (!compactViewport && sidebarCollapsed)} role={compactViewport && sidebarOpen ? "dialog" : undefined} aria-modal={compactViewport && sidebarOpen ? true : undefined}>
+        <div className="brand">
+          {branding.logoUrl ? (
+            <div className="brand-mark custom-logo">
+              <img src={branding.logoUrl} alt={branding.orgName || "Organization Logo"} className="org-logo-img" />
+            </div>
+          ) : (
+            <div className="brand-mark"><ShieldCheck size={22} /></div>
+          )}
+          <div className="brand-copy">
+            <strong>{branding.orgName || "KryptonVision"}</strong>
+            <span>{branding.tagline || "Enterprise operations"}</span>
+          </div>
+          <button
+            type="button"
+            className="sidebar-collapse-btn desktop-only"
+            onClick={toggleSidebarCollapse}
+            aria-label="Hide sidebar (Ctrl+B)"
+            title="Hide sidebar (Ctrl+B)"
+          >
+            <PanelLeftClose size={17} />
+          </button>
+          <button className="mobile-close" onClick={closeSidebar} aria-label="Close navigation">
+            <X size={19} />
+          </button>
+        </div>
+
+        <button type="button" className="command-search" onClick={() => setCommandOpen(true)}>
+          <Search size={15} />
+          <span>Search workspace</span>
+          <kbd><Command size={11} /> K</kbd>
+        </button>
+
+        <div className="nav-shortcuts" aria-label="Quick access">
+          {visibleHrefs.has("/") && <Link href="/" prefetch={false} className={isActive("/") ? "active" : ""} onClick={handleNavClick("/")}>
+            <LayoutDashboard size={15} /><span>Overview</span>
+          </Link>}
+          {visibleHrefs.has("/control-room") && <Link href="/control-room" prefetch={false} className={isActive("/control-room") ? "active" : ""} onClick={handleNavClick("/control-room")}>
+            <MonitorPlay size={15} /><span>Live</span>
+          </Link>}
+          {visibleHrefs.has("/operations/alerts") && <Link href="/operations/alerts" prefetch={false} className={isActive("/operations/alerts") ? "active" : ""} onClick={handleNavClick("/operations/alerts")}>
+            <Radar size={15} /><span>Alerts</span>
+          </Link>}
+          {visibleHrefs.has("/communications/calls") && <Link href="/communications/calls" prefetch={false} className={isActive("/communications/calls") ? "active" : ""} onClick={handleNavClick("/communications/calls")}>
+            <PhoneCall size={15} /><span>Calling</span>
+          </Link>}
+        </div>
+
+        <div className="nav-utility">
+          <Link href="/modules" prefetch={false} className={isActive("/modules") ? "active" : ""} onClick={handleNavClick("/modules")}>
+            <LayoutGrid size={14} />
+            <span>Workspace directory</span>
+            <small>{moduleCount}</small>
+          </Link>
+        </div>
+
+        <nav ref={mainNavRef} onScroll={handleNavScroll} className="main-nav" aria-label="Main navigation">
+          {(Array.isArray(visibleNavigation) ? visibleNavigation : navigation).map((group) => {
+            if (!group) return null;
+            const items = Array.isArray(group.items) ? group.items : [];
+            const GroupIcon = group.icon;
+            const href = group.label === "ADMINISTRATION" ? items[0]?.href : sectionHubHref(group.label);
+            return href ? <Link
+              key={group.label}
+              href={href}
+              prefetch={false}
+              className={`nav-section-link ${activeGroup?.label === group.label ? "active" : ""}`}
+              onClick={handleNavClick(href)}
+              aria-current={pathname === href ? "page" : undefined}
+            ><GroupIcon size={17} /><span>{sectionLabel(group.label)}</span><ArrowUpRight size={14} className="nav-section-arrow" /></Link> : null;
+          })}
+        </nav>
+
+
+        <div className="sidebar-footer">
+          <Link href="/support" className="sidebar-help" onClick={handleNavClick("/support")}>
+            <HelpCircle size={16} />
+            <span>Help &amp; support</span>
+            <ChevronRight size={15} />
+          </Link>
+          <div className="sidebar-legal" aria-label="Legal links">
+            <Link href="/privacy" onClick={handleNavClick("/privacy")}>Privacy</Link>
+            <span aria-hidden="true">•</span>
+            <Link href="/terms" onClick={handleNavClick("/terms")}>Terms</Link>
+          </div>
+        </div>
+      </aside>
+
+      <main id="workspace-content" tabIndex={-1} className="workspace" inert={commandOpen || (compactViewport && sidebarOpen)}>
+        <header className="topbar">
+          <button
+            type="button"
+            className="menu-button"
+            onClick={() => {
+              if (typeof window !== "undefined" && window.innerWidth >= 992) {
+                toggleSidebarCollapse();
+              } else {
+                setSidebarOpen(true);
+              }
+            }}
+            aria-label={compactViewport ? "Open navigation" : sidebarCollapsed ? "Show navigation" : "Hide navigation"}
+            aria-controls="workspace-navigation"
+            aria-expanded={compactViewport ? sidebarOpen : !sidebarCollapsed}
+            title={sidebarCollapsed ? "Show sidebar menu (Ctrl+B)" : "Hide sidebar menu (Ctrl+B)"}
+          >
+            {compactViewport ? <Menu size={19} /> : sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
+          </button>
+          <div className="topbar-context">
+            <div className="breadcrumbs">
+              <Link href="/" className="inline-flex items-center gap-1.5">
+                {branding.logoUrl ? <img src={branding.logoUrl} alt="" className="h-5 w-5 rounded object-contain" /> : null}
+                <span>{branding.orgName || "KryptonVision"}</span>
+              </Link><ChevronRight size={12} />
+              {activeGroup ? <Link href={sectionHubHref(activeGroup.label) ?? activeGroup.items[0].href}>{sectionLabel(activeGroup.label)}</Link> : <span>{currentPage.section}</span>}
+            </div>
+            <p className="topbar-title">{currentPage.title}</p>
+          </div>
+          <div className="topbar-actions">
+            {/* Dynamic RBAC Scope Indicator */}
+            <div className="app-scope-pill hidden sm:flex">
+              <Building2 size={14} />
+              <span>
+                {hasUnrestrictedMenuAccess(operator) || operatorRole.toLowerCase().includes("admin")
+                  ? "All branches"
+                  : "Assigned branch"}
+              </span>
+            </div>
+            <div className="workspace-context-label"><ShieldCheck size={14} /> Protected workspace</div>
+            <ThemeSwitcher />
+            <AlertAudioIndicator />
+            <div className={`create-menu relative ${createMenuOpen ? "open" : ""}`} ref={createMenuRef}>
+              <button
+                type="button"
+                className="create-menu-trigger"
+                onClick={() => setCreateMenuOpen((open) => !open)}
+                aria-expanded={createMenuOpen}
+                aria-haspopup="true"
+                aria-label="Create quick action"
+              >
+                <Plus size={15} /><span>Create</span><ChevronDown size={13} />
+              </button>
+              {createMenuOpen && (
+                <div className="create-menu-panel">
+                  <p>Quick actions</p>
+                  {visibleQuickActions.length > 0 ? (
+                    visibleQuickActions.map((action) => {
+                      const Icon = action.icon;
+                      return (
+                        <Link
+                          href={action.href}
+                          key={action.href}
+                          onClick={(e) => {
+                            setCreateMenuOpen(false);
+                            handleNavClick(action.href)(e);
+                          }}
+                        >
+                          <span><Icon size={15} /></span>
+                          <strong>{action.label}</strong>
+                          <ChevronRight size={13} />
+                        </Link>
+                      );
+                    })
+                  ) : (
+                    <div className="px-3 py-2 text-[11px] text-slate-400">
+                      No quick actions available for your role.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <button type="button" className="topbar-icon" aria-label="Search modules" onClick={() => setCommandOpen(true)}><Search size={18} /></button>
+            <Link
+              href="/communications/calls"
+              aria-label="Voice Calling & Intercom"
+              title="Voice Calling & Intercom"
+              className={`topbar-icon ${isActive("/communications/calls") ? "active text-emerald-400" : ""}`}
+              onClick={handleNavClick("/communications/calls")}
+            >
+              <PhoneCall size={18} />
+            </Link>
+            <Link
+              href="/operations/alerts"
+              aria-label="Notifications"
+              className="notification topbar-icon"
+              onClick={handleNavClick("/operations/alerts")}
+            >
+              <Bell size={18} />
+              {incidentCount > 0 && <i />}
+            </Link>
+            <Link
+              href="/account/security"
+              className="top-avatar"
+              aria-label="Operator profile and session security"
+              onClick={handleNavClick("/account/security")}
+            >
+              <CircleUserRound size={20} />
+            </Link>
+          </div>
+        </header>
+        <div className="route-surface experience-surface" data-area={pathname.split("/")[1] || "overview"} data-section={currentPage.section.toLowerCase().replaceAll(" ", "-")}>
+          {isRouteAuthorized ? (
+            <>
+              <CommandWorkspaceNav pathname={pathname} visibleHrefs={visibleHrefs} unrestricted={hasUnrestrictedMenuAccess(operator) && !hasCustomMenuConfiguration(operator)} />
+              {children}
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 space-y-4">
+              <div className="w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 mb-2">
+                <ShieldAlert size={32} />
+              </div>
+              <h2 className="text-xl font-bold text-slate-100">Access Restricted</h2>
+              <p className="text-sm text-slate-400 max-w-md">
+                Your assigned role (<span className="text-indigo-400 font-medium font-mono">{operator?.customRoleName || operator?.role || "user"}</span>) does not have permission to access <span className="text-slate-200 font-mono text-xs bg-slate-900 px-2 py-0.5 rounded border border-slate-800">{pathname}</span>.
+              </p>
+              <div className="pt-2">
+                <Link
+                  href="/"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 rounded-lg text-xs font-bold transition inline-flex items-center gap-2"
+                >
+                  <LayoutDashboard size={14} /> Return to Dashboard
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+      <AlertNotificationTray />
+
+      {commandOpen && (
+        <div className="command-overlay" role="presentation" onMouseDown={() => setCommandOpen(false)}>
+          <section ref={commandDialogRef} className="command-dialog" role="dialog" aria-modal="true" aria-label="Module search" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="command-input-row">
+              <Search size={19} />
+              <input
+                autoFocus
+                value={commandQuery}
+                onChange={(event) => setCommandQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setActiveCommandIndex((index) => (index + 1) % Math.max(commandResults.length, 1));
+                  } else if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setActiveCommandIndex((index) => (index - 1 + Math.max(commandResults.length, 1)) % Math.max(commandResults.length, 1));
+                  } else if (event.key === "Enter" && commandResults[activeCommandIndex]) {
+                    event.preventDefault();
+                    openCommandResult(commandResults[activeCommandIndex].href);
+                  }
+                }}
+                placeholder="Search cameras, incidents, reports, maintenance..."
+                aria-label="Search all modules"
+                role="combobox"
+                aria-expanded="true"
+                aria-autocomplete="list"
+                aria-controls="command-results-list"
+                aria-activedescendant={commandResults[activeCommandIndex] ? `command-result-${activeCommandIndex}` : undefined}
+              />
+              <button type="button" onClick={() => setCommandOpen(false)} aria-label="Close module search"><X size={17} /></button>
+            </div>
+            <div className="command-results" id="command-results-list" role="listbox" aria-label="Module destinations">
+              <div className="command-results-heading">
+                <span>{commandQuery ? "Search results" : recentHrefs.length ? "Recent & suggested" : "Popular destinations"}</span>
+                <Link href="/modules" onClick={() => setCommandOpen(false)}>View all modules <LayoutGrid size={13} /></Link>
+              </div>
+              {commandResults.length > 0 ? commandResults.map((item, index) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    href={item.href}
+                    key={`${item.section}-${item.href}`}
+                    id={`command-result-${index}`}
+                    role="option"
+                    aria-selected={activeCommandIndex === index}
+                    className={activeCommandIndex === index ? "active" : ""}
+                    onMouseEnter={() => setActiveCommandIndex(index)}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      openCommandResult(item.href);
+                    }}
+                  >
+                    <span className="command-result-icon"><Icon size={17} /></span>
+                    <span><strong>{item.label}</strong><small>{sectionLabel(item.section)}{item.recent ? " · Recently opened" : ""}</small></span>
+                    <ChevronRight size={15} />
+                  </Link>
+                );
+              }) : (
+                <div className="command-empty"><Search size={22} /><strong>No matching module</strong><span>Try a feature name such as camera, report, audit or branch.</span></div>
+              )}
+            </div>
+            <footer><span><kbd>↑↓</kbd> navigate</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span><strong>{searchableModules.length} modules available</strong></footer>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}

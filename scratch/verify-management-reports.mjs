@@ -22,7 +22,8 @@ for(const width of [1600,390]) {
     if(path.endsWith('/organization/nodes'))return route.fulfill({json:{data:[]}});
     return route.fulfill({json:{data:[]}});
   });
-  const page=await context.newPage(),errors=[];
+  const page=await context.newPage(),errors=[],requests=[];
+  page.on('request',request=>{const url=new URL(request.url());if(url.pathname.endsWith('/reports/mis'))requests.push(url.searchParams.get('groupBy'));});
   page.on('pageerror',error=>errors.push(error.message));
   await page.goto('http://127.0.0.1:3014/analytics/alerts',{waitUntil:'domcontentloaded',timeout:180000});
   const management=page.getByRole('region',{name:'Alert management analytics'});
@@ -55,6 +56,13 @@ for(const width of [1600,390]) {
   await page.getByRole('button',{name:/Export CSV/}).click();
   const csvDownload=await csvPromise;
   assert.equal((await readFile(await csvDownload.path(),'utf8')).split('\r\n').length,61);
+  for(const dimension of ['date','zone','region','area','branch']) {
+    assert.ok(await page.locator(`a[href="/reports/mis?groupBy=${dimension}"]`).count(),`Missing ${dimension} menu link`);
+    await page.goto(`http://127.0.0.1:3014/reports/mis?groupBy=${dimension}`,{waitUntil:'domcontentloaded',timeout:180000});
+    await page.getByRole('region',{name:'Executive management overview'}).waitFor({timeout:120000});
+    await page.waitForTimeout(300);
+    assert.equal(requests.at(-1),dimension);
+  }
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+2);
   results.push({width,alertExportRows:260,misExportRows:60,pagination:true,overflow,errors});
   assert.equal(errors.length,0,JSON.stringify(errors));

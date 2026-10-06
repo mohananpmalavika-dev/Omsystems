@@ -12,6 +12,7 @@ const existing=[
  'src/reporting/services/daily-surveillance-collector.service.ts','src/reporting/renderers/daily-surveillance-csv.renderer.ts','src/reporting/renderers/daily-surveillance-xlsx.renderer.ts',
  'dashboard/app/analytics/alerts/page.tsx','dashboard/components/alerts/alerts-graphical-analytics.tsx','dashboard/app/reports/mis/page.tsx','dashboard/app/reports/page.tsx',
  'dashboard/app/reports/benchmarking/page.tsx','dashboard/app/reports/compliance/page.tsx','dashboard/app/reports/financial/page.tsx',
+ 'dashboard/components/app-layout.tsx','dashboard/lib/section-hubs.ts',
 ];
 const additions=[
  'src/reporting/hierarchy.ts','packages/contracts/src/report-hierarchy.ts',
@@ -34,6 +35,19 @@ for(const file of [...existing,...additions]) {
   source='import { resolveReportHierarchy } from "../packages/contracts/src/report-hierarchy.js";\n'+production;
  }
  if(file==='dashboard/app/reports/page.tsx')source=source.replace('<Link href="/reports/live-person-count" className="btn-secondary"><BarChart3 size={16}/>Live person count</Link>','');
+ if(file==='dashboard/components/app-layout.tsx') {
+  const start=source.indexOf('      { label: "Management overview"'),end=source.indexOf('      { label: "Cost & value analysis"',start);
+  if(start<0||end<0)throw new Error('Report menu anchors missing');
+  const anchor='      { label: "Executive reports", href: "/reports/mis", icon: FileSpreadsheet },';
+  if(!original.toString().includes(anchor))throw new Error('Production report menu anchor missing');
+  source=original.toString().replace(anchor,source.slice(start,end).trimEnd());
+ }
+ if(file==='dashboard/lib/section-hubs.ts') {
+  const updated=source.split('\n').find(line=>line.includes('title: "Publish the picture"'));
+  const old=original.toString().split('\n').find(line=>line.includes('title: "Publish the picture"'));
+  if(!updated||!old)throw new Error('Report hub anchor missing');
+  source=original.toString().replace(old,updated);
+ }
  const target=path.join(stage,'source',file);await fs.mkdir(path.dirname(target),{recursive:true});await fs.writeFile(target,source);
  manifest.files.push({path:file,beforeSha256:original?hash(original):null,afterSha256:hash(source)});
  if(!file.startsWith('dashboard/')&&file.endsWith('.ts')) {
@@ -43,4 +57,5 @@ for(const file of [...existing,...additions]) {
  }
 }
 await fs.writeFile(path.join(stage,'manifest.json'),JSON.stringify(manifest,null,2));
+await fs.copyFile(path.join(root,'scratch/verify-live-management-reports.mjs'),path.join(stage,'verify-live-management-reports.mjs'));
 console.log(JSON.stringify({sourceFiles:manifest.files.length,runtimeFiles:manifest.backend.length,stage}));
