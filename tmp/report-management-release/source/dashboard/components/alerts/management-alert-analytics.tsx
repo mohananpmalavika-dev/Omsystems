@@ -70,10 +70,10 @@ export function AlertsGraphicalAnalytics(props: Props) {
     {!alerts.length ? <div className={styles.empty}>No alerts match this organization scope and date range.</div> : <>
       <div className={styles.grid}>
         <article className={styles.panel}><h3>Alert volume & critical risk by day</h3><p>Last detection date in IST · select a day to drill down</p><div className={styles.chart}>
-          <ResponsiveContainer width="100%" height="100%"><AreaChart data={daily} margin={{left:-20,right:12,top:10}} onClick={state => { if (typeof state.activeLabel === 'string') props.onSelectDate?.(state.activeLabel); }}>
+          <ResponsiveContainer width="100%" height="100%"><AreaChart data={daily} margin={{left:-20,right:12,top:10}}>
             <defs><linearGradient id={`${gradient}total`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#22b8ed" stopOpacity={.35}/><stop offset="100%" stopColor="#22b8ed" stopOpacity={0}/></linearGradient></defs>
             <CartesianGrid stroke="#9aabc8" strokeDasharray="3 4" opacity={.2}/><XAxis dataKey="name" tick={tick} tickFormatter={value => String(value).slice(5)}/><YAxis tick={tick} allowDecimals={false}/><Tooltip/><Legend/>
-            <Area isAnimationActive={false} type="monotone" dataKey="total" name="Total alerts" stroke="#22b8ed" strokeWidth={3} fill={`url(#${gradient}total)`}/>
+            <Area isAnimationActive={false} type="monotone" dataKey="total" name="Total alerts" stroke="#22b8ed" strokeWidth={3} fill={`url(#${gradient}total)`} dot={point => <circle key={point.payload.name} cx={point.cx} cy={point.cy} r={5} stroke="#22b8ed" strokeWidth={2} fill="white" role="button" tabIndex={0} aria-label={`View alerts on ${point.payload.name}`} style={{cursor:'pointer'}} onClick={event => { event.stopPropagation(); props.onSelectDate?.(point.payload.name); }} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); props.onSelectDate?.(point.payload.name); } }}/>} />
             <Area isAnimationActive={false} type="monotone" dataKey="critical" name="P1 / P2 alerts" stroke="#ef476f" strokeWidth={2} fill="#ef476f" fillOpacity={.08}/>
           </AreaChart></ResponsiveContainer>
         </div></article>
