@@ -10,6 +10,7 @@ export interface VerifiedHelmetHead {
 }
 export interface HelmetHeadVerifier {
   verify(frame: DetectionFrame, person: Box, threshold: number): Promise<VerifiedHelmetHead | null>;
+  verifyDirect?(frame: DetectionFrame, threshold: number): Promise<{ candidate: VerifiedHelmetHead; synthPerson: Box } | null>;
 }
 
 /** The person-crop classifier must agree with an independently located head. */
@@ -24,6 +25,24 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
     private readonly faceDetector: ObjectFrameInference | null = null,
     private readonly poseEstimator: PoseInference | null = null,
   ) {}
+
+  async verifyDirect(frame: DetectionFrame, threshold: number): Promise<{ candidate: VerifiedHelmetHead; synthPerson: Box } | null> {
+    let pending = this.frames.get(frame);
+    if (!pending) { pending = this.localizer.run(frame); this.frames.set(frame, pending); }
+    const objects = await pending;
+    const helmetCandidates = objects.filter(o => o.label === "helmet" && (o.confidence ?? 0) >= 0.25);
+    for (const h of helmetCandidates) {
+      const synthPerson = {
+        x: Math.max(0, h.boundingBox.x - h.boundingBox.width * 0.5),
+        y: h.boundingBox.y,
+        width: Math.min(1 - h.boundingBox.x, h.boundingBox.width * 2),
+        height: Math.min(1 - h.boundingBox.y, Math.max(0.25, h.boundingBox.height * 3.5)),
+      };
+      const result = await this.verify(frame, synthPerson, threshold);
+      if (result) return { candidate: result, synthPerson };
+    }
+    return null;
+  }
 
   async verify(frame: DetectionFrame, person: Box, threshold: number): Promise<VerifiedHelmetHead | null> {
     let pending = this.frames.get(frame);
@@ -50,8 +69,8 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
 
         // If ears are clearly visible with high confidence and unoccluded,
         // a full motorcycle helmet cannot be present.
-        const earsClearlyExposed = (leftEar && leftEar.confidence >= 0.65) || (rightEar && rightEar.confidence >= 0.65);
-        const hasExplicitHelmetBox = objects.some(o => o.label === "helmet" && (o.confidence ?? 0) >= 0.5 &&
+        const earsClearlyExposed = (leftEar && leftEar.confidence >= 0.70) || (rightEar && rightEar.confidence >= 0.70);
+        const hasExplicitHelmetBox = objects.some(o => o.label === "helmet" && (o.confidence ?? 0) >= 0.25 &&
           validHead(frame, person, o.boundingBox));
 
         if (earsClearlyExposed && !hasExplicitHelmetBox) {
@@ -78,6 +97,8 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
 
     // 2. FACE DETECTION (YuNet Cross-Verification)
     // An unoccluded, bare human face directly contradicts a full face-concealing helmet.
+    // If a transparent/clear visor is worn, the face can be visible while the helmet shell
+    // encloses the head and crown.
     if (this.faceDetector) {
       let facePending = this.faceFrames.get(frame);
       if (!facePending) {
@@ -89,8 +110,10 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
       if (visibleFace) {
         // If an open face is detected, but there is NO localized helmet shell on the crown,
         // it is a bare-headed visitor/staff member.
-        const hasHelmetCrown = objects.some(o => o.label === "helmet" && (o.confidence ?? 0) >= 0.5 &&
-          validHead(frame, person, o.boundingBox) && o.boundingBox.y <= visibleFace.boundingBox.y);
+        const hasHelmetCrown = objects.some(o => o.label === "helmet" &&
+          (o.confidence ?? 0) >= 0.25 &&
+          validHead(frame, person, o.boundingBox) &&
+          o.boundingBox.y <= visibleFace.boundingBox.y + 0.05);
         if (!hasHelmetCrown) {
           return null;
         }

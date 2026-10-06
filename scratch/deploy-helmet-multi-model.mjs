@@ -97,9 +97,8 @@ if [ "$ready" != "true" ]; then
   exit 1
 fi
 
-echo "Resolving open false alarm helmet alerts in database..."
-sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid -c "UPDATE analytics_alerts SET status = 'false_alarm' WHERE title ILIKE '%helmet%' AND status IN ('new', 'acknowledged');" || true
-sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid -c "UPDATE alerts SET status = 'false_alarm' WHERE title ILIKE '%helmet%' AND status IN ('new', 'acknowledged');" || true
+echo "Deploy completed."
+
 
 echo "SUCCESS! Multi-model helmet verification (Pose + Face + Helmet Localizer) is LIVE and verified."
 `;

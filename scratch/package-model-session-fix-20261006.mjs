@@ -5,7 +5,9 @@ const stage='tmp/model-session-fix-package-20261006';await mkdir(stage,{recursiv
 const files=[['analytics-engine/src/model-manager.ts','model-manager.ts'],['tmp/model-session-fix-build-20261006/analytics-engine/src/model-manager.js','model-manager.js'],['scratch/validate-model-session-lifetime-20261006.mjs','validate-model-session-lifetime-20261006.mjs'],['scratch/deploy-model-session-fix-20261006.sh','deploy.sh']];
 const hash=value=>createHash('sha256').update(value).digest('hex');
 for(const [source,name] of files)await copyFile(source,`${stage}/${name}`);
-const baseline=execFileSync('git',['show','HEAD:analytics-engine/src/model-manager.ts'],{encoding:'utf8'}).replaceAll('\r','').trimEnd();
+const baselineRef=process.argv[2]??'4f817046';
+const baseline=execFileSync('git',['show',`${baselineRef}:analytics-engine/src/model-manager.ts`],{encoding:'utf8'}).replaceAll('\r','').trimEnd();
+if(baseline.includes('createModelHandle'))throw new Error('The deployment baseline must precede the session correction');
 await writeFile(`${stage}/baseline-source.sha256`,hash(baseline)+'\n');
 await writeFile(`${stage}/SHA256SUMS`,(await Promise.all(files.map(async([,name])=>`${hash(await readFile(`${stage}/${name}`))}  ${name}`))).join('\n')+'\n');
 console.log(JSON.stringify({stage,baselineSourceHash:hash(baseline)}));

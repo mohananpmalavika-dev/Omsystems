@@ -16,46 +16,58 @@ try {
   const raw = await redis.get(\`analytics:latest-frame:\${cameraId}\`);
   const frameData = JSON.parse(raw);
 
-  const payload = {
-    tenantId: '00000000-0000-4000-8000-000000000001',
-    cameraId,
-    capturedAt: new Date().toISOString(),
-    width: 640,
-    height: 360,
-    imageBase64: frameData.imageBase64,
-    rules: [
-      {
-        id: 'debug-helmet-rule',
-        cameraId,
-        detectionType: 'helmet-worn',
-        enabled: true,
-        minConfidence: 0.5,
-        minDurationSeconds: 0,
-      },
-      {
-        id: 'debug-person-rule',
-        cameraId,
-        detectionType: 'person',
-        enabled: true,
-        minConfidence: 0.5,
-        minDurationSeconds: 0,
-      }
-    ],
-    metadata: { source: 'debug-test' }
-  };
+  const rules = [
+    {
+      id: 'debug-helmet-rule',
+      cameraId,
+      detectionType: 'helmet-worn',
+      enabled: true,
+      minConfidence: 0.5,
+      minDurationSeconds: 0,
+    }
+  ];
 
-  const res = await fetch('http://localhost:8092/internal/frames', {
+  const now = Date.now();
+
+  console.log('--- Frame 1 (t=0) ---');
+  const res1 = await fetch('http://localhost:8092/internal/frames', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       'x-analytics-source-key': '10bcf3c15292e4a76522e6c2b73644cd0f480e57fc67ab293ec60ac5c6a82844'
     },
-    body: JSON.stringify(payload)
+    body: JSON.stringify({
+      tenantId: '00000000-0000-4000-8000-000000000001',
+      cameraId,
+      capturedAt: new Date(now).toISOString(),
+      width: 640,
+      height: 360,
+      imageBase64: frameData.imageBase64,
+      rules,
+      metadata: { source: 'debug-test' }
+    })
   });
+  console.log('Frame 1:', await res1.json());
 
-  const body = await res.json();
-  console.log('HTTP Status:', res.status);
-  console.log('Response body:', JSON.stringify(body, null, 2));
+  console.log('--- Frame 2 (t=+2000ms) ---');
+  const res2 = await fetch('http://localhost:8092/internal/frames', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-analytics-source-key': '10bcf3c15292e4a76522e6c2b73644cd0f480e57fc67ab293ec60ac5c6a82844'
+    },
+    body: JSON.stringify({
+      tenantId: '00000000-0000-4000-8000-000000000001',
+      cameraId,
+      capturedAt: new Date(now + 2000).toISOString(),
+      width: 640,
+      height: 360,
+      imageBase64: frameData.imageBase64,
+      rules,
+      metadata: { source: 'debug-test' }
+    })
+  });
+  console.log('Frame 2:', await res2.json());
 
 } catch (err) {
   console.error('Error:', err);

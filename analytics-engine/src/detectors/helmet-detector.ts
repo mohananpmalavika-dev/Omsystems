@@ -34,7 +34,7 @@ export class HelmetDetector extends BaseDetector {
   private classifier: HelmetClassificationFrameInference | null;
   private modelLoadError: string | null = null;
   private readonly MIN_CONFIDENCE: number;
-  private readonly PERSON_CONFIDENCE = 0.65;
+  private readonly PERSON_CONFIDENCE = 0.50;
   // Crop classification cannot distinguish a helmet from every dark object.
   // Without a localized helmet observation, require strong independent person
   // evidence; the Hajipur empty-chair and bare-head alarms scored 0.67/0.83.
@@ -435,12 +435,40 @@ export class HelmetDetector extends BaseDetector {
       if (presence) indoorHelmetDetections.push(presence);
     }
 
+    // Direct frame-wide fallback: If no indoor person was detected at all
+    // (e.g. seated/slouched person on stairs whose posture scored below person detector thresholds),
+    // check if the head verifier detected an unambiguous helmet on the frame.
+    if (indoorPersons.length === 0 && runLocal && this.headVerifier && frame.imageData && frame.imageData.length > 0) {
+      if (typeof this.headVerifier.verifyDirect === "function") {
+        const direct = await this.headVerifier.verifyDirect(
+          frame,
+          Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE),
+        );
+        if (direct) {
+          const candidate: HelmetDetection = {
+            personBoundingBox: direct.synthPerson,
+            helmetBoundingBox: direct.candidate.boundingBox,
+            helmetDetected: true,
+            evidenceSource: "localized-head-classification",
+            confidence: direct.candidate.classificationConfidence,
+            localizationConfidence: direct.candidate.localizationConfidence,
+            personConfidence: 0.8,
+            riskLevel: "violation",
+          };
+          const confirmations = this.fastAlert ? 2 : 3;
+          if (this.confirmClassifiedHead(frame.cameraId, direct.synthPerson, frame.timestamp.getTime(), confirmations)) {
+            indoorHelmetDetections.push(candidate);
+          }
+        }
+      }
+    }
+
     return [...riderDetections, ...indoorHelmetDetections];
   }
 
   private hasClassifiablePerson(person: { confidence?: number; boundingBox: HelmetDetection["personBoundingBox"] }) {
-    const minConf = this.headVerifier ? 0.70 : this.FULL_PERSON_CONFIDENCE;
-    const minHeight = this.headVerifier ? 0.35 : 0.75;
+    const minConf = this.headVerifier ? 0.45 : this.FULL_PERSON_CONFIDENCE;
+    const minHeight = this.headVerifier ? 0.25 : 0.75;
     return (person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ||
       ((person.confidence ?? 0) >= minConf && person.boundingBox.height >= minHeight);
   }
@@ -463,8 +491,8 @@ export class HelmetDetector extends BaseDetector {
   }
 
   private hasRaisedHeadCandidate(person: { confidence?: number; boundingBox: HelmetDetection["personBoundingBox"] }) {
-    const minConf = this.headVerifier ? 0.70 : 0.8;
-    const minHeight = this.headVerifier ? 0.35 : 0.7;
+    const minConf = this.headVerifier ? 0.45 : 0.8;
+    const minHeight = this.headVerifier ? 0.25 : 0.7;
     return (person.confidence ?? 0) >= minConf && person.boundingBox.height >= minHeight;
   }
 
