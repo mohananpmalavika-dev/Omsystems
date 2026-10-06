@@ -63,6 +63,8 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
   const [replayNonce, setReplayNonce] = useState(0);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string>();
   const [monitorFullscreen, setMonitorFullscreen] = useState(false);
+  const [fullscreenPrompt, setFullscreenPrompt] = useState(cameraOnly);
+  const [fullscreenError, setFullscreenError] = useState<string>();
   const [networkTrafficMbps, setNetworkTrafficMbps] = useState<number | null>(null);
   const [fleetMonitorHeight, setFleetMonitorHeight] = useState<number>();
   const monitorRef = useRef<HTMLDivElement>(null);
@@ -111,10 +113,22 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
   }, [focusCameraId, cameras]);
   useEffect(() => { if (mode === "investigate" && !selectedEvent && !replayAnchor) setReplayAnchor(new Date().toISOString()); }, [mode, selectedEvent, replayAnchor]);
   useEffect(() => {
-    const syncFullscreen = () => setMonitorFullscreen(document.fullscreenElement === monitorRef.current);
+    const syncFullscreen = () => {
+      const fullscreen = document.fullscreenElement === monitorRef.current;
+      setMonitorFullscreen(fullscreen);
+      if (fullscreen) { setFullscreenPrompt(false); setFullscreenError(undefined); }
+    };
+    syncFullscreen();
     document.addEventListener("fullscreenchange", syncFullscreen);
     return () => document.removeEventListener("fullscreenchange", syncFullscreen);
   }, []);
+  useEffect(() => {
+    const monitor = monitorRef.current;
+    if (!cameraOnly || !monitor?.requestFullscreen || document.fullscreenElement) return;
+    // A newly navigated popup usually needs its own click. Keep the prompt if
+    // the browser rejects automatic fullscreen, and retry from that click.
+    void monitor.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
+  }, [cameraOnly]);
   useEffect(() => {
     if (mode !== "fleet") return;
     let frame = 0;
@@ -156,9 +170,18 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
   const selectedSegment = segments.find(segment => segment.id === selectedSegmentId);
 
   function selectCamera(id: string) { if (busy) return; if (mode === "fleet") setMode("watch"); setCameraId(id); setPinned(false); setInterventionsOpen(false); setSelectedEventId(undefined); setFeedback(undefined); setReplayAnchor(undefined); }
-  function toggleMonitorFullscreen() {
-    if (document.fullscreenElement === monitorRef.current) void document.exitFullscreen();
-    else void monitorRef.current?.requestFullscreen();
+  async function toggleMonitorFullscreen() {
+    setFullscreenError(undefined);
+    try {
+      if (document.fullscreenElement === monitorRef.current) await document.exitFullscreen();
+      else if (monitorRef.current?.requestFullscreen && document.fullscreenEnabled) {
+        await monitorRef.current.requestFullscreen({ navigationUI: "hide" });
+      } else {
+        setFullscreenError("Fullscreen is unavailable in this browser. Press F11 to hide the address bar.");
+      }
+    } catch {
+      setFullscreenError("Fullscreen could not start. Click Fullscreen to retry, or press F11 to hide the address bar.");
+    }
   }
   function stepCamera(direction: -1 | 1) {
     if (!scoped.length) return;
@@ -193,6 +216,11 @@ export function LiveOperationsStage({ cameras, alerts, aiByCamera, showAiOverlay
     "--fleet-meta-height": `${fleetMetaHeight}px`,
   } as CSSProperties : undefined;
   const monitor = (<div ref={monitorRef} className={`los-video-stage ${mode === "fleet" && stageCameras.length > 36 ? "fleet-dense" : ""}`} style={fleetMonitorStyle} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); const id = event.dataTransfer.getData("text/plain"); if (!cameraOnly && scopedIds.has(id)) { selectCamera(id); setMode("watch"); } }}>
+          {!monitorFullscreen && (fullscreenPrompt || fullscreenError) && <section className="los-fullscreen-prompt" aria-label="Live Wall fullscreen">
+            <div><strong>Hide the address bar</strong><p role={fullscreenError ? "alert" : undefined}>{fullscreenError || "Enter fullscreen to fill the screen. Press Esc to exit."}</p></div>
+            <button type="button" onClick={() => void toggleMonitorFullscreen()}><Maximize2 size={16} />Enter fullscreen</button>
+            <button type="button" aria-label="Dismiss fullscreen prompt" onClick={() => { setFullscreenPrompt(false); setFullscreenError(undefined); }}><X size={16} /></button>
+          </section>}
           <div className="los-monitor-bar"><span><i aria-hidden="true" />{mode === "fleet" || mode === "overview" ? "MULTI-FEED MONITOR" : active?.status?.toLowerCase() === "online" ? mode === "investigate" ? "LIVE SOURCE / REPLAY BELOW" : "LIVE SOURCE" : "CAMERA MONITOR"}</span><div className="los-monitor-actions"><span className="los-network-traffic" title="Measured video traffic received by this browser; this is not an internet speed test">VIDEO DOWN {networkTrafficMbps === null ? "—" : `${networkTrafficMbps.toFixed(2)} Mbps`}</span><span>{mode === "fleet" ? `PAGE ${fleet.currentPage + 1} / ${fleet.pageCount}` : mode === "overview" ? `${stageCameras.length} BRANCH FEEDS` : active?.branchName || "NO BRANCH SELECTED"}</span>{cameraOnly && fleet.pageCount > 1 && <><button type="button" aria-label="Previous feeds" disabled={fleet.currentPage === 0} onClick={() => setFleetPage(fleet.currentPage - 1)}><ChevronLeft size={14} /></button><button type="button" aria-label="Next feeds" disabled={fleet.currentPage + 1 === fleet.pageCount} onClick={() => setFleetPage(fleet.currentPage + 1)}><ChevronRight size={14} /></button></>}<button type="button" onClick={toggleMonitorFullscreen} aria-label={monitorFullscreen ? "Exit fullscreen monitor" : "Open fullscreen monitor"} aria-pressed={monitorFullscreen} title={monitorFullscreen ? "Exit fullscreen monitor (Esc)" : "Open fullscreen monitor"}>{monitorFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}{monitorFullscreen ? "Exit fullscreen" : "Fullscreen"}</button></div></div>
           {stageCameras.length ? <EnhancedCameraGrid key={mode === "fleet" ? `fleet:${fleetBranch}:${fleetPageSize}:${fleet.currentPage}` : mode === "overview" ? "overview" : active?.id} cameras={stageCameras} initialLayout={layout} compactStage tileCount={mode === "fleet" ? stageCameras.length : undefined} maxConcurrentStreams={mode === "fleet" ? Math.max(144, stageCameras.length, maxConcurrentStreams) : mode === "overview" ? Math.max(4, Math.min(16, maxConcurrentStreams)) : Math.max(16, maxConcurrentStreams)} enableVirtualScrolling={false} aiByCamera={aiByCamera} showAiOverlay={showAiOverlay} onOpenCameraAi={cameraOnly ? undefined : onOpenCameraAi} onActiveStreamsChange={onActiveStreamsChange} onNetworkTrafficChange={setNetworkTrafficMbps} onMonitoredCamerasChange={onMonitoredCamerasChange} /> : <div className="los-empty"><CameraIcon size={36} /><strong>No cameras in this scene.</strong><p>Choose another area or adjust the wall scope.</p></div>}
         </div>);

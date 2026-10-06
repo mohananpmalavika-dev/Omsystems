@@ -16,6 +16,21 @@ try {
   const context = await browser.newContext({ viewport: { width: 1600, height: 1100 }, serviceWorkers: 'block' });
   await context.addCookies([{ name: 'sentinel_access', value: 'qa', url: baseUrl }]);
   await context.addInitScript(() => { localStorage.setItem('accessToken', 'qa'); sessionStorage.setItem('user', JSON.stringify({ id: 'qa', role: 'superadmin' })); });
+  await context.addInitScript(() => {
+    const requestFullscreen = Element.prototype.requestFullscreen;
+    window.wallFullscreenRequests = [];
+    window.wallFullscreenBlockAutomatic = true;
+    Element.prototype.requestFullscreen = function (options) {
+      window.wallFullscreenRequests.push(options);
+      // Headless Chromium can allow fullscreen without activation; explicitly
+      // exercise the browser rejection that normal popup navigation can cause.
+      if (window.wallFullscreenBlockAutomatic) return Promise.reject(new Error('QA fullscreen requires a click'));
+      return requestFullscreen.call(this, options).catch(error => {
+        window.wallFullscreenFailure = error.message;
+        throw error;
+      });
+    };
+  });
   await context.route(/\/(api|v1)\//, route => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/organization/nodes')) return route.fulfill({ json: { data: nodes } });
@@ -97,6 +112,36 @@ try {
     assert.ok(await wall.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   }
   await checkCameraOnly(first);
+  // Exercise browsers that require a new click following popup navigation:
+  // verify the prompt, a rejected retry, and native fullscreen entry.
+  const fullscreenPrompt = first.getByRole('region', { name: 'Live Wall fullscreen' });
+  await fullscreenPrompt.waitFor({ timeout: 10000 }).catch(async error => {
+    console.log('Fullscreen state:', await first.evaluate(() => ({ fullscreen: document.fullscreenElement?.className, requests: window.wallFullscreenRequests, prompt: document.querySelector('.los-fullscreen-prompt')?.outerHTML })));
+    await first.screenshot({ path: 'tmp/live-wall-fullscreen-prompt-debug.png' });
+    throw error;
+  });
+  await first.bringToFront();
+  await first.evaluate(() => {
+    document.querySelector('.los-video-stage').requestFullscreen = () => Promise.reject(new Error('QA fullscreen denied'));
+  });
+  await fullscreenPrompt.getByRole('button', { name: 'Enter fullscreen', exact: true }).click();
+  await fullscreenPrompt.getByRole('alert').waitFor();
+  await first.evaluate(() => {
+    delete document.querySelector('.los-video-stage').requestFullscreen;
+    window.wallFullscreenBlockAutomatic = false;
+  });
+  await fullscreenPrompt.getByRole('button', { name: 'Enter fullscreen', exact: true }).click();
+  await first.waitForFunction(() => document.fullscreenElement?.classList.contains('los-video-stage'), null, { timeout: 10000 }).catch(async error => {
+    console.log('Fullscreen retry:', await first.evaluate(() => ({ enabled: document.fullscreenEnabled, requests: window.wallFullscreenRequests, failure: window.wallFullscreenFailure, alert: document.querySelector('.los-fullscreen-prompt')?.textContent })));
+    throw error;
+  });
+  assert.equal(await fullscreenPrompt.count(), 0);
+  await checkCameraOnly(first);
+  assert.ok(await first.evaluate(() => window.wallFullscreenRequests.length >= 2 && window.wallFullscreenRequests.every(options => options.navigationUI === 'hide')));
+  await first.getByRole('button', { name: 'Exit fullscreen monitor' }).click();
+  await first.waitForFunction(() => !document.fullscreenElement);
+  assert.equal(await fullscreenPrompt.count(), 0);
+  console.log('PASS: fullscreen prompt, denied retry, native entry with navigationUI=hide, and exit.');
 
   await page.locator('#zone-select').click();
   await zoneGroup.getByRole('checkbox', { name: 'All Zones (4)', exact: true }).check();
@@ -108,6 +153,8 @@ try {
   second.on('pageerror', error => errors.push(error.message));
   await second.waitForLoadState('domcontentloaded');
   await second.locator('.camera-tile[data-camera-id="c2"]').waitFor();
+  await second.getByRole('button', { name: 'Dismiss fullscreen prompt' }).click();
+  assert.equal(await second.getByRole('region', { name: 'Live Wall fullscreen' }).count(), 0);
   assert.deepEqual(new URL(second.url()).searchParams.getAll('zoneId'), ['z2']);
   assert.equal(await first.locator('.camera-tile').count(), 2);
   assert.equal(await windowControls.getByRole('button', { name: /^Wall [12]:/ }).count(), 2);
@@ -157,6 +204,7 @@ try {
   await dense.waitForFunction(() => document.querySelectorAll('.camera-tile').length === 32);
   await checkCameraOnly(dense);
   await dense.screenshot({ path: 'tmp/camera-only-wall-32-cameras.png' });
+  await dense.evaluate(() => { window.wallFullscreenBlockAutomatic = false; });
   await dense.getByRole('button', { name: 'Open fullscreen monitor' }).click();
   await dense.waitForFunction(() => document.fullscreenElement?.classList.contains('los-video-stage'));
   await checkCameraOnly(dense);
@@ -169,5 +217,5 @@ try {
   assert.equal(await empty.locator('.sidebar, .topbar, .los-page-heading').count(), 0);
   await empty.close();
   assert.deepEqual(errors, []);
-  console.log('PASS: camera-only popup without menus/logout/global UI, two independent scoped windows, inherited filters, reload persistence, viewport-filling fleet grid, desktop/mobile resize, 32-camera grid, native fullscreen, empty scope, focus/close controls, and blocked-popup fallback.');
+  console.log('PASS: camera-only popup, fullscreen launch prompt, denied-request recovery, hidden navigation UI, fullscreen exit and dismissal, independent scopes, reload persistence, viewport fit, desktop/mobile resize, 32-camera native fullscreen, empty scope, window controls, and blocked-popup fallback.');
 } finally { await browser.close(); }
