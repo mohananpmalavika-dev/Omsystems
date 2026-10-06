@@ -16,6 +16,7 @@ beforeAll(async () => {
         return <div id="message">{body}</div>;}
       createRoot(document.getElementById('root')).render(<App/>);`, resolveDir: resolve('.'), loader: 'tsx' },
     bundle: true, write: false, format: 'iife', jsx: 'automatic', alias: { '@': resolve('dashboard') },
+    define: { 'process.env.NEXT_PUBLIC_WS_URL': '""' },
     plugins: [{ name: 'socket-fixture', setup(builder) {
       builder.onResolve({ filter: /^socket.io-client$/ }, () => ({ path: 'socket', namespace: 'fixture' }));
       builder.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: `

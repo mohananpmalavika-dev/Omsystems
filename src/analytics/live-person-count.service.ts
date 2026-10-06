@@ -45,7 +45,7 @@ export class LivePersonCountService {
 
 export type PersonCountFilters = { branchId?: string; regionId?: string; zoneId?: string; groupBy?: "branch" | "region" | "zone" };
 
-export async function loadPersonCountScope(store: ControlPlaneStore, user: User) {
+export async function loadPersonCountScope(store: ControlPlaneStore, user: User, now?: number) {
   const cameras: Camera[] = [];
   for (let offset = 0; ; offset += 500) {
     const page = await store.listAccessibleCameras(user, "analytics:view", { limit: 500, offset });
@@ -59,7 +59,20 @@ export async function loadPersonCountScope(store: ControlPlaneStore, user: User)
     .map(branch => [branch.id, branch])).values()];
   const ancestors = await store.listNodesByIds([...new Set(branches.flatMap(branch => branch.path))]);
   const branchIds = new Set(branches.map(branch => branch.id));
-  return { cameras: cameras.filter(camera => branchIds.has(camera.branchId)), branches,
+  const gatewayIds = [...new Set(cameras.flatMap(camera => camera.edgeAgentId ? [camera.edgeAgentId] : []))];
+  const gateways = new Map(await Promise.all(gatewayIds.map(async id => [id, await store.getEdgeAgent(id)] as const)));
+  const statusTime = now ?? Date.now();
+  const currentCameras = cameras.filter(camera => branchIds.has(camera.branchId)).map(camera => {
+    if (!camera.edgeAgentId) return camera;
+    const gateway = gateways.get(camera.edgeAgentId);
+    const age = statusTime - Date.parse(gateway?.lastSeenAt ?? "");
+    // A persisted online camera status cannot establish current connectivity
+    // after its gateway has stopped checking in. Keep count coverage separate.
+    const connected = gateway?.status === "online" && gateway.credentialStatus !== "revoked" &&
+      Number.isFinite(age) && age >= -5000 && age <= PERSON_COUNT_FRESH_MS;
+    return connected ? camera : { ...camera, status: "unknown" as const };
+  });
+  return { cameras: currentCameras, branches,
     nodes: ancestors.filter(node => node.tenantId === user.tenantId) };
 }
 

@@ -22,8 +22,10 @@ export function IncomingCall({ call, name, destination, busy, soundReady, onEnab
   const dialog = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     dialog.current?.focus();
-    return () => previousFocus?.focus();
+    return () => { document.body.style.overflow = previousOverflow; previousFocus?.focus(); };
   }, []);
   const initials = name.split(/\s+/).slice(0, 2).map(word => word[0]).join('').toUpperCase();
   const source = call.caller?.type === 'OPERATOR' || call.sourceOperatorId ? 'Command center operator'

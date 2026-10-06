@@ -147,6 +147,9 @@ describe('calling pages', () => {
     await page.waitForTimeout(3200);
     expect(await page.evaluate(() => (window as any).tonesStarted)).toBe(tones);
     expect(await page.evaluate(() => (window as any).activeTones)).toBe(0);
+    await page.getByRole('button', { name: 'Ringtone on', exact: true }).click();
+    await page.getByRole('button', { name: 'Enable ringtone', exact: true }).waitFor();
+    expect(await page.evaluate(() => localStorage.getItem('commRingtoneEnabled'))).toBe('false');
   });
 
   it('preserves the incoming caller name in the answered call workspace', async () => {
@@ -158,6 +161,16 @@ describe('calling pages', () => {
     await page.getByRole('dialog', { name: 'Call workspace', exact: true }).waitFor();
     expect(await page.getByRole('dialog', { name: 'Call workspace' }).innerText()).toContain('Ananya Menon');
     await page.getByRole('button', { name: 'End call', exact: true }).click();
+  });
+
+  it('refreshes the receiver inbox after returning to the tab without a socket event', async () => {
+    await mount();
+    await page.evaluate(userId => {
+      (window as any).messages.push({ id: 'offline-message', senderType: 'OPERATOR', senderId: userId,
+        senderName: 'Ananya Menon', body: 'Saved while disconnected', createdAt: new Date().toISOString() });
+      window.dispatchEvent(new Event('focus'));
+    }, userId);
+    await page.getByRole('region', { name: 'Received messages' }).getByText('Saved while disconnected', { exact: true }).waitFor();
   });
 
   it('shows the redesigned directory and opens the call workspace with a local camera preview', async () => {

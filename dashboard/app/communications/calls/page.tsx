@@ -525,7 +525,6 @@ export default function CommunicationsCallsPage() {
       const stream = await webrtc.initializeMedia({ audio: true, video: modality === 'video' });
       if (!stream) return;
       const { call, credentials } = await communicationAPI.acceptCall(incomingCall.callId);
-      call.sourceEmployeeName = incomingName;
       acceptedCallId = call.id;
       
       const nextCall = { session: call, credentials, startTime: new Date(), modality, peerLabel: incomingName };
@@ -545,15 +544,16 @@ export default function CommunicationsCallsPage() {
   }, [incomingCall, incomingName, webrtc, signaling]);
   
   const handleRejectCall = useCallback(async () => {
-    if (!incomingCall) return;
+    if (!incomingCall || startingCallRef.current) return;
+    startingCallRef.current = true; setCallStarting(true);
     
     try {
       await communicationAPI.rejectCall(incomingCall.callId);
       setIncomingCall(null);
     } catch (err: any) {
       console.error('[Communications] Failed to reject call:', err);
-      setIncomingCall(null);
-    }
+      setError(err.message || 'Unable to decline this call. Please retry.');
+    } finally { startingCallRef.current = false; setCallStarting(false); }
   }, [incomingCall]);
   
   const handleCancelCall = useCallback(async () => {

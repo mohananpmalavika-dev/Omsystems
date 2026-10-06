@@ -640,13 +640,14 @@ export default function KryptoVisionConnectPage() {
   };
 
   const handleRejectCall = async () => {
-    if (!incomingCall) return;
+    if (!incomingCall || startingCallRef.current) return;
+    startingCallRef.current = true; setCallStarting(true);
     try {
       await communicationAPI.rejectCall(incomingCall.callId, undefined, true);
       setIncomingCall(null);
     } catch {
-      setIncomingCall(null);
-    }
+      setError('Unable to decline this call. Please retry.');
+    } finally { startingCallRef.current = false; setCallStarting(false); }
   };
 
   const handleEndCall = async () => {

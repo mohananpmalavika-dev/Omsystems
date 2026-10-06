@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import { describe, expect, it, vi } from "vitest";
-import { buildLivePersonCountReport, LivePersonCountService } from "../src/analytics/live-person-count.service.js";
+import { buildLivePersonCountReport, LivePersonCountService, loadPersonCountScope } from "../src/analytics/live-person-count.service.js";
 import { registerLivePersonCountRoutes } from "../src/routes/live-person-count.routes.js";
 import { sortedMatchingRules } from "../src/analytics/rule-engine.js";
 import type { Camera, ResourceNode } from "../src/domain/models.js";
@@ -13,6 +13,29 @@ const nodes = [node("z1","zone",["z1"]),node("r1","region",["z1","r1"]),node("z2
 const cameras = [{id:"c1",branchId:"b1",status:"online"},{id:"c2",branchId:"b1",status:"degraded"},{id:"c3",branchId:"b2",status:"offline"},{id:"c4",branchId:"b3",status:"unknown"}] as Camera[];
 const observed = (count: number, age=0) => ({count,status:"observed" as const,observedAt:new Date(now-age).toISOString()});
 describe("live person count reporting", () => {
+  it("does not report saved online camera statuses as current after the gateway disconnects", async () => {
+    const scopeCameras = [
+      {...cameras[0]!,edgeAgentId:"stale"},
+      {...cameras[1]!,edgeAgentId:"stale"},
+      {...cameras[2]!,status:"online",edgeAgentId:"fresh"},
+      {...cameras[3]!,status:"online",edgeAgentId:"missing"},
+    ] as Camera[];
+    const getEdgeAgent=vi.fn(async (id:string) => id === "missing" ? undefined : {
+      id,status:"online",lastSeenAt:new Date(now-(id === "stale" ? 90_001 : 0)).toISOString(),
+    });
+    const store={
+      listAccessibleCameras:vi.fn().mockResolvedValue({cameras:scopeCameras,total:scopeCameras.length}),
+      listAccessibleNodes:vi.fn().mockResolvedValue(branches),
+      listNodesByIds:vi.fn(async(ids:string[])=>nodes.filter(node=>ids.includes(node.id))),
+      getEdgeAgent,
+    } as unknown as ControlPlaneStore;
+    const scope=await loadPersonCountScope(store,{tenantId:"t1"} as any,now);
+    expect(getEdgeAgent).toHaveBeenCalledTimes(3);
+    const report=buildLivePersonCountReport(scope,new Map([["c1",observed(2)]]),{},now);
+    expect(report.summary).toMatchObject({onlineCameras:1,notWorkingCameras:3,reportingCameras:1,personCount:2});
+    expect(report.rows[0]).toMatchObject({onlineCameras:0,notWorkingCameras:2,coverage:"partial"});
+  });
+
   it("sums current views once, includes zero, and distinguishes missing coverage", () => {
     const report = buildLivePersonCountReport({cameras,branches,nodes},new Map([["c1",observed(2)],["c2",observed(3)],["c3",observed(0)],["c4",observed(99,90001)]]),{},now);
     expect(report.rows.map(row => [row.id,row.personCount,row.totalCameras,row.coverage])).toEqual([["b1",5,2,"complete"],["b2",0,1,"complete"],["b3",null,1,"unavailable"]]);
