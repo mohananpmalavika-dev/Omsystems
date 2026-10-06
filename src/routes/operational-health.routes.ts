@@ -195,7 +195,7 @@ export async function registerOperationalHealthRoutes(
           reported = "degraded";
         }
       }
-      if (reported === "degraded" && input.metrics.streamActive && !input.metrics.videoLoss && !input.metrics.blackScreen && !input.metrics.blueScreen && !input.metrics.imageFrozen) {
+      if ((reported === "degraded" || reported === "warning") && !input.metrics.videoLoss && !input.metrics.blackScreen && !input.metrics.blueScreen && !input.metrics.imageFrozen) {
         reported = "online";
       }
       if (reported === "unknown") {
@@ -205,6 +205,10 @@ export async function registerOperationalHealthRoutes(
       }
       if (reported === "online" || reported === "offline" || reported === "degraded" || reported === "unknown") {
         await store.updateCameraStatus(input.deviceId, reported);
+      }
+      if (reported === "online") {
+        input.metrics.status = "online";
+        input.metrics.streamActive = true;
       }
     }
     const receivedAt = new Date().toISOString();
