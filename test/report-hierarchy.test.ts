@@ -38,6 +38,26 @@ describe('reports follow the organization structure', () => {
     expect(()=>reportDayBounds('2026-10-07','2026-10-06')).toThrow();
   });
 
+  it('keeps distinct direct branches separate when their display names match', async () => {
+    const store = new MemoryStore();
+    const branch = store.nodes.get('A005')!;
+    for (const node of store.nodes.values()) if (node.type === 'branch' && node.id !== branch.id) store.nodes.delete(node.id);
+    branch.parentId = 'company-1';
+    branch.path = ['company-1', branch.id];
+    store.nodes.set('report-duplicate', { ...branch, id: 'report-duplicate', path: ['company-1', 'report-duplicate'] });
+    const app = Fastify();
+    app.addHook('preHandler', async request => { request.currentUser = (await store.getUser('user-superadmin-mgdhanyamohan'))!; });
+    const pool = { query: async () => ({ rows: [] }) } as unknown as Pool;
+    createMISUnifiedRoutes(app, pool, store);
+    try {
+      const response = await app.inject({ url: '/mis?groupBy=region' });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().matrix).toHaveLength(2);
+      expect(response.json().matrix.map((row: { dimension: string }) => row.dimension)).toEqual([branch.name, branch.name]);
+      expect(response.json().matrix.every((row: { branchCount: number }) => row.branchCount === 1)).toBe(true);
+    } finally { await app.close(); }
+  });
+
   it('uses real hierarchy names in MIS choices and direct branches in missing-level groups', async () => {
     const store = new MemoryStore();
     const branch = store.nodes.get('A005')!;

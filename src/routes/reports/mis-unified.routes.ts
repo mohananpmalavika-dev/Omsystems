@@ -626,7 +626,7 @@ function aggregateByDimension(
 
   const matrix: any[] = [];
 
-  for (const [dimensionKey, groupBranches] of groups.entries()) {
+  for (const groupBranches of groups.values()) {
     let totalCameras = 0;
     let onlineCameras = 0;
     let totalAlerts = 0;
