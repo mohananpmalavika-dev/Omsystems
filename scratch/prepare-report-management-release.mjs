@@ -12,7 +12,7 @@ const existing=[
  'src/reporting/services/daily-surveillance-collector.service.ts','src/reporting/renderers/daily-surveillance-csv.renderer.ts','src/reporting/renderers/daily-surveillance-xlsx.renderer.ts',
  'dashboard/app/analytics/alerts/page.tsx','dashboard/components/alerts/alerts-graphical-analytics.tsx','dashboard/app/reports/mis/page.tsx','dashboard/app/reports/page.tsx',
  'dashboard/app/reports/benchmarking/page.tsx','dashboard/app/reports/compliance/page.tsx','dashboard/app/reports/financial/page.tsx',
- 'dashboard/components/app-layout.tsx','dashboard/lib/section-hubs.ts',
+ 'dashboard/components/app-layout.tsx','dashboard/components/command-workspace-nav.tsx','dashboard/lib/section-hubs.ts',
 ];
 const additions=[
  'src/reporting/hierarchy.ts','packages/contracts/src/report-hierarchy.ts',

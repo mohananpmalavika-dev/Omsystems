@@ -116,6 +116,11 @@
       "afterSha256": "4c9ced51d9e66fa8cdaf1d9540151280e413924058bce6d3f18b3acda36fb9c6"
     },
     {
+      "path": "dashboard/components/command-workspace-nav.tsx",
+      "beforeSha256": "a00cf9132aea96504ba1c7cb366f0050f7c12c988558f765e6a440eb6ab9ef0c",
+      "afterSha256": "9485952ddf8f02aad42284e2bda35c98c6f2ad32de760c59da84f1952bca7f66"
+    },
+    {
       "path": "dashboard/lib/section-hubs.ts",
       "beforeSha256": "2f71d71b7ffeb31449c187d99e966881830ba08b356140e46b13c1ec56e86604",
       "afterSha256": "e2736f29d7f7f7aa08d8dd5113d5d84ee7137437490197750a4fe9f799391e82"
@@ -190,5 +195,5 @@
     "src/reporting/hierarchy.js",
     "packages/contracts/src/report-hierarchy.js"
   ],
-  "createdAt": "2026-10-06T02:55:28.814Z"
+  "createdAt": "2026-10-06T03:11:00.416Z"
 }
