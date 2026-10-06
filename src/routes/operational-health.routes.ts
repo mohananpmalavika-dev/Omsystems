@@ -26,6 +26,7 @@ import { normalizeRecorderMetrics, projectRecorderChannelHealth, projectRecorder
 import { normalizeEdgeAgentMetrics } from "../operational-health/edge-agent-health.js";
 import { loadBatchedRetentionInputs } from "../operational-health/retention-batch.js";
 import type { Camera, ResourceNode } from "../domain/models.js";
+import { requestCameraRecovery } from "../operational-health/camera-recovery.js";
 
 const deviceTypes = [
   "branch", "edge-agent", "recorder", "recorder-channel", "archive", "camera", "disk", "network", "ups",
@@ -559,76 +560,43 @@ export async function registerOperationalHealthRoutes(
 
   app.post("/v1/operations/health/cameras/bring-online", async (request, reply) => {
     const body = z.object({
-      cameraId: z.string().optional(),
-      branchId: z.string().optional(),
+      cameraId: z.string().min(1).optional(),
+      branchId: z.string().min(1).optional(),
     }).refine((data) => Boolean(data.cameraId || data.branchId), {
       message: "Either cameraId or branchId must be specified",
     }).parse(request.body ?? {});
 
-    const tenantId = request.currentUser.tenantId;
     let targetCameras: Camera[] = [];
 
     if (body.cameraId) {
       const camera = await store.getCamera(body.cameraId);
-      if (!camera) {
+      if (!camera || (body.branchId && camera.branchId !== body.branchId)) {
         return reply.code(404).send({ error: "camera_not_found", message: "Camera not found" });
       }
-      if (!(await canViewBranch(request, reply, store, camera.branchId))) return;
+      const branch = await store.getNode(camera.branchId);
+      if (!branch || branch.tenantId !== request.currentUser.tenantId) return reply.code(404).send({ error: "camera_not_found" });
+      const access = await store.checkAccess(request.currentUser, "device:configure", camera.nodeId);
+      if (!access?.allowed) return reply.code(403).send({ error: "forbidden", message: "Camera configuration permission is required to reconnect this camera." });
       targetCameras = [camera];
     } else if (body.branchId) {
-      if (!(await canViewBranch(request, reply, store, body.branchId))) return;
+      if (!(await requireStorageBranchAccess(request, reply, store, body.branchId))) return;
       targetCameras = await store.listCamerasByBranch(request.currentUser, body.branchId, "device:configure");
     }
 
-    const updatedCameraIds: string[] = [];
-    const receivedAt = new Date().toISOString();
-
-    for (const camera of targetCameras) {
-      await store.updateCameraStatus(camera.id, "online");
-      updatedCameraIds.push(camera.id);
-
-      const agentId = camera.edgeAgentId || "system-gateway";
-      const envelope: OperationalTelemetryEnvelope = {
-        tenantId,
-        branchId: camera.branchId,
-        edgeAgentId: agentId,
-        deviceType: "camera",
-        deviceId: camera.id,
-        observedAt: receivedAt,
-        receivedAt,
-        source: "system",
-        quality: "verified",
-        idempotencyKey: `manual-online:${camera.id}:${Date.now()}`,
-        metrics: {
-          status: "online",
-          streamActive: true,
-          fps: camera.specifications?.frameRate ?? 25,
-          responseTimeMs: 35,
-          videoLoss: false,
-          tamperingDetected: false,
-        },
-        reasonCodes: ["manual_operator_online_command"],
-      };
-
-      await store.ingestOperationalTelemetry(envelope);
-      operationalHealthEvents.publish({
-        id: randomUUID(),
-        tenantId,
-        type: "health.updated",
-        occurredAt: receivedAt,
-        branchId: camera.branchId,
-        deviceType: "camera",
-        deviceId: camera.id,
-      });
-    }
-
-    return reply.code(200).send({
-      success: true,
-      data: {
-        updatedCount: updatedCameraIds.length,
-        cameraIds: updatedCameraIds,
-      },
-      message: `Successfully brought ${updatedCameraIds.length} camera(s) online`,
+    if (!targetCameras.length) return reply.code(404).send({ error: "cameras_not_found", message: "No accessible cameras were found in this branch." });
+    const data = await requestCameraRecovery(store, targetCameras, request.currentUser.id);
+    if (!data.queuedCount) return reply.code(409).send({
+      success: false, error: data.skipped[0]?.error ?? "camera_recovery_unavailable", data,
+      message: data.skipped[0]?.message ?? "Camera recovery is unavailable.",
+    });
+    await store.writeAudit({
+      tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
+      action: "camera.recovery_requested", resourceNodeId: targetCameras[0]!.branchId,
+      outcome: "success", sourceIp: request.ip,
+      details: { cameraIds: data.cameraIds, commandIds: data.commands.map(command => command.id), skippedCount: data.skipped.length },
+    });
+    return reply.code(202).send({ success: true, data,
+      message: `Recovery requested for ${data.queuedCount} camera(s). Status updates after the gateway verifies the stream.${data.skipped.length ? ` ${data.skipped.length} camera(s) could not be queued: ${data.skipped.map(item => item.message).join(" ")}` : ""}`,
     });
   });
 

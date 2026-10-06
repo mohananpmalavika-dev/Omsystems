@@ -31,6 +31,8 @@ export interface CameraRecoveryTarget {
 type OnvifRecoveryClient = Pick<OnvifClient, "ping" | "inspect" | "getStreamUri" | "reboot">;
 
 export interface CameraRecoveryDependencies {
+  /** Save a verified replacement source before reporting recovery. Never include it in command results. */
+  onStreamRecovered?: (sourceUri: string) => Promise<void>;
   probeRtsp?: (uri: string, ffprobePath: string, timeoutMs: number) => Promise<RtspProbeResult>;
   createOnvifClient?: (url: string, credentials: OnvifCredentials, timeoutMs: number) => OnvifRecoveryClient;
   wait?: (milliseconds: number) => Promise<void>;
@@ -117,6 +119,13 @@ export async function recoverCamera(
           Date.now() - refreshStartedAt,
         ));
         if (refreshedProbe.reachable) {
+          try {
+            await dependencies.onStreamRecovered?.(refreshedUri);
+          } catch {
+            steps.push(stepResult("stream_refresh", "failed", "The verified replacement stream could not be saved. Retry recovery after the gateway connection is restored.", Date.now() - refreshStartedAt));
+            reasonCodes.push("recovered_stream_persistence_failed");
+            return complete(target.cameraId, false, startedAt, steps, reasonCodes);
+          }
           reasonCodes.push("onvif_stream_refresh_succeeded");
           return complete(target.cameraId, true, startedAt, steps, reasonCodes);
         }

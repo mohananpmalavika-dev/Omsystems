@@ -9,6 +9,47 @@ import {
 } from "../src/monitoring/camera-heartbeat.js";
 
 describe("camera frame health", () => {
+  it("ignores a pre-recovery timeout even when reconnecting the same stream URL", async () => {
+    const send = vi.fn(async (_payload: unknown) => undefined);
+    const service = new CameraHeartbeatService("http://control.example", "branch", "agent", undefined,
+      "ffprobe", "ffmpeg", undefined, send);
+    service.replaceCameras([{ id: "same-source", name: "Reconnect", rtspUrl: "rtsp://camera/stream", enabled: true }]);
+    let finish!: (data: CameraHeartbeatData) => void;
+    const measure = vi.spyOn(service as any, "measureCamera")
+      .mockImplementationOnce(() => new Promise<CameraHeartbeatData>(resolve => { finish = resolve; }));
+    try {
+      const pending = (service as any).sendAllHeartbeats();
+      service.updateCameraStream("same-source", "rtsp://camera/stream");
+      finish({ cameraId: "same-source", status: "offline", streamActive: false, videoLoss: true, reasonCodes: ['rtsp_unreachable'], responseTimeMs: 500, quality: "verified" });
+      await pending;
+      expect(send).not.toHaveBeenCalled();
+    } finally { measure.mockRestore(); }
+  });
+
+  it("uses the saved recovery source on later probes and ignores an old in-flight probe", async () => {
+    const send = vi.fn(async (_payload: unknown) => undefined);
+    const service = new CameraHeartbeatService("http://control.example", "branch", "agent", undefined,
+      "ffprobe", "ffmpeg", undefined, send);
+    service.replaceCameras([{ id: "recovered", name: "Recovered", rtspUrl: "rtsp://camera/old", enabled: true }]);
+    let finish!: (data: CameraHeartbeatData) => void;
+    const measure = vi.spyOn(service as any, "measureCamera")
+      .mockImplementationOnce(() => new Promise<CameraHeartbeatData>(resolve => { finish = resolve; }))
+      .mockResolvedValueOnce({ cameraId: "recovered", status: "online", streamActive: true, videoLoss: false, reasonCodes: [], responseTimeMs: 15, quality: "verified" });
+    try {
+      const pending = (service as any).sendAllHeartbeats();
+      // A periodic configuration sync may replace the camera object during the old probe.
+      service.replaceCameras([{ id: "recovered", name: "Recovered", rtspUrl: "rtsp://camera/old", enabled: true }]);
+      service.updateCameraStream("recovered", "rtsp://camera/fresh");
+      finish({ cameraId: "recovered", status: "offline", streamActive: false, videoLoss: true, reasonCodes: ['rtsp_unreachable'], responseTimeMs: 500, quality: "verified" });
+      await pending;
+      expect(send).not.toHaveBeenCalled();
+      await (service as any).sendAllHeartbeats();
+      expect(measure.mock.calls[1]?.[0]).toMatchObject({ rtspUrl: "rtsp://camera/fresh" });
+      expect(send).toHaveBeenCalledOnce();
+      expect(send.mock.calls[0]?.[0]).toMatchObject({ metrics: { status: "online", streamActive: true } });
+    } finally { measure.mockRestore(); }
+  });
+
   it("keeps the configured main stream for analytics head detail", async () => {
     const capture = vi.spyOn(rtspProbe, "captureRtspRgbFrame").mockResolvedValue(Buffer.alloc(640 * 360 * 3));
     try {

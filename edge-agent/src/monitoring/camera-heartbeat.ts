@@ -152,6 +152,18 @@ export class CameraHeartbeatService {
     logger.info(`Synchronized ${cameras.length} camera(s) for heartbeat monitoring`);
   }
 
+  updateCameraStream(cameraId: string, sourceUri: string): void {
+    const camera = this.cameras.get(cameraId);
+    if (!camera) return;
+    camera.rtspUrl = sourceUri;
+    this.cameraSourceVersions.set(cameraId, (this.cameraSourceVersions.get(cameraId) ?? 0) + 1);
+    this.frameStates.delete(cameraId);
+    this.analyticsCaptureRetryAfter.delete(cameraId);
+    this.consecutiveFailures.delete(cameraId);
+  }
+
+  private readonly cameraSourceVersions = new Map<string, number>();
+
   start(intervalMs = 30_000, analyticsIntervalMs = 2_000): void {
     if (this.isRunning) return;
     this.isRunning = true;
@@ -243,6 +255,13 @@ export class CameraHeartbeatService {
 
   private async sendHeartbeat(camera: CameraConfig): Promise<void> {
     const startedAt = Date.now();
+    const sourceAtStart = camera.rtspUrl;
+    const sourceVersion = this.cameraSourceVersions.get(camera.id) ?? 0;
+    const sourceChanged = () => {
+      const current = this.cameras.get(camera.id);
+      return sourceVersion !== (this.cameraSourceVersions.get(camera.id) ?? 0) ||
+        camera.rtspUrl !== sourceAtStart || (current !== undefined && current.rtspUrl !== sourceAtStart);
+    };
     try {
       const data = camera.rtspUrl
         ? await this.measureCamera(camera, startedAt)
@@ -251,10 +270,12 @@ export class CameraHeartbeatService {
             streamActive: false, videoLoss: false, reasonCodes: ["stream_secret_unavailable"],
             quality: "unavailable" as const, errorMessage: "Local RTSP secret is unavailable",
           };
+      if (sourceChanged()) return;
       await this.sendToPlatform(camera.id, data);
       this.considerAutomaticRecovery(camera, data);
       logger.debug(`Heartbeat sent for camera ${camera.name}: ${data.status}`);
     } catch (error) {
+      if (sourceChanged()) return;
       const message = error instanceof Error ? error.message : "Unknown error";
       logger.error(`Failed to send heartbeat for camera ${camera.name}`, { error });
       await this.sendToPlatform(camera.id, {

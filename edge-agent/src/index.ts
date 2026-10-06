@@ -1948,6 +1948,7 @@ async function recoverCameraAtEdge(cameraId: string, trigger: "automatic" | "ope
     reasonCodes: ["camera_recovery_started"],
   });
 
+  let verifiedSource = source;
   const recovery = await recoverCamera({
     cameraId,
     rtspUrl: source,
@@ -1956,7 +1957,14 @@ async function recoverCameraAtEdge(cameraId: string, trigger: "automatic" | "ope
   }, {
     ffprobePath: config.FFPROBE_PATH,
     timeoutMs: config.ONVIF_TIMEOUT_MS,
+  }, {
+    onStreamRecovered: async sourceUri => {
+      await saveStreamSecret(camera.connectionSecretRef, sourceUri);
+      verifiedSource = sourceUri;
+      cameraHeartbeat.updateCameraStream(cameraId, sourceUri);
+    },
   });
+  if (recovery.recovered) cameraHeartbeat.updateCameraStream(cameraId, verifiedSource);
   await control.submitTelemetry(agentId, {
     branchId,
     edgeAgentId: agentId,
@@ -1968,6 +1976,8 @@ async function recoverCameraAtEdge(cameraId: string, trigger: "automatic" | "ope
     idempotencyKey: `${agentId}:camera-recovery:${cameraId}:${recovery.startedAt}:completed`,
     metrics: {
       status: recovery.recovered ? "online" : "offline",
+      streamActive: recovery.recovered,
+      videoLoss: !recovery.recovered,
       recoveryInProgress: false,
       recoverySucceeded: recovery.recovered,
       recoveryTrigger: trigger,

@@ -29,6 +29,7 @@ describe("edge camera recovery", () => {
     const probe = vi.fn()
       .mockResolvedValueOnce(unreachable)
       .mockResolvedValueOnce(reachable);
+    const persist = vi.fn(async () => undefined);
 
     const result = await recoverCamera({
       cameraId: "camera-1",
@@ -37,6 +38,7 @@ describe("edge camera recovery", () => {
     }, { ffprobePath: "ffprobe", timeoutMs: 500 }, {
       probeRtsp: probe,
       createOnvifClient: vi.fn(() => client),
+      onStreamRecovered: persist,
     });
 
     expect(result).toMatchObject({ recovered: true, status: "recovered" });
@@ -45,6 +47,24 @@ describe("edge camera recovery", () => {
       expect.objectContaining({ step: "stream_refresh", status: "succeeded" }),
     ]));
     expect(probe.mock.calls[1]?.[0]).toBe("rtsp://operator:secret@10.20.30.40:554/fresh");
+    expect(persist).toHaveBeenCalledWith("rtsp://operator:secret@10.20.30.40:554/fresh");
+    expect(JSON.stringify(result)).not.toContain("operator:secret");
+    expect(client.reboot).not.toHaveBeenCalled();
+  });
+
+  it("does not report recovery or reboot a working camera if the replacement source cannot be saved", async () => {
+    const client = {
+      ping: vi.fn(async () => undefined), inspect: vi.fn(async () => deviceDetails),
+      getStreamUri: vi.fn(async () => "rtsp://10.20.30.40:554/fresh"), reboot: vi.fn(),
+    };
+    const result = await recoverCamera({ cameraId: "camera-1", rtspUrl: "rtsp://operator:secret@10.20.30.40:554/stream" },
+      { ffprobePath: "ffprobe", timeoutMs: 500 }, {
+        probeRtsp: vi.fn().mockResolvedValueOnce(unreachable).mockResolvedValueOnce(reachable),
+        createOnvifClient: () => client,
+        onStreamRecovered: async () => { throw new Error("connection unavailable"); },
+      });
+    expect(result.recovered).toBe(false);
+    expect(result.reasonCodes).toContain("recovered_stream_persistence_failed");
     expect(client.reboot).not.toHaveBeenCalled();
   });
 

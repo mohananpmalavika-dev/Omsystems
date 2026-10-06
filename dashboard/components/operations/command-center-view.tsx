@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import { cameraRecoveryApi } from "@/lib/api-client";
 import {
   ShieldAlert,
   Building2,
@@ -68,32 +69,9 @@ export function CommandCenterView() {
     setBringingCamerasOnline(true);
     setOnlineActionMessage(null);
     try {
-      const res = await fetch("/api/control/v1/operations/health/cameras/bring-online", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ branchId }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.message || data.error || "Failed to bring cameras online");
-      }
-      setOnlineActionMessage(data.message || "Cameras set to online successfully.");
+      const data = await cameraRecoveryApi.request({ branchId });
+      setOnlineActionMessage(data.message);
       await loadData();
-      if (selectedBranchWorkspace && selectedBranchWorkspace.branchId === branchId) {
-        setSelectedBranchWorkspace((prev: any) => prev ? {
-          ...prev,
-          cameras: {
-            ...prev.cameras,
-            working: prev.cameras?.total ?? prev.cameras?.working ?? 0,
-            healthy: prev.cameras?.total ?? prev.cameras?.healthy ?? 0,
-            notWorking: 0,
-            offline: 0,
-            degraded: 0,
-            unknown: 0,
-          }
-        } : null);
-      }
     } catch (err) {
       setOnlineActionMessage(err instanceof Error ? err.message : "Error restoring cameras");
     } finally {
@@ -163,6 +141,9 @@ export function CommandCenterView() {
 
       if (branchRes?.ok && branchData?.success && Array.isArray(branchData?.data)) {
         setBranches(branchData.data);
+        setSelectedBranchWorkspace((previous: any) => previous
+          ? branchData.data.find((branch: any) => branch.branchId === previous.branchId) ?? previous
+          : null);
         setHasBranchData(true);
       } else {
         unavailable.push("branch telemetry");
@@ -989,12 +970,12 @@ export function CommandCenterView() {
                       disabled={bringingCamerasOnline}
                       onClick={() => handleBringBranchCamerasOnline(selectedBranchWorkspace.branchId)}
                       className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-[11px] shadow transition-colors flex items-center gap-1 disabled:opacity-50"
-                      title="Force bring all not working or degraded cameras online"
+                      title="Request gateway recovery and verify the branch camera streams"
                     >
                       {bringingCamerasOnline ? (
                         <>
                           <RefreshCw className="w-3 h-3 animate-spin" />
-                          <span>Restoring...</span>
+                          <span>Requesting recovery...</span>
                         </>
                       ) : (
                         <>

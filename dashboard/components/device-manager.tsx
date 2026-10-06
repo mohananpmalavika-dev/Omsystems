@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { cameraInventoryApi, deviceInventoryApi } from "@/lib/api-client";
+import { cameraInventoryApi, deviceInventoryApi, cameraRecoveryApi } from "@/lib/api-client";
 import { expandDirectProbeTargets, isPrivateIpv4 } from "@/lib/direct-ip-probe";
 import { discoveryDeviceTypeLabel, discoveryModelLabel } from "@/lib/discovery-display";
 import { BranchConnectivityPanel } from "@/components/branch-connectivity-panel";
@@ -1252,10 +1252,11 @@ export function DeviceManager() {
       if (document.hidden || polling) return;
       polling = true;
       try {
-        const [gwResp, discResp, storageDiscoveryResp] = await Promise.allSettled([
+        const [gwResp, discResp, storageDiscoveryResp, cameraResp] = await Promise.allSettled([
           cameraInventoryApi.listGateways(selectedBranch),
           cameraInventoryApi.listDiscovered(selectedBranch),
           loadStorageDiscoveries(selectedBranch),
+          cameraInventoryApi.listByBranch(selectedBranch, "device:configure"),
         ]);
         if (selectedBranchRef.current !== selectedBranch) return;
         if (gwResp.status === "fulfilled" && gwResp.value?.data) {
@@ -1266,6 +1267,7 @@ export function DeviceManager() {
           updateDiscoveryReviewState(discResp.value.data);
         }
         if (storageDiscoveryResp.status === "fulfilled") setDiscoveredStorageDisks(storageDiscoveryResp.value);
+        if (cameraResp.status === "fulfilled" && Array.isArray(cameraResp.value?.data)) setCameras(cameraResp.value.data);
         void loadPortableDevices();
       } finally {
         polling = false;
@@ -2145,17 +2147,8 @@ export function DeviceManager() {
     setBringingCameraOnlineId(camera.id);
     setError(undefined);
     try {
-      const response = await fetch("/api/control/v1/operations/health/cameras/bring-online", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ cameraId: camera.id, branchId: selectedBranch }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.message || data.error || "Failed to bring camera online");
-      }
-      setNotice(`Camera "${camera.name}" was marked online successfully.`);
+      const data = await cameraRecoveryApi.request({ cameraId: camera.id, branchId: selectedBranch });
+      setNotice(data.message);
       await refreshBranch(selectedBranch);
     } catch (reason) {
       setError(messageOf(reason, "Failed to bring camera online."));
@@ -2169,17 +2162,8 @@ export function DeviceManager() {
     setBringingAllBranchCamerasOnline(true);
     setError(undefined);
     try {
-      const response = await fetch("/api/control/v1/operations/health/cameras/bring-online", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ branchId: selectedBranch }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.message || data.error || "Failed to bring all cameras online");
-      }
-      setNotice(data.message || "All cameras for this branch were brought online.");
+      const data = await cameraRecoveryApi.request({ branchId: selectedBranch });
+      setNotice(data.message);
       await refreshBranch(selectedBranch);
     } catch (reason) {
       setError(messageOf(reason, "Failed to bring cameras online."));
@@ -2479,7 +2463,7 @@ export function DeviceManager() {
                       title="Bring all degraded, unknown, or offline cameras in this branch online"
                       style={{ color: "#10b981", borderColor: "rgba(16, 185, 129, 0.4)", display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "11px", padding: "4px 10px" }}
                     >
-                      <CheckCircle2 size={13} /> {bringingAllBranchCamerasOnline ? "Bringing online…" : "Make cameras online"}
+                      <CheckCircle2 size={13} /> {bringingAllBranchCamerasOnline ? "Requesting recovery…" : "Make cameras online"}
                     </button>
                   )}
                   {selectedInventoryIds.size > 0 && (
@@ -2560,7 +2544,7 @@ export function DeviceManager() {
                       title={`Restore ${camera.name} to online stage`}
                       style={{ color: "#10b981", borderColor: "rgba(16, 185, 129, 0.4)", display: "inline-flex", alignItems: "center", gap: "4px" }}
                     >
-                      <CheckCircle2 size={13} /> {bringingCameraOnlineId === camera.id ? "Bringing online…" : "Make online"}
+                      <CheckCircle2 size={13} /> {bringingCameraOnlineId === camera.id ? "Requesting…" : "Make online"}
                     </button>
                   )}
                   <button

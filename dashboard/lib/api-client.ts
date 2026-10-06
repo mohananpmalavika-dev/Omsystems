@@ -7176,6 +7176,14 @@ export const alertSuppressionApi = {
   },
 };
 
+export const cameraRecoveryApi = {
+  request: (target: { cameraId?: string; branchId?: string }) => fetchApi<{
+    success: boolean;
+    message: string;
+    data: { queuedCount: number; cameraIds: string[]; commands: Array<{ id: string; cameraId: string; status: string }>; skipped: Array<{ cameraId: string; error: string; message: string }> };
+  }>('/v1/operations/health/cameras/bring-online', { method: 'POST', body: JSON.stringify(target) }),
+};
+
 export { ApiError };
 
 
