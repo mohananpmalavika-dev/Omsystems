@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root=/opt/sentinel-grid
-stage=/tmp/report-management-release-20261006
+stage=/tmp/report-management-release-20261006-v2
 mkdir -p "$stage"
 test ! -e "$stage/applied.txt"
 tar xzf /tmp/report-management-release.tar.gz -C "$stage"
@@ -55,7 +55,7 @@ if 'import { resolveReportHierarchy }' not in current:
  current='import { resolveReportHierarchy } from "../packages/contracts/src/report-hierarchy.js";\n'+current
 (stage/'dist/src/store.js').write_text(current)
 PY
-printf 'FROM %s\nCOPY dist/ /app/dist/\n' "$cp_image" > "$stage/Dockerfile.control"
+printf 'FROM sentinel-gcp-control-plane:before-management-reports-20261006\nCOPY dist/ /app/dist/\n' > "$stage/Dockerfile.control"
 sudo docker build -t sentinel-gcp-control-plane:management-reports-20261006 -f "$stage/Dockerfile.control" "$stage"
 cd "$root/deploy/gcp"
 sudo docker compose -f docker-compose.gcp.yml build dashboard
