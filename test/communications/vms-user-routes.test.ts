@@ -84,7 +84,7 @@ describe('VMS user communication routes', () => {
     invite = vi.fn();
     app = Fastify();
     (app as any).io = { communicationSignalingGateway: {
-      broadcastCallInvite: invite, broadcastMessageCreated: vi.fn(),
+      broadcastCallInvite: invite, broadcastMessageCreated: vi.fn(), broadcastDirectMessage: vi.fn(),
     } };
     app.addHook('preHandler', async (request) => {
       (request as any).currentUser = { id: callerId, tenantId, role: 'operator' };
@@ -258,6 +258,37 @@ describe('VMS user communication routes', () => {
     expect(messageQuery?.[1]).toEqual([tenantId, 'OPERATOR', callerId, null, contactType, employeeId]);
     expect(messageQuery?.[0]).toContain('m.sender_type = $2 AND m.sender_id = $3 AND m.recipient_type = $5 AND m.recipient_id = $6');
     expect(messageQuery?.[0]).toContain('m.sender_type = $5 AND m.sender_id = $6');
+  });
+
+  it('gets the caller display name from the tenant profile for the invite', async () => {
+    const original = query.getMockImplementation()!;
+    query.mockImplementation(async (sql, params) => sql.includes("NULLIF(display_name, '')")
+      ? { rows: [{ name: 'Krypton Operator' }], rowCount: 1 } : original(sql, params));
+    expect((await call()).statusCode).toBe(201);
+    expect(invite).toHaveBeenCalledWith(tenantId, [], [employeeId], expect.objectContaining({
+      caller: { type: 'OPERATOR', id: callerId, name: 'Krypton Operator' },
+    }));
+  });
+
+  it('persists and delivers a named direct message to an active recipient', async () => {
+    const original = query.getMockImplementation()!;
+    query.mockImplementation(async (sql, params) => {
+      if (sql.includes('SELECT id FROM users')) return { rows: [{ id: employeeId }], rowCount: 1 };
+      if (sql.includes('INSERT INTO communication_direct_messages')) return { rows: [{
+        id: callId, senderType: 'OPERATOR', senderId: callerId, recipientType: 'OPERATOR',
+        recipientId: employeeId, body: 'Hello receiver', createdAt: '2026-10-06T13:00:00Z',
+      }], rowCount: 1 };
+      if (sql.includes("NULLIF(display_name, '')")) return { rows: [{ name: 'Krypton Operator' }], rowCount: 1 };
+      return original(sql, params);
+    });
+    const response = await app.inject({ method: 'POST', url: '/v1/communications/direct-messages',
+      payload: { recipientType: 'OPERATOR', recipientId: employeeId, body: 'Hello receiver' } });
+    expect(response.statusCode).toBe(201);
+    expect(response.json().data.senderName).toBe('Krypton Operator');
+    expect((app as any).io.communicationSignalingGateway.broadcastDirectMessage).toHaveBeenCalledWith(
+      tenantId, 'OPERATOR', [employeeId], expect.objectContaining({ senderId: callerId, senderName: 'Krypton Operator', body: 'Hello receiver' })
+    );
+    expect(query.mock.calls.find(([sql]) => sql.includes('SELECT id FROM users'))?.[0]).toContain("(status = 'active' OR active = true)");
   });
 
   it.each([

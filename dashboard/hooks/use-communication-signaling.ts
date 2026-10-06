@@ -9,7 +9,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import type { CommunicationCallStatus, CommunicationPresence } from '@/services/communication-api';
+import type { CommunicationCallStatus, CommunicationPresence, DirectMessage } from '@/services/communication-api';
 
 // ============================================================================
 // TYPES
@@ -48,13 +48,15 @@ export interface CallStatusEvent {
   endReason?: string;
 }
 
-export interface MessageEvent {
+export interface ConversationMessageEvent {
   messageId: string;
   conversationId: string;
   senderName: string;
   body: string;
   createdAt: string;
 }
+
+export type MessageEvent = DirectMessage | ConversationMessageEvent;
 
 export interface PresenceEvent {
   entityType: 'BRANCH' | 'EMPLOYEE' | 'OPERATOR';
@@ -130,11 +132,12 @@ export function useCommunicationSignaling(identity: 'operator' | 'device' = 'ope
   
   // Initialize Socket.IO connection
   useEffect(() => {
+    if (identity !== 'device') return;
     const refreshDeviceToken = () => setDeviceToken(localStorage.getItem('commDeviceToken'));
     refreshDeviceToken();
     window.addEventListener('comm-device-enrolled', refreshDeviceToken);
     return () => window.removeEventListener('comm-device-enrolled', refreshDeviceToken);
-  }, []);
+  }, [identity]);
 
   useEffect(() => {
     const token = typeof window !== 'undefined'
@@ -282,7 +285,8 @@ export function useCommunicationSignaling(identity: 'operator' | 'device' = 'ope
       console.log('[CommunicationSignaling] Cleaning up connection');
       socket.disconnect();
       socketRef.current = null;
-      handlersRef.current.clear();
+      // Subscribers own their cleanup. Clearing them during a token handoff
+      // silently drops stable message subscriptions on the replacement socket.
       pendingCallSignalsRef.current.clear();
     };
   }, [deviceToken, dispatchCallSignal, identity]);

@@ -1,3 +1,38 @@
+.incomingOverlay { position: fixed; inset: 0; z-index: 10020; display: grid; place-items: center; padding: 20px; background: #061020b8; backdrop-filter: blur(10px); }
+.incomingDialog { width: min(440px, 100%); padding: 26px; background: linear-gradient(155deg, #192a43, #0d1829 70%); border: 1px solid #3a4d67; border-radius: 26px; color: #f3f7ff; box-shadow: 0 32px 100px #0007; text-align: center; outline: none; }
+.incomingTop { display: flex; align-items: center; justify-content: space-between; color: #9daec6; font-size: 12px; }
+.incomingTop > span { display: flex; align-items: center; gap: 8px; }
+.ringingDot { width: 7px; height: 7px; border-radius: 50%; background: #65dfad; box-shadow: 0 0 0 4px #65dfad18; animation: ringPulse 2s ease-in-out infinite; }
+.callerAvatar { position: relative; display: grid; place-items: center; width: 94px; height: 94px; margin: 36px auto 24px; border-radius: 30px; background: linear-gradient(145deg, #325b9c, #263b62); border: 1px solid #6c91cd70; color: #eaf2ff; font-size: 32px; font-weight: 600; box-shadow: 0 0 0 12px #739de808, 0 0 0 24px #739de804; }
+.callerAvatar > span { position: absolute; right: -4px; bottom: -4px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #38b889; border: 3px solid #142239; }
+.incomingDialog h2 { margin: 0 0 9px; color: #f3f7ff; font-size: 28px; font-weight: 650; line-height: 1.25; overflow-wrap: anywhere; }
+.callerSource { color: #bac9df; font-size: 13px; margin: 0; }
+.incomingDescription { color: #8f9fb7; font-size: 12px; margin: 14px 0 26px; line-height: 1.6; }
+.enableRingtone { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; margin-bottom: 20px; border: 1px solid #5b7498; border-radius: 9px; background: #23354f; color: #dceaff; font-size: 12px; cursor: pointer; }
+.incomingActions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.incomingActions button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 84px; padding: 12px 6px; border: 1px solid transparent; border-radius: 15px; color: #fff; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: filter .15s, transform .15s; }
+.incomingActions button:hover { filter: brightness(1.15); transform: translateY(-2px); }
+.incomingActions button:focus-visible, .enableRingtone:focus-visible, .inboxMessage:focus-visible { outline: 3px solid #86b6ff; outline-offset: 3px; }
+.incomingActions button:disabled { opacity: .45; cursor: wait; transform: none; }
+.declineCall { background: #9c3347; }
+.answerVideo { background: #315faf; }
+.answerVoice { background: #16805e; }
+.incomingFooter { margin: 23px 0 0; color: #8193ac; font-size: 11px; }
+.messageInbox { padding: 18px 20px; margin: 12px 0; border: 1px solid var(--line, #33455e); border-radius: 16px; background: var(--surface, #111e31); color: var(--ink, #e7effa); text-align: left; }
+.inboxHeading { display: flex; align-items: center; gap: 9px; }
+.inboxHeading h2 { font-size: 14px; font-weight: 650; margin: 0; }
+.inboxHeading > span { margin-left: auto; border-radius: 20px; background: var(--blue-soft, #23385b); padding: 3px 9px; font-size: 11px; color: var(--ink, #dceaff); }
+.inboxEmpty { margin: 10px 0 0; color: var(--muted, #99abc5); font-size: 12px; line-height: 1.6; }
+.inboxList { display: grid; gap: 7px; max-height: 230px; overflow: auto; }
+.inboxMessage { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 12px; margin-top: 9px; border: 1px solid var(--line, #33455e); border-radius: 11px; background: var(--surface-soft, #17263d); color: inherit; text-align: left; cursor: pointer; }
+.inboxAvatar { flex-shrink: 0; display: grid; place-items: center; width: 35px; height: 35px; border-radius: 11px; background: var(--blue-soft, #28426a); color: var(--blue, #9ac0ff); font-size: 14px; font-weight: 600; }
+.inboxPreview { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.inboxPreview strong { font-size: 12px; font-weight: 650; }
+.inboxPreview > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted, #a9b9d1); font-size: 12px; }
+.inboxMessage time { flex-shrink: 0; font-size: 11px; color: var(--muted, #99abc5); }
+@keyframes ringPulse { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .ringingDot { animation: none; } .incomingActions button { transition: none; } }
+@media (max-width: 480px) { .incomingDialog { padding: 22px 18px; } .incomingDialog h2 { font-size: 25px; } .messageInbox { padding: 15px 12px; } .inboxMessage { gap: 8px; } }
 .callWorkspace { --call-ink: #ecf1f8; --call-muted: #91a1b9; width: 100%; color: var(--call-ink); background: #101a2b; border: 1px solid #2b3950; border-radius: 22px; overflow: hidden; box-shadow: 0 24px 80px #02061740; text-align: left; }
 .callHeader { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px 26px; border-bottom: 1px solid #263247; }
 .peerIdentity { display: flex; align-items: center; gap: 13px; min-width: 0; }

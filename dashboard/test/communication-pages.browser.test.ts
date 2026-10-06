@@ -26,7 +26,9 @@ beforeAll(async () => {
       builder.onResolve({ filter: /use-communication-signaling$/ }, () => ({ path: 'signaling', namespace: 'fixture' }));
       builder.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ loader: 'js', contents: `
         const signaling = {connected:true,joinCall:async()=>{},sendWebRtcOffer:()=>{},sendWebRtcAnswer:()=>{},sendWebRtcIceCandidate:()=>{},sendCallMediaReady:()=>{}};
-        for (const name of ['onCallInvite','onCallAccepted','onCallMediaReady','onWebRtcOffer','onWebRtcAnswer','onWebRtcIceCandidate','onCallAcceptedElsewhere','onCallConnected','onCallEnded','onCallRejected','onCallCancelled','onCallFailed','onPresenceChanged','onMessageCreated']) signaling[name]=()=>()=>{};
+        const handlers = {};
+        window.emitCommunication = (name,event) => handlers[name]?.forEach(handler => handler(event));
+        for (const name of ['onCallInvite','onCallAccepted','onCallMediaReady','onWebRtcOffer','onWebRtcAnswer','onWebRtcIceCandidate','onCallAcceptedElsewhere','onCallConnected','onCallEnded','onCallRejected','onCallCancelled','onCallFailed','onPresenceChanged','onMessageCreated']) signaling[name]=handler=>{(handlers[name] ||= new Set()).add(handler);return ()=>handlers[name].delete(handler);};
         export const useCommunicationSignaling = () => signaling;` }));
     }}],
   });
@@ -48,6 +50,18 @@ async function mount(deviceSurface = false) {
   await page.evaluate(({ deviceSurface, userId, callId }) => {
     const w = window as any;
     w.deviceSurface = deviceSurface; w.requests = []; w.captureOrder = [];
+    w.messages = [];
+    w.tonesStarted = 0; w.tonesStopped = 0; w.activeTones = 0;
+    const createOscillator = AudioContext.prototype.createOscillator;
+    AudioContext.prototype.createOscillator = function () {
+      const tone = createOscillator.call(this);
+      const start = tone.start.bind(tone), stop = tone.stop.bind(tone);
+      tone.start = (...args) => { w.tonesStarted++; w.activeTones++; return start(...args); };
+      tone.stop = (...args) => { w.tonesStopped++; return stop(...args); };
+      tone.addEventListener('ended', () => { w.activeTones--; });
+      return tone;
+    };
+    localStorage.setItem('user', JSON.stringify({ id: '00000000-0000-4000-8000-000000000009' }));
     const capture = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
     navigator.mediaDevices.getUserMedia = async constraints => {
       if (w.denyCamera && constraints?.video) throw new DOMException('Camera denied', 'NotAllowedError');
@@ -63,7 +77,15 @@ async function mount(deviceSurface = false) {
       if (url.includes('/directory/branches')) return json([]);
       if (url.includes('/directory/employees')) return json([user]);
       if (url.includes('/device-directory')) return json({ branches: [], linkedEmployees: [], vmsUsers: [user] });
-      if (url.includes('/direct-messages') || url.includes('/device-direct-messages')) return json([]);
+      if (url.includes('/direct-messages') || url.includes('/device-direct-messages')) {
+        if (options.method === 'POST') {
+          const sent = { id: 'reply', senderType: deviceSurface ? 'DEVICE' : 'OPERATOR', senderId: deviceSurface ? 'fixture-terminal' : '00000000-0000-4000-8000-000000000009', isOwn: true, ...JSON.parse(options.body), createdAt: new Date().toISOString() };
+          w.messages.push(sent);
+          return json(sent);
+        }
+        return json(w.messages);
+      }
+      if (url.endsWith('/accept')) return json({ call: { id: callId, direction: 'OUTBOUND', status: 'CONNECTED' }, credentials: { iceServers: [] } });
       if (url.includes('/device-calls/') || url.includes('/calls/employee/')) {
         w.captureOrder.push('call-request');
         if (w.failCall) return new Response(JSON.stringify({ error: 'calling unavailable' }), { status: 503 });
@@ -86,6 +108,58 @@ async function mount(deviceSurface = false) {
 }
 
 describe('calling pages', () => {
+  it.each([false, true])('displays received messages without a selected contact and opens a reply on device=%s', async deviceSurface => {
+    await mount(deviceSurface);
+    await page.evaluate(userId => {
+      const w = window as any;
+      const message = { id: 'received', senderType: 'OPERATOR', senderId: userId, senderName: 'Ananya Menon', recipientType: 'OPERATOR', recipientId: 'recipient', body: 'Please check reception', createdAt: new Date().toISOString() };
+      w.messages.push(message);
+      w.emitCommunication('onMessageCreated', message);
+    }, userId);
+    const inbox = page.getByRole('region', { name: 'Received messages', exact: true });
+    await inbox.getByRole('button', { name: /Ananya Menon Please check reception/ }).click();
+    const input = page.getByPlaceholder(deviceSurface ? 'Message Ananya Menon' : 'Write a message to the selected contact');
+    await input.fill('Reception checked');
+    await page.getByRole('button', { name: deviceSurface ? 'Send message' : 'Send', exact: true }).click();
+    await page.getByText('Reception checked', { exact: true }).waitFor();
+    expect(await page.evaluate(() => {
+      const w = window as any;
+      return w.messages.find((message: any) => message.id === 'reply').recipientId;
+    })).toBe(userId);
+  });
+
+  it.each([false, true])('shows caller identity, rings, and stops on cancellation on device=%s', async deviceSurface => {
+    await mount(deviceSurface);
+    await page.getByRole('button', { name: 'Enable ringtone', exact: true }).click();
+    await page.getByRole('button', { name: 'Ringtone on', exact: true }).waitFor();
+    await page.evaluate(({ userId, callId }) => (window as any).emitCommunication('onCallInvite', {
+      callId, direction: 'INBOUND', caller: { type: 'OPERATOR', id: userId, name: 'Ananya Menon' },
+    }), { userId, callId });
+    await page.getByRole('dialog', { name: 'Ananya Menon', exact: true }).waitFor();
+    await page.waitForFunction(() => (window as any).tonesStarted > 0);
+    await page.screenshot({ path: `tmp/communications-qa/incoming-${deviceSurface ? 'device' : 'operator'}-desktop.png`, fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `tmp/communications-qa/incoming-${deviceSurface ? 'device' : 'operator'}-mobile.png`, fullPage: true });
+    await page.evaluate(callId => (window as any).emitCommunication('onCallCancelled', { callId }), callId);
+    await page.getByRole('dialog', { name: 'Ananya Menon', exact: true }).waitFor({ state: 'hidden' });
+    const tones = await page.evaluate(() => (window as any).tonesStarted);
+    await page.waitForTimeout(3200);
+    expect(await page.evaluate(() => (window as any).tonesStarted)).toBe(tones);
+    expect(await page.evaluate(() => (window as any).activeTones)).toBe(0);
+  });
+
+  it('preserves the incoming caller name in the answered call workspace', async () => {
+    await mount();
+    await page.evaluate(({ userId, callId }) => (window as any).emitCommunication('onCallInvite', {
+      callId, direction: 'INBOUND', caller: { type: 'OPERATOR', id: userId, name: 'Ananya Menon' },
+    }), { userId, callId });
+    await page.getByRole('button', { name: 'Answer voice', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Call workspace', exact: true }).waitFor();
+    expect(await page.getByRole('dialog', { name: 'Call workspace' }).innerText()).toContain('Ananya Menon');
+    await page.getByRole('button', { name: 'End call', exact: true }).click();
+  });
+
   it('shows the redesigned directory and opens the call workspace with a local camera preview', async () => {
     await mount();
     await page.getByRole('button', { name: 'Ananya Menon SOC Operator', exact: true }).click();

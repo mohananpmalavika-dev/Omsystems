@@ -2,13 +2,16 @@
 
 import { CallWorkspace } from '@/components/communications/call-workspace';
 import { MediaDeviceCheck } from '@/components/communications/media-device-check';
+import { IncomingCall, callerName } from '@/components/communications/incoming-call';
+import { MessageInbox } from '@/components/communications/message-inbox';
+import { useCallRingtone } from '@/hooks/use-call-ringtone';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Phone, PhoneOff, Search,
   Building2, User, Clock, CheckCircle2, XCircle, 
   PhoneMissed, AlertCircle, MessageSquare, RefreshCw,
   Radio, ChevronRight, Filter, Video, VideoOff, ScreenShare,
-  Shield, Users
+  Shield, Users, Volume2, VolumeX
 } from 'lucide-react';
 import { communicationAPI } from '@/services/communication-api';
 import { useCommunicationSignaling } from '@/hooks/use-communication-signaling';
@@ -42,6 +45,7 @@ interface ActiveCall {
   startTime: Date;
   modality?: CallModality;
   credentials: WebRTCCredentials;
+  peerLabel?: string;
 }
 
 // ============================================================================
@@ -147,10 +151,15 @@ export default function CommunicationsCallsPage() {
   const activeCallRef = useRef<ActiveCall | null>(null);
   const offeredCallRef = useRef<string | null>(null);
   const [incomingCall, setIncomingCall] = useState<CallInviteEvent | null>(null);
+  const ringtone = useCallRingtone(!activeCall && !callStarting ? incomingCall?.callId : undefined);
+  const incomingName = incomingCall ? callerName(incomingCall,
+    internalUsers.find(user => user.employeeId === (incomingCall.caller?.id || incomingCall.sourceOperatorId))?.employeeName) : '';
   const [callDuration, setCallDuration] = useState(0);
   const [callHistory, setCallHistory] = useState<CallSession[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [directMessageText, setDirectMessageText] = useState('');
+  const [messageSending, setMessageSending] = useState(false);
+  const messageEndRef = useRef<HTMLDivElement | null>(null);
   
   // Hooks
   const signaling = useCommunicationSignaling();
@@ -163,6 +172,11 @@ export default function CommunicationsCallsPage() {
     : selectedContact?.type === 'EMPLOYEE' ? selectedContact.employee.deviceId : undefined;
   const { directMessages, messagesError, messageRouteMissing, messagesLoading, loadDirectMessages } =
     useDirectMessages(messageContactType, messageContactId, signaling.onMessageCreated);
+  const lastMessageId = directMessages.at(-1)?.id;
+  useEffect(() => {
+    const container = messageEndRef.current?.parentElement;
+    if (container) container.scrollTop = container.scrollHeight;
+  }, [lastMessageId]);
   
   // Refs
   const durationIntervalRef = useRef<number | null>(null);
@@ -171,7 +185,7 @@ export default function CommunicationsCallsPage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
-        const stored = localStorage.getItem('user') || sessionStorage.getItem('user');
+        const stored = sessionStorage.getItem('user') || localStorage.getItem('user');
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed?.id) setCurrentUserId(parsed.id);
@@ -213,7 +227,7 @@ export default function CommunicationsCallsPage() {
 
   const handleSendDirectMessage = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!selectedContact || !directMessageText.trim()) return;
+    if (!selectedContact || !directMessageText.trim() || messageSending) return;
     const target = selectedContact.type === 'BRANCH'
       ? { type: 'BRANCH' as const, id: selectedContact.branch.branchId }
       : selectedContact.type === 'INTERNAL_USER'
@@ -221,12 +235,13 @@ export default function CommunicationsCallsPage() {
         : { type: 'DEVICE' as const, id: selectedContact.employee.deviceId };
     if (!target.id) { setError('Select a registered device to message'); return; }
     try {
+      setMessageSending(true);
       await communicationAPI.sendDirectMessage(target.type, target.id, directMessageText.trim());
       setDirectMessageText('');
       await loadDirectMessages();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Message could not be sent');
-    }
+    } finally { setMessageSending(false); }
   };
   
   // ============================================================================
@@ -338,6 +353,7 @@ export default function CommunicationsCallsPage() {
       if (activeCall && event.callId === activeCall.session.id) {
         handleCallEnd();
       }
+      if (incomingCall?.callId === event.callId) setIncomingCall(null);
     });
     
     // Call cancelled
@@ -355,6 +371,7 @@ export default function CommunicationsCallsPage() {
         handleCallEnd();
         setError(event.endReason || 'Call failed');
       }
+      if (incomingCall?.callId === event.callId) setIncomingCall(null);
     });
     
     // Presence changed
@@ -508,9 +525,10 @@ export default function CommunicationsCallsPage() {
       const stream = await webrtc.initializeMedia({ audio: true, video: modality === 'video' });
       if (!stream) return;
       const { call, credentials } = await communicationAPI.acceptCall(incomingCall.callId);
+      call.sourceEmployeeName = incomingName;
       acceptedCallId = call.id;
       
-      const nextCall = { session: call, credentials, startTime: new Date(), modality };
+      const nextCall = { session: call, credentials, startTime: new Date(), modality, peerLabel: incomingName };
       activeCallRef.current = nextCall;
       setActiveCall(nextCall);
       await signaling.joinCall(call.id);
@@ -524,7 +542,7 @@ export default function CommunicationsCallsPage() {
       setError(err.message || 'Failed to accept call');
       setIncomingCall(null);
     } finally { startingCallRef.current = false; setCallStarting(false); }
-  }, [incomingCall, webrtc, signaling]);
+  }, [incomingCall, incomingName, webrtc, signaling]);
   
   const handleRejectCall = useCallback(async () => {
     if (!incomingCall) return;
@@ -612,6 +630,10 @@ export default function CommunicationsCallsPage() {
         </div>
         
         <div className="comm-header-right">
+          <button type="button" data-comm-ringtone-control className="refresh-btn" onClick={ringtone.toggleSound} aria-pressed={ringtone.enabled && ringtone.ready}>
+            {ringtone.enabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            {ringtone.enabled && ringtone.ready ? 'Ringtone on' : 'Enable ringtone'}
+          </button>
           <MediaDeviceCheck disabled={callStarting || !!activeCall} />
           <div className={`service-status ${signaling.connected ? 'online' : 'offline'}`}>
             <Radio size={14} className={signaling.connected ? 'pulse' : ''} />
@@ -629,6 +651,22 @@ export default function CommunicationsCallsPage() {
           </button>
         </div>
       </header>
+      <MessageInbox subscribe={signaling.onMessageCreated} identityId={currentUserId} onOpen={message => {
+        setViewMode('directory');
+        setDirectoryScope('all');
+        setSearchQuery('');
+        if (message.senderType === 'OPERATOR') {
+          setSelectedContact({ type: 'INTERNAL_USER', user: internalUsers.find(user => user.employeeId === message.senderId) || {
+            employeeId: message.senderId, employeeName: message.senderName || 'VMS operator', employeeRole: 'Operator',
+            branchId: '', branchName: 'Command Center', presence: 'OFFLINE',
+          } });
+        } else {
+          setSelectedContact({ type: 'EMPLOYEE', employee: branches.flatMap(branch => branch.employees).find(employee => employee.deviceId === message.senderId) || {
+            employeeId: message.senderId, deviceId: message.senderId, employeeName: message.senderName || 'Branch device',
+            branchId: '', branchName: 'Branch intercom', presence: 'OFFLINE', onlineDeviceCount: 0,
+          } });
+        }
+      }} />
       
       {/* View Mode Tabs */}
       <div className="view-tabs">
@@ -1102,19 +1140,20 @@ export default function CommunicationsCallsPage() {
                     messagesError ? <p role="status" style={{ color: '#fca5a5', fontSize: '12px' }}>{messagesError}</p> :
                     messagesLoading ? <p style={{ color: '#94a3b8', fontSize: '12px' }}>Loading messages...</p> :
                     directMessages.length === 0 ? <p style={{ color: '#94a3b8', fontSize: '12px' }}>No messages yet.</p> :
-                    directMessages.slice(-20).map((message) => (
-                      <div key={message.id} style={{ background: 'var(--surface-soft)', padding: '10px 12px', borderRadius: '8px', fontSize: '12px' }}>
-                        <div style={{ color: '#94a3b8' }}>{message.senderId === currentUserId ? 'You' : message.senderName || message.senderType} · {new Date(message.createdAt).toLocaleString()}</div>
+                    directMessages.map((message) => (
+                      <div key={message.id} style={{ justifySelf: message.isOwn || message.senderId === currentUserId ? 'end' : 'start', width: 'fit-content', maxWidth: '85%', background: message.isOwn || message.senderId === currentUserId ? 'var(--blue-soft, #eaf1fd)' : 'var(--surface-soft)', padding: '10px 12px', borderRadius: '12px', fontSize: '12px' }}>
+                        <div style={{ color: 'var(--muted)' }}>{message.isOwn || message.senderId === currentUserId ? 'You' : message.senderName || message.senderType} · {new Date(message.createdAt).toLocaleString()}</div>
                         <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{message.body}</div>
                       </div>
                     ))}
+                  <div ref={messageEndRef} />
                 </div>
                 <form onSubmit={handleSendDirectMessage} style={{ display: 'flex', gap: '8px' }}>
                   <input value={directMessageText} onChange={(event) => setDirectMessageText(event.target.value)} maxLength={4000}
                     placeholder={selectedContact ? 'Write a message to the selected contact' : 'Select a contact or branch to message'}
                     style={{ minWidth: 0, flex: 1, padding: '9px', borderRadius: '8px', border: '1px solid #475569', background: 'var(--canvas)', color: 'var(--ink)' }} />
-                  <button type="submit" disabled={messageRouteMissing || !selectedContact || !directMessageText.trim()}
-                    style={{ padding: '9px 14px', borderRadius: '8px', background: '#2563eb', color: '#fff', opacity: messageRouteMissing || !selectedContact || !directMessageText.trim() ? 0.5 : 1 }}>Send</button>
+                  <button type="submit" disabled={messageSending || messageRouteMissing || !selectedContact || !directMessageText.trim()}
+                    style={{ padding: '9px 14px', borderRadius: '8px', background: '#2563eb', color: '#fff', opacity: messageSending || messageRouteMissing || !selectedContact || !directMessageText.trim() ? 0.5 : 1 }}>{messageSending ? 'Sending…' : 'Send'}</button>
                 </form>
               </section>
             </main>
@@ -1237,73 +1276,19 @@ export default function CommunicationsCallsPage() {
         <div className="call-overlay" role="dialog" aria-modal="true" aria-label="Call workspace">
           <div className="call-workspace-container">
             <CallWorkspace media={webrtc}
-              peerName={activeCall.session.direction === 'INBOUND'
+              peerName={activeCall.peerLabel || (activeCall.session.direction === 'INBOUND'
                 ? activeCall.session.sourceEmployeeName || activeCall.session.sourceBranchName || 'Incoming caller'
-                : activeCall.session.targetEmployeeName || activeCall.session.targetBranchName || 'Call participant'}
+                : activeCall.session.targetEmployeeName || activeCall.session.targetBranchName || 'Call participant')}
               status={activeCall.session.status} duration={formatCallDuration(callDuration)}
               onEnd={() => void (activeCall.session.status === 'CONNECTED' || webrtc.state === 'CONNECTED' ? handleEndCall() : handleCancelCall())} />
           </div>
         </div>
       )}
 
-      {/* Incoming Call Modal */}
-      {incomingCall && !activeCall && (
-        <div className="incoming-call-modal">
-          <div className="incoming-call-card">
-            <h2>Incoming Call</h2>
-            
-            <div className="caller-info">
-              {incomingCall.sourceBranchId ? (
-                <>
-                  <Building2 size={48} />
-                  <h3>{incomingCall.sourceBranchName || 'Branch Intercom'}</h3>
-                  {incomingCall.sourceEmployeeId && (
-                    <p>{incomingCall.sourceEmployeeName}</p>
-                  )}
-                </>
-              ) : (
-                <>
-                  <Shield size={48} style={{ color: '#38bdf8' }} />
-                  <h3>{incomingCall.sourceEmployeeName || 'Internal VMS Operator'}</h3>
-                  <p>Internal Command Center SOC Call</p>
-                </>
-              )}
-            </div>
-            
-            <div className="incoming-call-actions">
-              <button
-                type="button"
-                className="reject-btn"
-                onClick={handleRejectCall}
-              >
-                <PhoneOff size={20} />
-                Decline
-              </button>
-              
-              <button
-                type="button"
-                className="accept-btn"
-                style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#fff' }}
-                onClick={() => void handleAcceptCall('video')}
-              >
-                <Video size={20} />
-                Video
-              </button>
+      {incomingCall && !activeCall && <IncomingCall call={incomingCall} name={incomingName}
+        busy={callStarting} soundReady={ringtone.enabled && ringtone.ready} onEnableSound={ringtone.enableSound}
+        onAccept={mode => void handleAcceptCall(mode)} onDecline={() => void handleRejectCall()} />}
 
-              <button
-                type="button"
-                className="accept-btn"
-                onClick={() => void handleAcceptCall('audio')}
-              >
-                <Phone size={20} />
-                Voice
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      
       <style jsx>{`
         .communications-page {
           display: flex;

@@ -48,7 +48,7 @@ export interface CameraConfig {
   expectedFps?: number;
   expectedBitrate?: number;
   enabled: boolean;
-  /** High-frequency frame delivery is enabled only when the camera has an active AI rule. */
+  /** Enables frame delivery for live counting as well as configured AI rules. */
   analyticsEnabled?: boolean;
 }
 
@@ -121,7 +121,8 @@ export class CameraHeartbeatService {
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private analyticsInterval: NodeJS.Timeout | null = null;
   private heartbeatCycleRunning = false;
-  private analyticsFailureCooldownUntil = 0;
+  private readonly analyticsDeliveryRetryAfter = new Map<string, number>();
+  private readonly analyticsDeliveryInProgress = new Set<string>();
   private analyticsCycleRunning = false;
   private isRunning = false;
 
@@ -149,6 +150,9 @@ export class CameraHeartbeatService {
     for (const cameraId of this.analyticsCaptureRetryAfter.keys()) {
       if (!retainedIds.has(cameraId)) this.analyticsCaptureRetryAfter.delete(cameraId);
     }
+    for (const cameraId of this.analyticsDeliveryRetryAfter.keys()) {
+      if (!retainedIds.has(cameraId)) this.analyticsDeliveryRetryAfter.delete(cameraId);
+    }
     logger.info(`Synchronized ${cameras.length} camera(s) for heartbeat monitoring`);
   }
 
@@ -159,6 +163,7 @@ export class CameraHeartbeatService {
     this.cameraSourceVersions.set(cameraId, (this.cameraSourceVersions.get(cameraId) ?? 0) + 1);
     this.frameStates.delete(cameraId);
     this.analyticsCaptureRetryAfter.delete(cameraId);
+    this.analyticsDeliveryRetryAfter.delete(cameraId);
     this.consecutiveFailures.delete(cameraId);
   }
 
@@ -204,9 +209,6 @@ export class CameraHeartbeatService {
   }
 
   private async sendAllAnalyticsFrames(): Promise<void> {
-    if (Date.now() < this.analyticsFailureCooldownUntil) {
-      return;
-    }
     if (this.analyticsCycleRunning) {
       logger.warn("Skipping overlapping analytics frame cycle");
       return;
@@ -216,7 +218,7 @@ export class CameraHeartbeatService {
       const cameras = [...this.cameras.values()].filter((camera) =>
         camera.enabled && camera.analyticsEnabled === true && Boolean(camera.rtspUrl),
       );
-      // FFmpeg process startup is CPU intensive. Two concurrent captures keep
+      // FFmpeg process startup is CPU intensive. Four concurrent captures keep
       // inference fresh without allowing a large branch to exhaust the host.
       const batchSize = 4;
       for (let index = 0; index < cameras.length; index += batchSize) {
@@ -231,6 +233,8 @@ export class CameraHeartbeatService {
 
   private async captureAnalyticsFrame(camera: CameraConfig): Promise<void> {
     if (Date.now() < (this.analyticsCaptureRetryAfter.get(camera.id) ?? 0)) return;
+    if (Date.now() < (this.analyticsDeliveryRetryAfter.get(camera.id) ?? 0) ||
+        this.analyticsDeliveryInProgress.has(camera.id)) return;
     // Helmet classification runs on a person's head crop. At 320x180 that
     // crop can be only a few pixels, even when the operator sees a helmet.
     const width = 640;
@@ -502,20 +506,28 @@ export class CameraHeartbeatService {
     source: string,
   ): Promise<void> {
     if (!this.analyticsFrameSender) return;
-    await this.analyticsFrameSender({
-      cameraId,
-      capturedAt: new Date().toISOString(),
-      width,
-      height,
-      imageBase64: frame.toString("base64"),
-      metadata: { source, edgeAgentId: this.edgeAgentId },
-    }).catch((error: unknown) => {
-      this.analyticsFailureCooldownUntil = Date.now() + 60_000;
-      logger.warn("Analytics frame delivery failed; pausing analytics polling for 60s", {
+    if (Date.now() < (this.analyticsDeliveryRetryAfter.get(cameraId) ?? 0) ||
+        this.analyticsDeliveryInProgress.has(cameraId)) return;
+    this.analyticsDeliveryInProgress.add(cameraId);
+    try {
+      await this.analyticsFrameSender({
+        cameraId,
+        capturedAt: new Date().toISOString(),
+        width,
+        height,
+        imageBase64: frame.toString("base64"),
+        metadata: { source, edgeAgentId: this.edgeAgentId },
+      });
+      this.analyticsDeliveryRetryAfter.delete(cameraId);
+    } catch (error: unknown) {
+      this.analyticsDeliveryRetryAfter.set(cameraId, Date.now() + 60_000);
+      logger.warn("Analytics frame delivery failed; retrying this camera in 60s", {
         cameraId,
         error: error instanceof Error ? error.message : String(error),
       });
-    });
+    } finally {
+      this.analyticsDeliveryInProgress.delete(cameraId);
+    }
   }
 
   getStats() {

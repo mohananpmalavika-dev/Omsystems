@@ -17,7 +17,7 @@ describe("edge analytics frame transport", () => {
       get: vi.fn(async () => null),
     } as unknown as NonNullable<ReturnType<typeof redisModule.getClient>>);
     store = new MemoryStore();
-    const agent = await store.registerEdgeAgent("branch-blr-001", "AI edge", "0.1.4");
+    const agent = await store.registerEdgeAgent(store.cameras.get("cam-001")!.branchId, "AI edge", "0.1.4");
     store.cameras.get("cam-001")!.edgeAgentId = agent.id;
     await store.createAnalyticsRule("omsystems", "cam-001", undefined, {
       name: "AI - Person detection",
@@ -57,7 +57,7 @@ describe("edge analytics frame transport", () => {
   });
 
   it("forwards an authenticated local RGB frame with the camera rule set", async () => {
-    const agent = (await store.listEdgeAgentsByBranch("branch-blr-001"))[0]!;
+    const agent = (await store.getEdgeAgent(store.cameras.get("cam-001")!.edgeAgentId!))!;
     const response = await app.inject({
       method: "POST",
       url: `/v1/edge-agents/${agent.id}/analytics/frames`,
@@ -71,7 +71,7 @@ describe("edge analytics frame transport", () => {
       },
     });
 
-    expect(response.statusCode).toBe(202);
+    expect(response.statusCode, response.body).toBe(202);
     expect(response.json()).toMatchObject({
       accepted: true,
       analytics: { cameraId: "cam-001", eventsGenerated: 1 },
@@ -91,7 +91,7 @@ describe("edge analytics frame transport", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
       cameraId: "cam-001", eventsGenerated: 1, accepted: 0, failed: 1,
     }), { status: 202, headers: { "content-type": "application/json" } })));
-    const agent = (await store.listEdgeAgentsByBranch("branch-blr-001"))[0]!;
+    const agent = (await store.getEdgeAgent(store.cameras.get("cam-001")!.edgeAgentId!))!;
     const response = await app.inject({
       method: "POST",
       url: `/v1/edge-agents/${agent.id}/analytics/frames`,
@@ -104,7 +104,7 @@ describe("edge analytics frame transport", () => {
         imageBase64: Buffer.alloc(64 * 36 * 3).toString("base64"),
       },
     });
-    expect(response.statusCode).toBe(502);
+    expect(response.statusCode, response.body).toBe(502);
     expect(response.json()).toMatchObject({ error: "analytics_event_delivery_failed", failed: 1 });
   });
 });

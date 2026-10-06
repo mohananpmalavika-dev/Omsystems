@@ -10,6 +10,9 @@ import {
 } from 'lucide-react';
 import { CallWorkspace } from '@/components/communications/call-workspace';
 import { MediaDeviceCheck } from '@/components/communications/media-device-check';
+import { IncomingCall, callerName } from '@/components/communications/incoming-call';
+import { MessageInbox } from '@/components/communications/message-inbox';
+import { useCallRingtone } from '@/hooks/use-call-ringtone';
 import { communicationAPI } from '@/services/communication-api';
 import { useCommunicationSignaling } from '@/hooks/use-communication-signaling';
 import { useDirectMessages } from '@/hooks/use-direct-messages';
@@ -83,6 +86,9 @@ export default function KryptoVisionConnectPage() {
   const [callDuration, setCallDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [callStarting, setCallStarting] = useState(false);
+  const ringtone = useCallRingtone(!activeCall && !callStarting ? incomingCall?.callId : undefined);
+  const [messageSending, setMessageSending] = useState(false);
+  const messageEndRef = useRef<HTMLDivElement | null>(null);
   const startingCallRef = useRef(false);
 
   // In-Call Tools Drawer (Chat, Evidence, CCTV inject)
@@ -101,6 +107,11 @@ export default function KryptoVisionConnectPage() {
   const { directMessages, messagesError, messageRouteMissing, messagesLoading, loadDirectMessages } =
     useDirectMessages(messageContactType, messageContactId, signaling.onMessageCreated, true,
       deviceEnrolled && deviceStatus === 'ACTIVE');
+  const lastMessageId = directMessages.at(-1)?.id;
+  useEffect(() => {
+    const container = messageEndRef.current?.parentElement;
+    if (container) container.scrollTop = container.scrollHeight;
+  }, [lastMessageId]);
 
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const durationIntervalRef = useRef<number | null>(null);
@@ -451,12 +462,17 @@ export default function KryptoVisionConnectPage() {
       if (activeCall && event.callId === activeCall.session.id) {
         handleCallEnd();
       }
+      if (incomingCall?.callId === event.callId) setIncomingCall(null);
     });
 
     const unsubCancelled = signaling.onCallCancelled((event) => {
       if (incomingCall && event.callId === incomingCall.callId) {
         setIncomingCall(null);
       }
+    });
+    const unsubFailed = signaling.onCallFailed((event) => {
+      if (incomingCall?.callId === event.callId) setIncomingCall(null);
+      if (activeCall?.session.id === event.callId) { handleCallEnd(); setError(event.endReason || 'Call failed'); }
     });
 
     return () => {
@@ -471,6 +487,7 @@ export default function KryptoVisionConnectPage() {
       unsubElsewhere();
       unsubRejected();
       unsubCancelled();
+      unsubFailed();
     };
   }, [signaling, activeCall, incomingCall, deviceEnrolled, webrtc]);
 
@@ -560,19 +577,20 @@ export default function KryptoVisionConnectPage() {
 
   const handleSendDirectMessage = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!directMessageText.trim() || deviceStatus !== 'ACTIVE') return;
+    if (!directMessageText.trim() || deviceStatus !== 'ACTIVE' || messageSending) return;
     if (callTarget.type === 'VMS') {
       setError('Select a named VMS user, employee device, or branch to message.');
       return;
     }
     try {
+      setMessageSending(true);
       const recipientType = callTarget.type === 'VMS_USER' ? 'OPERATOR' : callTarget.type === 'BRANCH' ? 'BRANCH' : 'DEVICE';
       await communicationAPI.sendDirectMessage(recipientType, callTarget.id, directMessageText.trim(), true);
       setDirectMessageText('');
       await loadDirectMessages();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Message could not be sent');
-    }
+    } finally { setMessageSending(false); }
   };
 
   // 8. PA Announcement Broadcast
@@ -865,6 +883,10 @@ export default function KryptoVisionConnectPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button type="button" data-comm-ringtone-control onClick={ringtone.toggleSound} aria-pressed={ringtone.enabled && ringtone.ready}
+            className="text-xs px-3 py-2 rounded-xl border border-slate-700 text-slate-200">
+            {ringtone.enabled && ringtone.ready ? 'Ringtone on' : 'Enable ringtone'}
+          </button>
           <MediaDeviceCheck disabled={callStarting || !!activeCall} />
           {/* PA Emergency Broadcast button */}
           <button
@@ -889,6 +911,13 @@ export default function KryptoVisionConnectPage() {
           </button>
         </div>
       </header>
+      <div className="w-full max-w-6xl mx-auto">
+        <MessageInbox subscribe={signaling.onMessageCreated} identityId={deviceId} isDevice
+          enabled={deviceEnrolled && deviceStatus === 'ACTIVE'} onOpen={message => {
+            setCallTarget({ type: message.senderType === 'OPERATOR' ? 'VMS_USER' : 'EMPLOYEE',
+              id: message.senderId, label: message.senderName || 'Team member' });
+          }} />
+      </div>
 
       {deviceStatus !== 'ACTIVE' && (
         <div className="w-full max-w-6xl mx-auto mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
@@ -1270,18 +1299,19 @@ export default function KryptoVisionConnectPage() {
                   messagesError ? <p role="status" className="text-xs text-red-300">{messagesError}</p> :
                   messagesLoading ? <p className="text-xs text-slate-400">Loading messages...</p> :
                   directMessages.length === 0 ? <p className="text-xs text-slate-400">No messages yet.</p> :
-                  directMessages.slice(-20).map((message) => (
-                    <div key={message.id} className="rounded-lg bg-slate-800 px-3 py-2 text-xs">
+                  directMessages.map((message) => (
+                    <div key={message.id} className={`w-fit max-w-[85%] rounded-xl px-3 py-2 text-xs ${message.isOwn || message.senderId === deviceId ? 'ml-auto bg-blue-900/50' : 'bg-slate-800'}`}>
                       <div className="text-slate-400">{message.senderId === deviceId ? 'You' : message.senderName || message.senderType} · {new Date(message.createdAt).toLocaleString()}</div>
                       <p className="mt-1 text-slate-100 whitespace-pre-wrap break-words">{message.body}</p>
                     </div>
                   ))}
+                <div ref={messageEndRef} />
               </div>
               <form onSubmit={handleSendDirectMessage} className="flex gap-2">
                 <input value={directMessageText} onChange={(event) => setDirectMessageText(event.target.value)}
                   maxLength={4000} placeholder={callTarget.type === 'VMS' ? 'Select a named user, employee, or branch to message' : `Message ${callTarget.label}`}
                   className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
-                <button type="submit" disabled={messageRouteMissing || deviceStatus !== 'ACTIVE' || !directMessageText.trim() || callTarget.type === 'VMS'}
+                <button type="submit" aria-label={messageSending ? 'Sending message' : 'Send message'} disabled={messageSending || messageRouteMissing || deviceStatus !== 'ACTIVE' || !directMessageText.trim() || callTarget.type === 'VMS'}
                   className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><Send className="h-4 w-4" /></button>
               </form>
             </section>
@@ -1299,55 +1329,10 @@ export default function KryptoVisionConnectPage() {
         )}
       </main>
 
-      {/* Hidden Audio Tag for incoming sound */}
-
-
-      {/* INCOMING CALL MODAL (Ring-All / First-Answer-Wins) */}
-      {incomingCall && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-3xl p-6 sm:p-8 text-center space-y-6 shadow-2xl">
-            <div className="w-24 h-24 rounded-full bg-blue-600/20 border-2 border-blue-500/50 text-blue-400 flex items-center justify-center mx-auto animate-bounce shadow-xl shadow-blue-500/20">
-              <Phone className="w-12 h-12" />
-            </div>
-
-            <div className="space-y-1.5">
-              <span className="text-xs font-mono uppercase tracking-widest text-blue-400">
-                Incoming Call
-              </span>
-              <h3 className="text-2xl font-bold text-white">{incomingCall.caller?.name || incomingCall.sourceEmployeeName || incomingCall.sourceBranchName || 'VMS Command Center'}</h3>
-              <p className="text-xs text-slate-400">
-                Incoming call for {deviceMode === 'EMPLOYEE_SPECIFIC' ? linkedEmployee?.name : branchName}
-              </p>
-            </div>
-
-            {/* Action Buttons: Video Accept, Audio Accept, Decline */}
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <button
-                onClick={() => void handleAcceptCall('video')}
-                className="py-3.5 px-4 rounded-2xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-all"
-              >
-                <Video className="w-4 h-4" />
-                Video
-              </button>
-
-              <button
-                onClick={() => void handleAcceptCall('audio')}
-                className="py-3.5 px-4 rounded-2xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-all"
-              >
-                <Phone className="w-4 h-4" />
-                Voice
-              </button>
-            </div>
-
-            <button
-              onClick={() => void handleRejectCall()}
-              className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-red-600/20 text-slate-400 hover:text-red-300 text-xs font-medium transition-all"
-            >
-              Decline Call
-            </button>
-          </div>
-        </div>
-      )}
+      {incomingCall && !activeCall && <IncomingCall call={incomingCall} name={callerName(incomingCall)}
+        destination={deviceMode === 'EMPLOYEE_SPECIFIC' ? linkedEmployee?.name : branchName}
+        busy={callStarting} soundReady={ringtone.enabled && ringtone.ready} onEnableSound={ringtone.enableSound}
+        onAccept={mode => void handleAcceptCall(mode)} onDecline={() => void handleRejectCall()} />}
 
       {/* Footer info */}
       <footer className="text-[11px] text-slate-500 font-mono text-center">

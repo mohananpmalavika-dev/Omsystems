@@ -43,11 +43,16 @@ export function useDirectMessages(
     };
     refreshRef.current = load;
     void load();
-    const timer = window.setInterval(() => { if (!routeMissing) void load(); }, 15_000);
+    const refresh = () => { if (!routeMissing && !document.hidden) void load(); };
+    const timer = window.setInterval(refresh, 5000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
     const unsubscribe = onMessageCreated(() => { if (!routeMissing) void load(); });
     return () => {
       cancelled = true;
       window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
       unsubscribe();
       if (refreshRef.current === load) refreshRef.current = null;
     };

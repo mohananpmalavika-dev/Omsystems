@@ -9,6 +9,41 @@ import {
 } from "../src/monitoring/camera-heartbeat.js";
 
 describe("camera frame health", () => {
+  it("keeps other cameras reporting when one camera upload fails", async () => {
+    const capture = vi.spyOn(rtspProbe, "captureRtspRgbFrame").mockResolvedValue(Buffer.alloc(640 * 360 * 3));
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    const send = vi.fn(async (payload: {cameraId: string}) => {
+      if (payload.cameraId === "failed") throw new Error("camera_not_found_for_edge_agent");
+    });
+    const service = new CameraHeartbeatService("http://control.example", "branch", "agent", undefined,
+      "ffprobe", "ffmpeg", undefined, undefined, undefined, send);
+    service.replaceCameras(["failed", "working"].map(id => ({id,name:id,rtspUrl:`rtsp://camera/${id}`,enabled:true,analyticsEnabled:true})));
+    try {
+      await (service as any).sendAllAnalyticsFrames();
+      await (service as any).sendAllAnalyticsFrames();
+      expect(send.mock.calls.map(([payload]) => payload.cameraId)).toEqual(["failed", "working", "working"]);
+      expect(capture).toHaveBeenCalledTimes(3);
+      // Health samples obey the same backoff instead of extending it repeatedly.
+      await (service as any).deliverAnalyticsFrame("failed", Buffer.alloc(3), 1, 1, "edge-rtsp-health");
+      expect(send).toHaveBeenCalledTimes(3);
+      now.mockReturnValue(61_000);
+      await (service as any).sendAllAnalyticsFrames();
+      expect(send.mock.calls.map(([payload]) => payload.cameraId)).toEqual(["failed", "working", "working", "failed", "working"]);
+    } finally { capture.mockRestore(); now.mockRestore(); }
+  });
+
+  it("does not upload health and scheduled frames concurrently for the same camera", async () => {
+    let finish!: () => void;
+    const send = vi.fn(() => new Promise<void>(resolve => {finish=resolve;}));
+    const service = new CameraHeartbeatService("http://control.example", "branch", "agent", undefined,
+      "ffprobe", "ffmpeg", undefined, undefined, undefined, send);
+    const pending = (service as any).deliverAnalyticsFrame("camera", Buffer.alloc(3), 1, 1, "edge-rtsp-scheduled");
+    await (service as any).deliverAnalyticsFrame("camera", Buffer.alloc(3), 1, 1, "edge-rtsp-health");
+    expect(send).toHaveBeenCalledOnce();
+    finish();
+    await pending;
+  });
+
   it("ignores a pre-recovery timeout even when reconnecting the same stream URL", async () => {
     const send = vi.fn(async (_payload: unknown) => undefined);
     const service = new CameraHeartbeatService("http://control.example", "branch", "agent", undefined,

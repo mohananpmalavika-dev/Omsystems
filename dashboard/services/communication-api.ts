@@ -129,6 +129,7 @@ export interface DirectMessage {
   senderType: 'OPERATOR' | 'DEVICE';
   senderId: string;
   senderName?: string;
+  isOwn?: boolean;
   recipientType: 'OPERATOR' | 'DEVICE' | 'BRANCH';
   recipientId: string;
   body: string;

@@ -33,7 +33,7 @@ describe("independent helmet head verification", () => {
     expect(await new LocalizedHelmetHeadVerifier(localizer(),classifier).verify(frame(),person,.9167)).toBeNull();
   });
   it("retains independent localization confidence and the actual head box", async () => {
-    const classifier={run:vi.fn().mockResolvedValueOnce(score(.99)).mockResolvedValueOnce(score(.97))};
+    const classifier={run:vi.fn().mockResolvedValueOnce(score(.99)).mockResolvedValueOnce(score(.97)).mockResolvedValueOnce(score(.98))};
     expect(await new LocalizedHelmetHeadVerifier(localizer(),classifier).verify(frame(),person,.9167))
       .toEqual({boundingBox:box,classificationConfidence:.97,localizationConfidence:.8});
   });
@@ -41,6 +41,25 @@ describe("independent helmet head verification", () => {
     const classifier={run:vi.fn(async()=>score(.99))};
     expect(await new LocalizedHelmetHeadVerifier(localizer("head"),classifier).verify(frame(),person,.9167))
       .toMatchObject({boundingBox:box,classificationConfidence:.99,localizationConfidence:.8});
+  });
+  it.each(["head", "helmet"])("rejects Rajkot hair classified positive in tight %s crops when wider context disagrees", async label => {
+    const classifier={run:vi.fn().mockResolvedValueOnce(score(.99998))
+      .mockResolvedValueOnce(score(.99999)).mockResolvedValueOnce(score(.1362))};
+    expect(await new LocalizedHelmetHeadVerifier(localizer(label),classifier).verify(frame(),person,.9167)).toBeNull();
+    // A contradictory surrounding crop must never fall back to the crown.
+    expect(classifier.run).toHaveBeenCalledTimes(3);
+  });
+  it("rejects the Rajkot crown fallback when the shell boundary is bare hair", async () => {
+    const classifier={run:vi.fn().mockResolvedValueOnce(score(.6418))
+      .mockResolvedValueOnce(score(.5651)).mockResolvedValueOnce(score(.9978))
+      .mockResolvedValueOnce(score(.6578))};
+    expect(await new LocalizedHelmetHeadVerifier(localizer(),classifier).verify(frame(),person,.9167)).toBeNull();
+  });
+  it("reports the weakest supporting context score on a verified helmet", async () => {
+    const classifier={run:vi.fn().mockResolvedValueOnce(score(.999))
+      .mockResolvedValueOnce(score(.99)).mockResolvedValueOnce(score(.95))};
+    expect(await new LocalizedHelmetHeadVerifier(localizer(),classifier).verify(frame(),person,.9167))
+      .toMatchObject({classificationConfidence:.95});
   });
   it("keeps an independently corroborated helmet crown when the exposed face also has a head box", async () => {
     const objects={run:vi.fn(async()=>[

@@ -447,6 +447,13 @@ class LazySignalingGateway {
     const gateway = this.getGateway();
     if (!gateway) throw new Error('Communication websocket is unavailable');
     const { devices, operators } = await this.ringingParticipants(callId);
+    if (data.caller?.type === 'OPERATOR') {
+      const profile = await this.pool.query<{ name: string }>(
+        `SELECT COALESCE(NULLIF(display_name, ''), username) AS name
+         FROM users WHERE id = $1 AND tenant_id = $2`, [data.caller.id, tenantId]
+      );
+      data = { ...data, caller: { ...data.caller, name: profile.rows[0]?.name || data.caller.name } };
+    }
     gateway.broadcastCallInvite(tenantId, devices, operators, { id: callId, ...data });
   }
 
@@ -2434,6 +2441,7 @@ export async function registerCommunicationsRoutes(
       `SELECT m.id::text, m.sender_type AS "senderType", m.sender_id::text AS "senderId",
               m.recipient_type AS "recipientType", m.recipient_id::text AS "recipientId",
               m.body, m.created_at AS "createdAt",
+              (m.sender_type = $2 AND m.sender_id = $3) AS "isOwn",
               CASE WHEN m.sender_type = 'OPERATOR' THEN
                 (SELECT COALESCE(u.display_name, u.username) FROM users u WHERE u.id = m.sender_id)
               ELSE (SELECT COALESCE(d.assigned_employee_name, d.device_name) FROM communication_devices d WHERE d.id = m.sender_id)
@@ -2462,7 +2470,7 @@ export async function registerCommunicationsRoutes(
     let targetBranchId: string | null = null;
     if (recipientType === 'OPERATOR') {
       const target = await ctx.pool.query(
-        'SELECT id FROM users WHERE id = $1 AND tenant_id = $2 AND active = true LIMIT 1',
+        `SELECT id FROM users WHERE id = $1 AND tenant_id = $2 AND (status = 'active' OR active = true) LIMIT 1`,
         [recipientId, identity.tenantId]
       );
       if (!target.rowCount) return reply.code(404).send({ error: 'recipient_not_found' });
@@ -2492,7 +2500,11 @@ export async function registerCommunicationsRoutes(
          body, created_at AS "createdAt"`,
       [identity.tenantId, identity.type, identity.id, recipientType, recipientId, body]
     );
-    const message = created.rows[0];
+    const sender = await ctx.pool.query<{ name: string }>(identity.type === 'OPERATOR'
+      ? `SELECT COALESCE(NULLIF(display_name, ''), username) AS name FROM users WHERE id = $1 AND tenant_id = $2`
+      : `SELECT COALESCE(NULLIF(assigned_employee_name, ''), device_name) AS name FROM communication_devices WHERE id = $1 AND tenant_id = $2`,
+      [identity.id, identity.tenantId]);
+    const message = { ...created.rows[0], senderName: sender.rows[0]?.name || (identity.type === 'OPERATOR' ? 'VMS operator' : 'Branch device') };
     let recipients = [recipientId];
     if (recipientType === 'BRANCH') {
       const branchDevices = await ctx.pool.query<{ id: string }>(

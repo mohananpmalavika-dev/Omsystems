@@ -1,0 +1,280 @@
+/**
+ * Person Detection
+ * Detects and tracks people with pose estimation support
+ */
+import { randomUUID } from "node:crypto";
+import { BaseDetector, calculateIoU, getInferenceObjects, hasInferenceObjects } from "./base-detector.js";
+import { getModelManager } from "../model-manager.js";
+import { YoloCocoInference } from "../inference/yolo-coco-inference.js";
+import { modelUnavailableReason, yoloModelOptions } from "../inference/configured-model-inference.js";
+import { buildTrackingObservations } from "../tracking/index.js";
+export class PersonDetector extends BaseDetector {
+    tracks = new Map();
+    isModelLoaded = false;
+    inference = null;
+    trackingBus = null;
+    // Configuration
+    TRACKING_TIMEOUT_MS = 5000; // 5 seconds
+    STATIONARY_THRESHOLD = 0.03;
+    MIN_CONFIDENCE = 0.5;
+    constructor() {
+        super("person", "2.0.0");
+    }
+    /**
+     * Set tracking event bus for publishing observations
+     */
+    setTrackingBus(bus) {
+        this.trackingBus = bus;
+    }
+    async initialize() {
+        console.log("Initializing person detector...");
+        try {
+            const manager = getModelManager();
+            if (!manager.isModelAvailable("yolov8n"))
+                throw new Error(modelUnavailableReason("yolov8n"));
+            const modelConfig = manager.getModelConfig("yolov8n");
+            this.inference = new YoloCocoInference(await manager.getModel("yolov8n"), this.MIN_CONFIDENCE, 0.45, yoloModelOptions(modelConfig));
+            this.isModelLoaded = true;
+            console.log(`Person detector loaded ${modelConfig?.name ?? "configured open-source ONNX model"}`);
+        }
+        catch (error) {
+            this.isModelLoaded = false;
+            console.warn("Person detector running in external-ingestion mode:", error instanceof Error ? error.message : error);
+        }
+        this.startTrackingCleanup();
+    }
+    async detect(frame) {
+        const persons = await this.detectPersonsInFrame(frame);
+        // Update tracking for each detected person
+        const tracked = this.updateTracking(persons, frame.timestamp);
+        // Publish tracking observations to event bus
+        if (this.trackingBus && tracked.length > 0) {
+            this.publishTrackingObservations(tracked, frame);
+        }
+        const results = [];
+        if (tracked.length > 0) {
+            const avgConfidence = this.calculateAverageConfidence(tracked);
+            const objects = tracked.map(person => ({
+                label: "person",
+                confidence: person.confidence,
+                trackId: person.trackId,
+                boundingBox: person.boundingBox,
+            }));
+            // Base person detection
+            results.push({
+                detectionType: "person",
+                confidence: avgConfidence,
+                objects,
+                metadata: {
+                    count: tracked.length,
+                    trackedIds: tracked.map(p => p.trackId),
+                },
+                requiresAlert: true,
+            });
+            // People / Person Counting metrics
+            results.push({
+                detectionType: "person-counting",
+                confidence: avgConfidence,
+                objects,
+                metadata: {
+                    count: tracked.length,
+                    occupancy: tracked.length,
+                    // This is a frame snapshot, not an entry/exit measurement.  A
+                    // crossing is emitted only by a configured line rule.
+                    total: tracked.length,
+                    trackedIds: tracked.map(p => p.trackId),
+                },
+                requiresAlert: false,
+            });
+            // Occupancy Counting metrics
+            results.push({
+                detectionType: "occupancy-counting",
+                confidence: avgConfidence,
+                objects,
+                metadata: {
+                    count: tracked.length,
+                    occupancy: tracked.length,
+                    trackedIds: tracked.map(p => p.trackId),
+                },
+                requiresAlert: false,
+            });
+        }
+        return results;
+    }
+    /**
+     * Publish tracking observations to event bus
+     */
+    publishTrackingObservations(tracked, frame) {
+        if (!this.trackingBus)
+            return;
+        // Build frame context
+        const context = {
+            tenantId: frame.tenantId || 'default',
+            branchId: frame.metadata?.branchId,
+            cameraId: frame.cameraId,
+            frameId: frame.metadata?.frameId,
+            timestamp: frame.timestamp,
+            frameWidth: frame.width,
+            frameHeight: frame.height,
+        };
+        // Convert tracked persons to observations
+        const observations = buildTrackingObservations(tracked.map(person => ({
+            trackId: person.trackId,
+            label: 'person',
+            confidence: person.confidence,
+            boundingBox: person.boundingBox,
+            timestamp: frame.timestamp,
+            dwellTimeSeconds: person.dwellTimeSeconds,
+            isStationary: person.isStationary,
+        })), context);
+        // Publish each observation
+        for (const observation of observations) {
+            this.trackingBus.publish(observation);
+        }
+    }
+    /**
+     * Detect persons in frame using ML model
+     */
+    async detectPersonsInFrame(frame) {
+        const external = getInferenceObjects(frame, ["person"]).filter((item) => item.confidence >= this.MIN_CONFIDENCE);
+        // An explicit empty list is the result of the shared object pass, not a
+        // request to run a second YOLO inference for this frame.
+        if (hasInferenceObjects(frame) || !this.inference)
+            return external;
+        return (await this.inference.run(frame)).filter((item) => item.label === "person");
+    }
+    /**
+     * Update tracking for detected persons
+     */
+    updateTracking(detections, timestamp) {
+        const tracked = [];
+        // Clean up stale tracks
+        this.cleanupStaleTracks(timestamp);
+        for (const detection of detections) {
+            // Try to match with existing track
+            let trackId = this.findMatchingTrack(detection);
+            if (!trackId) {
+                // Create new track
+                trackId = randomUUID();
+                this.tracks.set(trackId, {
+                    trackId,
+                    firstSeen: timestamp,
+                    lastSeen: timestamp,
+                    positions: [],
+                    isStationary: false,
+                    lastBoundingBox: detection.boundingBox,
+                });
+            }
+            // Update track
+            const track = this.tracks.get(trackId);
+            track.lastSeen = timestamp;
+            track.lastBoundingBox = detection.boundingBox;
+            const center = {
+                x: detection.boundingBox.x + detection.boundingBox.width / 2,
+                y: detection.boundingBox.y + detection.boundingBox.height / 2,
+            };
+            track.positions.push({
+                x: center.x,
+                y: center.y,
+                timestamp,
+            });
+            // Limit position history
+            if (track.positions.length > 50) {
+                track.positions.shift();
+            }
+            // Check if stationary
+            track.isStationary = this.isTrackStationary(track);
+            tracked.push({
+                ...detection,
+                trackId,
+                isStationary: track.isStationary,
+                dwellTimeSeconds: (timestamp.getTime() - track.firstSeen.getTime()) / 1000,
+            });
+        }
+        return tracked;
+    }
+    /**
+     * Find matching track for detection using IoU
+     */
+    findMatchingTrack(detection) {
+        let bestMatch = null;
+        let bestScore = 0;
+        for (const [trackId, track] of this.tracks) {
+            const score = calculateIoU(track.lastBoundingBox, detection.boundingBox);
+            if (score > bestScore && score >= 0.25) {
+                bestScore = score;
+                bestMatch = trackId;
+            }
+        }
+        return bestMatch;
+    }
+    /**
+     * Check if track is stationary
+     */
+    isTrackStationary(track) {
+        if (track.positions.length < 5)
+            return false;
+        const recent = track.positions.slice(-5);
+        const firstPos = recent[0];
+        for (const pos of recent) {
+            const distance = Math.sqrt(Math.pow(pos.x - firstPos.x, 2) +
+                Math.pow(pos.y - firstPos.y, 2));
+            if (distance > this.STATIONARY_THRESHOLD) {
+                return false;
+            }
+        }
+        return true;
+    }
+    /**
+     * Clean up tracks that haven't been seen recently
+     */
+    cleanupStaleTracks(currentTime) {
+        const staleThreshold = currentTime.getTime() - this.TRACKING_TIMEOUT_MS;
+        for (const [trackId, track] of this.tracks.entries()) {
+            if (track.lastSeen.getTime() < staleThreshold) {
+                this.tracks.delete(trackId);
+            }
+        }
+    }
+    /**
+     * Start periodic cleanup of stale tracks
+     */
+    startTrackingCleanup() {
+        setInterval(() => {
+            this.cleanupStaleTracks(new Date());
+        }, 10000); // Every 10 seconds
+    }
+    /**
+     * Calculate average confidence
+     */
+    calculateAverageConfidence(detections) {
+        if (detections.length === 0)
+            return 0;
+        const sum = detections.reduce((acc, d) => acc + d.confidence, 0);
+        return sum / detections.length;
+    }
+    /**
+     * Get active tracks
+     */
+    getActiveTracks() {
+        return Array.from(this.tracks.values());
+    }
+    /**
+     * Get track by ID
+     */
+    getTrack(trackId) {
+        return this.tracks.get(trackId);
+    }
+    async cleanup() {
+        this.tracks.clear();
+        this.inference = null;
+        this.isModelLoaded = false;
+        console.log("Person detector cleaned up");
+    }
+    getHealth() {
+        return {
+            status: this.isModelLoaded ? "healthy" : "degraded",
+            details: this.isModelLoaded ? `Local ONNX inference active; ${this.tracks.size} active tracks` : `External detection ingestion only; ${this.tracks.size} active tracks`,
+        };
+    }
+}
