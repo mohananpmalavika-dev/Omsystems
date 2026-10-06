@@ -1,0 +1,24 @@
+1:"$Sreact.fragment"
+2:I[4073,["6334","static/chunks/app/admin/ha-topology/page-cad79748dd35a5f8.js"],"HAClusterView"]
+3:I[31872,[],"OutletBoundary"]
+4:"$Sreact.suspense"
+8:I[31872,[],"ViewportBoundary"]
+9:I[31872,[],"MetadataBoundary"]
+a:I[12569,[],"IconMark"]
+c:I[91133,[],""]
+d:I[4297,[],""]
+10:I[6684,["9568","static/chunks/9568-7ca6b233e1ab382e.js","9239","static/chunks/9239-4096b57ded412509.js","7581","static/chunks/app/admin/layout-fa0b21803b9a8ec5.js"],"AdminCommandDeck"]
+:HL["/_next/static/css/077e63f94dced9bc.css","style"]
+7:X
+f:X
+f:C
+0:{"buildId":"ujsN4gQGDkd0Ha09lMF1s","data":[{"rsc":["$","$1","c",{"children":[["$","div",null,{"className":"min-h-screen bg-slate-950 p-6","children":["$","div",null,{"className":"max-w-7xl mx-auto","children":["$","$L2",null,{}]}]}],null,["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":"$@6","staleTime":"$7","varyParams":null},{"rsc":["$","$1","h",{"children":[null,["$","$L8",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]}],["$","div",null,{"hidden":true,"children":["$","$L9",null,{"children":["$","$4",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"HA Architecture & Chaos Engineering | KryptonVision"}],["$","meta","1",{"name":"description","content":"Nx Witness & Milestone XProtect Corporate Class Multi-Node HA Topology & Chaos Engineering Console"}],["$","link","2",{"rel":"manifest","href":"/manifest.webmanifest"}],["$","meta","3",{"name":"mobile-web-app-capable","content":"yes"}],["$","meta","4",{"name":"apple-mobile-web-app-title","content":"KryptonVision"}],["$","meta","5",{"name":"apple-mobile-web-app-status-bar-style","content":"black-translucent"}],["$","link","6",{"rel":"icon","href":"/icon-192.png"}],["$","link","7",{"rel":"apple-touch-icon","href":"/apple-touch-icon.png"}],["$","$La","8",{}]]}]}]}],null]}],"isPartial":"$@b","staleTime":"$7","varyParams":null},{"rsc":["$","$1","c",{"children":[null,["$","$Lc",null,{"parallelRouterKey":"children","template":["$","$Ld",null,{}]}]]}],"isPartial":"$@e","staleTime":"$7","varyParams":"$f"},{"rsc":["$","$1","c",{"children":[[["$","link","0",{"rel":"stylesheet","href":"/_next/static/css/077e63f94dced9bc.css","precedence":"next"}]],["$","div",null,{"className":"admin-command-scope","children":[["$","$L10",null,{}],["$","$Lc",null,{"parallelRouterKey":"children","template":["$","$Ld",null,{}]}]]}]]}],"isPartial":"$@11","staleTime":"$7","varyParams":null}],"isUpgradeableISRFallback":false,"a":"$@12","rootVaryParams":null,"needsRuntimeRequest":"$@13"}
+5:null
+13:true
+7:300
+7:C
+12:0
+b:"$undefined"
+e:"$undefined"
+11:"$undefined"
+6:"$undefined"

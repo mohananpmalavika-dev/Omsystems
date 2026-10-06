@@ -1,0 +1,1 @@
+globalThis.__RSC_MANIFEST=(globalThis.__RSC_MANIFEST||{});globalThis.__RSC_MANIFEST["/api/security-devices/overview/route"]={"moduleLoading":{"prefix":"/_next/"},"ssrModuleMapping":{},"edgeSSRModuleMapping":{},"clientModules":{},"entryCSSFiles":{"C:\\Omsystems\\Omsystems\\dashboard\\app\\api\\security-devices\\overview\\route":[]},"rscModuleMapping":{},"edgeRscModuleMapping":{}};

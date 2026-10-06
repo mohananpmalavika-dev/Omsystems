@@ -1,0 +1,1 @@
+globalThis.__RSC_MANIFEST=(globalThis.__RSC_MANIFEST||{});globalThis.__RSC_MANIFEST["/api/admin/system/gateways/route"]={"moduleLoading":{"prefix":"/_next/"},"ssrModuleMapping":{},"edgeSSRModuleMapping":{},"clientModules":{},"entryCSSFiles":{"C:\\Omsystems\\Omsystems\\dashboard\\app\\api\\admin\\system\\gateways\\route":[]},"rscModuleMapping":{},"edgeRscModuleMapping":{}};

@@ -4,7 +4,8 @@ import { ReportPagination } from "@/components/reports/report-pagination";
 import { ExecutiveManagementReport } from "@/components/reports/executive-management-report";
 import { downloadReportCsv } from "@/lib/report-export";
 import { FieldVisual } from "@/components/field-visual";
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { AppLayout } from "@/components/app-layout";
 import { branchOpeningCsv } from "@/lib/branch-opening-csv";
@@ -95,12 +96,18 @@ type OpeningReport = {
 };
 
 export default function MisReportsPage() {
+  return <Suspense fallback={<div className="p-8">Loading reports…</div>}><MisReportsContent /></Suspense>;
+}
+
+function MisReportsContent() {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabKey>("all-in-one");
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("tab") === "branch-opening") {
-      setActiveTab("branch-opening");
-    }
-  }, []);
+    const tab = searchParams.get("tab");
+    setActiveTab(tab === "branch-opening" ? "branch-opening" : "all-in-one");
+    const dimension = searchParams.get("groupBy");
+    setGroupBy(["organization", "zone", "region", "area", "branch", "date", "time"].includes(dimension ?? "") ? dimension as GroupBy : "branch");
+  }, [searchParams]);
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");

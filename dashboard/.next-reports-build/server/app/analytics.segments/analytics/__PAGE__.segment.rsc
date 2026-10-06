@@ -1,0 +1,21 @@
+1:"$Sreact.fragment"
+2:I[86116,["9600","static/chunks/9600-4c282b63a1dd1ef3.js","4804","static/chunks/4804-963d4acc87fa8c54.js","1745","static/chunks/app/analytics/page-918fe9e51f214007.js"],"AnalyticsConsole"]
+3:I[31872,[],"OutletBoundary"]
+4:"$Sreact.suspense"
+8:I[31872,[],"ViewportBoundary"]
+9:I[31872,[],"MetadataBoundary"]
+a:I[12569,[],"IconMark"]
+c:I[80688,["9568","static/chunks/9568-7ca6b233e1ab382e.js","2979","static/chunks/2979-0e2110e567163a60.js","63","static/chunks/63-de877bf1de2740c8.js","4804","static/chunks/4804-963d4acc87fa8c54.js","688","static/chunks/688-9db53a20092b016c.js","8226","static/chunks/app/analytics/layout-9357100dfc521b5c.js"],"AppLayout"]
+d:I[46514,["9568","static/chunks/9568-7ca6b233e1ab382e.js","2979","static/chunks/2979-0e2110e567163a60.js","63","static/chunks/63-de877bf1de2740c8.js","4804","static/chunks/4804-963d4acc87fa8c54.js","688","static/chunks/688-9db53a20092b016c.js","8226","static/chunks/app/analytics/layout-9357100dfc521b5c.js"],"AnalyticsModuleNav"]
+e:I[91133,[],""]
+f:I[4297,[],""]
+7:X
+0:{"buildId":"ujsN4gQGDkd0Ha09lMF1s","data":[{"rsc":["$","$1","c",{"children":[["$","div",null,{"className":"content intelligence-console-page","children":["$","$L2",null,{}]}],null,["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":"$@6","staleTime":"$7","varyParams":null},{"rsc":["$","$1","h",{"children":[null,["$","$L8",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]}],["$","div",null,{"hidden":true,"children":["$","$L9",null,{"children":["$","$4",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"KryptonVision | Security Operations"}],["$","meta","1",{"name":"description","content":"Multi-branch CCTV monitoring and security operations"}],["$","link","2",{"rel":"manifest","href":"/manifest.webmanifest"}],["$","meta","3",{"name":"mobile-web-app-capable","content":"yes"}],["$","meta","4",{"name":"apple-mobile-web-app-title","content":"KryptonVision"}],["$","meta","5",{"name":"apple-mobile-web-app-status-bar-style","content":"black-translucent"}],["$","link","6",{"rel":"icon","href":"/icon-192.png"}],["$","link","7",{"rel":"apple-touch-icon","href":"/apple-touch-icon.png"}],["$","$La","8",{}]]}]}]}],null]}],"isPartial":"$@b","staleTime":"$7","varyParams":null},{"rsc":["$","$1","c",{"children":[null,["$","$Lc",null,{"children":["$","div",null,{"className":"product-section-shell intelligence-section","children":[["$","$Ld",null,{}],["$","$Le",null,{"parallelRouterKey":"children","template":["$","$Lf",null,{}]}]]}]}]]}],"isPartial":"$@10","staleTime":"$7","varyParams":null}],"isUpgradeableISRFallback":false,"a":"$@11","rootVaryParams":null,"needsRuntimeRequest":"$@12"}
+5:null
+12:true
+7:300
+7:C
+11:0
+b:"$undefined"
+10:"$undefined"
+6:"$undefined"

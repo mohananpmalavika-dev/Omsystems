@@ -1,0 +1,47 @@
+{
+  "polyfillFiles": [
+    "static/chunks/polyfills-42372ed130431b0a.js"
+  ],
+  "devFiles": [],
+  "lowPriorityFiles": [
+    "static/ujsN4gQGDkd0Ha09lMF1s/_buildManifest.js",
+    "static/ujsN4gQGDkd0Ha09lMF1s/_ssgManifest.js"
+  ],
+  "rootMainFiles": [
+    "static/chunks/webpack-073a2051de624bd1.js",
+    "static/chunks/c7879cf7-5841dac24ceb5ec9.js",
+    "static/chunks/5158-e43064a56c4f87d8.js",
+    "static/chunks/main-app-f9a0afbf59a83622.js"
+  ],
+  "rootMainFilesTree": {},
+  "pages": {
+    "/_app": [
+      "static/chunks/webpack-073a2051de624bd1.js",
+      "static/chunks/framework-114337d687a4e536.js",
+      "static/chunks/main-6b690c13bd7370c1.js",
+      "static/css/a7a4e057d37b565c.css",
+      "static/chunks/pages/_app-4a9f5d250d85b438.js"
+    ],
+    "/_error": [
+      "static/chunks/webpack-073a2051de624bd1.js",
+      "static/chunks/framework-114337d687a4e536.js",
+      "static/chunks/main-6b690c13bd7370c1.js",
+      "static/chunks/pages/_error-d30f5f9eccaf8f2c.js"
+    ],
+    "/camera-detail": [
+      "static/chunks/webpack-073a2051de624bd1.js",
+      "static/chunks/framework-114337d687a4e536.js",
+      "static/chunks/main-6b690c13bd7370c1.js",
+      "static/chunks/7264-2d54844c455850a1.js",
+      "static/chunks/304-a8f6d0f19bbc685b.js",
+      "static/chunks/pages/camera-detail-d12453278a149b45.js"
+    ],
+    "/camera-monitoring": [
+      "static/chunks/webpack-073a2051de624bd1.js",
+      "static/chunks/framework-114337d687a4e536.js",
+      "static/chunks/main-6b690c13bd7370c1.js",
+      "static/chunks/7264-2d54844c455850a1.js",
+      "static/chunks/pages/camera-monitoring-7f0cba3def1eb539.js"
+    ]
+  }
+}

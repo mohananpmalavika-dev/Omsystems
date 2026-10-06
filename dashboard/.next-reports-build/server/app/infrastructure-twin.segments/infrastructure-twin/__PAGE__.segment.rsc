@@ -1,0 +1,22 @@
+1:"$Sreact.fragment"
+2:I[32220,["1315","static/chunks/74185f8c-feef0b463f6cbf9d.js","6269","static/chunks/6269-88106d79175c3d88.js","9875","static/chunks/9875-b1187d49577d1064.js","7421","static/chunks/app/infrastructure-twin/page-da93271be8df3ea5.js"],"DigitalTwinPage"]
+3:I[31872,[],"OutletBoundary"]
+4:"$Sreact.suspense"
+8:I[31872,[],"ViewportBoundary"]
+9:I[31872,[],"MetadataBoundary"]
+a:I[12569,[],"IconMark"]
+c:I[91133,[],""]
+d:I[4297,[],""]
+:HL["/_next/static/css/d1e1fa7731bfdccb.css","style"]
+7:X
+f:X
+f:C
+0:{"buildId":"ujsN4gQGDkd0Ha09lMF1s","data":[{"rsc":["$","$1","c",{"children":[["$","$L2",null,{}],[["$","link","0",{"rel":"stylesheet","href":"/_next/static/css/d1e1fa7731bfdccb.css","precedence":"next"}]],["$","$L3",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@5"}]}]]}],"isPartial":"$@6","staleTime":"$7","varyParams":null},{"rsc":["$","$1","h",{"children":[null,["$","$L8",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]}],["$","div",null,{"hidden":true,"children":["$","$L9",null,{"children":["$","$4",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"KryptonVision | Security Operations"}],["$","meta","1",{"name":"description","content":"Multi-branch CCTV monitoring and security operations"}],["$","link","2",{"rel":"manifest","href":"/manifest.webmanifest"}],["$","meta","3",{"name":"mobile-web-app-capable","content":"yes"}],["$","meta","4",{"name":"apple-mobile-web-app-title","content":"KryptonVision"}],["$","meta","5",{"name":"apple-mobile-web-app-status-bar-style","content":"black-translucent"}],["$","link","6",{"rel":"icon","href":"/icon-192.png"}],["$","link","7",{"rel":"apple-touch-icon","href":"/apple-touch-icon.png"}],["$","$La","8",{}]]}]}]}],null]}],"isPartial":"$@b","staleTime":"$7","varyParams":null},{"rsc":["$","$1","c",{"children":[null,["$","$Lc",null,{"parallelRouterKey":"children","template":["$","$Ld",null,{}]}]]}],"isPartial":"$@e","staleTime":"$7","varyParams":"$f"}],"isUpgradeableISRFallback":false,"a":"$@10","rootVaryParams":null,"needsRuntimeRequest":"$@11"}
+5:null
+11:true
+7:300
+7:C
+10:0
+b:"$undefined"
+e:"$undefined"
+6:"$undefined"

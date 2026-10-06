@@ -1,0 +1,1595 @@
+import { randomUUID, timingSafeEqual } from "node:crypto";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
+import { shutterConfigSchema } from "../../packages/contracts/src/shutter.js";
+import {
+  hasExtendedInfrastructure,
+  type AnalyticsEventInput,
+  type ControlPlaneStore,
+} from "../control-plane-store.js";
+import type {
+  Action,
+  AnalyticsAlert,
+  AnalyticsIngestResult,
+  AnalyticsEvent,
+  AnalyticsAlertStatus,
+  Camera,
+  ResourceNode,
+} from "../domain/models.js";
+import {
+  AI_CAPABILITIES,
+  AI_CAPABILITY_DOMAINS,
+  isAiCapability,
+} from "../analytics/capability-catalog.js";
+import { enqueueAlertMatrix, type AlertNotificationDispatcher } from "../alerts/notification-dispatcher.js";
+import { alertEvents } from "../alerts/event-stream.js";
+import { queuePhysicalSiren } from "../alerts/physical-siren-dispatcher.js";
+import {
+  managedAlertEvidenceReferences,
+  type AlertEvidenceClient,
+} from "../alerts/evidence-capture.js";
+import { defaultSeverityForDetection } from "../analytics/severity-policy.js";
+import { digitalTwinEvents } from "../digital-twin/event-stream.js";
+import {
+  CAMERA_AI_RULE_BUNDLE,
+  CAMERA_AI_SETUP_REQUIRED,
+  ensureCameraAiBundle,
+} from "../analytics/camera-ai-bundle.js";
+import {
+  activeAnprRegistryMatches,
+  normalizePlateNumber,
+  recordAnprRegistryMatches,
+} from "../analytics/identity-registry.js";
+import type { NbfcRuleRepository } from "../analytics/nbfc-rule-repository.js";
+import type { NbfcRuleEngineService } from "../analytics/nbfc-rule-engine.service.js";
+import { evaluateBranchOpeningDualControl } from "../analytics/branch-opening-dual-control.service.js";
+
+interface AnalyticsRouteOptions {
+  analyticsEngineSharedKey?: string;
+  analyticsSourceSharedKey?: string;
+  analyticsEngineUrl?: string;
+  recordingEngineUrl?: string;
+  recordingEngineSharedKey?: string;
+  alertDispatcher?: AlertNotificationDispatcher;
+  alertEvidenceClient?: AlertEvidenceClient;
+  nbfcRuleRepository?: NbfcRuleRepository;
+  nbfcRuleEngine?: NbfcRuleEngineService;
+}
+
+const detectionTypeSchema = z.string().trim().min(1).max(120).refine(isAiCapability, {
+  message: "Unknown AI capability",
+});
+const alertStatuses = [
+  "new", "acknowledged", "investigating", "escalated", "resolved",
+  "false_alarm", "suppressed",
+] as const;
+const severities = ["P1", "P2", "P3", "P4", "P5"] as const;
+const cameraParams = z.object({ id: z.string().min(1) });
+const ruleParams = z.object({
+  id: z.string().min(1), ruleId: z.string().uuid(),
+});
+const alertParams = z.object({ alertId: z.string().uuid() });
+const pointSchema = z.object({
+  x: z.number().min(0).max(1), y: z.number().min(0).max(1),
+});
+const zoneSchema = z.object({
+  id: z.string().uuid().default(() => randomUUID()),
+  name: z.string().trim().min(2).max(120),
+  shape: z.enum(["polygon", "line"]),
+  points: z.array(pointSchema).min(2).max(100),
+}).superRefine((zone, context) => {
+  if (zone.shape === "polygon" && zone.points.length < 3) {
+    context.addIssue({ code: "custom", message: "A polygon needs at least three points" });
+  }
+  if (zone.shape === "line" && zone.points.length !== 2) {
+    context.addIssue({ code: "custom", message: "A line needs exactly two points" });
+  }
+});
+const scheduleSchema = z.object({
+  days: z.array(z.number().int().min(0).max(6)).min(1),
+  start: z.string().regex(/^\d{2}:\d{2}$/),
+  end: z.string().regex(/^\d{2}:\d{2}$/),
+  timezone: z.string().trim().min(1).max(100).default("Asia/Kolkata"),
+});
+const ruleSchema = z.object({
+  shutterConfig: shutterConfigSchema.optional(),
+  name: z.string().trim().min(2).max(160),
+  detectionType: detectionTypeSchema,
+  enabled: z.boolean().default(true),
+  zone: zoneSchema.optional(),
+  schedule: scheduleSchema.optional(),
+  objectClasses: z.array(z.string().trim().min(1).max(80)).max(50).default([]),
+  minConfidence: z.number().min(0).max(1).default(0.65),
+  minDurationSeconds: z.number().min(0).max(86_400).default(0),
+  direction: z.enum(["any", "a-to-b", "b-to-a", "enter", "exit"]).default("any"),
+  severity: z.enum(severities).optional(),
+  cooldownSeconds: z.number().int().min(0).max(86_400).default(60),
+  recipients: z.array(z.string().trim().min(1).max(320)).max(50).default([]),
+  escalateAfterSeconds: z.number().int().min(30).max(86_400).optional(),
+  recordingPolicy: z.enum(["none", "event-recording", "protect-window"])
+    .default("event-recording"),
+  preRollSeconds: z.number().int().min(0).max(120).default(30),
+  postRollSeconds: z.number().int().min(30).max(600).default(120),
+  modelId: z.string().uuid().optional(),
+});
+const objectSchema = z.object({
+  label: z.string().trim().min(1).max(100),
+  confidence: z.number().min(0).max(1),
+  trackId: z.string().trim().min(1).max(200).optional(),
+  boundingBox: z.object({
+    x: z.number().min(0).max(1), y: z.number().min(0).max(1),
+    width: z.number().positive().max(1), height: z.number().positive().max(1),
+  }).optional(),
+});
+const eventSchema = z.object({
+  tenantId: z.string().min(1), cameraId: z.string().min(1),
+  sourceEventId: z.string().trim().min(1).max(300),
+  detectionType: detectionTypeSchema,
+  occurredAt: z.string().datetime(), endedAt: z.string().datetime().optional(),
+  confidence: z.number().min(0).max(1),
+  durationSeconds: z.number().min(0).max(86_400).default(0),
+  modelVersion: z.string().trim().min(1).max(160),
+  objects: z.array(objectSchema).max(500).default([]),
+  snapshotReference: z.string().trim().min(1).max(2_000).optional(),
+  clipReference: z.string().trim().min(1).max(2_000).optional(),
+  metadata: z.record(z.unknown()).default({}),
+}).refine((event) => !event.endedAt || Date.parse(event.endedAt) >= Date.parse(event.occurredAt), {
+  message: "endedAt must not be before occurredAt", path: ["endedAt"],
+});
+const alertListQuery = z.object({
+  offset: z.coerce.number().int().min(0).default(0),
+  cameraId: z.string().min(1).optional(), branchId: z.string().min(1).optional(),
+  status: z.enum(alertStatuses).optional(), severity: z.enum(severities).optional(),
+  from: z.string().datetime().optional(), to: z.string().datetime().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+});
+const liveWallQuery = z.object({
+  cameraIds: z.string().trim().min(1).max(20_000).transform((value) =>
+    [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))]
+  ).refine(ids => ids.length <= 144, "Request at most 144 cameras per batch"),
+  limit: z.coerce.number().int().min(1).max(500).default(200),
+});
+
+function correlateLiveWallAlerts(alerts: AnalyticsAlert[]) {
+  const active = alerts.filter((alert) => !["resolved", "false_alarm", "suppressed"].includes(alert.status));
+  const clusters: Array<{
+    id: string;
+    branchId: string;
+    branchName?: string;
+    alertIds: string[];
+    cameraIds: string[];
+    severity: AnalyticsAlert["severity"];
+    startedAt: string;
+    title: string;
+  }> = [];
+
+  for (const alert of active.sort((a, b) => Date.parse(a.firstDetectedAt) - Date.parse(b.firstDetectedAt))) {
+    const branchKey = alert.branchId || `camera:${alert.cameraId}`;
+    const startedAt = Date.parse(alert.firstDetectedAt);
+    const cluster = clusters.find((candidate) =>
+      candidate.branchId === branchKey &&
+      Math.abs(startedAt - Date.parse(candidate.startedAt)) <= 5 * 60 * 1000 &&
+      !candidate.alertIds.includes(alert.id)
+    );
+
+    if (cluster) {
+      cluster.alertIds.push(alert.id);
+      if (!cluster.cameraIds.includes(alert.cameraId)) cluster.cameraIds.push(alert.cameraId);
+      if (["P1", "P2"].includes(alert.severity) && !["P1", "P2"].includes(cluster.severity)) {
+        cluster.severity = alert.severity;
+      }
+      continue;
+    }
+
+    clusters.push({
+      id: `wall-cluster-${alert.id}`,
+      branchId: branchKey,
+      branchName: alert.branchName,
+      alertIds: [alert.id],
+      cameraIds: [alert.cameraId],
+      severity: alert.severity,
+      startedAt: alert.firstDetectedAt,
+      title: alert.title,
+    });
+  }
+
+  return clusters
+    .filter((cluster) => cluster.cameraIds.length > 1)
+    .map((cluster) => ({
+      ...cluster,
+      title: `${cluster.alertIds.length} correlated alerts across ${cluster.cameraIds.length} cameras`,
+    }));
+}
+
+async function enrichAnprMetadata(
+  store: ControlPlaneStore,
+  tenantId: string,
+  metadata: Record<string, unknown>,
+) {
+  const plateNumbers = anprPlateNumbers(metadata);
+  const registrations = await activeAnprRegistryMatches(store, tenantId, plateNumbers);
+  if (registrations.length === 0) return { metadata, matchedPlateIds: [] as string[] };
+
+  const matches = new Map<string, Record<string, unknown>>();
+  for (const registration of registrations) {
+    matches.set(`${registration.watchlistId}:${registration.plateNumber}`, {
+      plateId: registration.plateId,
+      plateNumber: registration.plateNumber,
+      watchlistId: registration.watchlistId,
+      watchlistName: registration.watchlistName,
+      reason: registration.reason,
+      severity: registration.severity,
+      alertAuthorities: registration.alertAuthorities,
+      alertOnMatch: registration.alertOnMatch,
+    });
+  }
+  for (const value of Array.isArray(metadata.matches) ? metadata.matches : []) {
+    const match = asUnknownRecord(value);
+    const plateNumber = stringMetadata(match, "plateNumber", "plate_number");
+    if (!match || !plateNumber) continue;
+    const watchlistId = stringMetadata(match, "watchlistId", "watchlist_id") ?? "engine";
+    const key = `${watchlistId}:${normalizePlateNumber(plateNumber)}`;
+    if (!matches.has(key)) matches.set(key, match);
+  }
+  return {
+    metadata: { ...metadata, matches: [...matches.values()] },
+    matchedPlateIds: registrations.map((registration) => registration.plateId),
+  };
+}
+
+function anprPlateNumbers(metadata: Record<string, unknown>) {
+  const plates = new Set<string>();
+  for (const value of Array.isArray(metadata.readings) ? metadata.readings : []) {
+    const plate = stringMetadata(asUnknownRecord(value), "plateNumber", "plate_number");
+    if (plate) plates.add(normalizePlateNumber(plate));
+  }
+  for (const value of Array.isArray(metadata.plates) ? metadata.plates : []) {
+    if (typeof value === "string" && value.trim()) plates.add(normalizePlateNumber(value));
+  }
+  return [...plates];
+}
+
+function asUnknownRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function stringMetadata(record: Record<string, unknown> | undefined, ...keys: string[]) {
+  for (const key of keys) {
+    const value = record?.[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+export async function registerAnalyticsRoutes(
+  app: FastifyInstance,
+  store: ControlPlaneStore,
+  options: AnalyticsRouteOptions = {},
+) {
+  app.get("/v1/analytics/capabilities", async () => ({
+    service: "sentinel-analytics-engine",
+    pricing: "self-hosted-no-api-fees",
+    domains: AI_CAPABILITY_DOMAINS,
+    summary: {
+      domains: AI_CAPABILITY_DOMAINS.length,
+      capabilities: AI_CAPABILITIES.length,
+      core: AI_CAPABILITIES.filter((item) => item.stage === "core").length,
+      derived: AI_CAPABILITIES.filter((item) => item.stage === "derived").length,
+      openModel: AI_CAPABILITIES.filter((item) => item.stage === "open-model").length,
+    },
+    cameraDeployment: {
+      automatic: CAMERA_AI_RULE_BUNDLE.map((rule) => rule.detectionType),
+      setupRequired: [...CAMERA_AI_SETUP_REQUIRED],
+    },
+  }));
+  app.get("/v1/analytics/engine-health", async (_request, reply) => {
+    if (!options.analyticsEngineUrl || !options.analyticsEngineSharedKey) {
+      return reply.code(503).send({
+        status: "unconfigured",
+        aiState: "AI_UNAVAILABLE",
+        service: "sentinel-analytics-engine",
+        reason: "analytics_engine_not_configured",
+      });
+    }
+    try {
+      const response = await fetch(new URL("/health", options.analyticsEngineUrl), {
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (response.ok) return await response.json();
+      return reply.code(503).send({
+        status: "unhealthy",
+        aiState: "AI_UNAVAILABLE",
+        service: "sentinel-analytics-engine",
+        reason: "analytics_engine_unhealthy",
+        upstreamStatus: response.status,
+      });
+    } catch (error) {
+      return reply.code(503).send({
+        status: "unavailable",
+        aiState: "AI_UNAVAILABLE",
+        service: "sentinel-analytics-engine",
+        reason: "analytics_engine_unavailable",
+      });
+    }
+  });
+  app.post("/v1/analytics/assistant/query", async (request, reply) => {
+    const { query, branchId } = z.object({
+      query: z.string().trim().min(3).max(500),
+      branchId: z.string().min(1).optional(),
+    }).parse(request.body);
+    const normalized = query.toLowerCase();
+    if (branchId && !await authorizedNode(request, reply, store, branchId, "analytics:view")) return;
+    const branches = (await store.listAccessibleNodes(request.currentUser, "analytics:view", "branch"))
+      .filter((branch) => !branchId || branch.id === branchId);
+    const branchNames = new Map(branches.map((branch) => [branch.id, branch.name]));
+
+    if (/not recording|recording (is )?(off|stopped|failed)/.test(normalized)) {
+      const cameras = (await Promise.all(branches.map((branch) =>
+        store.listCamerasByBranch(request.currentUser, branch.id, "analytics:view")
+      ))).flat();
+      const stopped = [];
+      for (const camera of cameras) {
+        const job = await store.getRecordingJob(camera.id);
+        if (!job || !job.enabled || !["recording", "starting"].includes(job.status)) {
+          stopped.push({ cameraId: camera.id, camera: camera.name, branch: branchNames.get(camera.branchId), status: job?.status ?? "not-configured" });
+        }
+      }
+      return { intent: "cameras-not-recording", answer: `${stopped.length} accessible cameras are not actively recording.`, data: stopped, actions: [{ label: "Open recording health", href: "/audit/recording-verification" }] };
+    }
+
+    if (/smoke|fire|alert/.test(normalized)) {
+      const accessibleCameras = (await Promise.all(branches.map((branch) =>
+        store.listCamerasByBranch(request.currentUser, branch.id, "analytics:view")
+      ))).flat();
+      const accessibleCameraIds = new Set(accessibleCameras.map((camera) => camera.id));
+      const alerts = (await store.listAnalyticsAlerts(request.currentUser.tenantId, { limit: 200 }))
+        .filter((alert) => accessibleCameraIds.has(alert.cameraId));
+      const terms = ["smoke", "fire"].filter((term) => normalized.includes(term));
+      const matches = alerts.filter((alert) => {
+        const haystack = `${alert.title} ${alert.description ?? ""} ${alert.objectClasses.join(" ")}`.toLowerCase();
+        return terms.length === 0 || terms.some((term) => haystack.includes(term));
+      });
+      return { intent: "alert-search", answer: `Found ${matches.length} matching alerts.`, data: matches.slice(0, 50), actions: [{ label: "Open alert queue", href: "/analytics" }] };
+    }
+
+    if (/branches?.*(incident)|incident.*branches?/.test(normalized)) {
+      const threshold = Number(normalized.match(/(?:more than|over|>)\s*(\d+)/)?.[1] ?? 0);
+      const incidents = await store.listIncidents(request.currentUser.tenantId, { limit: 1000 });
+      const counts = new Map<string, number>();
+      for (const incident of incidents) if (branchNames.has(incident.branchId)) counts.set(incident.branchId, (counts.get(incident.branchId) ?? 0) + 1);
+      const data = [...counts].map(([branchId, count]) => ({ branchId, branch: branchNames.get(branchId), count })).filter((item) => item.count > threshold).sort((a, b) => b.count - a.count);
+      return { intent: "branch-incident-comparison", answer: `${data.length} branches have more than ${threshold} incidents.`, data, actions: [{ label: "Open incidents", href: "/incidents" }] };
+    }
+
+    return {
+      intent: "visual-search",
+      answer: "I prepared this as an attribute-based video search across accessible cameras.",
+      data: { query },
+      actions: [{ label: "Search recorded video", href: `/video-search?q=${encodeURIComponent(query)}` }],
+    };
+  });
+  app.get("/v1/cameras/:id/analytics/rules", async (request, reply) => {
+    const { id } = cameraParams.parse(request.params);
+    const camera = await authorizedCamera(request, reply, store, id, "analytics:view");
+    if (!camera) return;
+    return { data: await store.listAnalyticsRules(id) };
+  });
+
+  /**
+   * One permission-filtered snapshot for the browser video wall. Keeping this
+   * batched avoids one rules request per tile on large (up to 12x12) walls.
+   */
+  app.get("/v1/analytics/live-wall", async (request) => {
+    const query = liveWallQuery.parse(request.query);
+    const requestedCameras = await store.listCamerasByIds(query.cameraIds);
+    const authorizedCameraIds: string[] = [];
+
+    for (const camera of requestedCameras) {
+      if (await hasCameraAccess(request, store, camera, "analytics:view")) {
+        authorizedCameraIds.push(camera.id);
+      }
+    }
+
+    const authorizedSet = new Set(authorizedCameraIds);
+    const [rules, candidateAlerts] = await Promise.all([
+      authorizedCameraIds.length > 0
+        ? store.listAnalyticsRulesByCameraIds(authorizedCameraIds)
+        : Promise.resolve([]),
+      authorizedCameraIds.length > 0 ? store.listAnalyticsAlerts(request.currentUser.tenantId, {
+        cameraIds: authorizedCameraIds, priorityFirst: true, limit: query.limit,
+      }) : Promise.resolve([]),
+    ]);
+    const alerts = candidateAlerts
+      .filter((alert) => authorizedSet.has(alert.cameraId))
+      .slice(0, query.limit);
+
+    return {
+      data: {
+        cameraIds: authorizedCameraIds,
+        rules,
+        alerts,
+        correlations: correlateLiveWallAlerts(alerts),
+        summary: summarize(alerts),
+        sampledAt: new Date().toISOString(),
+      },
+    };
+  });
+
+  app.post("/v1/branches/:branchId/analytics/enable-all-cameras", async (request, reply) => {
+    const { branchId } = z.object({ branchId: z.string().min(1) }).parse(request.params);
+    if (!await authorizedNode(request, reply, store, branchId, "analytics:configure")) return;
+    const branch: ResourceNode | undefined = await store.getNode(branchId);
+    if (!branch || branch.type !== "branch") {
+      return reply.code(404).send({ error: "branch_not_found" });
+    }
+    const cameras = await store.listCamerasByBranch(
+      request.currentUser,
+      branchId,
+      "analytics:configure",
+    );
+    const results = [];
+    for (const camera of cameras) {
+      results.push(await ensureCameraAiBundle(
+        store,
+        request.currentUser.tenantId,
+        camera.id,
+        request.currentUser.id,
+      ));
+    }
+    const summary = results.reduce((total, result) => ({
+      created: total.created + result.created,
+      enabled: total.enabled + result.enabled,
+      unchanged: total.unchanged + result.unchanged,
+    }), { created: 0, enabled: 0, unchanged: 0 });
+    await audit(request, store, "analytics.camera_bundle_enabled", branch.id, {
+      cameraCount: cameras.length,
+      capabilityCount: CAMERA_AI_RULE_BUNDLE.length,
+      ...summary,
+    });
+    return reply.send({
+      branchId,
+      cameraCount: cameras.length,
+      capabilityCount: CAMERA_AI_RULE_BUNDLE.length,
+      ...summary,
+      setupRequired: [...CAMERA_AI_SETUP_REQUIRED],
+      results,
+    });
+  });
+
+  app.post("/v1/analytics/enable-all-fleet-cameras", async (request, reply) => {
+    const branches = await store.listAccessibleNodes(request.currentUser, "analytics:configure", "branch");
+    const allCameras = (await Promise.all(
+      branches.map((b) => store.listCamerasByBranch(request.currentUser, b.id, "analytics:configure"))
+    )).flat();
+
+    const results = [];
+    for (const camera of allCameras) {
+      results.push(await ensureCameraAiBundle(
+        store,
+        request.currentUser.tenantId,
+        camera.id,
+        request.currentUser.id,
+      ));
+    }
+    const summary = results.reduce((total, result) => ({
+      created: total.created + result.created,
+      enabled: total.enabled + result.enabled,
+      unchanged: total.unchanged + result.unchanged,
+    }), { created: 0, enabled: 0, unchanged: 0 });
+
+    await audit(request, store, "analytics.all_fleet_bundles_enabled", request.currentUser.tenantId, {
+      branchCount: branches.length,
+      cameraCount: allCameras.length,
+      capabilityCount: CAMERA_AI_RULE_BUNDLE.length,
+      ...summary,
+    });
+
+    return reply.send({
+      success: true,
+      branchCount: branches.length,
+      cameraCount: allCameras.length,
+      capabilityCount: CAMERA_AI_RULE_BUNDLE.length,
+      ...summary,
+      results,
+    });
+  });
+
+  app.post("/v1/cameras/:id/analytics/rules", async (request, reply) => {
+    const { id } = cameraParams.parse(request.params);
+    const parsed = ruleSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({error:"invalid_analytics_rule",details:parsed.error.issues});
+    const parsedInput = parsed.data;
+    const input = { ...parsedInput, severity: parsedInput.severity ?? defaultSeverityForDetection(parsedInput.detectionType) };
+    const camera = await authorizedCamera(request, reply, store, id, "analytics:configure");
+    if (!camera) return;
+    if (["shutter-state","shutter-opened","shutter-closed"].includes(input.detectionType) && !input.shutterConfig)
+      return reply.code(400).send({error:"shutter_calibration_required",message:"Select the shutter area and open/closed reference views."});
+    
+    // Filter out undefined values to match AnalyticsRuleInput interface
+    const ruleInput: any = Object.fromEntries(
+      Object.entries(input).filter(([, value]) => value !== undefined)
+    );
+    
+    const rule = await store.createAnalyticsRule(
+      request.currentUser.tenantId, id, request.currentUser.id, ruleInput,
+    );
+    await audit(request, store, "analytics.rule_created", camera.nodeId, {
+      cameraId: id, ruleId: rule.id, detectionType: rule.detectionType,
+    });
+    return reply.code(201).send(rule);
+  });
+
+  app.patch("/v1/cameras/:id/analytics/rules/:ruleId", async (request, reply) => {
+    const { id, ruleId } = ruleParams.parse(request.params);
+    const parsed = ruleSchema.partial().safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({error:"invalid_analytics_rule",details:parsed.error.issues});
+    const input = parsed.data;
+    const camera = await authorizedCamera(request, reply, store, id, "analytics:configure");
+    if (!camera) return;
+    const existing = (await store.listAnalyticsRules(id)).find(rule => rule.id === ruleId && rule.tenantId === request.currentUser.tenantId);
+    if (!existing) return reply.code(404).send({ error: "analytics_rule_not_found" });
+    if (["shutter-state", "shutter-opened", "shutter-closed"].includes(input.detectionType ?? existing.detectionType) &&
+        !(input.shutterConfig ?? existing.shutterConfig)) {
+      return reply.code(400).send({ error: "shutter_calibration_required", message: "Select the shutter area and open/closed reference views." });
+    }
+    const rule = await store.updateAnalyticsRule(
+      ruleId, request.currentUser.tenantId, id,
+      Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)),
+    );
+    if (!rule) return reply.code(404).send({ error: "analytics_rule_not_found" });
+    await audit(request, store, "analytics.rule_updated", camera.nodeId, {
+      cameraId: id, ruleId,
+    });
+    return rule;
+  });
+
+  app.delete("/v1/cameras/:id/analytics/rules/:ruleId", async (request, reply) => {
+    const { id, ruleId } = ruleParams.parse(request.params);
+    const camera = await authorizedCamera(request, reply, store, id, "analytics:configure");
+    if (!camera) return;
+    if (!await store.deleteAnalyticsRule(ruleId, request.currentUser.tenantId, id)) {
+      return reply.code(404).send({ error: "analytics_rule_not_found" });
+    }
+    await audit(request, store, "analytics.rule_deleted", camera.nodeId, {
+      cameraId: id, ruleId,
+    });
+    return reply.code(204).send();
+  });
+
+  app.get("/v1/analytics/alerts", async (request, reply) => {
+    const query = alertListQuery.parse(request.query);
+    if (query.cameraId && !await authorizedCamera(
+      request, reply, store, query.cameraId, "analytics:view",
+    )) return;
+    if (query.branchId && !await authorizedNode(
+      request, reply, store, query.branchId, "analytics:view",
+    )) return;
+    const cameraIds = await accessibleAlertCameraIds(request, store, query.branchId);
+    if (cameraIds.length === 0) return { data: [], summary: emptyAlertSummary(), total: 0 };
+    const candidates = await store.listAnalyticsAlerts(
+      request.currentUser.tenantId,
+      { ...query, cameraIds, limit: query.limit },
+    );
+    const summary = await store.getAnalyticsAlertsSummary(
+      request.currentUser.tenantId,
+      { cameraIds, branchId: query.branchId, cameraId: query.cameraId },
+    );
+    return { data: candidates, summary, total: summary.total, hasMore: candidates.length === query.limit };
+  });
+
+  app.get("/v1/analytics/alerts/summary", async (request, reply) => {
+    const query = z.object({
+      cameraId: z.string().min(1).optional(),
+      branchId: z.string().min(1).optional(),
+    }).parse(request.query);
+    if (query.cameraId && !await authorizedCamera(request, reply, store, query.cameraId, "analytics:view")) return;
+    if (query.branchId && !await authorizedNode(request, reply, store, query.branchId, "analytics:view")) return;
+    const cameraIds = await accessibleAlertCameraIds(request, store, query.branchId);
+    if (cameraIds.length === 0) return emptyAlertSummary();
+    const summary = await store.getAnalyticsAlertsSummary(
+      request.currentUser.tenantId,
+      { cameraIds, branchId: query.branchId, cameraId: query.cameraId },
+    );
+    return summary;
+  });
+
+  app.get("/v1/analytics/alerts/:alertId", async (request, reply) => {
+    const { alertId } = alertParams.parse(request.params);
+    const alert = await authorizedAlert(request, reply, store, alertId, "analytics:view");
+    if (!alert) return;
+    return alert;
+  });
+
+  app.post("/v1/analytics/alerts/:alertId/acknowledge", async (request, reply) => {
+    const { alertId } = alertParams.parse(request.params);
+    const { notes, expectedVersion } = z.object({
+      notes: z.string().trim().min(2).max(2_000).optional(),
+      expectedVersion: z.number().int().positive().optional(),
+    }).parse(request.body ?? {});
+    const alert = await authorizedAlert(
+      request, reply, store, alertId, "alerts:acknowledge",
+    );
+    if (!alert) return;
+    let updated;
+    try {
+      updated = await store.transitionAnalyticsAlert(
+        alertId, request.currentUser.tenantId,
+        { status: "acknowledged", actorUserId: request.currentUser.id, notes, expectedVersion },
+      );
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : "alert_conflict" });
+    }
+    await auditAlert(request, store, alert, "analytics.alert_acknowledged", { notes });
+    if (updated) publishAlert(updated, "alert.updated");
+    return updated;
+  });
+
+  app.post("/v1/analytics/alerts/:alertId/escalate", async (request, reply) => {
+    const { alertId } = alertParams.parse(request.params);
+    const body = z.object({
+      notes: z.string().trim().min(2).max(2_000).optional(),
+      recipients: z.array(z.string().trim().min(1).max(320)).max(50).default([]),
+      expectedVersion: z.number().int().positive().optional(),
+    }).parse(request.body ?? {});
+    const alert = await authorizedAlert(request, reply, store, alertId, "alerts:escalate");
+    if (!alert) return;
+    let updated;
+    try {
+      updated = await store.transitionAnalyticsAlert(
+        alertId, request.currentUser.tenantId,
+        { status: "escalated", actorUserId: request.currentUser.id, ...body },
+      );
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : "alert_conflict" });
+    }
+    await auditAlert(request, store, alert, "analytics.alert_escalated", {
+      recipientCount: body.recipients.length,
+    });
+    if (updated) publishAlert(updated, "alert.updated");
+    return updated;
+  });
+
+  app.patch("/v1/analytics/alerts/:alertId", async (request, reply) => {
+    const { alertId } = alertParams.parse(request.params);
+    const body = z.object({
+      status: z.enum(["investigating", "resolved", "false_alarm", "suppressed"]),
+      notes: z.string().trim().min(2).max(2_000).optional(),
+      falseAlarmReason: z.string().trim().min(2).max(1_000).optional(),
+      expectedVersion: z.number().int().positive().optional(),
+    }).superRefine((value, context) => {
+      if (value.status === "false_alarm" && !value.falseAlarmReason) {
+        context.addIssue({ code: "custom", path: ["falseAlarmReason"],
+          message: "A false alarm reason is required" });
+      }
+    }).parse(request.body);
+    const action: Action = body.status === "suppressed"
+      ? "analytics:configure" : "alerts:acknowledge";
+    const alert = await authorizedAlert(request, reply, store, alertId, action);
+    if (!alert) return;
+    
+    // Filter undefined values and ensure required field
+    const transitionInput: any = {
+      status: body.status,
+      actorUserId: request.currentUser.id,
+      ...(body.notes !== undefined && { notes: body.notes }),
+      ...(body.falseAlarmReason !== undefined && { falseAlarmReason: body.falseAlarmReason }),
+      ...(body.expectedVersion !== undefined && { expectedVersion: body.expectedVersion }),
+    };
+    
+    let updated;
+    try {
+      updated = await store.transitionAnalyticsAlert(
+        alertId, request.currentUser.tenantId, transitionInput,
+      );
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : "alert_conflict" });
+    }
+    await auditAlert(request, store, alert, "analytics.alert_status_changed", {
+      status: body.status, falseAlarmReason: body.falseAlarmReason,
+    });
+    if (updated) publishAlert(updated, "alert.updated");
+    return updated;
+  });
+
+  const handleConvertAlertToIncident = async (request: any, reply: any) => {
+    const alertId = request.params.alertId || request.params.id;
+    if (!alertId) return reply.code(400).send({ error: "alert_id_required" });
+    const body = z.object({
+      title: z.string().trim().min(3).max(160).optional(),
+      notes: z.string().trim().min(3).max(2_000).optional(),
+    }).parse(request.body ?? {});
+    const alert = await authorizedAlert(request, reply, store, alertId, "alerts:escalate");
+    if (!alert) return;
+    if (alert.incidentId) {
+      const existing = await store.getIncident(alert.incidentId).catch(() => null);
+      if (existing) return reply.code(200).send(existing);
+    }
+
+    const camera = await store.getCamera(alert.cameraId);
+    const branchId = camera?.branchId;
+
+    const rule = (await store.listAnalyticsRules(alert.cameraId))
+      .find((item) => item.id === alert.ruleId);
+
+    // 1. Create live incident (creates bookmark, legal hold, satisfies FK)
+    const liveIncident = await store.createLiveIncident({
+      tenantId: request.currentUser.tenantId,
+      cameraId: alert.cameraId,
+      createdBy: request.currentUser.id,
+      title: body.title ?? alert.title,
+      notes: body.notes ?? alert.description,
+      priority: alert.severity,
+      occurredAt: alert.firstDetectedAt,
+      preRollSeconds: rule?.preRollSeconds ?? 30,
+      postRollSeconds: rule?.postRollSeconds ?? 120,
+    });
+
+    const incidentNumber = `INC-AI-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+
+    // 2. Create enterprise incident in main `incidents` table using the SAME UUID
+    let enterpriseIncident: any;
+    try {
+      enterpriseIncident = await store.createIncident({
+        id: liveIncident.id,
+        tenantId: request.currentUser.tenantId,
+        incidentNumber,
+        title: body.title ?? alert.title,
+        description: body.notes ?? alert.description ?? `AI Detection alert: ${alert.title}`,
+        incidentType: rule?.detectionType ?? alert.title,
+        severity: alert.severity,
+        branchId: branchId ?? undefined,
+        occurredAt: alert.firstDetectedAt,
+        reportedBy: request.currentUser.id,
+        detectionSource: "ai-detection",
+        aiConfidence: alert.confidence,
+      });
+    } catch (err) {
+      console.warn("Could not insert enterprise incident into incidents table:", err);
+    }
+
+    // 3. Associate camera to incident_cameras
+    try {
+      if ((store as any).incidents?.addCamera) {
+        await (store as any).incidents.addCamera(liveIncident.id, alert.cameraId);
+      }
+    } catch {}
+
+    // 4. Attach snapshot evidence
+    const snapshotPath = alert.snapshotReference ?? `/v1/analytics/alerts/${alert.id}/snapshot`;
+    try {
+      if ((store as any).incidents?.createSnapshot) {
+        await (store as any).incidents.createSnapshot({
+          incidentId: liveIncident.id,
+          cameraId: alert.cameraId,
+          timestamp: alert.firstDetectedAt,
+          snapshotType: "original",
+          storagePath: snapshotPath,
+          description: alert.title,
+          createdBy: request.currentUser.id,
+        });
+      }
+    } catch {}
+
+    // 5. Attach clip evidence if available
+    if (alert.clipReference) {
+      try {
+        if ((store as any).incidents?.createClip) {
+          await (store as any).incidents.createClip({
+            incidentId: liveIncident.id,
+            cameraId: alert.cameraId,
+            sourceSegmentIds: [],
+            startTime: alert.firstDetectedAt,
+            endTime: alert.lastDetectedAt,
+            clipType: "investigation-copy",
+            storagePath: alert.clipReference,
+            hasWatermark: true,
+            hasTimestamp: true,
+            createdBy: request.currentUser.id,
+            notes: `AI Alert Clip for ${alert.title}`,
+          });
+        }
+      } catch {}
+    }
+
+    // 6. Link incident to analytics_alerts and mark escalated
+    await store.linkAnalyticsAlertIncident(alertId, request.currentUser.tenantId, liveIncident.id);
+    try {
+      await store.transitionAnalyticsAlert(alertId, request.currentUser.tenantId, {
+        status: "escalated",
+        actorUserId: request.currentUser.id,
+        notes: `Converted to enterprise incident ${incidentNumber}`,
+      });
+    } catch {}
+
+    await auditAlert(request, store, alert, "analytics.incident_created", {
+      incidentId: liveIncident.id,
+      incidentNumber,
+      legalHoldId: liveIncident.legalHoldId,
+    });
+
+    const responsePayload = {
+      ...(enterpriseIncident ?? liveIncident),
+      id: liveIncident.id,
+      incidentNumber: enterpriseIncident?.incidentNumber ?? incidentNumber,
+      legalHoldId: liveIncident.legalHoldId,
+      branchId,
+      branchName: camera?.name ? `Branch for ${camera.name}` : undefined,
+      cameraId: alert.cameraId,
+      cameraName: camera?.name,
+      status: enterpriseIncident?.status ?? "new",
+      snapshotUrl: snapshotPath,
+      videoClipUrl: alert.clipReference ?? `/v1/analytics/alerts/${alert.id}/clip`,
+    };
+
+    return reply.code(201).send(responsePayload);
+  };
+
+  app.post("/v1/analytics/alerts/:alertId/incidents", handleConvertAlertToIncident);
+  app.post("/api/ai/alerts/:alertId/convert-incident", handleConvertAlertToIncident);
+
+  app.get("/v1/analytics/alerts/:alertId/clip", async (request, reply) => {
+    const { alertId } = z.object({ alertId: z.string().uuid() }).parse(request.params);
+    const alert = await store.getAnalyticsAlert(alertId, request.currentUser.tenantId);
+    if (!alert) return reply.code(404).send({ error: "alert_not_found" });
+
+    if (alert.clipReference) {
+      if (alert.clipReference.startsWith("http://") || alert.clipReference.startsWith("https://")) {
+        return reply.redirect(alert.clipReference);
+      }
+      return reply.send({ success: true, url: alert.clipReference, alertId });
+    }
+
+    const from = new Date(new Date(alert.firstDetectedAt).getTime() - 30_000).toISOString();
+    const to = new Date(new Date(alert.lastDetectedAt).getTime() + 60_000).toISOString();
+    const segments = await store.listRecordingSegments(alert.cameraId, from, to).catch(() => []);
+
+    if (segments && segments.length > 0 && segments[0]?.id) {
+      return reply.redirect(`/api/recordings/play?segmentId=${encodeURIComponent(segments[0].id)}`);
+    }
+
+    return reply.send({
+      success: true,
+      alertId,
+      cameraId: alert.cameraId,
+      timestamp: alert.firstDetectedAt,
+      fallbackStreamUrl: `/v1/cameras/${alert.cameraId}/live/stream`,
+      message: "Event clip index ready; stream playback active",
+    });
+  });
+  app.get("/v1/analytics/alerts/:alertId/video", async (request, reply) => {
+    return reply.redirect(`/v1/analytics/alerts/${(request.params as any).alertId}/clip`);
+  });
+
+  app.get("/v1/analytics/alerts/:alertId/snapshot", async (request, reply) => {
+    const { alertId } = z.object({ alertId: z.string().uuid() }).parse(request.params);
+    const alert = await store.getAnalyticsAlert(alertId, request.currentUser.tenantId);
+    if (!alert) return reply.code(404).send({ error: "alert_not_found" });
+
+    // Try reading snapshotBase64 from analytics_events
+    if ((store as any).pool?.query && alert.eventId) {
+      try {
+        const res = await (store as any).pool.query(
+          "SELECT metadata FROM analytics_events WHERE id = $1",
+          [alert.eventId]
+        );
+        const meta = res.rows?.[0]?.metadata;
+        const marked = typeof meta?.annotatedSnapshotBase64 === "string"
+          ? meta.annotatedSnapshotBase64 : undefined;
+        if (marked || (meta && typeof meta === "object" && typeof meta.snapshotBase64 === "string" && meta.snapshotBase64.length > 0)) {
+          reply.header("content-type", "image/jpeg");
+          reply.header("cache-control", "public, max-age=86400, immutable");
+          return reply.send(Buffer.from(marked || meta.snapshotBase64, "base64"));
+        }
+      } catch {}
+    }
+
+    // Try analytics-engine
+    const aeUrl = options.analyticsEngineUrl || process.env.ANALYTICS_ENGINE_URL || "http://analytics-engine:8092";
+    try {
+      const aeResp = await fetch(new URL(`/internal/analytics/snapshots/${alert.eventId || alert.id}`, aeUrl), {
+        headers: { "x-analytics-engine-key": options.analyticsEngineSharedKey ?? "" },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (aeResp.ok) {
+        reply.header("content-type", "image/jpeg");
+        reply.header("cache-control", "public, max-age=86400");
+        return reply.send(Buffer.from(await aeResp.arrayBuffer()));
+      }
+    } catch {}
+
+    // An illustration is not camera evidence.  Returning a generated graphic
+    // here made an unavailable capture look genuine to operators and exports.
+    return reply.code(404).send({ error: "alert_snapshot_unavailable" });
+  });
+
+  app.post("/internal/analytics/events", async (request, reply) => {
+    if (!engineIdentity(request, reply, options.analyticsEngineSharedKey, options.analyticsSourceSharedKey)) return;
+    const input = eventSchema.parse(request.body);
+    const anprEnrichment = input.detectionType === "anpr"
+      ? await enrichAnprMetadata(store, input.tenantId, input.metadata)
+      : { metadata: input.metadata, matchedPlateIds: [] as string[] };
+    
+    // Ensure all required fields are present
+    const eventInput: any = {
+      tenantId: input.tenantId,
+      cameraId: input.cameraId,
+      sourceEventId: input.sourceEventId,
+      detectionType: input.detectionType,
+      occurredAt: input.occurredAt,
+      confidence: input.confidence,
+      durationSeconds: input.durationSeconds,
+      modelVersion: input.modelVersion,
+      objects: input.objects,
+      ...(input.endedAt !== undefined && { endedAt: input.endedAt }),
+      ...(input.snapshotReference !== undefined && { snapshotReference: input.snapshotReference }),
+      ...(input.clipReference !== undefined && { clipReference: input.clipReference }),
+      metadata: anprEnrichment.metadata,
+    };
+    
+    const result = await store.processAnalyticsEvent(eventInput);
+    if (result.event.status !== "duplicate") {
+      await recordAnprRegistryMatches(
+        store,
+        input.tenantId,
+        anprEnrichment.matchedPlateIds,
+        input.occurredAt,
+      );
+    }
+    await applyAnalyticsIngestSideEffects(app, store, options, eventInput, result);
+
+    let openingViolationCount = 0;
+    if (
+      input.detectionType !== "dual-control-verification" &&
+      options.nbfcRuleRepository &&
+      options.nbfcRuleEngine
+    ) {
+      const camera = await store.getCamera(input.cameraId);
+      if (camera) {
+        const violations = await evaluateBranchOpeningDualControl(
+          options.nbfcRuleRepository,
+          options.nbfcRuleEngine,
+          eventInput,
+          camera,
+          result.event.id,
+        );
+        openingViolationCount = violations.length;
+        for (const violation of violations) {
+          const violationInput: AnalyticsEventInput = {
+            ...eventInput,
+            cameraId: violation.cameraId,
+            sourceEventId: `branch-opening:${violation.ruleId}:${violation.branchId}:${violation.localDate}`,
+            detectionType: "dual-control-verification",
+            occurredAt: violation.occurredAt,
+            durationSeconds: 0,
+            objects: [],
+            snapshotReference: violation.snapshotReference,
+            clipReference: violation.clipReference,
+            metadata: {
+              ...(eventInput.metadata || {}),
+              branchId: violation.branchId,
+              sourceRuleId: violation.ruleId,
+              sourceRuleName: violation.ruleName,
+              correlationKey: `branch-opening:${violation.branchId}:${violation.localDate}`,
+              personBoundingBox: violation.personBoundingBox,
+              staffCount: violation.staffCount,
+              requiredStaff: violation.requiredStaff,
+              violation: "BRANCH_OPENING_MINIMUM_STAFF",
+            },
+          };
+          const violationResult = await store.processAnalyticsEvent(violationInput);
+          await applyAnalyticsIngestSideEffects(app, store, options, violationInput, violationResult);
+          if (violationResult.alerts.length > 0) {
+            await options.nbfcRuleRepository.markBranchOpeningAlertEmitted(
+              violation.ruleId, violation.branchId, violation.localDate,
+            );
+          } else {
+            app.log.error({ ruleId: violation.ruleId, cameraId: violation.cameraId },
+              "Branch opening failed but no dual-control alert rule matched");
+          }
+        }
+      }
+    }
+    await store.writeAudit({
+      tenantId: input.tenantId, actorUserId: null,
+      action: "analytics.event_ingested", resourceNodeId: null,
+      outcome: "success", details: {
+        eventId: result.event.id, sourceEventId: input.sourceEventId,
+        status: result.event.status, alertCount: result.alerts.length,
+        openingViolationCount,
+      },
+    });
+    return reply.code(202).send(result);
+  });
+
+  const branchAnalyticsParams = z.object({
+    branchId: z.string().trim().min(1).max(200),
+  });
+  const branchAnalyticsQuery = z.object({
+    from: z.string().datetime({ offset: true }).optional(),
+    to: z.string().datetime({ offset: true }).optional(),
+  }).superRefine((value, context) => {
+    if (value.from && value.to && Date.parse(value.from) > Date.parse(value.to)) {
+      context.addIssue({ code: "custom", path: ["from"], message: "from must not be after to" });
+    }
+  });
+
+  const loadBranchAnalytics = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    action: Extract<Action, "analytics:view" | "analytics:export">,
+  ) => {
+    const { branchId } = branchAnalyticsParams.parse(request.params);
+    const requestedRange = branchAnalyticsQuery.parse(request.query);
+    const now = new Date();
+    const query = {
+      from: requestedRange.from ?? new Date(now.getTime() - 24 * 60 * 60 * 1_000).toISOString(),
+      to: requestedRange.to ?? now.toISOString(),
+    };
+    const branches = await store.listAccessibleNodes(request.currentUser, action, "branch");
+    const branch = branches.find((candidate) => candidate.id === branchId);
+    if (!branch) {
+      await reply.code(404).send({ error: "branch_not_found" });
+      return undefined;
+    }
+
+    const cameras = await store.listCamerasByBranch(request.currentUser, branch.id, action);
+    const rules = cameras.length > 0
+      ? await store.listAnalyticsRulesByCameraIds(cameras.map((camera) => camera.id))
+      : [];
+    const rowLimit = 10_000;
+    const loadedAlerts = await store.listAnalyticsAlerts(request.currentUser.tenantId, {
+      branchId: branch.id,
+      from: query.from,
+      to: query.to,
+      limit: rowLimit + 1,
+    });
+    const loadedEvents = cameras.length > 0
+      ? await store.listAnalyticsEvents(request.currentUser.tenantId, {
+        cameraIds: cameras.map((camera) => camera.id),
+        from: query.from,
+        to: query.to,
+        limit: rowLimit + 1,
+      })
+      : [];
+    const truncated = loadedAlerts.length > rowLimit || loadedEvents.length > rowLimit;
+    const alerts = loadedAlerts.slice(0, rowLimit);
+    const events = loadedEvents.slice(0, rowLimit);
+    return { branch, cameras, rules, alerts, events, query, truncated };
+  };
+
+  app.get("/v1/branches/:branchId/analytics/summary", async (request, reply) => {
+    const report = await loadBranchAnalytics(request, reply, "analytics:view");
+    if (!report) return;
+
+    const eventsByType: Record<string, number> = {};
+    for (const event of report.events) {
+      eventsByType[event.detectionType] = (eventsByType[event.detectionType] ?? 0) + 1;
+    }
+    const footfallTypes = new Set(["line-crossing", "footfall", "customer-counting", "person-counting"]);
+    const hasFootfallRule = report.rules.some((rule) => footfallTypes.has(rule.detectionType));
+    const totalFootfall = hasFootfallRule
+      ? aggregateFootfall(
+        report.events.filter((event) => footfallTypes.has(event.detectionType)),
+        "day",
+      ).reduce((total, bucket) => total + bucket.total_crossings, 0)
+      : null;
+    const totalEvents = Object.values(eventsByType).reduce((total, count) => total + count, 0);
+    const dwellBuckets = aggregateDwell(
+      report.events.filter((event) => event.detectionType === "loitering" || event.detectionType === "dwell-time"),
+      "day",
+    );
+    const dwellSamples = dwellBuckets.reduce((total, bucket) => total + bucket.sample_count, 0);
+    const averageDwellTime = dwellSamples > 0
+      ? dwellBuckets.reduce(
+        (total, bucket) => total + bucket.average_seconds * bucket.sample_count,
+        0,
+      ) / dwellSamples
+      : null;
+
+    return reply.send({
+      period: {
+        startDate: report.query.from,
+        endDate: report.query.to,
+      },
+      totalAlerts: report.alerts.length,
+      criticalAlerts: report.alerts.filter((alert) => alert.severity === "P1").length,
+      resolvedAlerts: report.alerts.filter((alert) => alert.status === "resolved").length,
+      totalFootfall,
+      averageDwellTime,
+      activeRules: report.rules.filter((rule) => rule.enabled).length,
+      totalEvents,
+      eventsByType,
+      truncated: report.truncated,
+      branch: {
+        id: report.branch.id,
+        name: report.branch.name,
+        eventCount: totalEvents,
+      },
+    });
+  });
+
+  app.get("/v1/branches/:branchId/analytics/export/csv", async (request, reply) => {
+    const report = await loadBranchAnalytics(request, reply, "analytics:export");
+    if (!report) return;
+
+    const camerasById = new Map(report.cameras.map((camera) => [camera.id, camera]));
+    const rulesById = new Map(report.rules.map((rule) => [rule.id, rule]));
+    const rows = report.alerts.map((alert) => [
+      alert.id,
+      alert.cameraId,
+      camerasById.get(alert.cameraId)?.name ?? "",
+      rulesById.get(alert.ruleId)?.detectionType ?? "unknown",
+      alert.severity,
+      alert.status,
+      alert.confidence,
+      alert.occurrenceCount,
+      alert.firstDetectedAt,
+      alert.lastDetectedAt,
+      alert.title,
+    ]);
+    const csv = [
+      [
+        "alert_id", "camera_id", "camera_name", "detection_type", "severity", "status",
+        "confidence", "occurrences", "first_detected_at", "last_detected_at", "title",
+      ],
+      ...rows,
+    ].map((row) => row.map(csvCell).join(",")).join("\r\n");
+    const safeBranchId = report.branch.id.replace(/[^a-zA-Z0-9_-]/g, "-");
+
+    await audit(request, store, "analytics.summary_exported", report.branch.id, {
+      format: "csv", rowCount: report.alerts.length, truncated: report.truncated,
+      from: report.query.from ?? null, to: report.query.to ?? null,
+    });
+    return reply
+      .type("text/csv; charset=utf-8")
+      .header("content-disposition", `attachment; filename="analytics-${safeBranchId}.csv"`)
+      .send(`\uFEFF${csv}\r\n`);
+  });
+
+  // Camera metrics are derived from the normalized, persisted event stream.
+  // The analytics engine's retail endpoints expose process-wide snapshots and
+  // cannot safely be presented as camera-specific historical measurements.
+  const analyticsQuery = z.object({
+    from: z.string().datetime({ offset: true }).optional(),
+    to: z.string().datetime({ offset: true }).optional(),
+    interval: z.enum(["hour", "day"]).default("hour"),
+  }).superRefine((value, context) => {
+    if (value.from && value.to && Date.parse(value.from) > Date.parse(value.to)) {
+      context.addIssue({ code: "custom", path: ["from"], message: "from must not be after to" });
+    }
+  });
+
+  const metricEventLimit = 10_001;
+  const metricRange = (query: z.infer<typeof analyticsQuery>) => ({
+    from: query.from ?? new Date(Date.now() - 24 * 60 * 60 * 1_000).toISOString(),
+    to: query.to ?? new Date().toISOString(),
+  });
+
+  app.get("/v1/cameras/:id/analytics/footfall", async (request, reply) => {
+    const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
+    const query = analyticsQuery.parse(request.query);
+    const camera = await authorizedCamera(request, reply, store, id, "analytics:view");
+    if (!camera) return;
+    const range = metricRange(query);
+    const events = await store.listAnalyticsEvents(request.currentUser.tenantId, {
+      cameraId: id, ...range,
+      detectionTypes: ["line-crossing", "footfall", "customer-counting", "person-counting"],
+      limit: metricEventLimit,
+    });
+    return reply.send(metricSeriesResponse(aggregateFootfall(events.slice(0, 10_000), query.interval), events));
+  });
+
+  app.get("/v1/cameras/:id/analytics/dwell-time", async (request, reply) => {
+    const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
+    const query = analyticsQuery.parse(request.query);
+    const camera = await authorizedCamera(request, reply, store, id, "analytics:view");
+    if (!camera) return;
+    const range = metricRange(query);
+    const events = await store.listAnalyticsEvents(request.currentUser.tenantId, {
+      cameraId: id, ...range,
+      detectionTypes: ["loitering", "dwell-time"],
+      limit: metricEventLimit,
+    });
+    return reply.send(metricSeriesResponse(aggregateDwell(events.slice(0, 10_000), query.interval), events));
+  });
+
+  app.get("/v1/cameras/:id/analytics/queue", async (request, reply) => {
+    const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
+    const query = analyticsQuery.parse(request.query);
+    const camera = await authorizedCamera(request, reply, store, id, "analytics:view");
+    if (!camera) return;
+    const range = metricRange(query);
+    const events = await store.listAnalyticsEvents(request.currentUser.tenantId, {
+      cameraId: id, ...range,
+      detectionTypes: ["queue", "queue-length"],
+      limit: metricEventLimit,
+    });
+    return reply.send(metricSeriesResponse(aggregateQueue(events.slice(0, 10_000), query.interval), events));
+  });
+}
+
+function metricSeriesResponse<T>(data: T[], loadedEvents: AnalyticsEvent[]) {
+  return {
+    data,
+    basis: "persisted_analytics_events",
+    truncated: loadedEvents.length > 10_000,
+  };
+}
+
+function eventBucket(timestamp: string, interval: "hour" | "day") {
+  const date = new Date(timestamp);
+  date.setUTCMinutes(0, 0, 0);
+  if (interval === "day") date.setUTCHours(0, 0, 0, 0);
+  return date.toISOString();
+}
+
+function finiteMetadataNumber(metadata: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = metadata[key];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+  }
+  return undefined;
+}
+
+function aggregateFootfall(events: AnalyticsEvent[], interval: "hour" | "day") {
+  const buckets = new Map<string, { bucket_at: string; entries: number; exits: number; total_crossings: number }>();
+  for (const event of events) {
+    const bucketAt = eventBucket(event.occurredAt, interval);
+    const bucket = buckets.get(bucketAt) ?? { bucket_at: bucketAt, entries: 0, exits: 0, total_crossings: 0 };
+    const direction = typeof event.metadata.direction === "string" ? event.metadata.direction.toLowerCase() : "unknown";
+    const entries = finiteMetadataNumber(event.metadata, "entries", "entryCount") ??
+      (["entry", "enter", "a-to-b"].includes(direction) ? 1 : 0);
+    const exits = finiteMetadataNumber(event.metadata, "exits", "exitCount") ??
+      (["exit", "leave", "b-to-a"].includes(direction) ? 1 : 0);
+    bucket.entries += Math.max(0, entries);
+    bucket.exits += Math.max(0, exits);
+    // A raw detection or occupancy snapshot is not a crossing. Only an
+    // explicit count or a recognized directional tripwire contributes to
+    // footfall; this prevents frame-rate-dependent inflation.
+    const explicitCrossings = finiteMetadataNumber(event.metadata, "totalCrossings", "crossings");
+    bucket.total_crossings += Math.max(0,
+      explicitCrossings ?? (entries + exits > 0 ? entries + exits :
+      // Compatibility for external engines whose `footfall` contract itself
+      // denotes one verified crossing. Person/occupancy snapshots never take
+      // this fallback.
+      (event.detectionType === "footfall" ? 1 : 0)));
+    buckets.set(bucketAt, bucket);
+  }
+  return [...buckets.values()].sort((left, right) => left.bucket_at.localeCompare(right.bucket_at));
+}
+
+function aggregateDwell(events: AnalyticsEvent[], interval: "hour" | "day") {
+  const buckets = new Map<string, { bucket_at: string; total: number; maximum: number; samples: number }>();
+  for (const event of events) {
+    const seconds = finiteMetadataNumber(event.metadata, "dwellTimeSeconds", "dwellSeconds", "durationSeconds")
+      ?? event.durationSeconds;
+    if (!Number.isFinite(seconds) || seconds < 0) continue;
+    const bucketAt = eventBucket(event.occurredAt, interval);
+    const bucket = buckets.get(bucketAt) ?? { bucket_at: bucketAt, total: 0, maximum: 0, samples: 0 };
+    bucket.total += seconds;
+    bucket.maximum = Math.max(bucket.maximum, seconds);
+    bucket.samples += 1;
+    buckets.set(bucketAt, bucket);
+  }
+  return [...buckets.values()]
+    .sort((left, right) => left.bucket_at.localeCompare(right.bucket_at))
+    .map((bucket) => ({
+      bucket_at: bucket.bucket_at,
+      average_seconds: bucket.samples ? bucket.total / bucket.samples : 0,
+      maximum_seconds: bucket.maximum,
+      sample_count: bucket.samples,
+    }));
+}
+
+function aggregateQueue(events: AnalyticsEvent[], interval: "hour" | "day") {
+  const buckets = new Map<string, { bucket_at: string; total: number; maximum: number; samples: number }>();
+  for (const event of events) {
+    const queueRows = Array.isArray(event.metadata.queues) ? event.metadata.queues : [];
+    const lengths = queueRows.flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      const row = item as Record<string, unknown>;
+      const value = finiteMetadataNumber(row, "length", "queueLength", "currentLength");
+      return value === undefined ? [] : [value];
+    });
+    if (lengths.length === 0 && event.objects.length > 0) lengths.push(event.objects.length);
+    if (lengths.length === 0) continue;
+    const bucketAt = eventBucket(event.occurredAt, interval);
+    const bucket = buckets.get(bucketAt) ?? { bucket_at: bucketAt, total: 0, maximum: 0, samples: 0 };
+    for (const length of lengths) {
+      bucket.total += Math.max(0, length);
+      bucket.maximum = Math.max(bucket.maximum, length);
+      bucket.samples += 1;
+    }
+    buckets.set(bucketAt, bucket);
+  }
+  return [...buckets.values()]
+    .sort((left, right) => left.bucket_at.localeCompare(right.bucket_at))
+    .map((bucket) => ({
+      bucket_at: bucket.bucket_at,
+      average_count: bucket.samples ? bucket.total / bucket.samples : 0,
+      maximum_count: bucket.maximum,
+    }));
+}
+
+function publishAlert(alert: AnalyticsAlert, type: "alert.created" | "alert.updated") {
+  alertEvents.publish({
+    id: randomUUID(), tenantId: alert.tenantId, type,
+    occurredAt: new Date().toISOString(), alertId: alert.id, alert,
+  });
+}
+
+async function authorizedAlert(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  store: ControlPlaneStore,
+  alertId: string,
+  action: Action,
+) {
+  const alert = await store.getAnalyticsAlert(alertId, request.currentUser.tenantId);
+  if (!alert) {
+    await reply.code(404).send({ error: "analytics_alert_not_found" });
+    return undefined;
+  }
+  const camera = await authorizedCamera(request, reply, store, alert.cameraId, action);
+  return camera ? alert : undefined;
+}
+
+async function authorizedCamera(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  store: ControlPlaneStore,
+  cameraId: string,
+  action: Action,
+) {
+  const camera = await store.getCamera(cameraId);
+  if (!camera) {
+    await reply.code(404).send({ error: "camera_not_found" });
+    return undefined;
+  }
+  if (!await hasCameraAccess(request, store, camera, action)) {
+    await reply.code(403).send({ error: "forbidden" });
+    return undefined;
+  }
+  return camera;
+}
+
+async function hasCameraAccess(
+  request: FastifyRequest,
+  store: ControlPlaneStore,
+  camera: Camera,
+  action: Action,
+) {
+  if (request.currentUser?.role === "super_admin") return true;
+  const decision = hasExtendedInfrastructure(store)
+    ? await store.checkCameraAccess(request.currentUser.id, camera.id, action)
+    : await store.checkAccess(request.currentUser, action, camera.nodeId);
+  return Boolean(decision?.allowed);
+}
+
+async function accessibleAlertCameraIds(
+  request: FastifyRequest,
+  store: ControlPlaneStore,
+  branchId?: string,
+): Promise<string[]> {
+  const branches = await store.listAccessibleNodes(request.currentUser, "analytics:view", "branch");
+  const scoped = branchId ? branches.filter((branch) => branch.id === branchId) : branches;
+  const cameras = await Promise.all(scoped.map((branch) =>
+    store.listCamerasByBranch(request.currentUser, branch.id, "analytics:view")
+  ));
+  return [...new Set(cameras.flat().map((camera) => camera.id))];
+}
+
+function emptyAlertSummary() {
+  return { total: 0, active: 0, converted: 0, unconverted: 0, critical: 0, falseAlarms: 0 };
+}
+
+async function authorizedNode(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  store: ControlPlaneStore,
+  nodeId: string,
+  action: Action,
+) {
+  const decision = await store.checkAccess(request.currentUser, action, nodeId);
+  if (!decision) {
+    await reply.code(404).send({ error: "resource_not_found" });
+    return false;
+  }
+  if (!decision.allowed) {
+    await reply.code(403).send({ error: "forbidden", reason: decision.reason });
+    return false;
+  }
+  return true;
+}
+
+function summarize(alerts: AnalyticsAlert[]) {
+  const open = alerts.filter((alert) =>
+    !["resolved", "false_alarm", "suppressed"].includes(alert.status)
+  );
+  return {
+    total: alerts.length, open: open.length,
+    new: open.filter((alert) => alert.status === "new").length,
+    critical: open.filter((alert) => alert.severity === "P1").length,
+    highPriority: open.filter((alert) =>
+      alert.severity === "P1" || alert.severity === "P2"
+    ).length,
+  };
+}
+
+function engineIdentity(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  expected: string | undefined,
+  fallback?: string | undefined,
+) {
+  if (!expected && !fallback) {
+    void reply.code(503).send({ error: "analytics_engine_not_configured" });
+    return false;
+  }
+  const supplied = request.headers["x-analytics-engine-key"];
+  if (typeof supplied !== "string") {
+    void reply.code(401).send({ error: "invalid_analytics_engine_identity" });
+    return false;
+  }
+  if (expected && same(supplied, expected)) return true;
+  if (fallback && same(supplied, fallback)) return true;
+  void reply.code(401).send({ error: "invalid_analytics_engine_identity" });
+  return false;
+}
+
+async function applyAnalyticsIngestSideEffects(
+  app: FastifyInstance,
+  store: ControlPlaneStore,
+  options: AnalyticsRouteOptions,
+  input: AnalyticsEventInput,
+  result: AnalyticsIngestResult,
+) {
+  for (const alert of result.alerts) {
+    const rule = result.rules.find((item) => item.id === alert.ruleId);
+    if (!rule) continue;
+    if (alert.eventId !== result.event.id) {
+      publishAlert(alert, "alert.updated");
+      continue;
+    }
+    if (result.event.status === "accepted") {
+      if (options.alertEvidenceClient && (alert.severity === "P1" || alert.severity === "P2") &&
+          (!alert.snapshotReference || !alert.clipReference)) {
+        try {
+          await options.alertEvidenceClient.capture({
+            alertId: alert.id,
+            cameraId: alert.cameraId,
+            occurredAt: alert.firstDetectedAt,
+            clipSeconds: Math.min(20, Math.max(5, rule.postRollSeconds)),
+          });
+          const managed = managedAlertEvidenceReferences(alert.id);
+          const updated = await store.updateAnalyticsAlertEvidence(alert.id, alert.tenantId, {
+            ...(!alert.snapshotReference ? { snapshotReference: managed.snapshotReference } : {}),
+            ...(!alert.clipReference ? { clipReference: managed.clipReference } : {}),
+          });
+          if (updated) Object.assign(alert, updated);
+        } catch (error) {
+          app.log.error({ error, alertId: alert.id }, "Automatic alert evidence capture failed to start");
+        }
+      }
+      await enqueueAlertMatrix(store, alert, rule);
+      publishAlert(alert, "alert.created");
+      try {
+        const siren = await queuePhysicalSiren(store, {
+          alertId: alert.id,
+          tenantId: alert.tenantId,
+          cameraId: alert.cameraId,
+          severity: alert.severity,
+          detectionType: rule.detectionType,
+          occurredAt: alert.firstDetectedAt,
+        });
+        if (!siren.queued) {
+          app.log.warn({ alertId: alert.id, reason: "reason" in siren ? siren.reason : undefined }, "Physical siren command was not queued");
+        }
+      } catch (error) {
+        app.log.error({ error, alertId: alert.id }, "Physical siren command dispatch failed");
+      }
+      const camera = await store.getCamera(alert.cameraId);
+      if (camera) {
+        digitalTwinEvents.publish({
+          id: randomUUID(), tenantId: input.tenantId, branchId: camera.branchId,
+          type: "analytics.alert.created", occurredAt: alert.lastDetectedAt,
+          alertId: alert.id, severity: alert.severity === "P1" ? "critical" : "warning",
+        });
+      }
+    }
+    if (rule.recordingPolicy === "event-recording") {
+      await triggerRecording(app, options, alert.cameraId,
+        input.detectionType === "motion" ? "motion" : "event");
+    }
+    if (rule.recordingPolicy === "protect-window" && rule.createdBy &&
+        (input.detectionType !== "dual-control-verification" || result.event.status === "accepted")) {
+      try {
+        const incident = await store.createLiveIncident({
+          tenantId: input.tenantId, cameraId: input.cameraId,
+          createdBy: rule.createdBy, title: alert.title,
+          notes: alert.description, priority: alert.severity,
+          occurredAt: alert.firstDetectedAt,
+          preRollSeconds: rule.preRollSeconds, postRollSeconds: rule.postRollSeconds,
+        });
+        await store.linkAnalyticsAlertIncident(alert.id, input.tenantId, incident.id);
+        alert.incidentId = incident.id;
+      } catch (error) {
+        app.log.error({ error, alertId: alert.id }, "Analytics evidence protection failed");
+      }
+    }
+  }
+  if (result.event.status === "accepted" && options.alertDispatcher) {
+    void options.alertDispatcher.drainOnce().catch((error) =>
+      app.log.error({ error }, "Alert notification dispatch failed"));
+  }
+}
+
+async function triggerRecording(
+  app: FastifyInstance,
+  options: {
+    recordingEngineUrl?: string;
+    recordingEngineSharedKey?: string;
+  },
+  cameraId: string,
+  type: "motion" | "event",
+) {
+  if (!options.recordingEngineUrl || !options.recordingEngineSharedKey) return;
+  try {
+    const response = await fetch(new URL(
+      `/internal/jobs/${encodeURIComponent(cameraId)}/trigger`,
+      options.recordingEngineUrl,
+    ), {
+      method: "POST", signal: AbortSignal.timeout(5_000),
+      headers: {
+        "content-type": "application/json",
+        "x-recording-engine-key": options.recordingEngineSharedKey,
+      },
+      body: JSON.stringify({ type }),
+    });
+    if (!response.ok && response.status !== 409) {
+      throw new Error(`recording_engine_${response.status}`);
+    }
+  } catch (error) {
+    app.log.error({ error, cameraId }, "Analytics recording trigger failed");
+  }
+}
+
+async function auditAlert(
+  request: FastifyRequest,
+  store: ControlPlaneStore,
+  alert: AnalyticsAlert,
+  action: string,
+  details: Record<string, unknown>,
+) {
+  const camera = await store.getCamera(alert.cameraId);
+  await audit(request, store, action, camera?.nodeId ?? null, {
+    alertId: alert.id, cameraId: alert.cameraId, ...details,
+  });
+}
+
+async function audit(
+  request: FastifyRequest,
+  store: ControlPlaneStore,
+  action: string,
+  resourceNodeId: string | null,
+  details: Record<string, unknown>,
+) {
+  await store.writeAudit({
+    tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
+    action, resourceNodeId, outcome: "success", sourceIp: request.ip, details,
+  });
+}
+
+function same(left: string, right: string) {
+  const a = Buffer.from(left);
+  const b = Buffer.from(right);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function csvCell(value: unknown) {
+  let text = value == null ? "" : String(value);
+  if (/^[=+\-@]/.test(text)) text = `'${text}`;
+  return `"${text.replaceAll('"', '""')}"`;
+}

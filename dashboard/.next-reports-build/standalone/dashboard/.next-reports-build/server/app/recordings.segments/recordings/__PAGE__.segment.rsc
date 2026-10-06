@@ -1,0 +1,23 @@
+1:"$Sreact.fragment"
+2:I[80688,["7262","static/chunks/0677a558-a23046a32c7928b9.js","9568","static/chunks/9568-7ca6b233e1ab382e.js","2979","static/chunks/2979-0e2110e567163a60.js","63","static/chunks/63-de877bf1de2740c8.js","4804","static/chunks/4804-963d4acc87fa8c54.js","688","static/chunks/688-9db53a20092b016c.js","4795","static/chunks/app/recordings/page-204198f5063e3fa6.js"],"AppLayout"]
+3:I[83126,["7262","static/chunks/0677a558-a23046a32c7928b9.js","9568","static/chunks/9568-7ca6b233e1ab382e.js","2979","static/chunks/2979-0e2110e567163a60.js","63","static/chunks/63-de877bf1de2740c8.js","4804","static/chunks/4804-963d4acc87fa8c54.js","688","static/chunks/688-9db53a20092b016c.js","4795","static/chunks/app/recordings/page-204198f5063e3fa6.js"],"InvestigationFlowNav"]
+4:"$Sreact.suspense"
+5:I[64566,["7262","static/chunks/0677a558-a23046a32c7928b9.js","9568","static/chunks/9568-7ca6b233e1ab382e.js","2979","static/chunks/2979-0e2110e567163a60.js","63","static/chunks/63-de877bf1de2740c8.js","4804","static/chunks/4804-963d4acc87fa8c54.js","688","static/chunks/688-9db53a20092b016c.js","4795","static/chunks/app/recordings/page-204198f5063e3fa6.js"],"RecordingWorkspace"]
+6:I[31872,[],"OutletBoundary"]
+a:I[31872,[],"ViewportBoundary"]
+b:I[31872,[],"MetadataBoundary"]
+c:I[12569,[],"IconMark"]
+e:I[91133,[],""]
+f:I[4297,[],""]
+9:X
+11:X
+11:C
+0:{"buildId":"ujsN4gQGDkd0Ha09lMF1s","data":[{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"children":["$","div",null,{"className":"product-section-shell investigation-section","children":[["$","$L3",null,{}],["$","$4",null,{"fallback":["$","div",null,{"className":"page-container py-12 text-center text-gray-500","children":"Loading playback workspace…"}],"children":["$","$L5",null,{}]}]]}]}],null,["$","$L6",null,{"children":["$","$4",null,{"name":"Next.MetadataOutlet","children":"$@7"}]}]]}],"isPartial":"$@8","staleTime":"$9","varyParams":null},{"rsc":["$","$1","h",{"children":[null,["$","$La",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]}],["$","div",null,{"hidden":true,"children":["$","$Lb",null,{"children":["$","$4",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"KryptonVision | Security Operations"}],["$","meta","1",{"name":"description","content":"Multi-branch CCTV monitoring and security operations"}],["$","link","2",{"rel":"manifest","href":"/manifest.webmanifest"}],["$","meta","3",{"name":"mobile-web-app-capable","content":"yes"}],["$","meta","4",{"name":"apple-mobile-web-app-title","content":"KryptonVision"}],["$","meta","5",{"name":"apple-mobile-web-app-status-bar-style","content":"black-translucent"}],["$","link","6",{"rel":"icon","href":"/icon-192.png"}],["$","link","7",{"rel":"apple-touch-icon","href":"/apple-touch-icon.png"}],["$","$Lc","8",{}]]}]}]}],null]}],"isPartial":"$@d","staleTime":"$9","varyParams":null},{"rsc":["$","$1","c",{"children":[null,["$","$Le",null,{"parallelRouterKey":"children","template":["$","$Lf",null,{}]}]]}],"isPartial":"$@10","staleTime":"$9","varyParams":"$11"}],"isUpgradeableISRFallback":false,"a":"$@12","rootVaryParams":null,"needsRuntimeRequest":"$@13"}
+7:null
+13:true
+9:300
+9:C
+12:0
+d:"$undefined"
+10:"$undefined"
+8:"$undefined"

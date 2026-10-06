@@ -1,0 +1,184 @@
+{
+  "files": [
+    {
+      "path": "src/store.ts",
+      "beforeSha256": "50fff948c27d1d9c446a423620821dbdaaeaab2995a7639dec9cb4b829bad5a7",
+      "afterSha256": "c4b86e2ac1e61ef1c4b6fbd40d078b9aea78301bdc17e386c6c7a04f035e9084"
+    },
+    {
+      "path": "src/database/analytics-repository.ts",
+      "beforeSha256": "aba5e3a9a7cceda76b9ae0e5d65a6ec8e736d2db941101f388ace88fb7f8e693",
+      "afterSha256": "6e9c31f10feb3de784efdbadf3cd696c863d633b833c73ad50ce7f197344d014"
+    },
+    {
+      "path": "src/routes/analytics.routes.ts",
+      "beforeSha256": "ae8b593be04a527e24893b53335dd89854bee35646aa88bb80b27c56351ce396",
+      "afterSha256": "f8c3f16f6e9ab6c881be49f11dd1b57df04d7ed230cc2e72878368048c56b250"
+    },
+    {
+      "path": "src/routes/operational-reports.routes.ts",
+      "beforeSha256": "2e7d4245cf013663bb27637fbc01da829cba25328c6581a2e2a157b3ca2c3b78",
+      "afterSha256": "859910680aca16c90dc3e9a03033297d88edcdbc944292ce6ad2b88375bb1dce"
+    },
+    {
+      "path": "src/routes/reports/mis-unified.routes.ts",
+      "beforeSha256": "f5426df60d6d03da3aaf58fa792179b529ae229a35198fd6d99dacd7bc3ef333",
+      "afterSha256": "3b2dced73f6c97ae9cb5111cf7245c18687734839d0ba4b0e5d00db2669823d8"
+    },
+    {
+      "path": "src/routes/reports/branch-benchmarking.routes.ts",
+      "beforeSha256": "442fa297d4d3fdffc22dd56c5cdaffeed3a57e9fd5aff73dced5dcad651192f0",
+      "afterSha256": "0b1b3439a1a87bb0982e8ae77e6a8c8859903138292b6e5144f5ecc25c58f0a7"
+    },
+    {
+      "path": "src/routes/reports/compliance-scorecard.routes.ts",
+      "beforeSha256": "3a9eab98a06929d3afd6fd8c1380a0dd1dbf1e22b6648990ff4cfe68359add0c",
+      "afterSha256": "c5bbdf2aa11a857c098aebb77de07f5193c7584915861b8712f4cfd9296dd2f7"
+    },
+    {
+      "path": "src/routes/reports/financial-tco.routes.ts",
+      "beforeSha256": "6f4880511651a56cc7158689fa19648e780f7c8043c4e12c792b12d92acdd9fa",
+      "afterSha256": "96eb7249f0bfe47a98fe4fab2cb1bae5c1e310e8a502b210bc185d499262eddc"
+    },
+    {
+      "path": "src/control-plane-store.ts",
+      "beforeSha256": "83d37cbe1289b19f53441977c6640bc2dcf85dd97a1c376bca06e9726def851c",
+      "afterSha256": "3b3ed16f059a673330a9605eca118e6b01608c99b1398c41983981b64f905cd1"
+    },
+    {
+      "path": "src/reporting/worker.ts",
+      "beforeSha256": "b5dbafa38356240158fbca163bb2ca76e403c4c7e28ec91ba36f8d61b0041bc3",
+      "afterSha256": "e45a8e5133c0c7a1e7baaa27bad4e7ee745a9e48732d62938395423377adbf6c"
+    },
+    {
+      "path": "src/reporting/types.ts",
+      "beforeSha256": "623d30880a9211a2f277fc9f5672d14defc7691a566abf17d631e367307426cd",
+      "afterSha256": "1fe08eba6ab9360438b3eb92121154314b309f4a6cc00ed4c0422faf030258df"
+    },
+    {
+      "path": "src/reporting/domain/daily-surveillance-report.types.ts",
+      "beforeSha256": "2ccecaf746fb315501d1c1143c6b8f362ed353076100ef843ebd138730055834",
+      "afterSha256": "6d334e5152334e11f563739c7ab765f47d767c10a2df638d7a6b2818adcb6da5"
+    },
+    {
+      "path": "src/reporting/services/daily-surveillance-collector.service.ts",
+      "beforeSha256": "94ac2e5bda9689f5391b22cdfec663c7d6cc8b1afffbc602648cf3ebf05e083e",
+      "afterSha256": "105659485b7e95696c8bdf23c1a8fb1037bde721a1a644b395485bd9fc2f432c"
+    },
+    {
+      "path": "src/reporting/renderers/daily-surveillance-csv.renderer.ts",
+      "beforeSha256": "170e61655acacc61422f6485f67b5d6b98cdfdbb7cea2531c26c1682df042bfe",
+      "afterSha256": "7dddb2e38c1716405d18b93bd323a346a409f1cc9614c54c9449d24384c415f1"
+    },
+    {
+      "path": "src/reporting/renderers/daily-surveillance-xlsx.renderer.ts",
+      "beforeSha256": "f134b5e511cfc1dca789ffff0b159b6360a3598ef572159eb6b7ee727a7decf2",
+      "afterSha256": "ac7437730b0d13f5d2dab65284e99ae916fdda0dc37b1289b8254900b5411588"
+    },
+    {
+      "path": "dashboard/app/analytics/alerts/page.tsx",
+      "beforeSha256": "2fe5f9630d3008f98051b48f86de21b3d0afe68805a6c6c5c41a65452280af58",
+      "afterSha256": "4235772b1101f4b4088292a818ca9cd1a7caf2e8c2302a844cefb96bc91dc41c"
+    },
+    {
+      "path": "dashboard/components/alerts/alerts-graphical-analytics.tsx",
+      "beforeSha256": "cffda91a173f097b9b9ba2d4f0ddb9091418c5c9257fa6189740bde5dd774d02",
+      "afterSha256": "bc8066caa53cf4afea6f4fb533a100185f241200f4ed47a67766e9990ae805db"
+    },
+    {
+      "path": "dashboard/app/reports/mis/page.tsx",
+      "beforeSha256": "33538d67bb0480458a53579753b8a30f1adbc752df6504e4ddd46e5b739db5bf",
+      "afterSha256": "e72d1ff3234cd9377eefa44d025c769a6a75cbfcb4af33f4ba880d71346c7c4d"
+    },
+    {
+      "path": "dashboard/app/reports/page.tsx",
+      "beforeSha256": "d2f41eddef28f0b4c75f1a7c7c73ef2d73427ffb9b3f1ac5ec3b599f32ae5103",
+      "afterSha256": "ba1c288a38e43a0ed50367c4d27f0a38ec89de49a001e34be24d2e633ad61e4e"
+    },
+    {
+      "path": "dashboard/app/reports/benchmarking/page.tsx",
+      "beforeSha256": "64abf12320fa106ffbde73623db4c85df5cd5d2fa6442b682aae170958455c99",
+      "afterSha256": "db2558f4a41bab52a037ef49d9941fa227acd378130af0a184a265420f574de2"
+    },
+    {
+      "path": "dashboard/app/reports/compliance/page.tsx",
+      "beforeSha256": "b342ae0c65dc940054693d051ff16ecdd623cb89bd1f4094f4c3c47138f8d444",
+      "afterSha256": "cf67b58c4307a8b73c097bc97404b6c481c6acad07adfa74ab3a95045584c191"
+    },
+    {
+      "path": "dashboard/app/reports/financial/page.tsx",
+      "beforeSha256": "bc2b2fb52575c70a2a8b0c8a34abd0c534a76f46e94776cb2bc0a1f6cb089a0d",
+      "afterSha256": "950cc4da97433d1cbd6c3ac36202efa49a8682cc9c3efc4ef1ab51d5f5ccf72c"
+    },
+    {
+      "path": "src/reporting/hierarchy.ts",
+      "beforeSha256": null,
+      "afterSha256": "f9993134c0e3b79fea3ddfeda58cdb2acdc93e4b2045371e676469aa1eb993b5"
+    },
+    {
+      "path": "packages/contracts/src/report-hierarchy.ts",
+      "beforeSha256": null,
+      "afterSha256": "af11ece6ff02020d77088acf1f92143878d6559072d60869ce51ed56508516ee"
+    },
+    {
+      "path": "dashboard/lib/alert-report.ts",
+      "beforeSha256": null,
+      "afterSha256": "5a5dfcd0811d9b2ce2490691109cc48a3936bbd620f09472dc0bd4c91325f220"
+    },
+    {
+      "path": "dashboard/lib/report-export.ts",
+      "beforeSha256": null,
+      "afterSha256": "3250a04e40192819314e89eb8bfb6864a42941d55429581d2006c187ce3f4ac0"
+    },
+    {
+      "path": "dashboard/lib/branch-opening-csv.ts",
+      "beforeSha256": null,
+      "afterSha256": "44381735a1d40f64883ae3c0e1f604053f9582c03cedad505040dad474d0c18b"
+    },
+    {
+      "path": "dashboard/components/alerts/management-alert-analytics.tsx",
+      "beforeSha256": null,
+      "afterSha256": "d3b37cd590d8db640519450df258728256a7ae41eb1541f2e5a5d8e04c4b9740"
+    },
+    {
+      "path": "dashboard/components/reports/management-report.module.css",
+      "beforeSha256": null,
+      "afterSha256": "60c73ac6d25602f3eafdd55f74129209c302be33a4678e8829f281a491e1e2f1"
+    },
+    {
+      "path": "dashboard/components/reports/executive-management-report.tsx",
+      "beforeSha256": null,
+      "afterSha256": "aece8b42717279fde2a0b113686bd433d5f3c5f925e08bf38c95175086b0a32c"
+    },
+    {
+      "path": "dashboard/components/reports/report-pagination.tsx",
+      "beforeSha256": null,
+      "afterSha256": "3e1628050f9a9773750d2baccb958b812eafdbc1e7404632cbed1ba54aa6247c"
+    },
+    {
+      "path": "dashboard/components/reports/report-date-controls.tsx",
+      "beforeSha256": null,
+      "afterSha256": "6f283c136537cfb94dcaf914f94f066ebd11cdf61d54a64092208b8c9a6f4fbf"
+    }
+  ],
+  "backend": [
+    "src/store.js",
+    "src/database/analytics-repository.js",
+    "src/routes/analytics.routes.js",
+    "src/routes/operational-reports.routes.js",
+    "src/routes/reports/mis-unified.routes.js",
+    "src/routes/reports/branch-benchmarking.routes.js",
+    "src/routes/reports/compliance-scorecard.routes.js",
+    "src/routes/reports/financial-tco.routes.js",
+    "src/control-plane-store.js",
+    "src/reporting/worker.js",
+    "src/reporting/types.js",
+    "src/reporting/domain/daily-surveillance-report.types.js",
+    "src/reporting/services/daily-surveillance-collector.service.js",
+    "src/reporting/renderers/daily-surveillance-csv.renderer.js",
+    "src/reporting/renderers/daily-surveillance-xlsx.renderer.js",
+    "src/reporting/hierarchy.js",
+    "packages/contracts/src/report-hierarchy.js"
+  ],
+  "createdAt": "2026-10-05T20:45:27.836Z"
+}

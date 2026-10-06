@@ -81,7 +81,7 @@ export const sectionHubs: SectionHub[] = [
     journeys: [
       { title: "Review controls", description: "Assess requirements and see where supporting evidence is needed.", routes: ["/compliance", "/compliance/controls", "/compliance/evidence"] },
       { title: "Inspect the branch", description: "Check branch and camera health against your audit obligations.", routes: ["/audit/branch-compliance", "/audit/health", "/activity-report"] },
-      { title: "Publish the picture", description: "Prepare operational, executive, and cost reports.", routes: ["/reports", "/reports/mis", "/reports/financial"] },
+      { title: "Publish the picture", description: "Prepare operational, management, benchmark, compliance, and cost reports.", routes: ["/reports", "/reports/mis", "/reports/benchmarking", "/reports/compliance", "/reports/financial"] },
     ],
   },
   {

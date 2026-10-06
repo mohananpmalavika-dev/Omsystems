@@ -1,0 +1,1993 @@
+{
+  "version": 3,
+  "pages404": true,
+  "appType": "hybrid",
+  "caseSensitive": false,
+  "basePath": "",
+  "redirects": [
+    {
+      "source": "/:path+/",
+      "destination": "/:path+",
+      "internal": true,
+      "priority": true,
+      "statusCode": 308,
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))/$"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=*, microphone=*, geolocation=*, display-capture=*"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors 'self' https://* http://localhost:* https://kryptonlogic.com https://*.kryptonlogic.com https://kryptonlogic-ebe5a.web.app;"
+        }
+      ],
+      "regex": "^(?:/(.*))(?:/)?$"
+    }
+  ],
+  "onMatchHeaders": [],
+  "rewrites": {
+    "beforeFiles": [],
+    "afterFiles": [
+      {
+        "source": "/api/portable-camera/:path*",
+        "destination": "https://34-14-220-41.sslip.io/api/portable-camera/:path*",
+        "regex": "^/api/portable-camera(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?(?:/)?$"
+      },
+      {
+        "source": "/api/ai/:path*",
+        "destination": "https://34-14-220-41.sslip.io/api/ai/:path*",
+        "regex": "^/api/ai(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?(?:/)?$"
+      },
+      {
+        "source": "/api/mobile/:path*",
+        "destination": "https://34-14-220-41.sslip.io/api/mobile/:path*",
+        "regex": "^/api/mobile(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?(?:/)?$"
+      },
+      {
+        "source": "/api/edge-product/:path*",
+        "destination": "https://34-14-220-41.sslip.io/api/edge-product/:path*",
+        "regex": "^/api/edge-product(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?(?:/)?$"
+      },
+      {
+        "source": "/api/vms/:path*",
+        "destination": "https://34-14-220-41.sslip.io/api/vms/:path*",
+        "regex": "^/api/vms(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?(?:/)?$"
+      },
+      {
+        "source": "/metrics",
+        "destination": "https://34-14-220-41.sslip.io/metrics",
+        "regex": "^/metrics(?:/)?$"
+      },
+      {
+        "source": "/api/incidents/:path*",
+        "destination": "https://34-14-220-41.sslip.io/v1/incidents/:path*",
+        "regex": "^/api/incidents(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?(?:/)?$"
+      },
+      {
+        "source": "/api/incidents",
+        "destination": "https://34-14-220-41.sslip.io/v1/incidents",
+        "regex": "^/api/incidents(?:/)?$"
+      },
+      {
+        "source": "/api/attestation/:path*",
+        "destination": "https://34-14-220-41.sslip.io/api/attestation/:path*",
+        "regex": "^/api/attestation(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?(?:/)?$"
+      },
+      {
+        "source": "/api/ha/:path*",
+        "destination": "https://34-14-220-41.sslip.io/api/ha/:path*",
+        "regex": "^/api/ha(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?(?:/)?$"
+      },
+      {
+        "source": "/api/credentials/:path*",
+        "destination": "https://34-14-220-41.sslip.io/api/credentials/:path*",
+        "regex": "^/api/credentials(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?(?:/)?$"
+      },
+      {
+        "source": "/api/bulk/:path*",
+        "destination": "https://34-14-220-41.sslip.io/api/bulk/:path*",
+        "regex": "^/api/bulk(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?(?:/)?$"
+      },
+      {
+        "source": "/v1/:path*",
+        "destination": "https://34-14-220-41.sslip.io/v1/:path*",
+        "regex": "^/v1(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?(?:/)?$"
+      },
+      {
+        "source": "/internal/:path*",
+        "destination": "https://34-14-220-41.sslip.io/internal/:path*",
+        "regex": "^/internal(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?(?:/)?$"
+      }
+    ],
+    "fallback": []
+  },
+  "dynamicRoutes": [
+    {
+      "page": "/admin/qa/ui-audit/[runId]",
+      "regex": "^/admin/qa/ui\\-audit/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPrunId": "nxtPrunId"
+      },
+      "namedRegex": "^/admin/qa/ui\\-audit/(?<nxtPrunId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/admin/qa/runs/[runId]",
+      "regex": "^/api/admin/qa/runs/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPrunId": "nxtPrunId"
+      },
+      "namedRegex": "^/api/admin/qa/runs/(?<nxtPrunId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/admin/qa/runs/[runId]/actions",
+      "regex": "^/api/admin/qa/runs/([^/]+?)/actions(?:/)?$",
+      "routeKeys": {
+        "nxtPrunId": "nxtPrunId"
+      },
+      "namedRegex": "^/api/admin/qa/runs/(?<nxtPrunId>[^/]+?)/actions(?:/)?$"
+    },
+    {
+      "page": "/api/admin/qa/runs/[runId]/artifacts/[...path]",
+      "regex": "^/api/admin/qa/runs/([^/]+?)/artifacts/(.+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPrunId": "nxtPrunId",
+        "nxtPpath": "nxtPpath"
+      },
+      "namedRegex": "^/api/admin/qa/runs/(?<nxtPrunId>[^/]+?)/artifacts/(?<nxtPpath>.+?)(?:/)?$"
+    },
+    {
+      "page": "/api/admin/qa/runs/[runId]/live",
+      "regex": "^/api/admin/qa/runs/([^/]+?)/live(?:/)?$",
+      "routeKeys": {
+        "nxtPrunId": "nxtPrunId"
+      },
+      "namedRegex": "^/api/admin/qa/runs/(?<nxtPrunId>[^/]+?)/live(?:/)?$"
+    },
+    {
+      "page": "/api/admin/system/branches/[id]",
+      "regex": "^/api/admin/system/branches/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/admin/system/branches/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/admin/system/branches/[id]/archive",
+      "regex": "^/api/admin/system/branches/([^/]+?)/archive(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/admin/system/branches/(?<nxtPid>[^/]+?)/archive(?:/)?$"
+    },
+    {
+      "page": "/api/admin/system/branches/[id]/disable",
+      "regex": "^/api/admin/system/branches/([^/]+?)/disable(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/admin/system/branches/(?<nxtPid>[^/]+?)/disable(?:/)?$"
+    },
+    {
+      "page": "/api/admin/system/branches/[id]/lifecycle-impact",
+      "regex": "^/api/admin/system/branches/([^/]+?)/lifecycle\\-impact(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/admin/system/branches/(?<nxtPid>[^/]+?)/lifecycle\\-impact(?:/)?$"
+    },
+    {
+      "page": "/api/admin/system/branches/[id]/reactivate",
+      "regex": "^/api/admin/system/branches/([^/]+?)/reactivate(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/admin/system/branches/(?<nxtPid>[^/]+?)/reactivate(?:/)?$"
+    },
+    {
+      "page": "/api/admin/system/cameras/[id]",
+      "regex": "^/api/admin/system/cameras/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/admin/system/cameras/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/admin/system/gateways/[id]",
+      "regex": "^/api/admin/system/gateways/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/admin/system/gateways/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/audit/maintenance/[id]",
+      "regex": "^/api/audit/maintenance/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/audit/maintenance/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/branches/[id]/cameras",
+      "regex": "^/api/branches/([^/]+?)/cameras(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/branches/(?<nxtPid>[^/]+?)/cameras(?:/)?$"
+    },
+    {
+      "page": "/api/cameras/[id]/snapshot",
+      "regex": "^/api/cameras/([^/]+?)/snapshot(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/cameras/(?<nxtPid>[^/]+?)/snapshot(?:/)?$"
+    },
+    {
+      "page": "/api/cameras/[id]/status",
+      "regex": "^/api/cameras/([^/]+?)/status(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/cameras/(?<nxtPid>[^/]+?)/status(?:/)?$"
+    },
+    {
+      "page": "/api/compliance/assessments/[id]",
+      "regex": "^/api/compliance/assessments/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/compliance/assessments/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/compliance/assessments/[id]/execute",
+      "regex": "^/api/compliance/assessments/([^/]+?)/execute(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/compliance/assessments/(?<nxtPid>[^/]+?)/execute(?:/)?$"
+    },
+    {
+      "page": "/api/compliance/certificates/[id]",
+      "regex": "^/api/compliance/certificates/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/compliance/certificates/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/compliance/evidence/[id]/validate",
+      "regex": "^/api/compliance/evidence/([^/]+?)/validate(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/compliance/evidence/(?<nxtPid>[^/]+?)/validate(?:/)?$"
+    },
+    {
+      "page": "/api/control/[...path]",
+      "regex": "^/api/control/(.+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPpath": "nxtPpath"
+      },
+      "namedRegex": "^/api/control/(?<nxtPpath>.+?)(?:/)?$"
+    },
+    {
+      "page": "/api/mobile/[...path]",
+      "regex": "^/api/mobile/(.+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPpath": "nxtPpath"
+      },
+      "namedRegex": "^/api/mobile/(?<nxtPpath>.+?)(?:/)?$"
+    },
+    {
+      "page": "/api/observability/[...path]",
+      "regex": "^/api/observability/(.+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPpath": "nxtPpath"
+      },
+      "namedRegex": "^/api/observability/(?<nxtPpath>.+?)(?:/)?$"
+    },
+    {
+      "page": "/api/recording/[cameraId]",
+      "regex": "^/api/recording/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPcameraId": "nxtPcameraId"
+      },
+      "namedRegex": "^/api/recording/(?<nxtPcameraId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/recording-compliance/[cameraId]",
+      "regex": "^/api/recording\\-compliance/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPcameraId": "nxtPcameraId"
+      },
+      "namedRegex": "^/api/recording\\-compliance/(?<nxtPcameraId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/branches/[branchId]/posture",
+      "regex": "^/api/security\\-devices/branches/([^/]+?)/posture(?:/)?$",
+      "routeKeys": {
+        "nxtPbranchId": "nxtPbranchId"
+      },
+      "namedRegex": "^/api/security\\-devices/branches/(?<nxtPbranchId>[^/]+?)/posture(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/discovery/devices/[deviceId]",
+      "regex": "^/api/security\\-devices/discovery/devices/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPdeviceId": "nxtPdeviceId"
+      },
+      "namedRegex": "^/api/security\\-devices/discovery/devices/(?<nxtPdeviceId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/discovery/devices/[deviceId]/approve",
+      "regex": "^/api/security\\-devices/discovery/devices/([^/]+?)/approve(?:/)?$",
+      "routeKeys": {
+        "nxtPdeviceId": "nxtPdeviceId"
+      },
+      "namedRegex": "^/api/security\\-devices/discovery/devices/(?<nxtPdeviceId>[^/]+?)/approve(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/discovery/devices/[deviceId]/reject",
+      "regex": "^/api/security\\-devices/discovery/devices/([^/]+?)/reject(?:/)?$",
+      "routeKeys": {
+        "nxtPdeviceId": "nxtPdeviceId"
+      },
+      "namedRegex": "^/api/security\\-devices/discovery/devices/(?<nxtPdeviceId>[^/]+?)/reject(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/discovery/[jobId]",
+      "regex": "^/api/security\\-devices/discovery/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPjobId": "nxtPjobId"
+      },
+      "namedRegex": "^/api/security\\-devices/discovery/(?<nxtPjobId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/integrations/[integrationId]/discover",
+      "regex": "^/api/security\\-devices/integrations/([^/]+?)/discover(?:/)?$",
+      "routeKeys": {
+        "nxtPintegrationId": "nxtPintegrationId"
+      },
+      "namedRegex": "^/api/security\\-devices/integrations/(?<nxtPintegrationId>[^/]+?)/discover(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/integrations/[integrationId]/events",
+      "regex": "^/api/security\\-devices/integrations/([^/]+?)/events(?:/)?$",
+      "routeKeys": {
+        "nxtPintegrationId": "nxtPintegrationId"
+      },
+      "namedRegex": "^/api/security\\-devices/integrations/(?<nxtPintegrationId>[^/]+?)/events(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/integrations/[integrationId]/poll",
+      "regex": "^/api/security\\-devices/integrations/([^/]+?)/poll(?:/)?$",
+      "routeKeys": {
+        "nxtPintegrationId": "nxtPintegrationId"
+      },
+      "namedRegex": "^/api/security\\-devices/integrations/(?<nxtPintegrationId>[^/]+?)/poll(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/integrations/[integrationId]/test",
+      "regex": "^/api/security\\-devices/integrations/([^/]+?)/test(?:/)?$",
+      "routeKeys": {
+        "nxtPintegrationId": "nxtPintegrationId"
+      },
+      "namedRegex": "^/api/security\\-devices/integrations/(?<nxtPintegrationId>[^/]+?)/test(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/[deviceId]",
+      "regex": "^/api/security\\-devices/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPdeviceId": "nxtPdeviceId"
+      },
+      "namedRegex": "^/api/security\\-devices/(?<nxtPdeviceId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/[deviceId]/command",
+      "regex": "^/api/security\\-devices/([^/]+?)/command(?:/)?$",
+      "routeKeys": {
+        "nxtPdeviceId": "nxtPdeviceId"
+      },
+      "namedRegex": "^/api/security\\-devices/(?<nxtPdeviceId>[^/]+?)/command(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/[deviceId]/events",
+      "regex": "^/api/security\\-devices/([^/]+?)/events(?:/)?$",
+      "routeKeys": {
+        "nxtPdeviceId": "nxtPdeviceId"
+      },
+      "namedRegex": "^/api/security\\-devices/(?<nxtPdeviceId>[^/]+?)/events(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/[deviceId]/health",
+      "regex": "^/api/security\\-devices/([^/]+?)/health(?:/)?$",
+      "routeKeys": {
+        "nxtPdeviceId": "nxtPdeviceId"
+      },
+      "namedRegex": "^/api/security\\-devices/(?<nxtPdeviceId>[^/]+?)/health(?:/)?$"
+    },
+    {
+      "page": "/api/v1/[...path]",
+      "regex": "^/api/v1/(.+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPpath": "nxtPpath"
+      },
+      "namedRegex": "^/api/v1/(?<nxtPpath>.+?)(?:/)?$"
+    },
+    {
+      "page": "/api/vms/[...path]",
+      "regex": "^/api/vms/(.+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPpath": "nxtPpath"
+      },
+      "namedRegex": "^/api/vms/(?<nxtPpath>.+?)(?:/)?$"
+    },
+    {
+      "page": "/api/zero-touch/[...path]",
+      "regex": "^/api/zero\\-touch/(.+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPpath": "nxtPpath"
+      },
+      "namedRegex": "^/api/zero\\-touch/(?<nxtPpath>.+?)(?:/)?$"
+    },
+    {
+      "page": "/compliance/assessments/[id]",
+      "regex": "^/compliance/assessments/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/compliance/assessments/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/compliance/controls/[id]",
+      "regex": "^/compliance/controls/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/compliance/controls/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/compliance/findings/[id]",
+      "regex": "^/compliance/findings/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/compliance/findings/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/compliance/requirements/[id]",
+      "regex": "^/compliance/requirements/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/compliance/requirements/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/compliance/risks/[id]",
+      "regex": "^/compliance/risks/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/compliance/risks/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/compliance/[id]",
+      "regex": "^/compliance/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/compliance/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/digital-twin/branches/[branchId]",
+      "regex": "^/digital\\-twin/branches/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPbranchId": "nxtPbranchId"
+      },
+      "namedRegex": "^/digital\\-twin/branches/(?<nxtPbranchId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/digital-twin/branches/[branchId]/editor",
+      "regex": "^/digital\\-twin/branches/([^/]+?)/editor(?:/)?$",
+      "routeKeys": {
+        "nxtPbranchId": "nxtPbranchId"
+      },
+      "namedRegex": "^/digital\\-twin/branches/(?<nxtPbranchId>[^/]+?)/editor(?:/)?$"
+    },
+    {
+      "page": "/digital-twin/buildings/[buildingId]",
+      "regex": "^/digital\\-twin/buildings/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPbuildingId": "nxtPbuildingId"
+      },
+      "namedRegex": "^/digital\\-twin/buildings/(?<nxtPbuildingId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/incidents/[id]",
+      "regex": "^/incidents/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/incidents/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/live-incident/[token]",
+      "regex": "^/live\\-incident/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPtoken": "nxtPtoken"
+      },
+      "namedRegex": "^/live\\-incident/(?<nxtPtoken>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/maintenance/amc/[id]",
+      "regex": "^/maintenance/amc/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/maintenance/amc/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/maintenance/assets/[id]",
+      "regex": "^/maintenance/assets/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/maintenance/assets/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/maintenance/privacy/cameras/[cameraId]/purposes",
+      "regex": "^/maintenance/privacy/cameras/([^/]+?)/purposes(?:/)?$",
+      "routeKeys": {
+        "nxtPcameraId": "nxtPcameraId"
+      },
+      "namedRegex": "^/maintenance/privacy/cameras/(?<nxtPcameraId>[^/]+?)/purposes(?:/)?$"
+    },
+    {
+      "page": "/maintenance/vendors/[id]",
+      "regex": "^/maintenance/vendors/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/maintenance/vendors/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/maintenance/workorders/[id]",
+      "regex": "^/maintenance/workorders/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/maintenance/workorders/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/operations/branches/[branchId]",
+      "regex": "^/operations/branches/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPbranchId": "nxtPbranchId"
+      },
+      "namedRegex": "^/operations/branches/(?<nxtPbranchId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/security-devices/[deviceId]",
+      "regex": "^/security\\-devices/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPdeviceId": "nxtPdeviceId"
+      },
+      "namedRegex": "^/security\\-devices/(?<nxtPdeviceId>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/workspaces/[area]",
+      "regex": "^/workspaces/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtParea": "nxtParea"
+      },
+      "namedRegex": "^/workspaces/(?<nxtParea>[^/]+?)(?:/)?$"
+    }
+  ],
+  "staticRoutes": [
+    {
+      "page": "/",
+      "regex": "^/(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/(?:/)?$"
+    },
+    {
+      "page": "/_not-found",
+      "regex": "^/_not\\-found(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_not\\-found(?:/)?$"
+    },
+    {
+      "page": "/account",
+      "regex": "^/account(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/account(?:/)?$"
+    },
+    {
+      "page": "/account/security",
+      "regex": "^/account/security(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/account/security(?:/)?$"
+    },
+    {
+      "page": "/activity-report",
+      "regex": "^/activity\\-report(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/activity\\-report(?:/)?$"
+    },
+    {
+      "page": "/admin",
+      "regex": "^/admin(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin(?:/)?$"
+    },
+    {
+      "page": "/admin/ai-quality",
+      "regex": "^/admin/ai\\-quality(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/ai\\-quality(?:/)?$"
+    },
+    {
+      "page": "/admin/branch-onboarding",
+      "regex": "^/admin/branch\\-onboarding(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/branch\\-onboarding(?:/)?$"
+    },
+    {
+      "page": "/admin/camera-import-export",
+      "regex": "^/admin/camera\\-import\\-export(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/camera\\-import\\-export(?:/)?$"
+    },
+    {
+      "page": "/admin/database",
+      "regex": "^/admin/database(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/database(?:/)?$"
+    },
+    {
+      "page": "/admin/edge-agent-branches",
+      "regex": "^/admin/edge\\-agent\\-branches(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/edge\\-agent\\-branches(?:/)?$"
+    },
+    {
+      "page": "/admin/features",
+      "regex": "^/admin/features(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/features(?:/)?$"
+    },
+    {
+      "page": "/admin/ha-topology",
+      "regex": "^/admin/ha\\-topology(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/ha\\-topology(?:/)?$"
+    },
+    {
+      "page": "/admin/media-gateway-failover",
+      "regex": "^/admin/media\\-gateway\\-failover(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/media\\-gateway\\-failover(?:/)?$"
+    },
+    {
+      "page": "/admin/organization",
+      "regex": "^/admin/organization(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/organization(?:/)?$"
+    },
+    {
+      "page": "/admin/platform/capabilities",
+      "regex": "^/admin/platform/capabilities(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/platform/capabilities(?:/)?$"
+    },
+    {
+      "page": "/admin/qa/ui-audit",
+      "regex": "^/admin/qa/ui\\-audit(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/qa/ui\\-audit(?:/)?$"
+    },
+    {
+      "page": "/admin/qa/ui-audit/compare",
+      "regex": "^/admin/qa/ui\\-audit/compare(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/qa/ui\\-audit/compare(?:/)?$"
+    },
+    {
+      "page": "/admin/recording-failover",
+      "regex": "^/admin/recording\\-failover(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/recording\\-failover(?:/)?$"
+    },
+    {
+      "page": "/admin/roles",
+      "regex": "^/admin/roles(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/roles(?:/)?$"
+    },
+    {
+      "page": "/admin/signed-configuration",
+      "regex": "^/admin/signed\\-configuration(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/signed\\-configuration(?:/)?$"
+    },
+    {
+      "page": "/admin/storage-failover",
+      "regex": "^/admin/storage\\-failover(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/storage\\-failover(?:/)?$"
+    },
+    {
+      "page": "/admin/stream-settings",
+      "regex": "^/admin/stream\\-settings(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/stream\\-settings(?:/)?$"
+    },
+    {
+      "page": "/admin/system",
+      "regex": "^/admin/system(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/system(?:/)?$"
+    },
+    {
+      "page": "/admin/zero-touch",
+      "regex": "^/admin/zero\\-touch(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/zero\\-touch(?:/)?$"
+    },
+    {
+      "page": "/admin/zero-touch/diagnostics",
+      "regex": "^/admin/zero\\-touch/diagnostics(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/admin/zero\\-touch/diagnostics(?:/)?$"
+    },
+    {
+      "page": "/analytics",
+      "regex": "^/analytics(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics(?:/)?$"
+    },
+    {
+      "page": "/analytics/abandoned-objects",
+      "regex": "^/analytics/abandoned\\-objects(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/abandoned\\-objects(?:/)?$"
+    },
+    {
+      "page": "/analytics/alerts",
+      "regex": "^/analytics/alerts(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/alerts(?:/)?$"
+    },
+    {
+      "page": "/analytics/anpr",
+      "regex": "^/analytics/anpr(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/anpr(?:/)?$"
+    },
+    {
+      "page": "/analytics/anpr-logistics",
+      "regex": "^/analytics/anpr\\-logistics(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/anpr\\-logistics(?:/)?$"
+    },
+    {
+      "page": "/analytics/banking",
+      "regex": "^/analytics/banking(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/banking(?:/)?$"
+    },
+    {
+      "page": "/analytics/banking/authorized-persons",
+      "regex": "^/analytics/banking/authorized\\-persons(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/banking/authorized\\-persons(?:/)?$"
+    },
+    {
+      "page": "/analytics/behavioral",
+      "regex": "^/analytics/behavioral(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/behavioral(?:/)?$"
+    },
+    {
+      "page": "/analytics/branch-comparison",
+      "regex": "^/analytics/branch\\-comparison(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/branch\\-comparison(?:/)?$"
+    },
+    {
+      "page": "/analytics/camera-obstruction",
+      "regex": "^/analytics/camera\\-obstruction(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/camera\\-obstruction(?:/)?$"
+    },
+    {
+      "page": "/analytics/camera-tamper",
+      "regex": "^/analytics/camera\\-tamper(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/camera\\-tamper(?:/)?$"
+    },
+    {
+      "page": "/analytics/crowd",
+      "regex": "^/analytics/crowd(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/crowd(?:/)?$"
+    },
+    {
+      "page": "/analytics/dashboard",
+      "regex": "^/analytics/dashboard(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/dashboard(?:/)?$"
+    },
+    {
+      "page": "/analytics/face",
+      "regex": "^/analytics/face(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/face(?:/)?$"
+    },
+    {
+      "page": "/analytics/face-recognition",
+      "regex": "^/analytics/face\\-recognition(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/face\\-recognition(?:/)?$"
+    },
+    {
+      "page": "/analytics/fall",
+      "regex": "^/analytics/fall(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/fall(?:/)?$"
+    },
+    {
+      "page": "/analytics/industrial",
+      "regex": "^/analytics/industrial(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/industrial(?:/)?$"
+    },
+    {
+      "page": "/analytics/investigation",
+      "regex": "^/analytics/investigation(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/investigation(?:/)?$"
+    },
+    {
+      "page": "/analytics/nbfc-watchlist",
+      "regex": "^/analytics/nbfc\\-watchlist(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/nbfc\\-watchlist(?:/)?$"
+    },
+    {
+      "page": "/analytics/people",
+      "regex": "^/analytics/people(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/people(?:/)?$"
+    },
+    {
+      "page": "/analytics/predictions",
+      "regex": "^/analytics/predictions(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/predictions(?:/)?$"
+    },
+    {
+      "page": "/analytics/reid",
+      "regex": "^/analytics/reid(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/reid(?:/)?$"
+    },
+    {
+      "page": "/analytics/retail",
+      "regex": "^/analytics/retail(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/retail(?:/)?$"
+    },
+    {
+      "page": "/analytics/rules",
+      "regex": "^/analytics/rules(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/rules(?:/)?$"
+    },
+    {
+      "page": "/analytics/tailgating",
+      "regex": "^/analytics/tailgating(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/tailgating(?:/)?$"
+    },
+    {
+      "page": "/analytics/vehicles",
+      "regex": "^/analytics/vehicles(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/analytics/vehicles(?:/)?$"
+    },
+    {
+      "page": "/api/admin/qa/compare",
+      "regex": "^/api/admin/qa/compare(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/qa/compare(?:/)?$"
+    },
+    {
+      "page": "/api/admin/qa/runs",
+      "regex": "^/api/admin/qa/runs(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/qa/runs(?:/)?$"
+    },
+    {
+      "page": "/api/admin/system/branches",
+      "regex": "^/api/admin/system/branches(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/system/branches(?:/)?$"
+    },
+    {
+      "page": "/api/admin/system/branches/all",
+      "regex": "^/api/admin/system/branches/all(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/system/branches/all(?:/)?$"
+    },
+    {
+      "page": "/api/admin/system/cameras",
+      "regex": "^/api/admin/system/cameras(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/system/cameras(?:/)?$"
+    },
+    {
+      "page": "/api/admin/system/cameras/all",
+      "regex": "^/api/admin/system/cameras/all(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/system/cameras/all(?:/)?$"
+    },
+    {
+      "page": "/api/admin/system/gateways",
+      "regex": "^/api/admin/system/gateways(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/system/gateways(?:/)?$"
+    },
+    {
+      "page": "/api/admin/system/gateways/all",
+      "regex": "^/api/admin/system/gateways/all(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/system/gateways/all(?:/)?$"
+    },
+    {
+      "page": "/api/admin/system/stats",
+      "regex": "^/api/admin/system/stats(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/system/stats(?:/)?$"
+    },
+    {
+      "page": "/api/admin/system/stream-preference",
+      "regex": "^/api/admin/system/stream\\-preference(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/system/stream\\-preference(?:/)?$"
+    },
+    {
+      "page": "/api/audit/access-logs",
+      "regex": "^/api/audit/access\\-logs(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/audit/access\\-logs(?:/)?$"
+    },
+    {
+      "page": "/api/audit/branch-compliance",
+      "regex": "^/api/audit/branch\\-compliance(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/audit/branch\\-compliance(?:/)?$"
+    },
+    {
+      "page": "/api/audit/health",
+      "regex": "^/api/audit/health(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/audit/health(?:/)?$"
+    },
+    {
+      "page": "/api/audit/maintenance",
+      "regex": "^/api/audit/maintenance(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/audit/maintenance(?:/)?$"
+    },
+    {
+      "page": "/api/audit/quality",
+      "regex": "^/api/audit/quality(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/audit/quality(?:/)?$"
+    },
+    {
+      "page": "/api/audit/recording-verification",
+      "regex": "^/api/audit/recording\\-verification(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/audit/recording\\-verification(?:/)?$"
+    },
+    {
+      "page": "/api/audit/storage",
+      "regex": "^/api/audit/storage(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/audit/storage(?:/)?$"
+    },
+    {
+      "page": "/api/branches",
+      "regex": "^/api/branches(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/branches(?:/)?$"
+    },
+    {
+      "page": "/api/cameras/export",
+      "regex": "^/api/cameras/export(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/cameras/export(?:/)?$"
+    },
+    {
+      "page": "/api/cameras/import",
+      "regex": "^/api/cameras/import(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/cameras/import(?:/)?$"
+    },
+    {
+      "page": "/api/cameras/import/template",
+      "regex": "^/api/cameras/import/template(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/cameras/import/template(?:/)?$"
+    },
+    {
+      "page": "/api/communications/devices/register",
+      "regex": "^/api/communications/devices/register(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/communications/devices/register(?:/)?$"
+    },
+    {
+      "page": "/api/compliance/assessments",
+      "regex": "^/api/compliance/assessments(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/compliance/assessments(?:/)?$"
+    },
+    {
+      "page": "/api/compliance/certificates",
+      "regex": "^/api/compliance/certificates(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/compliance/certificates(?:/)?$"
+    },
+    {
+      "page": "/api/compliance/certificates/verify",
+      "regex": "^/api/compliance/certificates/verify(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/compliance/certificates/verify(?:/)?$"
+    },
+    {
+      "page": "/api/compliance/controls",
+      "regex": "^/api/compliance/controls(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/compliance/controls(?:/)?$"
+    },
+    {
+      "page": "/api/compliance/dashboard",
+      "regex": "^/api/compliance/dashboard(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/compliance/dashboard(?:/)?$"
+    },
+    {
+      "page": "/api/compliance/evidence",
+      "regex": "^/api/compliance/evidence(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/compliance/evidence(?:/)?$"
+    },
+    {
+      "page": "/api/compliance/findings",
+      "regex": "^/api/compliance/findings(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/compliance/findings(?:/)?$"
+    },
+    {
+      "page": "/api/compliance/requirements",
+      "regex": "^/api/compliance/requirements(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/compliance/requirements(?:/)?$"
+    },
+    {
+      "page": "/api/compliance/risks",
+      "regex": "^/api/compliance/risks(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/compliance/risks(?:/)?$"
+    },
+    {
+      "page": "/api/compliance/tests",
+      "regex": "^/api/compliance/tests(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/compliance/tests(?:/)?$"
+    },
+    {
+      "page": "/api/control/v1/alerts/alert-center",
+      "regex": "^/api/control/v1/alerts/alert\\-center(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/control/v1/alerts/alert\\-center(?:/)?$"
+    },
+    {
+      "page": "/api/control/v1/grids/layouts",
+      "regex": "^/api/control/v1/grids/layouts(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/control/v1/grids/layouts(?:/)?$"
+    },
+    {
+      "page": "/api/control/v1/video-wall/configs",
+      "regex": "^/api/control/v1/video\\-wall/configs(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/control/v1/video\\-wall/configs(?:/)?$"
+    },
+    {
+      "page": "/api/digital-twin/topology",
+      "regex": "^/api/digital\\-twin/topology(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/digital\\-twin/topology(?:/)?$"
+    },
+    {
+      "page": "/api/health",
+      "regex": "^/api/health(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/health(?:/)?$"
+    },
+    {
+      "page": "/api/live",
+      "regex": "^/api/live(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/live(?:/)?$"
+    },
+    {
+      "page": "/api/live/debug",
+      "regex": "^/api/live/debug(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/live/debug(?:/)?$"
+    },
+    {
+      "page": "/api/media/snapshot-relay",
+      "regex": "^/api/media/snapshot\\-relay(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/media/snapshot\\-relay(?:/)?$"
+    },
+    {
+      "page": "/api/observability/web-vitals",
+      "regex": "^/api/observability/web\\-vitals(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/observability/web\\-vitals(?:/)?$"
+    },
+    {
+      "page": "/api/operations/storage",
+      "regex": "^/api/operations/storage(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/operations/storage(?:/)?$"
+    },
+    {
+      "page": "/api/recordings/play",
+      "regex": "^/api/recordings/play(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/recordings/play(?:/)?$"
+    },
+    {
+      "page": "/api/security/posture",
+      "regex": "^/api/security/posture(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/security/posture(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices",
+      "regex": "^/api/security\\-devices(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/security\\-devices(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/discovery",
+      "regex": "^/api/security\\-devices/discovery(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/security\\-devices/discovery(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/discovery/devices",
+      "regex": "^/api/security\\-devices/discovery/devices(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/security\\-devices/discovery/devices(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/discovery/devices/approve-high-confidence",
+      "regex": "^/api/security\\-devices/discovery/devices/approve\\-high\\-confidence(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/security\\-devices/discovery/devices/approve\\-high\\-confidence(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/discovery/devices/delete-pending",
+      "regex": "^/api/security\\-devices/discovery/devices/delete\\-pending(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/security\\-devices/discovery/devices/delete\\-pending(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/integrations",
+      "regex": "^/api/security\\-devices/integrations(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/security\\-devices/integrations(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/integrations/hikvision/ax-pro",
+      "regex": "^/api/security\\-devices/integrations/hikvision/ax\\-pro(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/security\\-devices/integrations/hikvision/ax\\-pro(?:/)?$"
+    },
+    {
+      "page": "/api/security-devices/overview",
+      "regex": "^/api/security\\-devices/overview(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/security\\-devices/overview(?:/)?$"
+    },
+    {
+      "page": "/api/talk",
+      "regex": "^/api/talk(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/talk(?:/)?$"
+    },
+    {
+      "page": "/audit/branch-compliance",
+      "regex": "^/audit/branch\\-compliance(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/audit/branch\\-compliance(?:/)?$"
+    },
+    {
+      "page": "/audit/health",
+      "regex": "^/audit/health(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/audit/health(?:/)?$"
+    },
+    {
+      "page": "/audit/maintenance",
+      "regex": "^/audit/maintenance(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/audit/maintenance(?:/)?$"
+    },
+    {
+      "page": "/camera-detail",
+      "regex": "^/camera\\-detail(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/camera\\-detail(?:/)?$"
+    },
+    {
+      "page": "/camera-monitoring",
+      "regex": "^/camera\\-monitoring(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/camera\\-monitoring(?:/)?$"
+    },
+    {
+      "page": "/command-center",
+      "regex": "^/command\\-center(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/command\\-center(?:/)?$"
+    },
+    {
+      "page": "/communications",
+      "regex": "^/communications(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/communications(?:/)?$"
+    },
+    {
+      "page": "/communications/admin/devices",
+      "regex": "^/communications/admin/devices(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/communications/admin/devices(?:/)?$"
+    },
+    {
+      "page": "/communications/calls",
+      "regex": "^/communications/calls(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/communications/calls(?:/)?$"
+    },
+    {
+      "page": "/communications/connect",
+      "regex": "^/communications/connect(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/communications/connect(?:/)?$"
+    },
+    {
+      "page": "/compliance",
+      "regex": "^/compliance(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/compliance(?:/)?$"
+    },
+    {
+      "page": "/compliance/assessments",
+      "regex": "^/compliance/assessments(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/compliance/assessments(?:/)?$"
+    },
+    {
+      "page": "/compliance/certificates",
+      "regex": "^/compliance/certificates(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/compliance/certificates(?:/)?$"
+    },
+    {
+      "page": "/compliance/controls",
+      "regex": "^/compliance/controls(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/compliance/controls(?:/)?$"
+    },
+    {
+      "page": "/compliance/dashboard",
+      "regex": "^/compliance/dashboard(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/compliance/dashboard(?:/)?$"
+    },
+    {
+      "page": "/compliance/evidence",
+      "regex": "^/compliance/evidence(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/compliance/evidence(?:/)?$"
+    },
+    {
+      "page": "/compliance/findings",
+      "regex": "^/compliance/findings(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/compliance/findings(?:/)?$"
+    },
+    {
+      "page": "/compliance/overview",
+      "regex": "^/compliance/overview(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/compliance/overview(?:/)?$"
+    },
+    {
+      "page": "/compliance/policies",
+      "regex": "^/compliance/policies(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/compliance/policies(?:/)?$"
+    },
+    {
+      "page": "/compliance/recording",
+      "regex": "^/compliance/recording(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/compliance/recording(?:/)?$"
+    },
+    {
+      "page": "/compliance/requirements",
+      "regex": "^/compliance/requirements(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/compliance/requirements(?:/)?$"
+    },
+    {
+      "page": "/compliance/requirements/new",
+      "regex": "^/compliance/requirements/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/compliance/requirements/new(?:/)?$"
+    },
+    {
+      "page": "/compliance/risks",
+      "regex": "^/compliance/risks(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/compliance/risks(?:/)?$"
+    },
+    {
+      "page": "/compliance/risks/new",
+      "regex": "^/compliance/risks/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/compliance/risks/new(?:/)?$"
+    },
+    {
+      "page": "/control-room",
+      "regex": "^/control\\-room(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/control\\-room(?:/)?$"
+    },
+    {
+      "page": "/control-room/display-node",
+      "regex": "^/control\\-room/display\\-node(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/control\\-room/display\\-node(?:/)?$"
+    },
+    {
+      "page": "/dashboards",
+      "regex": "^/dashboards(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboards(?:/)?$"
+    },
+    {
+      "page": "/diagnostics",
+      "regex": "^/diagnostics(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/diagnostics(?:/)?$"
+    },
+    {
+      "page": "/digital-twin",
+      "regex": "^/digital\\-twin(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/digital\\-twin(?:/)?$"
+    },
+    {
+      "page": "/digital-twin/branches",
+      "regex": "^/digital\\-twin/branches(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/digital\\-twin/branches(?:/)?$"
+    },
+    {
+      "page": "/evidence",
+      "regex": "^/evidence(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/evidence(?:/)?$"
+    },
+    {
+      "page": "/federation",
+      "regex": "^/federation(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/federation(?:/)?$"
+    },
+    {
+      "page": "/forgot-password",
+      "regex": "^/forgot\\-password(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/forgot\\-password(?:/)?$"
+    },
+    {
+      "page": "/health",
+      "regex": "^/health(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/health(?:/)?$"
+    },
+    {
+      "page": "/incidents",
+      "regex": "^/incidents(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/incidents(?:/)?$"
+    },
+    {
+      "page": "/incidents/create",
+      "regex": "^/incidents/create(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/incidents/create(?:/)?$"
+    },
+    {
+      "page": "/infrastructure-twin",
+      "regex": "^/infrastructure\\-twin(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/infrastructure\\-twin(?:/)?$"
+    },
+    {
+      "page": "/login",
+      "regex": "^/login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/login(?:/)?$"
+    },
+    {
+      "page": "/maintenance",
+      "regex": "^/maintenance(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance(?:/)?$"
+    },
+    {
+      "page": "/maintenance/alerts",
+      "regex": "^/maintenance/alerts(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/alerts(?:/)?$"
+    },
+    {
+      "page": "/maintenance/amc",
+      "regex": "^/maintenance/amc(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/amc(?:/)?$"
+    },
+    {
+      "page": "/maintenance/amc/new",
+      "regex": "^/maintenance/amc/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/amc/new(?:/)?$"
+    },
+    {
+      "page": "/maintenance/assets",
+      "regex": "^/maintenance/assets(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/assets(?:/)?$"
+    },
+    {
+      "page": "/maintenance/assets/new",
+      "regex": "^/maintenance/assets/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/assets/new(?:/)?$"
+    },
+    {
+      "page": "/maintenance/camera-map",
+      "regex": "^/maintenance/camera\\-map(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/camera\\-map(?:/)?$"
+    },
+    {
+      "page": "/maintenance/compatibility",
+      "regex": "^/maintenance/compatibility(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/compatibility(?:/)?$"
+    },
+    {
+      "page": "/maintenance/device-configuration",
+      "regex": "^/maintenance/device\\-configuration(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/device\\-configuration(?:/)?$"
+    },
+    {
+      "page": "/maintenance/device-management",
+      "regex": "^/maintenance/device\\-management(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/device\\-management(?:/)?$"
+    },
+    {
+      "page": "/maintenance/dvr-nvr-monitor",
+      "regex": "^/maintenance/dvr\\-nvr\\-monitor(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/dvr\\-nvr\\-monitor(?:/)?$"
+    },
+    {
+      "page": "/maintenance/health",
+      "regex": "^/maintenance/health(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/health(?:/)?$"
+    },
+    {
+      "page": "/maintenance/predictive",
+      "regex": "^/maintenance/predictive(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/predictive(?:/)?$"
+    },
+    {
+      "page": "/maintenance/privacy",
+      "regex": "^/maintenance/privacy(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/privacy(?:/)?$"
+    },
+    {
+      "page": "/maintenance/privacy/breaches",
+      "regex": "^/maintenance/privacy/breaches(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/privacy/breaches(?:/)?$"
+    },
+    {
+      "page": "/maintenance/privacy/breaches/new",
+      "regex": "^/maintenance/privacy/breaches/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/privacy/breaches/new(?:/)?$"
+    },
+    {
+      "page": "/maintenance/privacy/cameras",
+      "regex": "^/maintenance/privacy/cameras(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/privacy/cameras(?:/)?$"
+    },
+    {
+      "page": "/maintenance/privacy/controls",
+      "regex": "^/maintenance/privacy/controls(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/privacy/controls(?:/)?$"
+    },
+    {
+      "page": "/maintenance/privacy/purposes",
+      "regex": "^/maintenance/privacy/purposes(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/privacy/purposes(?:/)?$"
+    },
+    {
+      "page": "/maintenance/privacy/purposes/new",
+      "regex": "^/maintenance/privacy/purposes/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/privacy/purposes/new(?:/)?$"
+    },
+    {
+      "page": "/maintenance/reports",
+      "regex": "^/maintenance/reports(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/reports(?:/)?$"
+    },
+    {
+      "page": "/maintenance/vendors",
+      "regex": "^/maintenance/vendors(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/vendors(?:/)?$"
+    },
+    {
+      "page": "/maintenance/vendors/new",
+      "regex": "^/maintenance/vendors/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/vendors/new(?:/)?$"
+    },
+    {
+      "page": "/maintenance/workorders",
+      "regex": "^/maintenance/workorders(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/workorders(?:/)?$"
+    },
+    {
+      "page": "/maintenance/workorders/new",
+      "regex": "^/maintenance/workorders/new(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/maintenance/workorders/new(?:/)?$"
+    },
+    {
+      "page": "/manifest.webmanifest",
+      "regex": "^/manifest\\.webmanifest(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/manifest\\.webmanifest(?:/)?$"
+    },
+    {
+      "page": "/metrics",
+      "regex": "^/metrics(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/metrics(?:/)?$"
+    },
+    {
+      "page": "/mis-dashboard",
+      "regex": "^/mis\\-dashboard(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/mis\\-dashboard(?:/)?$"
+    },
+    {
+      "page": "/mobile",
+      "regex": "^/mobile(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/mobile(?:/)?$"
+    },
+    {
+      "page": "/modules",
+      "regex": "^/modules(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/modules(?:/)?$"
+    },
+    {
+      "page": "/nbfc-operations",
+      "regex": "^/nbfc\\-operations(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/nbfc\\-operations(?:/)?$"
+    },
+    {
+      "page": "/operations",
+      "regex": "^/operations(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations(?:/)?$"
+    },
+    {
+      "page": "/operations/ai-command-center",
+      "regex": "^/operations/ai\\-command\\-center(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/ai\\-command\\-center(?:/)?$"
+    },
+    {
+      "page": "/operations/alert-command-center",
+      "regex": "^/operations/alert\\-command\\-center(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/alert\\-command\\-center(?:/)?$"
+    },
+    {
+      "page": "/operations/alert-notification-policy",
+      "regex": "^/operations/alert\\-notification\\-policy(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/alert\\-notification\\-policy(?:/)?$"
+    },
+    {
+      "page": "/operations/alerts",
+      "regex": "^/operations/alerts(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/alerts(?:/)?$"
+    },
+    {
+      "page": "/operations/assets",
+      "regex": "^/operations/assets(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/assets(?:/)?$"
+    },
+    {
+      "page": "/operations/branches",
+      "regex": "^/operations/branches(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/branches(?:/)?$"
+    },
+    {
+      "page": "/operations/cameras",
+      "regex": "^/operations/cameras(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/cameras(?:/)?$"
+    },
+    {
+      "page": "/operations/device-connectivity",
+      "regex": "^/operations/device\\-connectivity(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/device\\-connectivity(?:/)?$"
+    },
+    {
+      "page": "/operations/edge-agents",
+      "regex": "^/operations/edge\\-agents(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/edge\\-agents(?:/)?$"
+    },
+    {
+      "page": "/operations/edge-fleet",
+      "regex": "^/operations/edge\\-fleet(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/edge\\-fleet(?:/)?$"
+    },
+    {
+      "page": "/operations/ha-failover",
+      "regex": "^/operations/ha\\-failover(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/ha\\-failover(?:/)?$"
+    },
+    {
+      "page": "/operations/infrastructure",
+      "regex": "^/operations/infrastructure(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/infrastructure(?:/)?$"
+    },
+    {
+      "page": "/operations/maintenance",
+      "regex": "^/operations/maintenance(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/maintenance(?:/)?$"
+    },
+    {
+      "page": "/operations/media-pipeline",
+      "regex": "^/operations/media\\-pipeline(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/media\\-pipeline(?:/)?$"
+    },
+    {
+      "page": "/operations/network",
+      "regex": "^/operations/network(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/network(?:/)?$"
+    },
+    {
+      "page": "/operations/observability",
+      "regex": "^/operations/observability(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/observability(?:/)?$"
+    },
+    {
+      "page": "/operations/rca-analysis",
+      "regex": "^/operations/rca\\-analysis(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/rca\\-analysis(?:/)?$"
+    },
+    {
+      "page": "/operations/recording",
+      "regex": "^/operations/recording(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/recording(?:/)?$"
+    },
+    {
+      "page": "/operations/recording/archive",
+      "regex": "^/operations/recording/archive(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/recording/archive(?:/)?$"
+    },
+    {
+      "page": "/operations/recording/recovery",
+      "regex": "^/operations/recording/recovery(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/recording/recovery(?:/)?$"
+    },
+    {
+      "page": "/operations/storage",
+      "regex": "^/operations/storage(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/storage(?:/)?$"
+    },
+    {
+      "page": "/operations/ups",
+      "regex": "^/operations/ups(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/ups(?:/)?$"
+    },
+    {
+      "page": "/operations/video-wall",
+      "regex": "^/operations/video\\-wall(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/operations/video\\-wall(?:/)?$"
+    },
+    {
+      "page": "/performance",
+      "regex": "^/performance(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/performance(?:/)?$"
+    },
+    {
+      "page": "/playback/bookmarks",
+      "regex": "^/playback/bookmarks(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/playback/bookmarks(?:/)?$"
+    },
+    {
+      "page": "/playback/synced",
+      "regex": "^/playback/synced(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/playback/synced(?:/)?$"
+    },
+    {
+      "page": "/portable-camera/enroll",
+      "regex": "^/portable\\-camera/enroll(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/portable\\-camera/enroll(?:/)?$"
+    },
+    {
+      "page": "/privacy",
+      "regex": "^/privacy(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/privacy(?:/)?$"
+    },
+    {
+      "page": "/recordings",
+      "regex": "^/recordings(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/recordings(?:/)?$"
+    },
+    {
+      "page": "/reports",
+      "regex": "^/reports(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/reports(?:/)?$"
+    },
+    {
+      "page": "/reports/ai-analytics/compare",
+      "regex": "^/reports/ai\\-analytics/compare(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/reports/ai\\-analytics/compare(?:/)?$"
+    },
+    {
+      "page": "/reports/ai-analytics/roi",
+      "regex": "^/reports/ai\\-analytics/roi(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/reports/ai\\-analytics/roi(?:/)?$"
+    },
+    {
+      "page": "/reports/benchmarking",
+      "regex": "^/reports/benchmarking(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/reports/benchmarking(?:/)?$"
+    },
+    {
+      "page": "/reports/compliance",
+      "regex": "^/reports/compliance(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/reports/compliance(?:/)?$"
+    },
+    {
+      "page": "/reports/financial",
+      "regex": "^/reports/financial(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/reports/financial(?:/)?$"
+    },
+    {
+      "page": "/reports/live-person-count",
+      "regex": "^/reports/live\\-person\\-count(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/reports/live\\-person\\-count(?:/)?$"
+    },
+    {
+      "page": "/reports/mis",
+      "regex": "^/reports/mis(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/reports/mis(?:/)?$"
+    },
+    {
+      "page": "/reset-password",
+      "regex": "^/reset\\-password(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/reset\\-password(?:/)?$"
+    },
+    {
+      "page": "/role-dashboard",
+      "regex": "^/role\\-dashboard(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/role\\-dashboard(?:/)?$"
+    },
+    {
+      "page": "/security/device-health",
+      "regex": "^/security/device\\-health(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/security/device\\-health(?:/)?$"
+    },
+    {
+      "page": "/security-devices",
+      "regex": "^/security\\-devices(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/security\\-devices(?:/)?$"
+    },
+    {
+      "page": "/security-devices/branch-posture",
+      "regex": "^/security\\-devices/branch\\-posture(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/security\\-devices/branch\\-posture(?:/)?$"
+    },
+    {
+      "page": "/security-devices/devices",
+      "regex": "^/security\\-devices/devices(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/security\\-devices/devices(?:/)?$"
+    },
+    {
+      "page": "/security-devices/discovery",
+      "regex": "^/security\\-devices/discovery(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/security\\-devices/discovery(?:/)?$"
+    },
+    {
+      "page": "/security-devices/integrations",
+      "regex": "^/security\\-devices/integrations(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/security\\-devices/integrations(?:/)?$"
+    },
+    {
+      "page": "/security-operations",
+      "regex": "^/security\\-operations(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/security\\-operations(?:/)?$"
+    },
+    {
+      "page": "/settings",
+      "regex": "^/settings(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/settings(?:/)?$"
+    },
+    {
+      "page": "/settings/alerts",
+      "regex": "^/settings/alerts(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/settings/alerts(?:/)?$"
+    },
+    {
+      "page": "/settings/features",
+      "regex": "^/settings/features(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/settings/features(?:/)?$"
+    },
+    {
+      "page": "/settings/integrations/hikvision/ax-pro",
+      "regex": "^/settings/integrations/hikvision/ax\\-pro(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/settings/integrations/hikvision/ax\\-pro(?:/)?$"
+    },
+    {
+      "page": "/support",
+      "regex": "^/support(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/support(?:/)?$"
+    },
+    {
+      "page": "/terms",
+      "regex": "^/terms(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/terms(?:/)?$"
+    },
+    {
+      "page": "/video/audio",
+      "regex": "^/video/audio(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/video/audio(?:/)?$"
+    },
+    {
+      "page": "/video-search",
+      "regex": "^/video\\-search(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/video\\-search(?:/)?$"
+    },
+    {
+      "page": "/video-search/ai",
+      "regex": "^/video\\-search/ai(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/video\\-search/ai(?:/)?$"
+    }
+  ],
+  "dataRoutes": [],
+  "rsc": {
+    "header": "rsc",
+    "varyHeader": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "prefetchHeader": "next-router-prefetch",
+    "didPostponeHeader": "x-nextjs-postponed",
+    "contentTypeHeader": "text/x-component",
+    "suffix": ".rsc",
+    "prefetchSegmentHeader": "next-router-segment-prefetch",
+    "prefetchSegmentSuffix": ".segment.rsc",
+    "prefetchSegmentDirSuffix": ".segments",
+    "clientParamParsing": false,
+    "dynamicRSCPrerender": false
+  },
+  "rewriteHeaders": {
+    "pathHeader": "x-nextjs-rewritten-path",
+    "queryHeader": "x-nextjs-rewritten-query"
+  }
+}

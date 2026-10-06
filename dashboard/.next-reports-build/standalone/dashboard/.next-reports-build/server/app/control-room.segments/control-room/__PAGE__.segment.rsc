@@ -1,0 +1,23 @@
+1:"$Sreact.fragment"
+2:I[1076,[],"ClientPageRoot"]
+3:I[99600,["7262","static/chunks/0677a558-a23046a32c7928b9.js","9568","static/chunks/9568-7ca6b233e1ab382e.js","2979","static/chunks/2979-0e2110e567163a60.js","6578","static/chunks/6578-58cf0116fd0ed389.js","7405","static/chunks/7405-28afb24ac84c1a96.js","566","static/chunks/566-4b9f5bfacb4504d4.js","4804","static/chunks/4804-963d4acc87fa8c54.js","4638","static/chunks/4638-dba3882c30048e5b.js","8409","static/chunks/8409-2fdb343290c60984.js","6148","static/chunks/app/control-room/page-dea35ae1f1b2c542.js"],"default"]
+6:I[31872,[],"OutletBoundary"]
+7:"$Sreact.suspense"
+b:I[31872,[],"ViewportBoundary"]
+c:I[31872,[],"MetadataBoundary"]
+d:I[12569,[],"IconMark"]
+f:I[91133,[],""]
+10:I[4297,[],""]
+:HL["/_next/static/css/83ee3b6b21379167.css","style"]
+a:X
+0:{"buildId":"ujsN4gQGDkd0Ha09lMF1s","data":[{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"Component":"$3","serverProvidedParams":{"searchParams":{},"params":{},"promises":["$@4","$@5"]}}],[["$","link","0",{"rel":"stylesheet","href":"/_next/static/css/83ee3b6b21379167.css","precedence":"next"}]],["$","$L6",null,{"children":["$","$7",null,{"name":"Next.MetadataOutlet","children":"$@8"}]}]]}],"isPartial":"$@9","staleTime":"$a","varyParams":null},{"rsc":["$","$1","h",{"children":[null,["$","$Lb",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]}],["$","div",null,{"hidden":true,"children":["$","$Lc",null,{"children":["$","$7",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"KryptonVision | Security Operations"}],["$","meta","1",{"name":"description","content":"Multi-branch CCTV monitoring and security operations"}],["$","link","2",{"rel":"manifest","href":"/manifest.webmanifest"}],["$","meta","3",{"name":"mobile-web-app-capable","content":"yes"}],["$","meta","4",{"name":"apple-mobile-web-app-title","content":"KryptonVision"}],["$","meta","5",{"name":"apple-mobile-web-app-status-bar-style","content":"black-translucent"}],["$","link","6",{"rel":"icon","href":"/icon-192.png"}],["$","link","7",{"rel":"apple-touch-icon","href":"/apple-touch-icon.png"}],["$","$Ld","8",{}]]}]}]}],null]}],"isPartial":"$@e","staleTime":"$a","varyParams":null},{"rsc":["$","$1","c",{"children":[null,["$","div",null,{"className":"product-section-shell live-monitoring-section","children":["$","$Lf",null,{"parallelRouterKey":"children","template":["$","$L10",null,{}]}]}]]}],"isPartial":"$@11","staleTime":"$a","varyParams":null}],"isUpgradeableISRFallback":false,"a":"$@12","rootVaryParams":null,"needsRuntimeRequest":"$@13"}
+4:{}
+5:"$0:data:0:rsc:props:children:0:props:serverProvidedParams:params"
+8:null
+13:true
+a:300
+a:C
+12:0
+e:"$undefined"
+11:"$undefined"
+9:"$undefined"

@@ -1,0 +1,22 @@
+{
+  "..\\node_modules\\next\\dist\\client\\index.js -> ../pages/_app": {
+    "id": 75310,
+    "files": [
+      "static/chunks/5310.1dbcd5ef876070c4.js"
+    ]
+  },
+  "..\\node_modules\\next\\dist\\client\\index.js -> ../pages/_error": {
+    "id": 86555,
+    "files": [
+      "static/chunks/6555.2c1d8d264b2eafbf.js"
+    ]
+  },
+  "app\\maintenance\\camera-map\\page.tsx -> @/components/maintenance/map-view": {
+    "id": 44308,
+    "files": [
+      "static/css/55693049b062c6a3.css",
+      "static/chunks/77cbbdfc.793aadfd462f60d2.js",
+      "static/chunks/4308.71d237225577a338.js"
+    ]
+  }
+}

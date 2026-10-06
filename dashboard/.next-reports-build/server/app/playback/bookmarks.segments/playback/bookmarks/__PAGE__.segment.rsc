@@ -1,0 +1,23 @@
+1:"$Sreact.fragment"
+2:I[80688,["9568","static/chunks/9568-7ca6b233e1ab382e.js","2979","static/chunks/2979-0e2110e567163a60.js","63","static/chunks/63-de877bf1de2740c8.js","4804","static/chunks/4804-963d4acc87fa8c54.js","688","static/chunks/688-9db53a20092b016c.js","1336","static/chunks/app/playback/bookmarks/page-cc4550f3846f2e7a.js"],"AppLayout"]
+3:"$Sreact.suspense"
+4:I[10984,["9568","static/chunks/9568-7ca6b233e1ab382e.js","2979","static/chunks/2979-0e2110e567163a60.js","63","static/chunks/63-de877bf1de2740c8.js","4804","static/chunks/4804-963d4acc87fa8c54.js","688","static/chunks/688-9db53a20092b016c.js","1336","static/chunks/app/playback/bookmarks/page-cc4550f3846f2e7a.js"],"VideoBookmarksWorkspace"]
+5:I[31872,[],"OutletBoundary"]
+9:I[31872,[],"ViewportBoundary"]
+a:I[31872,[],"MetadataBoundary"]
+b:I[12569,[],"IconMark"]
+d:I[91133,[],""]
+e:I[4297,[],""]
+8:X
+10:X
+10:C
+0:{"buildId":"ujsN4gQGDkd0Ha09lMF1s","data":[{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"children":["$","div",null,{"className":"p-6 max-w-[1600px] mx-auto","children":["$","$3",null,{"fallback":["$","div",null,{"className":"py-24 text-center text-slate-500 font-mono text-sm","children":"Loading Video Timeline Bookmarks workspace..."}],"children":["$","$L4",null,{}]}]}]}],null,["$","$L5",null,{"children":["$","$3",null,{"name":"Next.MetadataOutlet","children":"$@6"}]}]]}],"isPartial":"$@7","staleTime":"$8","varyParams":null},{"rsc":["$","$1","h",{"children":[null,["$","$L9",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]}],["$","div",null,{"hidden":true,"children":["$","$La",null,{"children":["$","$3",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"Video Timeline Bookmarks | KryptonVision VMS"}],["$","meta","1",{"name":"description","content":"Operator tagged timestamps with notes, priority levels, and incident associations."}],["$","link","2",{"rel":"manifest","href":"/manifest.webmanifest"}],["$","meta","3",{"name":"mobile-web-app-capable","content":"yes"}],["$","meta","4",{"name":"apple-mobile-web-app-title","content":"KryptonVision"}],["$","meta","5",{"name":"apple-mobile-web-app-status-bar-style","content":"black-translucent"}],["$","link","6",{"rel":"icon","href":"/icon-192.png"}],["$","link","7",{"rel":"apple-touch-icon","href":"/apple-touch-icon.png"}],["$","$Lb","8",{}]]}]}]}],null]}],"isPartial":"$@c","staleTime":"$8","varyParams":null},{"rsc":["$","$1","c",{"children":[null,["$","$Ld",null,{"parallelRouterKey":"children","template":["$","$Le",null,{}]}]]}],"isPartial":"$@f","staleTime":"$8","varyParams":"$10"},{"rsc":["$","$1","c",{"children":[null,["$","$Ld",null,{"parallelRouterKey":"children","template":["$","$Le",null,{}]}]]}],"isPartial":"$@11","staleTime":"$8","varyParams":"$10"}],"isUpgradeableISRFallback":false,"a":"$@12","rootVaryParams":null,"needsRuntimeRequest":"$@13"}
+6:null
+13:true
+8:300
+8:C
+12:0
+c:"$undefined"
+f:"$undefined"
+11:"$undefined"
+7:"$undefined"

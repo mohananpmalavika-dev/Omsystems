@@ -1,0 +1,27 @@
+1:"$Sreact.fragment"
+2:I[1076,[],"ClientPageRoot"]
+3:I[67500,["9568","static/chunks/9568-7ca6b233e1ab382e.js","2979","static/chunks/2979-0e2110e567163a60.js","63","static/chunks/63-de877bf1de2740c8.js","4804","static/chunks/4804-963d4acc87fa8c54.js","688","static/chunks/688-9db53a20092b016c.js","6639","static/chunks/app/admin/recording-failover/page-6845ecd46cdd0b59.js"],"default"]
+6:I[31872,[],"OutletBoundary"]
+7:"$Sreact.suspense"
+b:I[31872,[],"ViewportBoundary"]
+c:I[31872,[],"MetadataBoundary"]
+d:I[12569,[],"IconMark"]
+f:I[91133,[],""]
+10:I[4297,[],""]
+13:I[6684,["9568","static/chunks/9568-7ca6b233e1ab382e.js","9239","static/chunks/9239-4096b57ded412509.js","7581","static/chunks/app/admin/layout-fa0b21803b9a8ec5.js"],"AdminCommandDeck"]
+:HL["/_next/static/css/077e63f94dced9bc.css","style"]
+a:X
+12:X
+12:C
+0:{"buildId":"ujsN4gQGDkd0Ha09lMF1s","data":[{"rsc":["$","$1","c",{"children":[["$","$L2",null,{"Component":"$3","serverProvidedParams":{"searchParams":{},"params":{},"promises":["$@4","$@5"]}}],null,["$","$L6",null,{"children":["$","$7",null,{"name":"Next.MetadataOutlet","children":"$@8"}]}]]}],"isPartial":"$@9","staleTime":"$a","varyParams":null},{"rsc":["$","$1","h",{"children":[null,["$","$Lb",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]}],["$","div",null,{"hidden":true,"children":["$","$Lc",null,{"children":["$","$7",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"KryptonVision | Security Operations"}],["$","meta","1",{"name":"description","content":"Multi-branch CCTV monitoring and security operations"}],["$","link","2",{"rel":"manifest","href":"/manifest.webmanifest"}],["$","meta","3",{"name":"mobile-web-app-capable","content":"yes"}],["$","meta","4",{"name":"apple-mobile-web-app-title","content":"KryptonVision"}],["$","meta","5",{"name":"apple-mobile-web-app-status-bar-style","content":"black-translucent"}],["$","link","6",{"rel":"icon","href":"/icon-192.png"}],["$","link","7",{"rel":"apple-touch-icon","href":"/apple-touch-icon.png"}],["$","$Ld","8",{}]]}]}]}],null]}],"isPartial":"$@e","staleTime":"$a","varyParams":null},{"rsc":["$","$1","c",{"children":[null,["$","$Lf",null,{"parallelRouterKey":"children","template":["$","$L10",null,{}]}]]}],"isPartial":"$@11","staleTime":"$a","varyParams":"$12"},{"rsc":["$","$1","c",{"children":[[["$","link","0",{"rel":"stylesheet","href":"/_next/static/css/077e63f94dced9bc.css","precedence":"next"}]],["$","div",null,{"className":"admin-command-scope","children":[["$","$L13",null,{}],["$","$Lf",null,{"parallelRouterKey":"children","template":["$","$L10",null,{}]}]]}]]}],"isPartial":"$@14","staleTime":"$a","varyParams":null}],"isUpgradeableISRFallback":false,"a":"$@15","rootVaryParams":null,"needsRuntimeRequest":"$@16"}
+4:{}
+5:"$0:data:0:rsc:props:children:0:props:serverProvidedParams:params"
+8:null
+16:true
+a:300
+a:C
+15:0
+e:"$undefined"
+11:"$undefined"
+14:"$undefined"
+9:"$undefined"
