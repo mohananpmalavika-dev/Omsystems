@@ -633,13 +633,6 @@ html[data-theme] .app-shell.wall-window-shell {
   overflow: hidden;
   background: #050a13 !important;
 }
-.los-fullscreen-prompt { position: absolute; z-index: 30; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; width: max-content; max-width: calc(100% - 24px); padding: 14px 16px; border: 1px solid #3b566f; border-radius: 10px; background: #13243b; color: #f1f5f9; box-shadow: 0 8px 32px #0008; }
-.los-fullscreen-prompt strong { font-size: 14px; }
-.los-fullscreen-prompt p { margin: 4px 0 0; color: #b9cadd; font-size: 12px; }
-.los-fullscreen-prompt button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; flex-shrink: 0; min-height: 40px; padding: 8px 12px; border: 1px solid #658296; border-radius: 6px; background: #213d53; color: #f1f5f9; font-size: 13px; cursor: pointer; }
-.los-fullscreen-prompt button:focus-visible { outline: 2px solid #63dce8; outline-offset: 3px; }
-@media (max-width: 600px) { .los-fullscreen-prompt { flex-wrap: wrap; gap: 10px; } .los-fullscreen-prompt > div { width: 100%; } }
-
 html[data-theme] .app-shell.wall-window-shell .experience-surface.wall-window-surface,
 html[data-theme] .app-shell.wall-window-shell .operations-stage-room.wall-window-room,
 html[data-theme] .app-shell.wall-window-shell .camera-only-wall {
