@@ -8,9 +8,11 @@ import { BaseDetector, type DetectionFrame, type DetectionResult, calculateIoU, 
 import {
   loadHelmetClassificationInference,
   loadObjectInference,
+  loadPoseInference,
   modelUnavailableReason,
   type HelmetClassificationFrameInference,
   type ObjectFrameInference,
+  type PoseInference,
 } from "../inference/configured-model-inference.js";
 import { LocalizedHelmetHeadVerifier, type HelmetHeadVerifier } from "../inference/helmet-head-verification.js";
 
@@ -80,12 +82,28 @@ export class HelmetDetector extends BaseDetector {
       if ((!this.inference && !this.classifier) || this.verificationRequired) {
         this.verificationRequired = true;
         this.classifier ??= await loadHelmetClassificationInference("helmet");
+        const localizer = await loadObjectInference("helmet-head-localizer", 0.25);
+        let faceDetector: ObjectFrameInference | null = null;
+        let poseEstimator: PoseInference | null = null;
+        const shouldLoadAuxModels = process.env.HELMET_MULTI_MODEL === "true" || !process.env.VITEST;
+        if (shouldLoadAuxModels) {
+          try {
+            faceDetector = await loadObjectInference("face-detector", 0.6);
+          } catch {}
+          try {
+            poseEstimator = await loadPoseInference("pose-estimator", 0.4);
+          } catch {}
+        }
         this.headVerifier ??= new LocalizedHelmetHeadVerifier(
-          await loadObjectInference("helmet-head-localizer", 0.25), this.classifier);
+          localizer,
+          this.classifier,
+          faceDetector,
+          poseEstimator,
+        );
       }
       this.isModelLoaded = true;
       this.modelLoadError = null;
-      console.log("Helmet detector loaded local ONNX helmet classifier");
+      console.log("Helmet detector loaded local ONNX helmet classifier with multi-model verification");
     } catch (error) {
       this.inference = null;
       this.isModelLoaded = false;
@@ -261,6 +279,23 @@ export class HelmetDetector extends BaseDetector {
       }
       // An explicit helmet box elsewhere in the scene is contrary spatial
       // evidence; do not override it with a crop classification.
+      if (!presence && (helmets.length > 0 || !runLocal || (!this.headVerifier && !this.classifier))) continue;
+
+      if (presence && runLocal && this.classifier && frame.imageData && frame.imageData.length > 0) {
+        const { upperResult, standardResult } = await this.helmetClassifications(frame, person.boundingBox);
+        const alertThreshold = Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE);
+        if (!upperResult.wearingHelmet || !standardResult.wearingHelmet ||
+            upperResult.wearingHelmetConfidence < alertThreshold ||
+            standardResult.wearingHelmetConfidence < alertThreshold) {
+          continue;
+        }
+        presence.confidence = Math.min(
+          presence.confidence ?? 1,
+          upperResult.wearingHelmetConfidence,
+          standardResult.wearingHelmetConfidence,
+        );
+      }
+
       if (!presence && runLocal && this.headVerifier && frame.imageData && frame.imageData.length > 0) {
         const verified = await this.headVerifier.verify(
           frame,

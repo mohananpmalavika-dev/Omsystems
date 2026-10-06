@@ -1,5 +1,6 @@
 import type { DetectionFrame, InferenceObject } from "../detectors/base-detector.js";
-import type { HelmetClassificationFrameInference, ObjectFrameInference } from "./configured-model-inference.js";
+import type { HelmetClassificationFrameInference, ObjectFrameInference, PoseInference } from "./configured-model-inference.js";
+import type { PoseDetection } from "./vision-specialty-inference.js";
 
 type Box = InferenceObject["boundingBox"];
 export interface VerifiedHelmetHead {
@@ -14,12 +15,89 @@ export interface HelmetHeadVerifier {
 /** The person-crop classifier must agree with an independently located head. */
 export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
   private readonly frames = new WeakMap<DetectionFrame, Promise<InferenceObject[]>>();
-  constructor(private readonly localizer: ObjectFrameInference, private readonly classifier: HelmetClassificationFrameInference) {}
+  private readonly faceFrames = new WeakMap<DetectionFrame, Promise<InferenceObject[]>>();
+  private readonly poseFrames = new WeakMap<DetectionFrame, Promise<PoseDetection[]>>();
+
+  constructor(
+    private readonly localizer: ObjectFrameInference,
+    private readonly classifier: HelmetClassificationFrameInference,
+    private readonly faceDetector: ObjectFrameInference | null = null,
+    private readonly poseEstimator: PoseInference | null = null,
+  ) {}
 
   async verify(frame: DetectionFrame, person: Box, threshold: number): Promise<VerifiedHelmetHead | null> {
     let pending = this.frames.get(frame);
     if (!pending) { pending = this.localizer.run(frame); this.frames.set(frame, pending); }
     const objects = await pending;
+
+    // 1. POSE ESTIMATION (Keypoint Verification)
+    // Filters out office chair backrests / tall furniture behind the person
+    if (this.poseEstimator) {
+      let posePending = this.poseFrames.get(frame);
+      if (!posePending) {
+        posePending = this.poseEstimator.run(frame);
+        this.poseFrames.set(frame, posePending);
+      }
+      const poses = await posePending;
+      const matchedPose = findMatchingPose(poses, person);
+      if (matchedPose) {
+        const kp = matchedPose.keypoints;
+        const nose = (kp[0] && kp[0].confidence >= 0.4) ? kp[0] : undefined;
+        const leftEar = (kp[3] && kp[3].confidence >= 0.5) ? kp[3] : undefined;
+        const rightEar = (kp[4] && kp[4].confidence >= 0.5) ? kp[4] : undefined;
+        const leftShoulder = (kp[5] && kp[5].confidence >= 0.4) ? kp[5] : undefined;
+        const rightShoulder = (kp[6] && kp[6].confidence >= 0.4) ? kp[6] : undefined;
+
+        // If ears are clearly visible with high confidence and unoccluded,
+        // a full motorcycle helmet cannot be present.
+        const earsClearlyExposed = (leftEar && leftEar.confidence >= 0.65) || (rightEar && rightEar.confidence >= 0.65);
+        const hasExplicitHelmetBox = objects.some(o => o.label === "helmet" && (o.confidence ?? 0) >= 0.5 &&
+          validHead(frame, person, o.boundingBox));
+
+        if (earsClearlyExposed && !hasExplicitHelmetBox) {
+          // Reject bare head masquerading as helmet
+          return null;
+        }
+
+        // Chair backrest check: head must physically align with nose & shoulders
+        if (nose && (leftShoulder || rightShoulder)) {
+          const shoulderY = leftShoulder?.y ?? rightShoulder!.y;
+          const headHeightEst = Math.abs(shoulderY - nose.y);
+          // A valid helmet/head box must cover down to the eyes/nose region.
+          // If the bottom of the box is above the nose or center is far above the skull, it is a chair headrest.
+          const isChairBackrest = (candidateBox: Box) =>
+            (candidateBox.y + candidateBox.height < nose.y) ||
+            (candidateBox.y < nose.y - headHeightEst * 1.3 && (candidateBox.y + candidateBox.height / 2) < nose.y - headHeightEst * 0.7);
+          const validCandidates = objects.filter(o => !isChairBackrest(o.boundingBox));
+          if (validCandidates.length === 0 && objects.length > 0) {
+            return null;
+          }
+        }
+      }
+    }
+
+    // 2. FACE DETECTION (YuNet Cross-Verification)
+    // An unoccluded, bare human face directly contradicts a full face-concealing helmet.
+    if (this.faceDetector) {
+      let facePending = this.faceFrames.get(frame);
+      if (!facePending) {
+        facePending = this.faceDetector.run(frame);
+        this.faceFrames.set(frame, facePending);
+      }
+      const faces = await facePending;
+      const visibleFace = faces.find(f => (f.confidence ?? 0) >= 0.65 && isInsidePersonHead(person, f.boundingBox));
+      if (visibleFace) {
+        // If an open face is detected, but there is NO localized helmet shell on the crown,
+        // it is a bare-headed visitor/staff member.
+        const hasHelmetCrown = objects.some(o => o.label === "helmet" && (o.confidence ?? 0) >= 0.5 &&
+          validHead(frame, person, o.boundingBox) && o.boundingBox.y <= visibleFace.boundingBox.y);
+        if (!hasHelmetCrown) {
+          return null;
+        }
+      }
+    }
+
+    // 3. HELMET & HEAD LOCALIZER (YOLOv5)
     // "head" localizes the visible head, including exposed faces underneath
     // helmets. The independent classifier must establish helmet evidence.
     const candidates = objects.filter(head =>
@@ -64,6 +142,27 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
     }
     return null;
   }
+}
+
+function isInsidePersonHead(person: Box, face: Box): boolean {
+  const headTop = Math.max(0, person.y - person.height * 0.1);
+  const headBottom = person.y + person.height * 0.45;
+  const inY = face.y >= headTop && face.y <= headBottom;
+  const inX = face.x >= person.x - person.width * 0.2 && (face.x + face.width) <= person.x + person.width * 1.2;
+  return inY && inX;
+}
+
+function findMatchingPose(poses: PoseDetection[], person: Box): PoseDetection | undefined {
+  if (!poses || poses.length === 0) return undefined;
+  return poses.find(pose => {
+    const left = Math.max(person.x, pose.boundingBox.x);
+    const top = Math.max(person.y, pose.boundingBox.y);
+    const right = Math.min(person.x + person.width, pose.boundingBox.x + pose.boundingBox.width);
+    const bottom = Math.min(person.y + person.height, pose.boundingBox.y + pose.boundingBox.height);
+    const intersection = Math.max(0, right - left) * Math.max(0, bottom - top);
+    const area = person.width * person.height;
+    return (intersection / area) >= 0.25;
+  });
 }
 
 function expand(box: Box, padding: number): Box {

@@ -157,4 +157,60 @@ describe("independent helmet head verification", () => {
     }
     expect(await detector.detect({...frame(),timestamp:new Date(6000)})).toHaveLength(1);
   });
+
+  it("rejects false alarms when face detector detects a clear bare face without helmet shell", async () => {
+    const classifier = { run: vi.fn(async () => score(0.99)) };
+    const faceBox = { x: 0.3, y: 0.22, width: 0.15, height: 0.15 };
+    const faceDetector = { run: vi.fn(async () => [{ label: "face", confidence: 0.88, boundingBox: faceBox }]) };
+    // Localizer only finds "head" (e.g. hair/head), NOT "helmet"
+    const verifier = new LocalizedHelmetHeadVerifier(localizer("head"), classifier, faceDetector);
+    expect(await verifier.verify(frame(), person, 0.9167)).toBeNull();
+  });
+
+  it("rejects false alarms when pose estimation detects exposed bare ears", async () => {
+    const classifier = { run: vi.fn(async () => score(0.99)) };
+    const keypoints = Array.from({ length: 17 }, () => ({ x: 0, y: 0, confidence: 0 }));
+    keypoints[0] = { x: 0.35, y: 0.25, confidence: 0.8 }; // nose
+    keypoints[3] = { x: 0.28, y: 0.24, confidence: 0.85 }; // left_ear
+    keypoints[4] = { x: 0.42, y: 0.24, confidence: 0.82 }; // right_ear
+    keypoints[5] = { x: 0.25, y: 0.38, confidence: 0.9 }; // left_shoulder
+    keypoints[6] = { x: 0.45, y: 0.38, confidence: 0.9 }; // right_shoulder
+    const poseEstimator = {
+      run: vi.fn(async () => [{ boundingBox: person, confidence: 0.9, keypoints }])
+    };
+    // Head detected, but ears are clearly visible with high confidence -> not a motorcycle helmet!
+    const verifier = new LocalizedHelmetHeadVerifier(localizer("head"), classifier, null, poseEstimator);
+    expect(await verifier.verify(frame(), person, 0.9167)).toBeNull();
+  });
+
+  it("rejects chair backrest false alarms when candidate sits above anatomical head", async () => {
+    const classifier = { run: vi.fn(async () => score(0.99)) };
+    const chairTopBox = { x: 0.3, y: 0.05, width: 0.15, height: 0.08 }; // High chair headrest
+    const keypoints = Array.from({ length: 17 }, () => ({ x: 0, y: 0, confidence: 0 }));
+    keypoints[0] = { x: 0.35, y: 0.28, confidence: 0.8 }; // nose
+    keypoints[5] = { x: 0.25, y: 0.40, confidence: 0.9 }; // left_shoulder
+    keypoints[6] = { x: 0.45, y: 0.40, confidence: 0.9 }; // right_shoulder
+    const poseEstimator = {
+      run: vi.fn(async () => [{ boundingBox: person, confidence: 0.9, keypoints }])
+    };
+    // The candidate box is the chair top at y: 0.05, far above nose at y: 0.28
+    const verifier = new LocalizedHelmetHeadVerifier(localizer("head", chairTopBox), classifier, null, poseEstimator);
+    expect(await verifier.verify(frame(), person, 0.9167)).toBeNull();
+  });
+
+  it("confirms a helmet when pose is aligned and crown helmet is localized", async () => {
+    const classifier = { run: vi.fn(async () => score(0.99)) };
+    const faceDetector = { run: vi.fn(async () => []) }; // Face occluded by helmet
+    const keypoints = Array.from({ length: 17 }, () => ({ x: 0, y: 0, confidence: 0 }));
+    keypoints[0] = { x: 0.35, y: 0.25, confidence: 0.5 }; // nose
+    keypoints[5] = { x: 0.25, y: 0.35, confidence: 0.9 }; // left_shoulder
+    keypoints[6] = { x: 0.45, y: 0.35, confidence: 0.9 }; // right_shoulder
+    const poseEstimator = {
+      run: vi.fn(async () => [{ boundingBox: person, confidence: 0.9, keypoints }])
+    };
+    const verifier = new LocalizedHelmetHeadVerifier(localizer("helmet", box), classifier, faceDetector, poseEstimator);
+    const result = await verifier.verify(frame(), person, 0.9167);
+    expect(result).not.toBeNull();
+    expect(result?.boundingBox).toEqual(box);
+  });
 });
