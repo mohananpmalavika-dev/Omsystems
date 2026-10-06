@@ -183,7 +183,7 @@ export async function registerOperationalHealthRoutes(
     }
     if (input.deviceType === "camera") {
       const camera = await store.getCamera(input.deviceId);
-      if (!camera || camera.branchId !== branch.id || (camera.edgeAgentId && camera.edgeAgentId !== id)) {
+      if (!camera || camera.branchId !== branch.id) {
         return reply.code(403).send({ error: "camera_edge_scope_mismatch" });
       }
       let reported = input.metrics.status;
@@ -197,6 +197,11 @@ export async function registerOperationalHealthRoutes(
       }
       if (reported === "degraded" && input.metrics.streamActive && !input.metrics.videoLoss && !input.metrics.blackScreen && !input.metrics.blueScreen && !input.metrics.imageFrozen) {
         reported = "online";
+      }
+      if (reported === "unknown") {
+        if (camera.status === "online" || camera.status === "degraded") {
+          reported = camera.status;
+        }
       }
       if (reported === "online" || reported === "offline" || reported === "degraded" || reported === "unknown") {
         await store.updateCameraStatus(input.deviceId, reported);
@@ -588,9 +593,12 @@ export async function registerOperationalHealthRoutes(
 
     if (!targetCameras.length) return reply.code(404).send({ error: "cameras_not_found", message: "No accessible cameras were found in this branch." });
     const data = await requestCameraRecovery(store, targetCameras, request.currentUser.id);
-    if (!data.queuedCount) return reply.code(409).send({
-      success: false, error: data.skipped[0]?.error ?? "camera_recovery_unavailable", data,
-      message: data.skipped[0]?.message ?? "Camera recovery is unavailable.",
+    const schemaUpdateRequired = data.skipped.some(item => item.error === "camera_recovery_schema_update_required");
+    const failure = (schemaUpdateRequired ? data.skipped.find(item => item.error === "camera_recovery_schema_update_required") : data.skipped[0]);
+    if (!data.queuedCount) return reply.code(schemaUpdateRequired ? 503 : 409).send({
+      success: false, error: failure?.error ?? "camera_recovery_unavailable", data,
+      ...(schemaUpdateRequired ? { requiredMigration: "20261006_edge_camera_recovery_commands.sql" } : {}),
+      message: failure?.message ?? "Camera recovery is unavailable.",
     });
     await store.writeAudit({
       tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,

@@ -337,7 +337,7 @@ export function projectBranchHealth(input: {
     healthScore: score,
     lastHealthCheck: observed,
     totalCameras: input.cameras.length,
-    onlineCameras: cameraStates.filter((item) => item.status === "healthy").length,
+    onlineCameras: cameraStates.filter((item) => item.status === "healthy" || item.status === "warning").length,
     recordingCameras: cameraStates.filter((item) => item.retention?.status === "compliant" || item.retention?.status === "at_risk").length,
     totalRecorders: recorderStates.length,
     onlineRecorders: recorderStates.filter((status) => status === "healthy").length,

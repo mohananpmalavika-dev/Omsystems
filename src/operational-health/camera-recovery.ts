@@ -24,9 +24,17 @@ export async function requestCameraRecovery(store: ControlPlaneStore, cameras: C
     const existing = pending.get(camera.branchId)!.find(command => command.type === "recover-camera" &&
       command.edgeAgentId === agent.id && command.payload.cameraId === camera.id &&
       (command.status === "queued" || command.status === "running"));
-    const command = existing ?? await store.createEdgeCommand({
-      edgeAgentId: agent.id, type: "recover-camera", payload: { cameraId: camera.id, branchId: camera.branchId }, requestedBy,
-    });
+    let command: EdgeCommand;
+    try {
+      command = existing ?? await store.createEdgeCommand({
+        edgeAgentId: agent.id, type: "recover-camera", payload: { cameraId: camera.id, branchId: camera.branchId }, requestedBy,
+      });
+    } catch (error) {
+      const databaseError = error as { code?: string; constraint?: string } | null;
+      if (databaseError?.code !== "23514" || databaseError.constraint !== "edge_commands_command_type_check") throw error;
+      skipped.push({ cameraId: camera.id, error: "camera_recovery_schema_update_required", message: "The server database needs an update before camera recovery can run. Contact your administrator." });
+      continue;
+    }
     if (!existing) pending.get(camera.branchId)!.push(command);
     commands.push(command);
   }

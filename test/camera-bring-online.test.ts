@@ -41,6 +41,50 @@ describe('Make online requests verified camera recovery', () => {
     expect((await store.getCamera('cam-001'))!.status).toBe('offline');
   });
 
+  it('reports the missing database migration without returning 500 or forcing online', async () => {
+    vi.spyOn(store, 'createEdgeCommand').mockRejectedValue(Object.assign(new Error('check constraint violation'), {
+      code: '23514', constraint: 'edge_commands_command_type_check',
+    }));
+    const response = await app.inject(request);
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({ success: false, error: 'camera_recovery_schema_update_required', requiredMigration: '20261006_edge_camera_recovery_commands.sql' });
+    expect(response.json().message).toContain('database needs an update');
+    expect((await store.getCamera('cam-001'))!.status).toBe('offline');
+  });
+
+  it('preserves queued bulk requests when another camera encounters the schema constraint', async () => {
+    const original = store.cameras.get('cam-001')!;
+    store.cameras.set('recovery-second', { ...original, id: 'recovery-second', name: 'Second camera' });
+    const create = store.createEdgeCommand.bind(store);
+    vi.spyOn(store, 'createEdgeCommand').mockImplementation(input => input.payload.cameraId === 'recovery-second'
+      ? Promise.reject(Object.assign(new Error('check constraint violation'), { code: '23514', constraint: 'edge_commands_command_type_check' }))
+      : create(input));
+    const response = await app.inject({ ...request, payload: { branchId: 'branch-blr-001' } });
+    expect(response.statusCode).toBe(202);
+    expect(response.json().data).toMatchObject({ queuedCount: 1, cameraIds: ['cam-001'], skipped: [{ cameraId: 'recovery-second', error: 'camera_recovery_schema_update_required' }] });
+  });
+
+  it('prioritizes the database update error when a bulk request also has an unassigned camera', async () => {
+    const original = store.cameras.get('cam-001')!;
+    store.cameras.set('recovery-assigned', { ...original, id: 'recovery-assigned', name: 'Assigned camera' });
+    original.edgeAgentId = undefined;
+    vi.spyOn(store, 'createEdgeCommand').mockRejectedValue(Object.assign(new Error('check constraint violation'), {
+      code: '23514', constraint: 'edge_commands_command_type_check',
+    }));
+    const response = await app.inject({ ...request, payload: { branchId: 'branch-blr-001' } });
+    expect(response.statusCode).toBe(503);
+    expect(response.json().error).toBe('camera_recovery_schema_update_required');
+    expect(response.json().message).toContain('database needs an update');
+    expect(response.json().data.skipped).toHaveLength(2);
+  });
+
+  it('does not mask a different database failure as a missing migration', async () => {
+    vi.spyOn(store, 'createEdgeCommand').mockRejectedValue(Object.assign(new Error('different constraint'), {
+      code: '23514', constraint: 'edge_commands_status_check',
+    }));
+    expect((await app.inject(request)).statusCode).toBe(500);
+  });
+
   it('reuses a pending recovery when the operator retries', async () => {
     const first = (await app.inject(request)).json();
     const second = (await app.inject(request)).json();

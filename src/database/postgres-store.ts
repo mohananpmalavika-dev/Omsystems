@@ -156,10 +156,23 @@ export class PostgresStore
       `SELECT secret.encrypted_uri
        FROM central_stream_secrets secret
        JOIN edge_agents agent ON agent.id = secret.edge_agent_id
-       JOIN cameras camera ON camera.edge_agent_id = agent.id
-         AND camera.connection_secret_ref = $2
+       LEFT JOIN cameras camera ON camera.connection_secret_ref = $2
        WHERE secret.reference = $1 AND agent.credential_revoked_at IS NULL
-         AND ($3::uuid IS NULL OR agent.id = $3::uuid)
+         AND (
+           $3::uuid IS NULL
+           OR agent.id = $3::uuid
+           OR (camera.id IS NOT NULL AND (
+             camera.edge_agent_id = $3::uuid
+             OR EXISTS (
+               SELECT 1 FROM edge_agent_branch_assignments eaba
+               WHERE eaba.edge_agent_id = $3::uuid AND eaba.branch_node_id = camera.branch_node_id
+             )
+             OR EXISTS (
+               SELECT 1 FROM edge_agents ea
+               WHERE ea.id = $3::uuid AND ea.branch_node_id = camera.branch_node_id
+             )
+           ))
+         )
        LIMIT 1`,
       [reference, baseReference, edgeAgentId ?? null],
     );
