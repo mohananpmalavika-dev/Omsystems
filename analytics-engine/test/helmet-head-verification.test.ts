@@ -37,6 +37,20 @@ describe("independent helmet head verification", () => {
     expect(await new LocalizedHelmetHeadVerifier(localizer(),classifier).verify(frame(),person,.9167))
       .toEqual({boundingBox:box,classificationConfidence:.97,localizationConfidence:.8});
   });
+  it("accepts a head-labelled helmet only when the full head and context both classify positive", async () => {
+    const classifier={run:vi.fn(async()=>score(.99))};
+    expect(await new LocalizedHelmetHeadVerifier(localizer("head"),classifier).verify(frame(),person,.9167))
+      .toMatchObject({boundingBox:box,classificationConfidence:.99,localizationConfidence:.8});
+  });
+  it("keeps an independently corroborated helmet crown when the exposed face also has a head box", async () => {
+    const objects={run:vi.fn(async()=>[
+      {label:"head",confidence:.8,boundingBox:box},
+      {label:"helmet",confidence:.4,boundingBox:box},
+    ])};
+    const classifier={run:vi.fn(async(_frame,crop)=>score(crop.height<box.height?.99:.02))};
+    expect(await new LocalizedHelmetHeadVerifier(objects,classifier).verify(frame(),person,.9167))
+      .toMatchObject({classificationConfidence:.99,localizationConfidence:.4,boundingBox:{height:box.height*.65}});
+  });
   it("supports an exposed face only when a helmet-labelled box corroborates the crown", async () => {
     const classifier={run:vi.fn(async(_frame,crop)=>score(crop.height<box.height?.99:.02))};
     expect(await new LocalizedHelmetHeadVerifier(localizer("helmet"),classifier).verify(frame(),person,.9167))
@@ -98,5 +112,30 @@ describe("independent helmet head verification", () => {
     expect(results).toHaveLength(1);
     expect(results[0]?.metadata.evidenceSource).toBe("localized-head-classification");
     expect(results[0]?.objects.find(object=>object.label==="helmet")?.boundingBox).toEqual(box);
+  });
+  it.each([false, true])("confirms a verified helmet across distinct frames when body crops are negative (fast=%s)", async fastAlert => {
+    const classifier = {run:vi.fn(async()=>score(.01))};
+    const verifier = new LocalizedHelmetHeadVerifier(localizer(), {
+      run:vi.fn(async()=>score(.99)),
+    });
+    const detector = new HelmetDetector(null,.88,classifier,fastAlert,verifier);
+    await detector.initialize();
+    expect(await detector.detect(frame())).toEqual([]);
+    expect(await detector.detect(frame())).toEqual([]);
+    const results = await detector.detect({...frame(),timestamp:new Date(2000)});
+    expect(results).toHaveLength(1);
+    expect(results[0]?.metadata.evidenceSource).toBe("localized-head-classification");
+    expect(results[0]?.objects.find(object=>object.label==="helmet")?.boundingBox).toEqual(box);
+    expect(results[0]?.confidence).toBe(.99);
+  });
+  it("clears a pending localized helmet when the next head verification is negative", async () => {
+    const verified = {boundingBox:box,classificationConfidence:.99,localizationConfidence:.8};
+    const verify = vi.fn().mockResolvedValueOnce(verified).mockResolvedValueOnce(null).mockResolvedValue(verified);
+    const detector = new HelmetDetector(null,.88,{run:vi.fn(async()=>score(.01))},false,{verify});
+    await detector.initialize();
+    for (const seconds of [0,2,4]) {
+      expect(await detector.detect({...frame(),timestamp:new Date(seconds*1000)})).toEqual([]);
+    }
+    expect(await detector.detect({...frame(),timestamp:new Date(6000)})).toHaveLength(1);
   });
 });
