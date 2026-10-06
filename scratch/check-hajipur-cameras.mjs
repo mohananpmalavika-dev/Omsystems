@@ -1,10 +1,18 @@
 import { execSync } from 'node:child_process';
 
 const sql = `
-SELECT reference, edge_agent_id, updated_at 
-FROM central_stream_secrets 
-WHERE reference LIKE '%hajipur%' OR reference LIKE '%bettaih%' OR reference LIKE '%peravaruni%' OR reference LIKE '%rajkot%'
-ORDER BY reference;
+SELECT 
+  c.id,
+  c.recorder_channel,
+  c.status,
+  c.edge_agent_id,
+  c.connection_secret_ref,
+  c.profiles,
+  c.capabilities
+FROM cameras c
+JOIN branches b ON c.branch_node_id = b.id
+WHERE b.name = 'Hajipur'
+ORDER BY c.recorder_channel;
 `;
 
 const base64 = Buffer.from(sql).toString('base64');

@@ -4,17 +4,18 @@ const sql = `
 SELECT 
   b.name as branch, 
   c.recorder_channel, 
-  c.status, 
-  c.edge_agent_id, 
-  c.connection_secret_ref, 
-  c.id 
+  c.id as camera_id,
+  c.resource_node_id,
+  c.edge_agent_id,
+  c.connection_secret_ref,
+  c.status
 FROM cameras c 
 JOIN branches b ON c.branch_node_id = b.id 
 ORDER BY b.name, c.recorder_channel;
 `;
 
 const base64 = Buffer.from(sql).toString('base64');
-const cmd = `gcloud compute ssh kryptovision-server --zone=asia-south1-b --project=project-7866fc3f-5dd5-4495-804 --command="echo '${base64}' | base64 -d | sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid"`;
+const cmd = `ssh -i C:\\Users\\Dhanya\\.ssh\\google_compute_engine -o StrictHostKeyChecking=no Dhanya@34.14.220.41 "echo '${base64}' | base64 -d | sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid"`;
 
 const res = execSync(cmd, { encoding: 'utf8' });
 console.log(res);
