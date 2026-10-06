@@ -67,3 +67,4 @@ deploy/gcp/wireguard-media/*.pub
 
 # Local UX preview build outputs
 dashboard/.next-ux-*/
+dashboard/.next-reports-build/cache/
