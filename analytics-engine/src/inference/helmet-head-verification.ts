@@ -27,19 +27,111 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
   ) {}
 
   async verifyDirect(frame: DetectionFrame, threshold: number): Promise<{ candidate: VerifiedHelmetHead; synthPerson: Box } | null> {
+    const candidateProposals: Array<{ box: Box; source: string; confidence: number }> = [];
+
+    // 1. From localizer: helmet or head (threshold >= 0.10)
     let pending = this.frames.get(frame);
     if (!pending) { pending = this.localizer.run(frame); this.frames.set(frame, pending); }
     const objects = await pending;
-    const helmetCandidates = objects.filter(o => o.label === "helmet" && (o.confidence ?? 0) >= 0.25);
-    for (const h of helmetCandidates) {
-      const synthPerson = {
-        x: Math.max(0, h.boundingBox.x - h.boundingBox.width * 0.5),
-        y: h.boundingBox.y,
-        width: Math.min(1 - h.boundingBox.x, h.boundingBox.width * 2),
-        height: Math.min(1 - h.boundingBox.y, Math.max(0.25, h.boundingBox.height * 3.5)),
+    for (const o of objects) {
+      if ((o.label === "helmet" || o.label === "head") && (o.confidence ?? 0) >= 0.10) {
+        candidateProposals.push({ box: o.boundingBox, source: `localizer-${o.label}`, confidence: o.confidence ?? 0.5 });
+      }
+    }
+
+    // 2. From face detector (YuNet face proposal >= 0.08)
+    if (this.faceDetector) {
+      let facePending = this.faceFrames.get(frame);
+      if (!facePending) {
+        facePending = this.faceDetector.run(frame);
+        this.faceFrames.set(frame, facePending);
+      }
+      const faces = await facePending;
+      for (const f of faces) {
+        if ((f.confidence ?? 0) >= 0.08) {
+          const headBox = {
+            x: Math.max(0, f.boundingBox.x - f.boundingBox.width * 0.4),
+            y: Math.max(0, f.boundingBox.y - f.boundingBox.height * 0.9),
+            width: Math.min(1 - f.boundingBox.x, f.boundingBox.width * 1.8),
+            height: Math.min(1 - f.boundingBox.y, f.boundingBox.height * 2.3),
+          };
+          candidateProposals.push({ box: headBox, source: "face-yunet", confidence: f.confidence ?? 0.5 });
+        }
+      }
+    }
+
+    for (const proposal of candidateProposals) {
+      const box = proposal.box;
+      if (![box.x, box.y, box.width, box.height].every(Number.isFinite) ||
+          box.width <= 0 || box.height <= 0 ||
+          box.width * frame.width < 20 || box.height * frame.height < 20) {
+        continue;
+      }
+
+      const synthPerson: Box = {
+        x: Math.max(0, box.x - box.width * 0.5),
+        y: box.y,
+        width: Math.min(1 - box.x, box.width * 2),
+        height: Math.min(1 - box.y, Math.max(0.25, box.height * 3.5)),
       };
-      const result = await this.verify(frame, synthPerson, threshold);
-      if (result) return { candidate: result, synthPerson };
+
+      // Keypoint anti-false-alarm check
+      if (this.poseEstimator) {
+        let posePending = this.poseFrames.get(frame);
+        if (!posePending) {
+          posePending = this.poseEstimator.run(frame);
+          this.poseFrames.set(frame, posePending);
+        }
+        const poses = await posePending;
+        const matchedPose = findMatchingPose(poses, synthPerson);
+        if (matchedPose) {
+          const kp = matchedPose.keypoints;
+          const leftEar = (kp[3] && kp[3].confidence >= 0.5) ? kp[3] : undefined;
+          const rightEar = (kp[4] && kp[4].confidence >= 0.5) ? kp[4] : undefined;
+          const earsClearlyExposed = (leftEar && leftEar.confidence >= 0.70) || (rightEar && rightEar.confidence >= 0.70);
+          if (earsClearlyExposed) continue;
+        }
+      }
+
+      const head = await this.classifier.run(frame, box);
+      const context = await this.classifier.run(frame, expand(box, 0.15));
+      if (head.wearingHelmet && context.wearingHelmet &&
+          Math.min(head.wearingHelmetConfidence, context.wearingHelmetConfidence) >= threshold) {
+        const surrounding = await this.classifier.run(frame, expand(box, 0.75));
+        if (!surrounding.wearingHelmet || surrounding.wearingHelmetConfidence < threshold) continue;
+
+        return {
+          candidate: {
+            boundingBox: box,
+            classificationConfidence: Math.min(head.wearingHelmetConfidence, context.wearingHelmetConfidence, surrounding.wearingHelmetConfidence),
+            localizationConfidence: proposal.confidence,
+          },
+          synthPerson,
+        };
+      }
+
+      // Support crown helmet with exposed face
+      if (box.height * 0.65 * frame.height >= 20) {
+        const crown = { ...box, height: box.height * 0.65 };
+        const result = await this.classifier.run(frame, crown);
+        if (result?.wearingHelmet && result.wearingHelmetConfidence >= threshold) {
+          const x = Math.max(0, box.x - box.width * 0.3), y = Math.max(0, box.y - box.height * 0.15);
+          const shellContext = await this.classifier.run(frame, {
+            x, y, width: Math.min(1, box.x + box.width * 1.3) - x,
+            height: Math.min(1, crown.y + crown.height + box.height * 0.15) - y,
+          });
+          if (shellContext.wearingHelmet && shellContext.wearingHelmetConfidence >= threshold) {
+            return {
+              candidate: {
+                boundingBox: crown,
+                classificationConfidence: Math.min(result.wearingHelmetConfidence, shellContext.wearingHelmetConfidence),
+                localizationConfidence: proposal.confidence,
+              },
+              synthPerson,
+            };
+          }
+        }
+      }
     }
     return null;
   }

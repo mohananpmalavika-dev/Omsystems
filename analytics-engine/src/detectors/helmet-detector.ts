@@ -88,7 +88,7 @@ export class HelmetDetector extends BaseDetector {
         const shouldLoadAuxModels = process.env.HELMET_MULTI_MODEL === "true" || !process.env.VITEST;
         if (shouldLoadAuxModels) {
           try {
-            faceDetector = await loadObjectInference("face-detector", 0.6);
+            faceDetector = await loadObjectInference("face-detector", 0.08);
           } catch {}
           try {
             poseEstimator = await loadPoseInference("pose-estimator", 0.4);
@@ -437,8 +437,9 @@ export class HelmetDetector extends BaseDetector {
 
     // Direct frame-wide fallback: If no indoor person was detected at all
     // (e.g. seated/slouched person on stairs whose posture scored below person detector thresholds),
+    // or if none of the indoor persons yielded a confirmed helmet detection,
     // check if the head verifier detected an unambiguous helmet on the frame.
-    if (indoorPersons.length === 0 && runLocal && this.headVerifier && frame.imageData && frame.imageData.length > 0) {
+    if (indoorHelmetDetections.length === 0 && runLocal && this.headVerifier && frame.imageData && frame.imageData.length > 0) {
       if (typeof this.headVerifier.verifyDirect === "function") {
         const direct = await this.headVerifier.verifyDirect(
           frame,
@@ -452,7 +453,7 @@ export class HelmetDetector extends BaseDetector {
             evidenceSource: "localized-head-classification",
             confidence: direct.candidate.classificationConfidence,
             localizationConfidence: direct.candidate.localizationConfidence,
-            personConfidence: 0.8,
+            personConfidence: 0.85,
             riskLevel: "violation",
           };
           const confirmations = this.fastAlert ? 2 : 3;
