@@ -24,3 +24,18 @@ Visually confirmed helmet wear in cached CH2 and CH6 frames captured at 00:45:58
 Evidence: `reports/pilot-pipeline-wearer-20261007.json` and corresponding local JPG snapshots in `tmp/pilot-wearer-*`. Replays of the saved JPEGs are lossy and must not be treated as exact replays of the raw frames. The JPEG replay verified the CH2 head at confidence 0.9563; CH6 found only a `head` label and a visible face at confidence 0.7621, triggering the existing face-without-helmet-shell veto before classification. This suggests a remaining sensitivity to model localization and transparent/open visor views, but does not justify relaxing thresholds from these samples alone. Earlier visually bare-headed samples also received high helmet classification scores.
 
 The latest result is that production detection and server dashboard dispatch succeeded. Visibility of the notifications in the user's browser remains unverified.
+
+## Local delay fix completed
+
+The following changes are implemented and validated locally, without deployment:
+
+- Active analytics cameras retain one FFmpeg decoder each, producing one 640×360 RGB frame per second from the configured stream. Capture no longer pays RTSP connection and decoder startup costs for every sample.
+- Delivery runs independently per camera at the existing configured interval, with a two-second default. A slow upload or unavailable stream no longer prevents later cameras from delivering their next sample.
+- Each decoder retains only its latest complete frame and a partial-frame assembly buffer. Samples older than three seconds are rejected, and repeated reads preserve their actual capture timestamp so they cannot falsely advance helmet confirmation. Busy cameras skip intervening frames rather than queuing old images.
+- Health checks reuse active analytics decoders. Decoder stalls reconnect after a ten-second watchdog, with reconnect backoff from two seconds to thirty seconds. Configuration changes and service shutdown stop decoders and clear buffered samples. A failed upload from an old source cannot install a retry delay on its replacement.
+- Dashboard fallback reconciliation runs every five seconds, refreshes immediately on event-stream reconnect and browser focus, and prevents overlapping polling requests. A polling response from before a newer streamed event cannot erase that event.
+- Helmet confidence thresholds and distinct-frame confirmation were preserved.
+
+Validation: **100 tests passed** across nine files, including a real FFmpeg process emitting consecutive full-sized RGB frames, fragmented frame assembly, stale-frame rejection, independent uploads, reconnect/backoff, configuration changes, source recovery, health checks, helmet false-alarm and head-verification regressions, and browser notification recovery. Edge-agent and dashboard type checks passed; the edge-agent TypeScript build passed; `git diff --check` passed. An initial browser-suite startup exceeded its twenty-second hook limit; the successful browser runs used a longer startup allowance.
+
+Expected benefit: with a warm decoder, two successful verified observations can be sampled about two seconds apart at the default delivery interval. This is not a measured production alert latency guarantee: model rejections, inference time, network time, decoder startup, and load on the edge host still affect total latency. Continuous decoding trades lower startup latency for sustained camera connections and CPU use; production timing and resource use remain unmeasured because deployment was explicitly prohibited.
