@@ -615,10 +615,10 @@ function aggregateByDimension(
 
   for (const b of branches) {
     let key = b.branch_id;
-    if (groupBy === 'organization') key = b.org_name || b.branch_name;
-    else if (groupBy === 'zone') key = b.zone_name || b.branch_name;
-    else if (groupBy === 'region') key = b.region_name || b.branch_name;
-    else if (groupBy === 'area') key = b.area_name || b.branch_name;
+    if (groupBy === 'organization') key = b.org_name ? `organization:${b.org_name}` : `branch:${b.branch_id}`;
+    else if (groupBy === 'zone') key = b.zone_name ? `zone:${b.zone_name}` : `branch:${b.branch_id}`;
+    else if (groupBy === 'region') key = b.region_name ? `region:${b.region_name}` : `branch:${b.branch_id}`;
+    else if (groupBy === 'area') key = b.area_name ? `area:${b.area_name}` : `branch:${b.branch_id}`;
 
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(b);
@@ -704,7 +704,11 @@ function aggregateByDimension(
     }
 
     matrix.push({
-      dimension: groupBy === 'branch' ? groupBranches[0]!.branch_name : dimensionKey,
+      dimension: groupBy === 'organization' ? groupBranches[0]!.org_name || groupBranches[0]!.branch_name
+        : groupBy === 'zone' ? groupBranches[0]!.zone_name || groupBranches[0]!.branch_name
+        : groupBy === 'region' ? groupBranches[0]!.region_name || groupBranches[0]!.branch_name
+        : groupBy === 'area' ? groupBranches[0]!.area_name || groupBranches[0]!.branch_name
+        : groupBranches[0]!.branch_name,
       branchId: groupBy === 'branch' ? groupBranches[0]!.branch_id : undefined,
       branchCount: groupBy === 'branch' ? 1 : groupBranches.length,
       onlineCameras,
