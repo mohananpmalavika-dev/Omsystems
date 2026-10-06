@@ -103,9 +103,9 @@ function MisReportsContent() {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabKey>("all-in-one");
   useEffect(() => {
-    const tab = searchParams.get("tab");
+    const tab = searchParams?.get("tab");
     setActiveTab(tab === "branch-opening" ? "branch-opening" : "all-in-one");
-    const dimension = searchParams.get("groupBy");
+    const dimension = searchParams?.get("groupBy");
     setGroupBy(["organization", "zone", "region", "area", "branch", "date", "time"].includes(dimension ?? "") ? dimension as GroupBy : "branch");
   }, [searchParams]);
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");

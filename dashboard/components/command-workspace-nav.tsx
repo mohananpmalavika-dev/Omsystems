@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowRight, ArrowUpRight, BarChart3, FileText, Layers3 } from "lucide-react";
 
 type WorkspaceLink = { href: string; label: string };
@@ -31,7 +32,14 @@ const stages: JourneyStage[] = [
     title: "Find the meaning",
     description: "Compare outcomes and understand the evidence.",
     links: [
-      { href: "/reports/mis", label: "Executive reports" },
+      { href: "/reports/mis", label: "Management overview" },
+      { href: "/reports/mis?groupBy=date", label: "Date-wise reports" },
+      { href: "/reports/mis?groupBy=zone", label: "Zone-wise reports" },
+      { href: "/reports/mis?groupBy=region", label: "Region-wise reports" },
+      { href: "/reports/mis?groupBy=area", label: "Area-wise reports" },
+      { href: "/reports/mis?groupBy=branch", label: "Branch-wise reports" },
+      { href: "/reports/mis?tab=branch-opening", label: "Branch opening reports" },
+      { href: "/analytics/alerts", label: "AI alert graphical reports" },
       { href: "/reports/financial", label: "Cost & value" },
       { href: "/reports/compliance", label: "Compliance" },
       { href: "/reports/benchmarking", label: "Benchmarking" },
@@ -48,7 +56,8 @@ const stages: JourneyStage[] = [
   },
 ];
 
-const workspacePaths = new Set(stages.flatMap((stage) => stage.links.map((link) => link.href)));
+const routePath = (href: string) => href.split("?")[0];
+const workspacePaths = new Set(stages.flatMap((stage) => stage.links.map((link) => routePath(link.href))));
 
 export function CommandWorkspaceNav({
   pathname,
@@ -59,16 +68,21 @@ export function CommandWorkspaceNav({
   visibleHrefs: Set<string>;
   unrestricted: boolean;
 }) {
+  const searchParams = useSearchParams();
   if (!workspacePaths.has(pathname)) return null;
 
   const availableStages = stages
     .map((stage) => ({
       ...stage,
-      links: stage.links.filter((link) => link.href === pathname || unrestricted || visibleHrefs.has(link.href)),
+      links: stage.links.filter((link) => unrestricted || visibleHrefs.has(link.href) || visibleHrefs.has(routePath(link.href))),
     }))
     .filter((stage) => stage.links.length > 0);
-  const currentStage = stages.find((stage) => stage.links.some((link) => link.href === pathname))!;
-  const currentLink = currentStage.links.find((link) => link.href === pathname)!;
+  const currentStage = stages.find((stage) => stage.links.some((link) => routePath(link.href) === pathname))!;
+  const currentLink = currentStage.links.filter((link) => {
+    if (routePath(link.href) !== pathname) return false;
+    const query = new URLSearchParams(link.href.split("?")[1]);
+    return Array.from(query).every(([key, value]) => searchParams?.get(key) === value);
+  }).sort((a, b) => b.href.length - a.href.length)[0] ?? currentStage.links[0];
   const nextStage = availableStages.find((stage) => Number(stage.number) > Number(currentStage.number));
   const nextLink = nextStage?.links[0]
     ?? availableStages.find((stage) => stage.number !== currentStage.number)?.links[0];
@@ -106,8 +120,8 @@ export function CommandWorkspaceNav({
               <p>{stage.description}</p>
               <div className="command-workspace-nav-links">
                 {stage.links.map((link) => (
-                  <Link key={link.href} href={link.href} className={pathname === link.href ? "is-current" : undefined} aria-current={pathname === link.href ? "page" : undefined}>
-                    {link.label}{pathname !== link.href && <ArrowUpRight size={12} aria-hidden="true" />}
+                  <Link key={link.href} href={link.href} className={currentLink.href === link.href ? "is-current" : undefined} aria-current={currentLink.href === link.href ? "page" : undefined}>
+                    {link.label}{currentLink.href !== link.href && <ArrowUpRight size={12} aria-hidden="true" />}
                   </Link>
                 ))}
               </div>
