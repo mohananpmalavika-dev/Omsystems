@@ -2,12 +2,105 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ModelManager } from "../src/model-manager.js";
+import { ModelManager, type ModelManagerOptions } from "../src/model-manager.js";
 
 const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
+  vi.useRealTimers();
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+});
+
+async function optionalSessionManager(options: ModelManagerOptions = {}) {
+  const modelsDirectory = await mkdtemp(path.join(os.tmpdir(), "sentinel-session-lifetime-"));
+  temporaryDirectories.push(modelsDirectory);
+  await writeFile(path.join(modelsDirectory, "session.onnx"), Buffer.alloc(4096));
+  const sessions: any[] = [];
+  const loader = vi.fn(async () => {
+    let disposed = false;
+    const session = {
+      inputNames: ["input"], outputNames: ["output"],
+      run: vi.fn(async (value: unknown) => {
+        if (disposed) throw new Error("Session already disposed.");
+        return { generation: sessions.indexOf(session), value };
+      }),
+      release: vi.fn(async () => { disposed = true; }),
+    };
+    sessions.push(session);
+    return session;
+  });
+  const manager = new ModelManager({ modelsDirectory, modelLoader: loader, enableGPU: false, startCleanupTimer: false, ...options });
+  await manager.initialize();
+  manager.addModelConfig({ id: "optional-session", name: "Optional inference session", path: "session.onnx", type: "onnx", priority: "low" });
+  return { manager, loader, sessions };
+}
+
+describe("retained inference session lifetime", () => {
+  it("reloads an evicted session through the original detector handle", async () => {
+    const { manager, sessions } = await optionalSessionManager();
+    const handle = await manager.getModel("optional-session");
+    expect(handle.inputNames).toEqual(["input"]);
+    await manager.unloadModel("optional-session");
+    expect(sessions[0].release).toHaveBeenCalledOnce();
+    expect(await handle.run("live frame")).toEqual({ generation: 1, value: "live frame" });
+    expect(sessions[0].run).not.toHaveBeenCalled();
+    await manager.shutdown();
+  });
+
+  it("counts inference activity so cleanup keeps a continuously used optional session", async () => {
+    vi.useFakeTimers();
+    const { manager, sessions } = await optionalSessionManager({ startCleanupTimer: true, autoUnloadAfter: 1 });
+    const handle = await manager.getModel("optional-session");
+    for (let i = 0; i < 10; i++) {
+      await vi.advanceTimersByTimeAsync(30_000);
+      await handle.run(i);
+    }
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].release).not.toHaveBeenCalled();
+    await manager.shutdown();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("does not dispose an inference still running when the idle timer fires", async () => {
+    vi.useFakeTimers();
+    const { manager, sessions } = await optionalSessionManager({ startCleanupTimer: true, autoUnloadAfter: 1 });
+    const handle = await manager.getModel("optional-session");
+    let finish!: () => void;
+    sessions[0].run.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+    const running = handle.run("slow frame");
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(sessions[0].release).not.toHaveBeenCalled();
+    finish();
+    await running;
+    await manager.shutdown();
+    expect(sessions[0].release).toHaveBeenCalledOnce();
+  });
+
+  it("shares one reload when multiple detectors use an evicted session concurrently", async () => {
+    const { manager, loader } = await optionalSessionManager();
+    const handle = await manager.getModel("optional-session");
+    await manager.unloadModel("optional-session");
+    const results = await Promise.all([handle.run("frame A"), handle.run("frame B")]);
+    expect(results.map(value => value.generation)).toEqual([1, 1]);
+    expect(loader).toHaveBeenCalledTimes(2);
+    await manager.shutdown();
+  });
+
+  it("waits for an active inference before forced disposal", async () => {
+    const { manager, sessions } = await optionalSessionManager();
+    const handle = await manager.getModel("optional-session");
+    let started!: () => void, finish!: () => void;
+    const ready = new Promise<void>(resolve => { started = resolve; });
+    sessions[0].run.mockImplementation(() => { started(); return new Promise<void>(resolve => { finish = resolve; }); });
+    const running = handle.run("last frame");
+    await ready;
+    const unloading = manager.unloadModel("optional-session", true);
+    expect(sessions[0].release).not.toHaveBeenCalled();
+    finish();
+    await Promise.all([running, unloading]);
+    expect(sessions[0].release).toHaveBeenCalledOnce();
+    await manager.shutdown();
+  });
 });
 
 describe("model provisioning contract", () => {

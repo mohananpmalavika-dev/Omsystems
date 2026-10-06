@@ -66,6 +66,8 @@ export interface ModelAvailability {
 interface ModelInstance {
   id: string;
   model: any; // Actual model object (ONNX session, TF model, etc.)
+  handle: any; // Retained inference adapters use this reloadable session handle.
+  runs: Set<Promise<any>>;
   config: ModelConfig;
   loadedAt: Date;
   lastUsed: Date;
@@ -129,6 +131,8 @@ export class ModelManager {
   };
   private isInitialized = false;
   private loadTimes: number[] = [];
+  private readonly pendingLoads = new Map<string, Promise<any>>();
+  private cleanupTimer: ReturnType<typeof setInterval> | undefined;
 
   // GPU detection
   private gpuAvailable = false;
@@ -254,8 +258,21 @@ export class ModelManager {
       this.stats.cacheHits++;
       cached.lastUsed = new Date();
       cached.useCount++;
-      return cached.model;
+      return cached.handle;
     }
+
+    const pending = this.pendingLoads.get(modelId);
+    if (pending) return pending;
+    const loading = this.loadUncachedModel(modelId);
+    this.pendingLoads.set(modelId, loading);
+    try {
+      return await loading;
+    } finally {
+      this.pendingLoads.delete(modelId);
+    }
+  }
+
+  private async loadUncachedModel(modelId: string): Promise<any> {
 
     // Cache miss - load model
     this.stats.cacheMisses++;
@@ -311,6 +328,8 @@ export class ModelManager {
       const instance: ModelInstance = {
         id: modelId,
         model,
+        handle: undefined,
+        runs: new Set(),
         config,
         loadedAt: new Date(),
         lastUsed: new Date(),
@@ -318,17 +337,47 @@ export class ModelManager {
         memoryUsage,
         isLoaded: true
       };
+      instance.handle = this.createModelHandle(instance);
 
       this.models.set(modelId, instance);
       this.stats.totalMemoryUsage += memoryUsage;
 
       console.log(`Model loaded: ${config.name} (${loadTime}ms, ~${Math.round(memoryUsage / 1024 / 1024)}MB)`);
 
-      return model;
+      return instance.handle;
     } catch (error) {
       console.error(`Failed to load model ${modelId}:`, error);
       throw error;
     }
+  }
+
+  private createModelHandle(instance: ModelInstance): any {
+    if (typeof instance.model?.run !== 'function') return instance.model;
+    // Detectors retain their session for the service lifetime. Optional models
+    // can still leave the cache: the next inference reloads instead of calling
+    // the disposed session, and each run refreshes the actual usage time.
+    const run = async (...args: any[]) => {
+      let current: ModelInstance | undefined;
+      do {
+        await this.loadModel(instance.id);
+        current = this.models.get(instance.id);
+      } while (!current?.isLoaded);
+      const running = Promise.resolve().then(() => current!.model.run(...args));
+      current.runs.add(running);
+      try {
+        return await running;
+      } finally {
+        current.runs.delete(running);
+        current.lastUsed = new Date();
+      }
+    };
+    return new Proxy(instance.model, {
+      get(target, property) {
+        if (property === 'run') return run;
+        const value = Reflect.get(target, property, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
   }
 
   private resolveModelPath(configuredPath: string): string {
@@ -448,7 +497,7 @@ export class ModelManager {
       if (model.config.warmup || model.config.required) continue; // Don't evict warmup or required models
 
       await this.unloadModel(model.id);
-      freedSpace += model.memoryUsage;
+      if (!this.isModelLoaded(model.id)) freedSpace += model.memoryUsage;
 
       if (freedSpace >= requiredSpace) {
         break;
@@ -465,19 +514,24 @@ export class ModelManager {
     if (!force && (instance.config.warmup || instance.config.required)) {
       return;
     }
+    if (!force && instance.runs.size > 0) return;
+
+    // Detach before waiting/releasing so retained handles cannot start another
+    // run on this session. Forced shutdown waits for its existing runs.
+    instance.isLoaded = false;
+    this.models.delete(modelId);
+    await Promise.allSettled(instance.runs);
 
     console.log(`Unloading model: ${instance.config.name}`);
 
     // Clean up model resources
     if (instance.model && typeof instance.model.dispose === 'function') {
-      instance.model.dispose();
+      await instance.model.dispose();
     } else if (instance.model && typeof instance.model.release === 'function') {
       await instance.model.release();
     }
 
     this.stats.totalMemoryUsage -= instance.memoryUsage;
-    instance.isLoaded = false;
-    this.models.delete(modelId);
   }
 
   /**
@@ -516,7 +570,7 @@ export class ModelManager {
   private startCleanupTimer(): void {
     const intervalMs = 5 * 60 * 1000; // Check every 5 minutes
 
-    setInterval(() => {
+    this.cleanupTimer = setInterval(() => {
       this.cleanupUnusedModels();
     }, intervalMs);
   }
@@ -534,7 +588,7 @@ export class ModelManager {
       const idleTime = now - instance.lastUsed.getTime();
       if (idleTime > thresholdMs) {
         console.log(`Auto-unloading idle model: ${instance.config.name}`);
-        this.unloadModel(modelId);
+        void this.unloadModel(modelId).catch(error => console.error(`Failed to unload idle model ${modelId}:`, error));
       }
     }
   }
@@ -778,7 +832,7 @@ export class ModelManager {
     
     const modelIds = Array.from(this.models.keys());
     for (const id of modelIds) {
-      await this.unloadModel(id);
+      await this.unloadModel(id, true);
     }
 
     this.models.clear();
@@ -792,6 +846,8 @@ export class ModelManager {
    */
   async shutdown(): Promise<void> {
     console.log('Shutting down Model Manager...');
+    if (this.cleanupTimer) clearInterval(this.cleanupTimer);
+    this.cleanupTimer = undefined;
     await this.clearAll();
     this.isInitialized = false;
     console.log('Model Manager shut down');

@@ -1,0 +1,32 @@
+{
+  "checkedAt": "2026-10-06T17:47:04.98Z",
+  "cameraId": "26b22c59-b492-434a-aa89-163fff620af1",
+  "capturedAt": "2026-10-06T17:46:13.69Z",
+  "frameAgeSeconds": 51.291,
+  "width": 640,
+  "height": 360,
+  "auxiliaryModels": {
+    "face": true,
+    "pose": true
+  },
+  "fastAlert": true,
+  "detections": [
+    {
+      "label": "refrigerator",
+      "confidence": 0.8499304661476614,
+      "boundingBox": {
+        "x": 0.10723254669700613,
+        "y": 0.004534751179727655,
+        "width": 0.8782901876141946,
+        "height": 0.9872676546699165
+      }
+    }
+  ],
+  "heads": [],
+  "faces": [],
+  "poses": [],
+  "verification": [],
+  "singleFrameResults": [],
+  "detectorClassificationCalls": [],
+  "eventsSubmitted": 0
+}
