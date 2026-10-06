@@ -1,5 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as rtspProbe from "../src/streaming/rtsp-probe.js";
+import * as packetLoss from "../src/monitoring/camera-packet-loss.js";
+import * as rgbStreams from "../src/streaming/rtsp-rgb-stream.js";
 import {
   assessLumaFrame,
   CameraHeartbeatService,
@@ -8,9 +10,110 @@ import {
   type CameraHeartbeatData,
 } from "../src/monitoring/camera-heartbeat.js";
 
+const streams = new Map<string, {
+  start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn>; latestFrame: ReturnType<typeof vi.fn>;
+}>();
+beforeEach(() => {
+  streams.clear();
+  let sequence = 0;
+  vi.spyOn(rgbStreams, "createRtspRgbStream").mockImplementation(uri => {
+    const stream = { start: vi.fn(), stop: vi.fn(), latestFrame: vi.fn(() => ({
+      rgb: Buffer.alloc(640 * 360 * 3), capturedAt: new Date(++sequence * 1_000).toISOString(),
+    })) };
+    streams.set(uri, stream);
+    return stream;
+  });
+});
+afterEach(() => vi.restoreAllMocks());
+
 describe("camera frame health", () => {
+  it("delivers later cameras immediately and keeps their next tick independent of a slow upload", async () => {
+    let finish!: () => void;
+    const send = vi.fn((payload: {cameraId: string}) => payload.cameraId === "slow"
+      ? new Promise<void>(resolve => { finish = resolve; }) : Promise.resolve());
+    const service = new CameraHeartbeatService("http://control.example", "branch", "agent", undefined,
+      "ffprobe", "ffmpeg", undefined, undefined, undefined, send);
+    service.replaceCameras(["slow", "one", "two", "three", "four", "five"].map(id => ({
+      id, name: id, rtspUrl: `rtsp://camera/${id}`, enabled: true, analyticsEnabled: true,
+    })));
+    const firstTick = (service as any).sendAllAnalyticsFrames();
+    expect(send).toHaveBeenCalledTimes(6);
+    await new Promise(resolve => setImmediate(resolve));
+    await (service as any).sendAllAnalyticsFrames();
+    expect(send.mock.calls.filter(([payload]) => payload.cameraId === "slow")).toHaveLength(1);
+    expect(send.mock.calls.filter(([payload]) => payload.cameraId === "five")).toHaveLength(2);
+    expect(rgbStreams.createRtspRgbStream).toHaveBeenCalledTimes(6);
+    finish();
+    await firstTick;
+    service.stop();
+  });
+
+  it("never recounts a buffered frame as a new timestamp, and preserves capture time for cloud and local inference", async () => {
+    const send = vi.fn(async () => undefined), local = vi.fn(async () => undefined);
+    const service = new CameraHeartbeatService("http://control.example", "branch", "agent", undefined,
+      "ffprobe", "ffmpeg", undefined, undefined, undefined, send, local);
+    service.replaceCameras([{id:"camera",name:"Camera",rtspUrl:"rtsp://camera/main",enabled:true,analyticsEnabled:true}]);
+    (service as any).syncAnalyticsStreams();
+    const capturedAt = new Date(1_000).toISOString();
+    streams.get("rtsp://camera/main")!.latestFrame.mockReturnValue({rgb:Buffer.alloc(640*360*3),capturedAt});
+    await (service as any).sendAllAnalyticsFrames();
+    await (service as any).sendAllAnalyticsFrames();
+    expect(send).toHaveBeenCalledOnce();
+    expect(local).toHaveBeenCalledOnce();
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({capturedAt}));
+    expect(local).toHaveBeenCalledWith(expect.objectContaining({capturedAt}));
+    service.stop();
+  });
+
+  it("does not delay a recovered source when an older in-flight upload fails", async () => {
+    let reject!: (error: Error) => void;
+    const send = vi.fn().mockImplementationOnce(() => new Promise((_resolve, fail) => {reject=fail;}))
+      .mockResolvedValue(undefined);
+    const service = new CameraHeartbeatService("http://control.example", "branch", "agent", undefined,
+      "ffprobe", "ffmpeg", undefined, undefined, undefined, send);
+    const camera = {id:"camera",name:"Camera",rtspUrl:"rtsp://camera/old",enabled:true,analyticsEnabled:true};
+    service.replaceCameras([camera]);
+    const oldTick = (service as any).sendAllAnalyticsFrames();
+    service.replaceCameras([{...camera,rtspUrl:"rtsp://camera/recovered"}]);
+    // The next tick notices the source replacement while the old upload runs.
+    await (service as any).sendAllAnalyticsFrames();
+    reject(new Error("old source upload failed"));
+    await oldTick;
+    await (service as any).sendAllAnalyticsFrames();
+    expect(send).toHaveBeenCalledTimes(2);
+    service.stop();
+  });
+
+  it("reuses the decoder for health samples and stops/replaces it with camera configuration changes", async () => {
+    vi.spyOn(rtspProbe, "measureRtspStream").mockResolvedValue({reachable:true,codec:"h264",width:640,height:360,
+      fps:25,bitrateKbps:1000,sampleDurationSeconds:3});
+    const capture = vi.spyOn(rtspProbe, "captureRtspRgbFrame");
+    vi.spyOn(packetLoss, "measureCameraPacketLoss").mockResolvedValue(null);
+    const send = vi.fn(async () => undefined);
+    const service = new CameraHeartbeatService("http://control.example", "branch", "agent", undefined,
+      "ffprobe", "ffmpeg", undefined, undefined, undefined, send);
+    vi.spyOn(service as any, "sendAllHeartbeats").mockResolvedValue(undefined);
+    const camera = {id:"camera",name:"Camera",rtspUrl:"rtsp://camera/main",enabled:true,analyticsEnabled:true};
+    service.replaceCameras([camera]);
+    service.start();
+    try {
+      const first = streams.get(camera.rtspUrl)!;
+      await (service as any).measureCamera(camera, Date.now());
+      expect(capture).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
+      service.replaceCameras([{...camera}]);
+      expect(first.stop).not.toHaveBeenCalled();
+      expect(rgbStreams.createRtspRgbStream).toHaveBeenCalledOnce();
+      service.updateCameraStream(camera.id, "rtsp://camera/recovered");
+      expect(first.stop).toHaveBeenCalledOnce();
+      const replacement = streams.get("rtsp://camera/recovered")!;
+      service.replaceCameras([{...camera,analyticsEnabled:false}]);
+      expect(replacement.stop).toHaveBeenCalledOnce();
+      expect(service.getStats().analyticsCaptureStreams).toBe(0);
+    } finally { service.stop(); }
+  });
+
   it("keeps other cameras reporting when one camera upload fails", async () => {
-    const capture = vi.spyOn(rtspProbe, "captureRtspRgbFrame").mockResolvedValue(Buffer.alloc(640 * 360 * 3));
     const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
     const send = vi.fn(async (payload: {cameraId: string}) => {
       if (payload.cameraId === "failed") throw new Error("camera_not_found_for_edge_agent");
@@ -22,14 +125,14 @@ describe("camera frame health", () => {
       await (service as any).sendAllAnalyticsFrames();
       await (service as any).sendAllAnalyticsFrames();
       expect(send.mock.calls.map(([payload]) => payload.cameraId)).toEqual(["failed", "working", "working"]);
-      expect(capture).toHaveBeenCalledTimes(3);
+      expect(rgbStreams.createRtspRgbStream).toHaveBeenCalledTimes(2);
       // Health samples obey the same backoff instead of extending it repeatedly.
       await (service as any).deliverAnalyticsFrame("failed", Buffer.alloc(3), 1, 1, "edge-rtsp-health");
       expect(send).toHaveBeenCalledTimes(3);
       now.mockReturnValue(61_000);
       await (service as any).sendAllAnalyticsFrames();
       expect(send.mock.calls.map(([payload]) => payload.cameraId)).toEqual(["failed", "working", "working", "failed", "working"]);
-    } finally { capture.mockRestore(); now.mockRestore(); }
+    } finally { service.stop(); now.mockRestore(); }
   });
 
   it("does not upload health and scheduled frames concurrently for the same camera", async () => {
@@ -86,35 +189,32 @@ describe("camera frame health", () => {
   });
 
   it("keeps the configured main stream for analytics head detail", async () => {
-    const capture = vi.spyOn(rtspProbe, "captureRtspRgbFrame").mockResolvedValue(Buffer.alloc(640 * 360 * 3));
-    try {
       const send = vi.fn(async () => undefined);
       const service = new CameraHeartbeatService("http://control.example", "branch", "agent", undefined,
         "ffprobe", "ffmpeg", undefined, undefined, undefined, send);
-      const camera = { id: "main", name: "Main", rtspUrl: "rtsp://camera/stream?channel=6&subtype=0", enabled: true };
-      await (service as any).captureAnalyticsFrame(camera);
-      expect(capture).toHaveBeenCalledWith(camera.rtspUrl, "ffmpeg", 10_000, 640, 360);
+      const camera = { id: "main", name: "Main", rtspUrl: "rtsp://camera/stream?channel=6&subtype=0", enabled: true, analyticsEnabled: true };
+      service.replaceCameras([camera]);
+      await (service as any).sendAllAnalyticsFrames();
+      expect(rgbStreams.createRtspRgbStream).toHaveBeenCalledWith(camera.rtspUrl, "ffmpeg", 640, 360, expect.any(Function));
       expect(send).toHaveBeenCalledOnce();
-    } finally { capture.mockRestore(); }
+      service.stop();
   });
 
-  it("backs off a failed source without delaying a working camera and retries after a minute", async () => {
-    const capture = vi.spyOn(rtspProbe, "captureRtspRgbFrame").mockImplementation(async (url) =>
-      url.includes("failed") ? null : Buffer.alloc(640 * 360 * 3));
-    const now = vi.spyOn(Date, "now").mockReturnValue(1_000);
-    try {
-      const service = new CameraHeartbeatService("http://control.example", "branch", "agent", undefined,
-        "ffprobe", "ffmpeg", undefined, undefined, undefined, vi.fn(async () => undefined));
-      const failed = { id: "failed", name: "Failed", rtspUrl: "rtsp://camera/failed", enabled: true };
-      const working = { id: "working", name: "Working", rtspUrl: "rtsp://camera/working", enabled: true };
-      await (service as any).captureAnalyticsFrame(failed);
-      await (service as any).captureAnalyticsFrame(failed);
-      await (service as any).captureAnalyticsFrame(working);
-      expect(capture).toHaveBeenCalledTimes(2);
-      now.mockReturnValue(61_000);
-      await (service as any).captureAnalyticsFrame(failed);
-      expect(capture).toHaveBeenCalledTimes(3);
-    } finally { capture.mockRestore(); now.mockRestore(); }
+  it("keeps sampling a working camera when another stream has no fresh frame", async () => {
+    const send = vi.fn(async () => undefined);
+    const service = new CameraHeartbeatService("http://control.example", "branch", "agent", undefined,
+      "ffprobe", "ffmpeg", undefined, undefined, undefined, send);
+    service.replaceCameras(["failed", "working"].map(id => ({
+      id, name: id, rtspUrl: `rtsp://camera/${id}`, enabled: true, analyticsEnabled: true,
+    })));
+    (service as any).syncAnalyticsStreams();
+    streams.get("rtsp://camera/failed")!.latestFrame.mockReturnValue(null);
+    await (service as any).sendAllAnalyticsFrames();
+    await (service as any).sendAllAnalyticsFrames();
+    expect(send.mock.calls).toHaveLength(2);
+    expect(send).toHaveBeenLastCalledWith(expect.objectContaining({cameraId: "working"}));
+    expect(rgbStreams.createRtspRgbStream).toHaveBeenCalledTimes(2);
+    service.stop();
   });
   it("detects a persistently identical frame only after three samples", () => {
     const frame = Buffer.alloc(64 * 36, 80);

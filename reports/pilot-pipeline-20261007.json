@@ -1,0 +1,150 @@
+[
+  {
+    "checkedAt": "2026-10-06T19:12:04.019Z",
+    "cameraId": "a85e6b3f-89c4-40b9-a51d-cab4499ddb7c",
+    "capturedAt": "2026-10-06T19:11:54.365Z",
+    "personCount": {
+      "observedAt": "2026-10-06T19:11:54.365Z",
+      "count": 0,
+      "status": "observed"
+    },
+    "trace": {
+      "objects": []
+    },
+    "events": [],
+    "pending": [],
+    "eventsSubmitted": 0
+  },
+  {
+    "checkedAt": "2026-10-06T19:12:04.227Z",
+    "cameraId": "99965e01-8fb4-44e3-8b9f-615ec673274d",
+    "capturedAt": "2026-10-06T19:11:37.32Z",
+    "personCount": {
+      "observedAt": "2026-10-06T19:11:37.32Z",
+      "count": 0,
+      "status": "observed"
+    },
+    "trace": {
+      "objects": [
+        {
+          "detectionType": "object",
+          "confidence": 0.3552842957600433,
+          "objects": [
+            {
+              "label": "person",
+              "confidence": 0.3552842957600433,
+              "boundingBox": {
+                "x": 0.9088732615114813,
+                "y": 0.13086471614116593,
+                "width": 0.09052193783765661,
+                "height": 0.2828285629840527
+              }
+            }
+          ],
+          "metadata": {
+            "count": 1,
+            "source": "local-open-onnx"
+          },
+          "requiresAlert": false
+        }
+      ],
+      "persons": [],
+      "helmets": []
+    },
+    "events": [],
+    "pending": [],
+    "eventsSubmitted": 0
+  },
+  {
+    "checkedAt": "2026-10-06T19:12:04.35Z",
+    "cameraId": "a85e6b3f-89c4-40b9-a51d-cab4499ddb7c",
+    "capturedAt": "2026-10-06T19:11:55.936Z",
+    "personCount": {
+      "observedAt": "2026-10-06T19:11:55.936Z",
+      "count": 0,
+      "status": "observed"
+    },
+    "trace": {
+      "objects": [],
+      "persons": [],
+      "helmets": []
+    },
+    "events": [],
+    "pending": [],
+    "eventsSubmitted": 0
+  },
+  {
+    "checkedAt": "2026-10-06T19:12:07.173Z",
+    "cameraId": "99965e01-8fb4-44e3-8b9f-615ec673274d",
+    "capturedAt": "2026-10-06T19:12:06.302Z",
+    "personCount": {
+      "observedAt": "2026-10-06T19:12:06.302Z",
+      "count": 0,
+      "status": "observed"
+    },
+    "trace": {
+      "objects": [],
+      "persons": [],
+      "helmets": []
+    },
+    "events": [],
+    "pending": [],
+    "eventsSubmitted": 0
+  },
+  {
+    "checkedAt": "2026-10-06T19:12:21.25Z",
+    "cameraId": "a85e6b3f-89c4-40b9-a51d-cab4499ddb7c",
+    "capturedAt": "2026-10-06T19:12:20.274Z",
+    "personCount": {
+      "observedAt": "2026-10-06T19:12:20.274Z",
+      "count": 0,
+      "status": "observed"
+    },
+    "trace": {
+      "objects": []
+    },
+    "events": [],
+    "pending": [],
+    "eventsSubmitted": 0
+  },
+  {
+    "checkedAt": "2026-10-06T19:12:31.386Z",
+    "cameraId": "99965e01-8fb4-44e3-8b9f-615ec673274d",
+    "capturedAt": "2026-10-06T19:12:30.238Z",
+    "personCount": {
+      "observedAt": "2026-10-06T19:12:30.238Z",
+      "count": 0,
+      "status": "observed"
+    },
+    "trace": {
+      "objects": [
+        {
+          "detectionType": "object",
+          "confidence": 0.38022529948659667,
+          "objects": [
+            {
+              "label": "person",
+              "confidence": 0.38022529948659667,
+              "boundingBox": {
+                "x": 0.7997298709384767,
+                "y": 0.16939719121334723,
+                "width": 0.1993399104427347,
+                "height": 0.7150928136495276
+              }
+            }
+          ],
+          "metadata": {
+            "count": 1,
+            "source": "local-open-onnx"
+          },
+          "requiresAlert": false
+        }
+      ],
+      "persons": [],
+      "helmets": []
+    },
+    "events": [],
+    "pending": [],
+    "eventsSubmitted": 0
+  }
+]

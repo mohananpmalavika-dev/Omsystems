@@ -21,24 +21,9 @@ try {
   const frameData = JSON.parse(raw);
   const imageBuffer = Buffer.from(frameData.imageBase64, 'base64');
 
-  const { getModelManager } = await import('/app/dist/analytics-engine/src/model-manager.js');
-  const modelManager = getModelManager({
-    modelsDirectory: process.env.MODELS_DIR || '/app/models',
-    enableGPU: false
-  });
-  if (!modelManager.isReady()) {
-    await modelManager.initialize();
-  }
-  console.log('ModelManager ready:', modelManager.isReady(), 'models:', modelManager.getProvisioningSummary());
-
-  const { HelmetDetector } = await import('/app/dist/analytics-engine/src/detectors/helmet-detector.js');
-  const detector = new HelmetDetector(
-    null,
-    0.88,
-    null,
-    true
-  );
-  await detector.initialize();
+  const { AnalyticsPipeline } = await import('/app/dist/analytics-engine/src/analytics-pipeline.js');
+  const pipeline = new AnalyticsPipeline();
+  await pipeline.initialize();
 
   const now = Date.now();
   const testFrame = {
@@ -53,14 +38,28 @@ try {
     }
   };
 
-  console.log('--- Testing detect() Frame 1 ---');
-  const res1 = await detector.detect(testFrame);
-  console.log('Result 1:', JSON.stringify(res1, null, 2));
+  const rules = [
+    {
+      id: 'debug-helmet-rule',
+      cameraId,
+      detectionType: 'helmet-worn',
+      enabled: true,
+      minConfidence: 0.5,
+      minDurationSeconds: 0,
+    }
+  ];
 
-  console.log('--- Testing detect() Frame 2 (+2s) ---');
+  console.log('--- Direct helmetDetector.detect() ---');
+  const d1 = await pipeline.helmetDetector.detect(testFrame);
+  console.log('Detector 1:', JSON.stringify(d1, null, 2));
+
   testFrame.timestamp = new Date(now + 2000);
-  const res2 = await detector.detect(testFrame);
-  console.log('Result 2:', JSON.stringify(res2, null, 2));
+  const d2 = await pipeline.helmetDetector.detect(testFrame);
+  console.log('Detector 2:', JSON.stringify(d2, null, 2));
+
+  testFrame.timestamp = new Date(now + 4000);
+  const d3 = await pipeline.helmetDetector.detect(testFrame);
+  console.log('Detector 3:', JSON.stringify(d3, null, 2));
 
 } catch (err) {
   console.error('Error in test:', err);

@@ -7,6 +7,7 @@
 import { createHash } from "node:crypto";
 import { measureCameraPacketLoss } from "./camera-packet-loss.js";
 import { captureRtspRgbFrame, measureRtspStream } from "../streaming/rtsp-probe.js";
+import { createRtspRgbStream, type RgbFrameStream } from "../streaming/rtsp-rgb-stream.js";
 import { assessAnalogRgbFrame, type AnalogSignalState } from "./analog-signal-quality.js";
 import { logger } from "../utils/logger.js";
 import type { AnalyticsFramePayload, TelemetryPayload } from "../registration/gateway-client.js";
@@ -123,7 +124,9 @@ export class CameraHeartbeatService {
   private heartbeatCycleRunning = false;
   private readonly analyticsDeliveryRetryAfter = new Map<string, number>();
   private readonly analyticsDeliveryInProgress = new Set<string>();
-  private analyticsCycleRunning = false;
+  private readonly analyticsStreams = new Map<string, { uri: string; stream: RgbFrameStream }>();
+  private readonly analyticsProcessingInProgress = new Set<string>();
+  private readonly analyticsLastCapturedAt = new Map<string, string>();
   private isRunning = false;
 
   constructor(
@@ -147,12 +150,10 @@ export class CameraHeartbeatService {
     for (const cameraId of this.frameStates.keys()) {
       if (!retainedIds.has(cameraId)) this.frameStates.delete(cameraId);
     }
-    for (const cameraId of this.analyticsCaptureRetryAfter.keys()) {
-      if (!retainedIds.has(cameraId)) this.analyticsCaptureRetryAfter.delete(cameraId);
-    }
     for (const cameraId of this.analyticsDeliveryRetryAfter.keys()) {
       if (!retainedIds.has(cameraId)) this.analyticsDeliveryRetryAfter.delete(cameraId);
     }
+    if (this.isRunning) this.syncAnalyticsStreams();
     logger.info(`Synchronized ${cameras.length} camera(s) for heartbeat monitoring`);
   }
 
@@ -162,9 +163,12 @@ export class CameraHeartbeatService {
     camera.rtspUrl = sourceUri;
     this.cameraSourceVersions.set(cameraId, (this.cameraSourceVersions.get(cameraId) ?? 0) + 1);
     this.frameStates.delete(cameraId);
-    this.analyticsCaptureRetryAfter.delete(cameraId);
+    this.analyticsStreams.get(cameraId)?.stream.stop();
+    this.analyticsStreams.delete(cameraId);
+    this.analyticsLastCapturedAt.delete(cameraId);
     this.analyticsDeliveryRetryAfter.delete(cameraId);
     this.consecutiveFailures.delete(cameraId);
+    if (this.isRunning) this.syncAnalyticsStreams();
   }
 
   private readonly cameraSourceVersions = new Map<string, number>();
@@ -172,6 +176,7 @@ export class CameraHeartbeatService {
   start(intervalMs = 30_000, analyticsIntervalMs = 2_000): void {
     if (this.isRunning) return;
     this.isRunning = true;
+    this.syncAnalyticsStreams();
     this.sendAllHeartbeats().catch((error: unknown) => logger.error("Failed to send initial camera heartbeats", { error }));
     this.heartbeatInterval = setInterval(() => {
       this.sendAllHeartbeats().catch((error: unknown) => logger.error("Failed to send camera heartbeats", { error }));
@@ -189,6 +194,9 @@ export class CameraHeartbeatService {
     if (this.analyticsInterval) clearInterval(this.analyticsInterval);
     this.heartbeatInterval = null;
     this.analyticsInterval = null;
+    for (const { stream } of this.analyticsStreams.values()) stream.stop();
+    this.analyticsStreams.clear();
+    this.analyticsLastCapturedAt.clear();
   }
 
   private async sendAllHeartbeats(): Promise<void> {
@@ -209,51 +217,52 @@ export class CameraHeartbeatService {
   }
 
   private async sendAllAnalyticsFrames(): Promise<void> {
-    if (this.analyticsCycleRunning) {
-      logger.warn("Skipping overlapping analytics frame cycle");
-      return;
+    this.syncAnalyticsStreams();
+    const cameras = [...this.cameras.values()].filter((camera) => this.analyticsStreams.has(camera.id));
+    // Each camera has its own backpressure. An outstanding upload never
+    // prevents the next tick from delivering a fresh frame for another camera.
+    await Promise.allSettled(cameras.map((camera) => this.captureAnalyticsFrame(camera)));
+  }
+
+  private syncAnalyticsStreams(): void {
+    const eligible = new Map([...this.cameras.values()].filter(camera =>
+      this.analyticsFrameSender && camera.enabled && camera.analyticsEnabled === true && camera.rtspUrl,
+    ).map(camera => [camera.id, camera]));
+    for (const [id, current] of this.analyticsStreams) {
+      if (eligible.get(id)?.rtspUrl === current.uri) continue;
+      current.stream.stop();
+      this.analyticsStreams.delete(id);
+      this.analyticsLastCapturedAt.delete(id);
+      this.analyticsDeliveryRetryAfter.delete(id);
+      this.frameStates.delete(id);
+      this.cameraSourceVersions.set(id, (this.cameraSourceVersions.get(id) ?? 0) + 1);
     }
-    this.analyticsCycleRunning = true;
-    try {
-      const cameras = [...this.cameras.values()].filter((camera) =>
-        camera.enabled && camera.analyticsEnabled === true && Boolean(camera.rtspUrl),
-      );
-      // FFmpeg process startup is CPU intensive. Four concurrent captures keep
-      // inference fresh without allowing a large branch to exhaust the host.
-      const batchSize = 4;
-      for (let index = 0; index < cameras.length; index += batchSize) {
-        await Promise.allSettled(cameras.slice(index, index + batchSize).map((camera) => this.captureAnalyticsFrame(camera)));
-      }
-    } finally {
-      this.analyticsCycleRunning = false;
+    for (const [id, camera] of eligible) {
+      if (this.analyticsStreams.has(id)) continue;
+      const stream = createRtspRgbStream(camera.rtspUrl!, this.ffmpegPath, 640, 360, reason => {
+        logger.warn("Analytics capture reconnecting", { cameraId: id, reason });
+      });
+      this.analyticsStreams.set(id, { uri: camera.rtspUrl!, stream });
+      stream.start();
     }
   }
 
-  private readonly analyticsCaptureRetryAfter = new Map<string, number>();
-
   private async captureAnalyticsFrame(camera: CameraConfig): Promise<void> {
-    if (Date.now() < (this.analyticsCaptureRetryAfter.get(camera.id) ?? 0)) return;
     if (Date.now() < (this.analyticsDeliveryRetryAfter.get(camera.id) ?? 0) ||
-        this.analyticsDeliveryInProgress.has(camera.id)) return;
-    // Helmet classification runs on a person's head crop. At 320x180 that
-    // crop can be only a few pixels, even when the operator sees a helmet.
+        this.analyticsDeliveryInProgress.has(camera.id) || this.analyticsProcessingInProgress.has(camera.id)) return;
     const width = 640;
     const height = 360;
-    // Preserve the configured source's head detail. Upscaling a DVR's
-    // 352x288 substream to 640x360 does not restore the lost image detail.
-    const captureUrl = camera.rtspUrl!;
-    const frame = await captureRtspRgbFrame(captureUrl, this.ffmpegPath, 10_000, width, height);
-    if (!frame) {
-      // One offline camera must not spend another ten seconds on every
-      // batch and starve the cameras needed for temporal helmet evidence.
-      this.analyticsCaptureRetryAfter.set(camera.id, Date.now() + 60_000);
-      logger.warn("Analytics frame capture unavailable", { cameraId: camera.id });
-      return;
-    }
-    this.analyticsCaptureRetryAfter.delete(camera.id);
-    await this.deliverAnalyticsFrame(camera.id, frame, width, height, "edge-rtsp-scheduled");
-    if (this.onAnalyticsRgbFrame) {
-      await this.onAnalyticsRgbFrame({ cameraId: camera.id, rgb: frame, width, height, capturedAt: new Date().toISOString() });
+    const frame = this.analyticsStreams.get(camera.id)?.stream.latestFrame();
+    if (!frame || this.analyticsLastCapturedAt.get(camera.id) === frame.capturedAt) return;
+    this.analyticsLastCapturedAt.set(camera.id, frame.capturedAt);
+    this.analyticsProcessingInProgress.add(camera.id);
+    try {
+      await Promise.all([
+        this.deliverAnalyticsFrame(camera.id, frame.rgb, width, height, "edge-rtsp-scheduled", frame.capturedAt),
+        this.onAnalyticsRgbFrame?.({ cameraId: camera.id, rgb: frame.rgb, width, height, capturedAt: frame.capturedAt }),
+      ]);
+    } finally {
+      this.analyticsProcessingInProgress.delete(camera.id);
     }
   }
 
@@ -355,13 +364,15 @@ export class CameraHeartbeatService {
     const analyticsHeight = 360;
     const [packetLoss, frame] = await Promise.all([
       measureCameraPacketLoss(rtspUrl),
-      captureRtspRgbFrame(rtspUrl, this.ffmpegPath, 10_000, analyticsWidth, analyticsHeight),
+      this.analyticsStreams.has(camera.id)
+        ? Promise.resolve(this.analyticsStreams.get(camera.id)?.stream.latestFrame()?.rgb ?? null)
+        : captureRtspRgbFrame(rtspUrl, this.ffmpegPath, 10_000, analyticsWidth, analyticsHeight),
     ]);
     const frameHealth = frame
       ? assessAnalogRgbFrame(this.frameStates.get(camera.id), frame, analyticsWidth, analyticsHeight)
       : null;
     if (frameHealth) this.frameStates.set(camera.id, frameHealth.state);
-    if (frame && this.analyticsFrameSender && camera.analyticsEnabled !== false) {
+    if (frame && this.analyticsFrameSender && camera.analyticsEnabled !== false && !this.analyticsStreams.has(camera.id)) {
       // Camera health must not wait behind cloud inference. The scheduled
       // analytics loop provides backpressure and this sample is best effort.
       void this.deliverAnalyticsFrame(camera.id, frame, analyticsWidth, analyticsHeight, "edge-rtsp-health");
@@ -504,15 +515,17 @@ export class CameraHeartbeatService {
     width: number,
     height: number,
     source: string,
+    capturedAt = new Date().toISOString(),
   ): Promise<void> {
     if (!this.analyticsFrameSender) return;
     if (Date.now() < (this.analyticsDeliveryRetryAfter.get(cameraId) ?? 0) ||
         this.analyticsDeliveryInProgress.has(cameraId)) return;
     this.analyticsDeliveryInProgress.add(cameraId);
+    const sourceVersion = this.cameraSourceVersions.get(cameraId) ?? 0;
     try {
       await this.analyticsFrameSender({
         cameraId,
-        capturedAt: new Date().toISOString(),
+        capturedAt,
         width,
         height,
         imageBase64: frame.toString("base64"),
@@ -520,7 +533,10 @@ export class CameraHeartbeatService {
       });
       this.analyticsDeliveryRetryAfter.delete(cameraId);
     } catch (error: unknown) {
-      this.analyticsDeliveryRetryAfter.set(cameraId, Date.now() + 60_000);
+      // A failure from the old source must not delay its replacement stream.
+      if (sourceVersion === (this.cameraSourceVersions.get(cameraId) ?? 0)) {
+        this.analyticsDeliveryRetryAfter.set(cameraId, Date.now() + 60_000);
+      }
       logger.warn("Analytics frame delivery failed; retrying this camera in 60s", {
         cameraId,
         error: error instanceof Error ? error.message : String(error),
@@ -537,7 +553,8 @@ export class CameraHeartbeatService {
       enabledCameras: cameras.filter((camera) => camera.enabled).length,
       analyticsCameras: cameras.filter((camera) => camera.enabled && camera.analyticsEnabled !== false).length,
       heartbeatCycleRunning: this.heartbeatCycleRunning,
-      analyticsCycleRunning: this.analyticsCycleRunning,
+      analyticsCycleRunning: this.analyticsProcessingInProgress.size > 0,
+      analyticsCaptureStreams: this.analyticsStreams.size,
       isRunning: this.isRunning,
     };
   }

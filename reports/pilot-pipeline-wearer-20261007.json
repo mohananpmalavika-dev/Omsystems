@@ -1,0 +1,488 @@
+[
+  {
+    "checkedAt": "2026-10-06T19:16:21.429Z",
+    "cameraId": "a85e6b3f-89c4-40b9-a51d-cab4499ddb7c",
+    "capturedAt": "2026-10-06T19:15:58.59Z",
+    "personCount": {
+      "observedAt": "2026-10-06T19:15:58.59Z",
+      "count": 0,
+      "status": "observed"
+    },
+    "trace": {
+      "objects": [
+        {
+          "detectionType": "object",
+          "confidence": 0.6153019838945148,
+          "objects": [
+            {
+              "label": "person",
+              "confidence": 0.6153019838945148,
+              "boundingBox": {
+                "x": 0.7019115720266451,
+                "y": 0.10733040071121439,
+                "width": 0.15938900307254056,
+                "height": 0.7293349840869905
+              }
+            },
+            {
+              "label": "suitcase",
+              "confidence": 0.5826404338228031,
+              "boundingBox": {
+                "x": 0.7354938535884137,
+                "y": 0.4809813767086364,
+                "width": 0.16285203761112232,
+                "height": 0.404563964396333
+              }
+            }
+          ],
+          "metadata": {
+            "count": 2,
+            "source": "local-open-onnx"
+          },
+          "requiresAlert": false
+        }
+      ],
+      "persons": [
+        {
+          "detectionType": "person",
+          "confidence": 0.6153019838945148,
+          "objects": [
+            {
+              "label": "person",
+              "confidence": 0.6153019838945148,
+              "trackId": "f2eea706-b01e-4afd-b138-4666cd9cedc3",
+              "boundingBox": {
+                "x": 0.7019115720266451,
+                "y": 0.10733040071121439,
+                "width": 0.15938900307254056,
+                "height": 0.7293349840869905
+              }
+            }
+          ],
+          "metadata": {
+            "count": 1,
+            "trackedIds": [
+              "f2eea706-b01e-4afd-b138-4666cd9cedc3"
+            ]
+          },
+          "requiresAlert": true
+        },
+        {
+          "detectionType": "person-counting",
+          "confidence": 0.6153019838945148,
+          "objects": [
+            {
+              "label": "person",
+              "confidence": 0.6153019838945148,
+              "trackId": "f2eea706-b01e-4afd-b138-4666cd9cedc3",
+              "boundingBox": {
+                "x": 0.7019115720266451,
+                "y": 0.10733040071121439,
+                "width": 0.15938900307254056,
+                "height": 0.7293349840869905
+              }
+            }
+          ],
+          "metadata": {
+            "count": 1,
+            "occupancy": 1,
+            "total": 1,
+            "trackedIds": [
+              "f2eea706-b01e-4afd-b138-4666cd9cedc3"
+            ]
+          },
+          "requiresAlert": false
+        },
+        {
+          "detectionType": "occupancy-counting",
+          "confidence": 0.6153019838945148,
+          "objects": [
+            {
+              "label": "person",
+              "confidence": 0.6153019838945148,
+              "trackId": "f2eea706-b01e-4afd-b138-4666cd9cedc3",
+              "boundingBox": {
+                "x": 0.7019115720266451,
+                "y": 0.10733040071121439,
+                "width": 0.15938900307254056,
+                "height": 0.7293349840869905
+              }
+            }
+          ],
+          "metadata": {
+            "count": 1,
+            "occupancy": 1,
+            "trackedIds": [
+              "f2eea706-b01e-4afd-b138-4666cd9cedc3"
+            ]
+          },
+          "requiresAlert": false
+        }
+      ],
+      "helmets": []
+    },
+    "direct": [
+      {
+        "label": "person",
+        "confidence": 0.6153019838945148,
+        "boundingBox": {
+          "x": 0.7019115720266451,
+          "y": 0.10733040071121439,
+          "width": 0.15938900307254056,
+          "height": 0.7293349840869905
+        }
+      },
+      {
+        "label": "suitcase",
+        "confidence": 0.5826404338228031,
+        "boundingBox": {
+          "x": 0.7354938535884137,
+          "y": 0.4809813767086364,
+          "width": 0.16285203761112232,
+          "height": 0.404563964396333
+        }
+      }
+    ],
+    "verification": [
+      {
+        "person": {
+          "label": "person",
+          "confidence": 0.6153019838945148,
+          "boundingBox": {
+            "x": 0.7019115720266451,
+            "y": 0.10733040071121439,
+            "width": 0.15938900307254056,
+            "height": 0.7293349840869905
+          }
+        },
+        "verified": null
+      }
+    ],
+    "events": [],
+    "pending": [],
+    "eventsSubmitted": 0
+  },
+  {
+    "checkedAt": "2026-10-06T19:16:22.055Z",
+    "cameraId": "99965e01-8fb4-44e3-8b9f-615ec673274d",
+    "capturedAt": "2026-10-06T19:15:52.783Z",
+    "personCount": {
+      "observedAt": "2026-10-06T19:15:52.783Z",
+      "count": 1,
+      "status": "observed"
+    },
+    "trace": {
+      "objects": [
+        {
+          "detectionType": "object",
+          "confidence": 0.7552280084612448,
+          "objects": [
+            {
+              "label": "person",
+              "confidence": 0.7552280084612448,
+              "boundingBox": {
+                "x": 0.38288559032289665,
+                "y": 0.21318172176502756,
+                "width": 0.19090750329538758,
+                "height": 0.7446477720711566
+              }
+            }
+          ],
+          "metadata": {
+            "count": 1,
+            "source": "local-open-onnx"
+          },
+          "requiresAlert": false
+        }
+      ],
+      "persons": [
+        {
+          "detectionType": "person",
+          "confidence": 0.7552280084612448,
+          "objects": [
+            {
+              "label": "person",
+              "confidence": 0.7552280084612448,
+              "trackId": "85822dc2-91ef-4559-affd-647426e3e9ff",
+              "boundingBox": {
+                "x": 0.38288559032289665,
+                "y": 0.21318172176502756,
+                "width": 0.19090750329538758,
+                "height": 0.7446477720711566
+              }
+            }
+          ],
+          "metadata": {
+            "count": 1,
+            "trackedIds": [
+              "85822dc2-91ef-4559-affd-647426e3e9ff"
+            ]
+          },
+          "requiresAlert": true
+        },
+        {
+          "detectionType": "person-counting",
+          "confidence": 0.7552280084612448,
+          "objects": [
+            {
+              "label": "person",
+              "confidence": 0.7552280084612448,
+              "trackId": "85822dc2-91ef-4559-affd-647426e3e9ff",
+              "boundingBox": {
+                "x": 0.38288559032289665,
+                "y": 0.21318172176502756,
+                "width": 0.19090750329538758,
+                "height": 0.7446477720711566
+              }
+            }
+          ],
+          "metadata": {
+            "count": 1,
+            "occupancy": 1,
+            "total": 1,
+            "trackedIds": [
+              "85822dc2-91ef-4559-affd-647426e3e9ff"
+            ]
+          },
+          "requiresAlert": false
+        },
+        {
+          "detectionType": "occupancy-counting",
+          "confidence": 0.7552280084612448,
+          "objects": [
+            {
+              "label": "person",
+              "confidence": 0.7552280084612448,
+              "trackId": "85822dc2-91ef-4559-affd-647426e3e9ff",
+              "boundingBox": {
+                "x": 0.38288559032289665,
+                "y": 0.21318172176502756,
+                "width": 0.19090750329538758,
+                "height": 0.7446477720711566
+              }
+            }
+          ],
+          "metadata": {
+            "count": 1,
+            "occupancy": 1,
+            "trackedIds": [
+              "85822dc2-91ef-4559-affd-647426e3e9ff"
+            ]
+          },
+          "requiresAlert": false
+        }
+      ],
+      "helmets": []
+    },
+    "direct": [
+      {
+        "label": "person",
+        "confidence": 0.7552280084612448,
+        "boundingBox": {
+          "x": 0.38288559032289665,
+          "y": 0.21318172176502756,
+          "width": 0.19090750329538758,
+          "height": 0.7446477720711566
+        }
+      }
+    ],
+    "verification": [
+      {
+        "person": {
+          "label": "person",
+          "confidence": 0.7552280084612448,
+          "boundingBox": {
+            "x": 0.38288559032289665,
+            "y": 0.21318172176502756,
+            "width": 0.19090750329538758,
+            "height": 0.7446477720711566
+          }
+        },
+        "verified": null
+      }
+    ],
+    "events": [],
+    "pending": [],
+    "eventsSubmitted": 0
+  },
+  {
+    "checkedAt": "2026-10-06T19:16:22.473Z",
+    "cameraId": "99965e01-8fb4-44e3-8b9f-615ec673274d",
+    "capturedAt": "2026-10-06T19:16:08.899Z",
+    "personCount": {
+      "observedAt": "2026-10-06T19:16:08.899Z",
+      "count": 0,
+      "status": "observed"
+    },
+    "trace": {
+      "objects": [],
+      "persons": [],
+      "helmets": []
+    },
+    "direct": [
+      {
+        "label": "chair",
+        "confidence": 0.6490789053545853,
+        "boundingBox": {
+          "x": 0.37266502736453716,
+          "y": 0.36528788452251965,
+          "width": 0.15692914837479804,
+          "height": 0.5142920366967516
+        }
+      },
+      {
+        "label": "couch",
+        "confidence": 0.604932641668654,
+        "boundingBox": {
+          "x": 0.48702242522605055,
+          "y": 0.41439628011228147,
+          "width": 0.4542074063814888,
+          "height": 0.45548754836584837
+        }
+      },
+      {
+        "label": "bowl",
+        "confidence": 0.3505535806979765,
+        "boundingBox": {
+          "x": 0.6589429558673748,
+          "y": 0.619117491972963,
+          "width": 0.13283542894904066,
+          "height": 0.11236591075382296
+        }
+      }
+    ],
+    "verification": [],
+    "events": [],
+    "pending": [],
+    "eventsSubmitted": 0
+  },
+  {
+    "checkedAt": "2026-10-06T19:16:42.82Z",
+    "cameraId": "99965e01-8fb4-44e3-8b9f-615ec673274d",
+    "capturedAt": "2026-10-06T19:16:40.865Z",
+    "personCount": {
+      "observedAt": "2026-10-06T19:16:40.865Z",
+      "count": 0,
+      "status": "observed"
+    },
+    "trace": {
+      "objects": []
+    },
+    "direct": [
+      {
+        "label": "chair",
+        "confidence": 0.8037875172692566,
+        "boundingBox": {
+          "x": 0.36887699223998877,
+          "y": 0.35013438941331876,
+          "width": 0.16365819077190985,
+          "height": 0.5374594990155663
+        }
+      },
+      {
+        "label": "couch",
+        "confidence": 0.5590035353787215,
+        "boundingBox": {
+          "x": 0.48861781608013277,
+          "y": 0.4205269990352448,
+          "width": 0.3611372952853661,
+          "height": 0.4231354204940052
+        }
+      },
+      {
+        "label": "bowl",
+        "confidence": 0.35878054873884935,
+        "boundingBox": {
+          "x": 0.00018252252940814244,
+          "y": 0.501605504572897,
+          "width": 0.04770098412303092,
+          "height": 0.060840676024436546
+        }
+      }
+    ],
+    "verification": [],
+    "events": [],
+    "pending": [],
+    "eventsSubmitted": 0
+  },
+  {
+    "checkedAt": "2026-10-06T19:16:54.846Z",
+    "cameraId": "a85e6b3f-89c4-40b9-a51d-cab4499ddb7c",
+    "capturedAt": "2026-10-06T19:16:52.588Z",
+    "personCount": {
+      "observedAt": "2026-10-06T19:16:52.588Z",
+      "count": 0,
+      "status": "observed"
+    },
+    "trace": {
+      "objects": [],
+      "persons": [],
+      "helmets": []
+    },
+    "direct": [
+      {
+        "label": "chair",
+        "confidence": 0.41219050872904006,
+        "boundingBox": {
+          "x": 0.6943653613943902,
+          "y": 0.38846243889057436,
+          "width": 0.160122381142353,
+          "height": 0.400668337117898
+        }
+      },
+      {
+        "label": "bench",
+        "confidence": 0.37645081017868165,
+        "boundingBox": {
+          "x": 0.8891802376411746,
+          "y": 0.6024558059342978,
+          "width": 0.10946126783916454,
+          "height": 0.3152086991185671
+        }
+      }
+    ],
+    "verification": [],
+    "events": [],
+    "pending": [],
+    "eventsSubmitted": 0
+  },
+  {
+    "checkedAt": "2026-10-06T19:17:27.076Z",
+    "cameraId": "a85e6b3f-89c4-40b9-a51d-cab4499ddb7c",
+    "capturedAt": "2026-10-06T19:17:23.409Z",
+    "personCount": {
+      "observedAt": "2026-10-06T19:17:23.409Z",
+      "count": 0,
+      "status": "observed"
+    },
+    "trace": {
+      "objects": []
+    },
+    "direct": [
+      {
+        "label": "bench",
+        "confidence": 0.5047201423954562,
+        "boundingBox": {
+          "x": 0.8909578770291715,
+          "y": 0.6003270773516447,
+          "width": 0.10827006057906108,
+          "height": 0.3182908708793092
+        }
+      },
+      {
+        "label": "chair",
+        "confidence": 0.4844935203520393,
+        "boundingBox": {
+          "x": 0.6947835900065902,
+          "y": 0.3927207929029394,
+          "width": 0.15756975947574414,
+          "height": 0.397941532587196
+        }
+      }
+    ],
+    "verification": [],
+    "events": [],
+    "pending": [],
+    "eventsSubmitted": 0
+  }
+]

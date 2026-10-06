@@ -64,13 +64,17 @@ export function GlobalAlertCenter() {
   const alertsRef = useRef<CommandAlert[]>([]);
   const hasLoadedAlerts = useRef(false);
   const notificationTimer = useRef<number | undefined>(undefined);
+  const loading = useRef(false);
+  const eventVersion = useRef(0);
 
   useEffect(() => {
     return alertAudioService.onStatusChange(setAudioStatus);
   }, []);
 
   const load = useCallback(async () => {
-    if (!enabledForRoute) return;
+    if (!enabledForRoute || loading.current) return;
+    loading.current = true;
+    const requestedVersion = eventVersion.current;
     try {
       // Route through the BFF proxy so auth cookies are forwarded correctly
       // and backend 502s are absorbed gracefully.
@@ -82,6 +86,8 @@ export function GlobalAlertCenter() {
       });
       if (!response.ok) return;
       const body = await response.json();
+      // An older polling response must not erase a newer streamed alert.
+      if (eventVersion.current !== requestedVersion) return;
       const nextAlerts = (body.data ?? []) as CommandAlert[];
       if (hasLoadedAlerts.current) {
         const previousIds = new Set(alertsRef.current.map((alert) => alert.id));
@@ -112,6 +118,8 @@ export function GlobalAlertCenter() {
       setAlerts(nextAlerts);
     } catch {
       // SSE reconnect and polling fallback
+    } finally {
+      loading.current = false;
     }
   }, [enabledForRoute, alertToastEnabled]);
 
@@ -141,6 +149,7 @@ export function GlobalAlertCenter() {
         if (next.length === 0) return;
         const newAlert = next[0];
         if (activeDashboardQueue([newAlert]).length === 0) return;
+        eventVersion.current += 1;
         const alreadyPresent = alertsRef.current.some((alert) => alert.id === newAlert.id);
         if (!alreadyPresent && alertToastEnabled) {
           if (notificationTimer.current) window.clearTimeout(notificationTimer.current);
@@ -182,6 +191,7 @@ export function GlobalAlertCenter() {
         const body = await response.json();
         const updated = (body.data ?? [])[0] as CommandAlert | undefined;
         if (!updated) return;
+        eventVersion.current += 1;
         alertsRef.current = alertsRef.current.map((alert) => alert.id === updated.id ? updated : alert);
         setAlerts((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
 
@@ -191,11 +201,15 @@ export function GlobalAlertCenter() {
       } catch { }
     });
 
-    // Fallback periodic reconciliation every 45 seconds
-    const timer = window.setInterval(load, 45_000);
+    // Reconcile missed events promptly, including when SSE reconnects.
+    events.onopen = () => { void load(); };
+    const timer = window.setInterval(load, 5_000);
+    const refreshOnFocus = () => { void load(); };
+    window.addEventListener("focus", refreshOnFocus);
     return () => {
       events.close();
       window.clearInterval(timer);
+      window.removeEventListener("focus", refreshOnFocus);
       if (notificationTimer.current) window.clearTimeout(notificationTimer.current);
     };
   }, [enabledForRoute, load]);

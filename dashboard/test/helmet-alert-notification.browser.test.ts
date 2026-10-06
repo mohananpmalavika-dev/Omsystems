@@ -28,14 +28,15 @@ beforeAll(async()=>{
 afterEach(async()=>{await page?.close();});
 afterAll(async()=>{await browser?.close();});
 
-async function mount(){
+async function mount(useClock=false){
  page=await browser.newPage();page.setDefaultTimeout(5000);
  await page.route('http://localhost:3207/**',route=>route.fulfill({contentType:'text/html',body:'<div id="root"></div>'}));
  await page.goto('http://localhost:3207');
+ if(useClock){await page.clock.install();await page.clock.pauseAt(new Date(Date.now()+1000));}
  await page.evaluate(()=>{
   const w=window as any;w.playedAlerts=[];w.preferenceWrites=[];w.alerts=[];
   const listeners=new Map<string,Function>();
-  w.EventSource=class {addEventListener(name:string,fn:Function){listeners.set(name,fn)}close(){}};
+  w.EventSource=class {onopen?:()=>void;constructor(){w.currentEventSource=this;}addEventListener(name:string,fn:Function){listeners.set(name,fn)}close(){}};
   w.emitAlert=(name:string,data:unknown)=>listeners.get(name)?.({data:JSON.stringify(data)});
   const json=(body:unknown)=>new Response(JSON.stringify(body),{headers:{'content-type':'application/json'}});
   w.fetch=async(url:string,options:any={})=>{
@@ -43,7 +44,12 @@ async function mount(){
     if(options.method==='POST')w.preferenceWrites.push(JSON.parse(options.body));
     return json({preferences:{alertPopupEnabled:false,alertToastEnabled:true}});
    }
-   if(url.includes('alert-center'))return json({data:w.alerts});
+   if(url.includes('alert-center')){
+    w.pollCalls=(w.pollCalls??0)+1;
+    const response=json({data:w.alerts});
+    if(w.holdPoll)return new Promise(resolve=>{w.releasePoll=()=>resolve(response);});
+    return response;
+   }
    if(url.includes('command-center/'))return json({data:w.alerts.filter((a:any)=>url.endsWith(a.id))});
    return json({});
   };
@@ -56,6 +62,37 @@ const helmet=()=>({id:'helmet-fixture',cameraId:'kollam-channel8',branchId:'koll
  firstDetectedAt:new Date().toISOString(),lastDetectedAt:new Date().toISOString(),createdAt:new Date().toISOString()});
 
 describe('helmet popup delivery with independent audio and popup preferences',()=>{
+ it('recovers a missed helmet event within five seconds without overlapping slow polling requests',async()=>{
+  await mount(true);
+  await page.evaluate(alert=>{const w=window as any;w.alerts=[alert];w.holdPoll=true;},helmet());
+  await page.clock.runFor(4999);
+  expect(await page.evaluate(()=>(window as any).playedAlerts.length)).toBe(0);
+  await page.clock.runFor(1);
+  expect(await page.evaluate(()=>(window as any).pollCalls)).toBe(2);
+  await page.clock.runFor(10000);
+  expect(await page.evaluate(()=>(window as any).pollCalls)).toBe(2);
+  await page.evaluate(()=>{const w=window as any;w.holdPoll=false;w.releasePoll();});
+  await page.waitForFunction(()=>(window as any).playedAlerts.some((a:any)=>a.alertId==='helmet-fixture'));
+ });
+ it('reconciles immediately when the event connection reopens and browser focus returns',async()=>{
+  await mount(true);
+  await page.evaluate(alert=>{const w=window as any;w.alerts=[alert];w.currentEventSource.onopen();},helmet());
+  await page.waitForFunction(()=>(window as any).playedAlerts.length>0);
+  const second={...helmet(),id:'second-helmet'};
+  await page.evaluate(alert=>{const w=window as any;w.alerts=[...w.alerts,alert];window.dispatchEvent(new Event('focus'));},second);
+  await page.waitForFunction(()=>(window as any).playedAlerts.some((a:any)=>a.alertId==='second-helmet'));
+ });
+ it('does not erase a new streamed helmet alert when an older polling response finishes',async()=>{
+  await mount(true);
+  await page.evaluate(()=>{(window as any).holdPoll=true;});
+  await page.clock.runFor(5000);
+  await page.evaluate(alert=>{const w=window as any;w.alerts=[alert];w.emitAlert('alert.created',{alertId:alert.id});},helmet());
+  await page.waitForFunction(()=>(window as any).playedAlerts.length>0);
+  await page.evaluate(()=>{const w=window as any;w.holdPoll=false;w.releasePoll();});
+  await page.getByRole('button',{name:'Alert controls: audio on, popups off',exact:true}).click();
+  await page.getByTitle('Enable incident modal popups',{exact:true}).click();
+  await page.getByRole('button',{name:'Acknowledge & Stop Alarm',exact:true}).waitFor();
+ });
  it('makes disabled popups visible even while alert audio is on',async()=>{
   await mount();
   expect(await page.getByRole('button',{name:'Alert controls: audio on, popups off',exact:true}).count()).toBe(1);

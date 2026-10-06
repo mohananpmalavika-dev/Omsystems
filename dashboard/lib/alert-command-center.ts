@@ -45,7 +45,7 @@ export function activeDashboardQueue(alerts: CommandAlert[]) {
 
 export function popupQueue(alerts: CommandAlert[], dismissed: ReadonlySet<string>) {
   return activeDashboardQueue(alerts).filter((alert) =>
-    alert.status === "new" && (alert.severity === "P1" || alert.severity === "P2") && !dismissed.has(alert.id));
+    (alert.status === "new" || alert.status === "escalated") && (alert.severity === "P1" || alert.severity === "P2") && !dismissed.has(alert.id));
 }
 
 export function alertTonePattern(priorityValue: string) {

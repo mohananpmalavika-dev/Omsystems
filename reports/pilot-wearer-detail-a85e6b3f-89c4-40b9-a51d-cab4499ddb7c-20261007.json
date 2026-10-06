@@ -1,0 +1,163 @@
+{
+  "checkedAt": "2026-10-06T19:20:09.728Z",
+  "cameraId": "a85e6b3f-89c4-40b9-a51d-cab4499ddb7c",
+  "capturedAt": "2026-10-06T19:15:58.59Z",
+  "frameAgeSeconds": 251.138,
+  "width": 640,
+  "height": 360,
+  "auxiliaryModels": {
+    "face": true,
+    "pose": true
+  },
+  "fastAlert": true,
+  "detections": [
+    {
+      "label": "suitcase",
+      "confidence": 0.675404464522444,
+      "boundingBox": {
+        "x": 0.7355047739091146,
+        "y": 0.48936161686869795,
+        "width": 0.1632428720203093,
+        "height": 0.38135267612985
+      }
+    },
+    {
+      "label": "person",
+      "confidence": 0.5357081784310509,
+      "boundingBox": {
+        "x": 0.7027089886824225,
+        "y": 0.10507668784723266,
+        "width": 0.15624682401267154,
+        "height": 0.6859094345023704
+      }
+    }
+  ],
+  "heads": [
+    {
+      "label": "head",
+      "confidence": 0.6923075870642492,
+      "boundingBox": {
+        "x": 0.7336994171142578,
+        "y": 0.1012481795416938,
+        "width": 0.10884389877319334,
+        "height": 0.17081050872802733
+      }
+    }
+  ],
+  "faces": [],
+  "poses": [],
+  "verification": [
+    {
+      "person": {
+        "label": "person",
+        "confidence": 0.5357081784310509,
+        "boundingBox": {
+          "x": 0.7027089886824225,
+          "y": 0.10507668784723266,
+          "width": 0.15624682401267154,
+          "height": 0.6859094345023704
+        }
+      },
+      "verified": {
+        "boundingBox": {
+          "x": 0.7336994171142578,
+          "y": 0.1012481795416938,
+          "width": 0.10884389877319334,
+          "height": 0.17081050872802733
+        },
+        "classificationConfidence": 0.9562675998195259,
+        "localizationConfidence": 0.6923075870642492
+      },
+      "classificationCalls": [
+        {
+          "box": {
+            "x": 0.7336994171142578,
+            "y": 0.1012481795416938,
+            "width": 0.10884389877319334,
+            "height": 0.17081050872802733
+          },
+          "result": {
+            "wearingHelmet": true,
+            "confidence": 0.9999860398175873,
+            "wearingHelmetConfidence": 0.9999860398175873,
+            "unwearingHelmetConfidence": 1.3960182412685653E-05
+          }
+        },
+        {
+          "box": {
+            "x": 0.7173728322982788,
+            "y": 0.0756266032324897,
+            "width": 0.14149706840515142,
+            "height": 0.2220536613464355
+          },
+          "result": {
+            "wearingHelmet": true,
+            "confidence": 0.9999996481867953,
+            "wearingHelmetConfidence": 0.9999996481867953,
+            "unwearingHelmetConfidence": 3.5181320458888256E-07
+          }
+        },
+        {
+          "box": {
+            "x": 0.6520664930343628,
+            "y": 0,
+            "width": 0.2721097469329833,
+            "height": 0.4001665698157416
+          },
+          "result": {
+            "wearingHelmet": true,
+            "confidence": 0.9562675998195259,
+            "wearingHelmetConfidence": 0.9562675998195259,
+            "unwearingHelmetConfidence": 0.04373240018047413
+          }
+        }
+      ]
+    }
+  ],
+  "singleFrameResults": [],
+  "detectorClassificationCalls": [
+    {
+      "box": {
+        "x": 0.7336994171142578,
+        "y": 0.1012481795416938,
+        "width": 0.10884389877319334,
+        "height": 0.17081050872802733
+      },
+      "result": {
+        "wearingHelmet": true,
+        "confidence": 0.9999860398175873,
+        "wearingHelmetConfidence": 0.9999860398175873,
+        "unwearingHelmetConfidence": 1.3960182412685653E-05
+      }
+    },
+    {
+      "box": {
+        "x": 0.7173728322982788,
+        "y": 0.0756266032324897,
+        "width": 0.14149706840515142,
+        "height": 0.2220536613464355
+      },
+      "result": {
+        "wearingHelmet": true,
+        "confidence": 0.9999996481867953,
+        "wearingHelmetConfidence": 0.9999996481867953,
+        "unwearingHelmetConfidence": 3.5181320458888256E-07
+      }
+    },
+    {
+      "box": {
+        "x": 0.6520664930343628,
+        "y": 0,
+        "width": 0.2721097469329833,
+        "height": 0.4001665698157416
+      },
+      "result": {
+        "wearingHelmet": true,
+        "confidence": 0.9562675998195259,
+        "wearingHelmetConfidence": 0.9562675998195259,
+        "unwearingHelmetConfidence": 0.04373240018047413
+      }
+    }
+  ],
+  "eventsSubmitted": 0
+}
