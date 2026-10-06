@@ -38,6 +38,13 @@ for(const width of [1600,390]) {
   await management.getByRole('button',{name:'Export all alerts',exact:true}).click();
   const download=await downloadPromise,path=await download.path();
   assert.equal((await readFile(path,'utf8')).split('\r\n').length,261);
+  await management.getByRole('button',{name:'View alerts on 2026-10-03',exact:true}).click();
+  await page.waitForTimeout(300);
+  const dayExportPromise=page.waitForEvent('download');
+  await management.getByRole('button',{name:'Export all alerts',exact:true}).click();
+  const dayCsv=await readFile(await (await dayExportPromise).path(),'utf8');
+  assert.ok(dayCsv.split('\r\n').length>1 && dayCsv.split('\r\n').length<261,'Chart selection must filter to a single day');
+  await management.getByRole('button',{name:'Reset',exact:true}).click();
   await page.getByLabel('Report start date').fill('2026-10-06');
   await page.getByLabel('Report end date').fill('2026-10-06');
   await page.getByRole('button',{name:'Generate report',exact:true}).click();
@@ -64,7 +71,7 @@ for(const width of [1600,390]) {
     assert.equal(requests.at(-1),dimension);
   }
   const overflow=await page.evaluate(()=>document.documentElement.scrollWidth>window.innerWidth+2);
-  results.push({width,alertExportRows:260,misExportRows:60,pagination:true,overflow,errors});
+  results.push({width,alertExportRows:260,misExportRows:60,pagination:true,chartDateSelection:true,menuDimensions:true,overflow,errors});
   assert.equal(errors.length,0,JSON.stringify(errors));
   await context.close();
 }

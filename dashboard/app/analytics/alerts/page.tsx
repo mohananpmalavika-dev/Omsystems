@@ -554,7 +554,7 @@ export default function AiAlertsIncidentHubPage() {
         {/* Graphical Representation of Alerts (Zone-wise, Region-wise, Area-wise, Branch-wise, Alert Type-wise, Date-wise) */}
         {viewMode !== "table" && (
           <AlertsGraphicalAnalytics
-            alerts={alerts}
+            alerts={filteredAlerts}
             selectedZone={zoneFilter}
             selectedBranch={branchFilter}
             selectedRegion={regionFilter}

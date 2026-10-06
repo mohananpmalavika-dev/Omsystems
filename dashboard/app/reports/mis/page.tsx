@@ -913,7 +913,7 @@ function MisReportsContent() {
                 <BarChart data={data?.allBranches || []} margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
                   <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} interval={0} angle={-15} textAnchor="end" />
-                  <YAxis stroke="#94a3b8" fontSize={11} domain={[90, 100]} unit="%" />
+                  <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 100]} unit="%" />
                   <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", borderRadius: 8, fontSize: 12 }} />
                   <ReferenceLine y={99.0} stroke="#10b981" strokeDasharray="3 3" label={{ value: "99% Target", fill: "#10b981", fontSize: 10 }} />
                   <Bar dataKey="uptime" name="Uptime %" fill="#38bdf8" radius={[4, 4, 0, 0]} />
@@ -975,7 +975,6 @@ function MisReportsContent() {
                   <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} interval={0} angle={-15} textAnchor="end" />
                   <YAxis stroke="#94a3b8" fontSize={11} domain={[90, 100]} unit="%" />
                   <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", borderRadius: 8, fontSize: 12 }} />
-                  <ReferenceLine y={98.0} stroke="#10b981" strokeDasharray="3 3" label={{ value: "98% Target", fill: "#10b981", fontSize: 10 }} />
                   <Line type="monotone" dataKey="slaPercent" name="SLA Compliance %" stroke="#38bdf8" strokeWidth={2.5} />
                 </LineChart>
               </ResponsiveContainer>
@@ -986,19 +985,18 @@ function MisReportsContent() {
         {/* Tab 6: Audit Compliance */}
         {activeTab === "compliance" && (
           <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-5">
-            <h2 className="text-base font-semibold text-white mb-1">Statutory 90-Day Video Retention Status</h2>
-            <p className="text-xs text-slate-400 mb-4">Achieved storage retention days across all audited branches</p>
+            <h2 className="text-base font-semibold text-white mb-1">Configured Recording Retention by Branch</h2>
+            <p className="text-xs text-slate-400 mb-4">Current configured retention days; branches without a configured value remain unavailable</p>
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data?.allBranches || []} margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
                   <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} interval={0} angle={-15} textAnchor="end" />
-                  <YAxis stroke="#94a3b8" fontSize={11} domain={[70, 100]} unit="d" />
+                  <YAxis stroke="#94a3b8" fontSize={11} domain={[0, 'auto']} unit="d" />
                   <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", borderRadius: 8, fontSize: 12 }} />
-                  <ReferenceLine y={90} stroke="#f43f5e" strokeDasharray="3 3" label={{ value: "Mandatory 90 Days", fill: "#f43f5e", fontSize: 10 }} />
                   <Bar dataKey="retentionDays" name="Configured retention (Days)" fill="#14b8a6" radius={[4, 4, 0, 0]}>
                     {(data?.allBranches || []).map((entry: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={entry.retentionDays >= 90 ? "#14b8a6" : "#f43f5e"} />
+                      <Cell key={`cell-${index}`} fill={entry.retentionDays == null ? "#94a3b8" : "#14b8a6"} />
                     ))}
                   </Bar>
                 </BarChart>
