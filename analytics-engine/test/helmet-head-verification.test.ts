@@ -14,7 +14,7 @@ const frame = (): DetectionFrame => ({cameraId:"bettaih",tenantId:"test",timesta
   metadata:{inferenceMode:"local-onnx",detections:[{label:"person",confidence:.95,boundingBox:person}]}});
 const score = (value:number) => ({wearingHelmet:value>.5,confidence:Math.max(value,1-value),
   wearingHelmetConfidence:value,unwearingHelmetConfidence:1-value});
-const localizer = (label="head", boundingBox=box) => ({run:vi.fn(async()=>[{label,confidence:.8,boundingBox}])});
+const localizer = (label="helmet", boundingBox=box) => ({run:vi.fn(async()=>[{label,confidence:.8,boundingBox}])});
 beforeEach(() => vi.clearAllMocks());
 
 describe("independent helmet head verification", () => {
@@ -26,8 +26,7 @@ describe("independent helmet head verification", () => {
   });
   it("rejects a bare head even when an isolated crown would classify as a helmet", async () => {
     const classifier={run:vi.fn(async(_frame,crop)=>score(crop.height<box.height?.99:.02))};
-    expect(await new LocalizedHelmetHeadVerifier(localizer(),classifier).verify(frame(),person,.9167)).toBeNull();
-    expect(classifier.run).toHaveBeenCalledTimes(2);
+    expect(await new LocalizedHelmetHeadVerifier(localizer("head"),classifier).verify(frame(),person,.9167)).toBeNull();
   });
   it("requires whole-head and surrounding context agreement", async () => {
     const classifier={run:vi.fn().mockResolvedValueOnce(score(.999)).mockResolvedValueOnce(score(.2))};

@@ -1,4 +1,4 @@
-import type { DetectionFrame, InferenceObject } from "../detectors/base-detector.js";
+import { calculateIoU, type DetectionFrame, type InferenceObject } from "../detectors/base-detector.js";
 import type { HelmetClassificationFrameInference, ObjectFrameInference } from "./configured-model-inference.js";
 
 type Box = InferenceObject["boundingBox"];
@@ -19,11 +19,21 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
   async verify(frame: DetectionFrame, person: Box, threshold: number): Promise<VerifiedHelmetHead | null> {
     let pending = this.frames.get(frame);
     if (!pending) { pending = this.localizer.run(frame); this.frames.set(frame, pending); }
-    const candidates = (await pending).filter(head =>
-      (head.label === "head" || head.label === "helmet") && (head.confidence ?? 0) >= 0.25 &&
+    const objects = await pending;
+    const candidates = objects.filter(head =>
+      head.label === "helmet" && (head.confidence ?? 0) >= 0.25 &&
       validHead(frame, person, head.boundingBox));
+    const bareHeads = objects.filter(head =>
+      head.label === "head" && (head.confidence ?? 0) >= 0.25 &&
+      validHead(frame, person, head.boundingBox));
+
     for (const candidate of candidates.sort((a,b) => (b.confidence ?? 0) - (a.confidence ?? 0))) {
       const box = candidate.boundingBox;
+      const dominantBareHead = bareHeads.find(bh =>
+        (bh.confidence ?? 0) >= (candidate.confidence ?? 0) &&
+        calculateIoU(bh.boundingBox, box) >= 0.3);
+      if (dominantBareHead) continue;
+
       const head = await this.classifier.run(frame, box);
       const context = await this.classifier.run(frame, expand(box, 0.15));
       if (head.wearingHelmet && context.wearingHelmet &&
@@ -37,7 +47,7 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
       if (candidate.label === "helmet" && box.height * 0.65 * frame.height >= 20) {
         const crown = { ...box, height: box.height * 0.65 };
         const result = await this.classifier.run(frame, crown);
-        if (result.wearingHelmet && result.wearingHelmetConfidence >= threshold) {
+        if (result?.wearingHelmet && result.wearingHelmetConfidence >= threshold) {
           return { boundingBox: crown, classificationConfidence: result.wearingHelmetConfidence,
             localizationConfidence: candidate.confidence! };
         }

@@ -279,7 +279,7 @@ export class HelmetDetector extends BaseDetector {
             riskLevel: "violation",
           };
           const confirmations = this.fastAlert
-            ? 1
+            ? 2
             : ((person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ? 2 : 3);
           if (this.confirmClassifiedHead(frame.cameraId, person.boundingBox, frame.timestamp.getTime(), confirmations)) {
             presence = candidate;
