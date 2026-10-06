@@ -58,6 +58,7 @@ export function AlertAudioIndicator() {
       {/* Permanent Header Pill Button */}
       <button
         type="button"
+        aria-label={`Alert controls: audio ${isEnabled ? isMuted ? "muted" : "on" : "off"}, popups ${alertPopupEnabled ? "on" : "off"}`}
         onClick={() => setOpen(!open)}
         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-bold border transition-all cursor-pointer ${
           isReady
@@ -68,7 +69,7 @@ export function AlertAudioIndicator() {
             ? "bg-rose-950/70 border-rose-600 text-rose-300 hover:bg-rose-900/80 animate-pulse"
             : "bg-slate-800/90 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white"
         }`}
-        title="Control Room Alert Audio Status & Cross-Device Controls"
+        title={`Alert audio ${isEnabled ? "enabled" : "disabled"}; automatic incident popups ${alertPopupEnabled ? "enabled" : "disabled"}. Open notification controls.`}
       >
         {isReady ? (
           <Volume2 className="h-3.5 w-3.5 text-emerald-400" />
@@ -80,6 +81,7 @@ export function AlertAudioIndicator() {
           <VolumeX className="h-3.5 w-3.5 text-slate-400" />
         )}
         <span>AUDIO: {isEnabled ? (isMuted ? "MUTED" : "ON") : "OFF"}</span>
+        {!alertPopupEnabled && <span className="border-l border-current/30 pl-1.5 text-amber-300">POPUPS OFF</span>}
         {status.activeP1Count > 0 && (
           <span className="px-1 py-0.2 rounded bg-rose-600 text-white text-[10px] font-black">
             P1 × {status.activeP1Count}
