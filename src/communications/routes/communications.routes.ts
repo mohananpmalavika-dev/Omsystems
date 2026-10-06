@@ -133,6 +133,11 @@ const directMessageSchema = z.object({
   body: z.string().trim().min(1).max(4000),
 });
 
+const directMessageQuerySchema = z.object({
+  contactType: z.enum(['OPERATOR', 'DEVICE', 'BRANCH']).optional(),
+  contactId: z.string().uuid().optional(),
+}).refine(({ contactType, contactId }) => Boolean(contactType) === Boolean(contactId));
+
 // One entry per active VMS user. Only a real branch assignment is exposed as
 // branch_id; company/region assignments belong to the central VMS directory.
 const vmsUserDirectorySql = `SELECT u.id::text, COALESCE(u.display_name, u.username) AS name,
@@ -2400,6 +2405,9 @@ export async function registerCommunicationsRoutes(
   const listDirectMessages = async (request: AuthenticatedRequest, reply: FastifyReply, deviceRoute: boolean) => {
     const identity = await directIdentity(request, reply, deviceRoute);
     if (!identity) return;
+    const parsed = directMessageQuerySchema.safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'invalid_message_contact' });
+    const { contactType, contactId } = parsed.data;
     let branchInbox: string | null = null;
     if (deviceRoute) {
       const result = await ctx.pool.query<{ device_type: string }>(
@@ -2408,6 +2416,20 @@ export async function registerCommunicationsRoutes(
       );
       if (result.rows[0]?.device_type?.startsWith('BRANCH_')) branchInbox = identity.branchId;
     }
+    // Intersect the selected thread with the authenticated inbox before LIMIT.
+    // Branch replies come from devices; shared terminals also receive branch broadcasts.
+    const contactFilter = contactType ? ` AND (
+      (m.sender_type = $2 AND m.sender_id = $3 AND m.recipient_type = $5 AND m.recipient_id = $6)
+      OR (m.sender_type = $5 AND m.sender_id = $6 AND (
+        (m.recipient_type = $2 AND m.recipient_id = $3)
+        OR ($4::uuid IS NOT NULL AND m.recipient_type = 'BRANCH' AND m.recipient_id = $4)))
+      OR ($5 = 'BRANCH' AND m.sender_type = 'DEVICE'
+        AND m.recipient_type = $2 AND m.recipient_id = $3 AND EXISTS (
+          SELECT 1 FROM communication_devices d
+          WHERE d.id = m.sender_id AND d.tenant_id = m.tenant_id AND d.branch_id = $6))
+    )` : '';
+    const params = [identity.tenantId, identity.type, identity.id, branchInbox];
+    if (contactType) params.push(contactType, contactId!);
     const result = await ctx.pool.query(
       `SELECT m.id::text, m.sender_type AS "senderType", m.sender_id::text AS "senderId",
               m.recipient_type AS "recipientType", m.recipient_id::text AS "recipientId",
@@ -2421,8 +2443,9 @@ export async function registerCommunicationsRoutes(
          ((m.sender_type = $2 AND m.sender_id = $3)
           OR (m.recipient_type = $2 AND m.recipient_id = $3)
           OR ($4::uuid IS NOT NULL AND m.recipient_type = 'BRANCH' AND m.recipient_id = $4))
-       ORDER BY m.created_at DESC LIMIT 100`,
-      [identity.tenantId, identity.type, identity.id, branchInbox]
+       ${contactFilter}
+       ORDER BY m.created_at DESC, m.id DESC LIMIT 100`,
+      params
     );
     return reply.send({ data: result.rows.reverse() });
   };

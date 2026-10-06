@@ -1,0 +1,74 @@
+.callWorkspace { --call-ink: #ecf1f8; --call-muted: #91a1b9; width: 100%; color: var(--call-ink); background: #101a2b; border: 1px solid #2b3950; border-radius: 22px; overflow: hidden; box-shadow: 0 24px 80px #02061740; text-align: left; }
+.callHeader { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px 26px; border-bottom: 1px solid #263247; }
+.peerIdentity { display: flex; align-items: center; gap: 13px; min-width: 0; }
+.peerIdentity h2 { margin: 3px 0 0; color: #f5f8fc; font-size: 18px; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
+.peerIcon { display: grid; place-items: center; width: 43px; height: 43px; flex-shrink: 0; border: 1px solid #334a66; border-radius: 13px; background: #1b2d46; color: #90bfff; }
+.eyebrow { font-size: 9px; font-weight: 650; letter-spacing: .16em; color: #90a4c1; }
+.sessionStatus { display: flex; align-items: center; gap: 8px; color: #aab9ce; font-size: 12px; white-space: nowrap; }
+.sessionStatus time { margin-left: 12px; padding-left: 16px; border-left: 1px solid #374257; font-variant-numeric: tabular-nums; color: #e2e8f0; }
+.statusDot { display: inline-block; width: 6px; height: 6px; border-radius: 100%; background: #e4b75c; flex-shrink: 0; }
+.connected { background: #52d8ac; box-shadow: 0 0 0 3px #52d8ac14; }
+.videoStage { position: relative; width: calc(100% - 32px); aspect-ratio: 16/9; max-height: 62vh; min-height: 250px; margin: 16px; border-radius: 14px; overflow: hidden; isolation: isolate; background: radial-gradient(ellipse at 50% 40%, #1c2c44, #080f1c 75%); border: 1px solid #273750; }
+.videoStage > video { position: absolute; width: 100%; height: 100%; object-fit: contain; }
+.participantPlaceholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: radial-gradient(ellipse at center, #1b2b43, #0b1320); }
+.participantPlaceholder h3 { margin: 6px 0 0; font-size: 23px; font-weight: 550; color: #eef3fa; }
+.participantPlaceholder p { margin: 0; font-size: 12px; color: #91a1b9; }
+.avatar { width: 86px; height: 86px; display: grid; place-items: center; border-radius: 29px; background: #243951; border: 1px solid #3a5371; color: #bdcfea; font-size: 29px; font-weight: 500; box-shadow: 0 0 0 12px #31476213; }
+.stageTopline { position: absolute; top: 15px; left: 17px; right: 15px; display: flex; justify-content: space-between; align-items: center; color: #b7c4d7; font-size: 10px; }
+.stageTopline span { display: flex; gap: 6px; align-items: center; background: #091120a8; border-radius: 7px; padding: 6px 9px; }
+.stageTopline button { border: 1px solid #ffffff20; background: #0d1726b0; color: #dce5f2; padding: 7px; border-radius: 7px; cursor: pointer; }
+.stagePeer { position: absolute; bottom: 17px; left: 17px; display: flex; gap: 7px; align-items: center; background: #091120c0; border: 1px solid #ffffff15; padding: 7px 11px; border-radius: 8px; font-size: 11px; max-width: calc(100% - 205px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.localPreview { position: absolute; right: 16px; bottom: 16px; width: 168px; aspect-ratio: 16/10; border-radius: 10px; background: #182337; border: 1px solid #52627c; overflow: hidden; box-shadow: 0 6px 26px #0005; }
+.localPreview video { width: 100%; height: 100%; object-fit: cover; }
+.screenPreview video { object-fit: contain; }
+.mirrored { transform: scaleX(-1); }
+.localPlaceholder { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px; font-size: 10px; color: #7f92ae; background: #162236; }
+.previewLabel { position: absolute; bottom: 6px; left: 7px; display: flex; align-items: center; gap: 5px; background: #070e1bc0; padding: 3px 6px; border-radius: 5px; font-size: 10px; }
+.callFooter { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 24px 21px; }
+.callControls { display: flex; align-items: stretch; gap: 8px; }
+.control, .endCall { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; min-width: 62px; padding: 10px 13px; border: 1px solid #334159; border-radius: 12px; background: #1a273b; color: #d8e2f1; cursor: pointer; transition: background .15s; }
+.control span, .endCall span { font-size: 10px; font-weight: 550; white-space: nowrap; }
+.control:hover:not(:disabled) { background: #2a3b54; }
+.controlOff { background: #482a36; border-color: #784151; color: #ffc1ce; }
+.controlActive { background: #1b4162; border-color: #477faf; color: #c8e8ff; }
+.endCall { margin-left: 8px; background: #d94251; border-color: #e35a68; color: white; }
+.endCall:hover { background: #e55060; }
+.control:disabled, .shareNotice button:disabled { opacity: .45; cursor: not-allowed; }
+.connectionInfo { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #91a1b9; flex-wrap: wrap; max-width: 140px; }
+.connectionInfo > span:last-child:not(:first-child) { color: #c2cddd; }
+.footerBrand { font-size: 11px; color: #6e809a; letter-spacing: -.02em; }
+.shareNotice { display: flex; align-items: center; gap: 8px; margin: 0 16px 15px; padding: 10px 14px; border-radius: 9px; background: #183e36; color: #a6e9d5; border: 1px solid #2e6354; font-size: 12px; }
+.shareNotice button { margin-left: auto; border: none; background: transparent; color: #c0f6e5; text-decoration: underline; cursor: pointer; white-space: nowrap; font-size: 11px; }
+.error { display: flex; gap: 8px; align-items: center; margin: 12px 16px; padding: 12px; color: #ffbec7; background: #482630; border: 1px solid #70414e; border-radius: 9px; font-size: 12px; }
+.error svg { flex-shrink: 0; }
+.audioPrompt { display: flex; align-items: center; gap: 7px; margin: 12px auto; padding: 9px 14px; background: #2b466a; border: 1px solid #506f99; color: white; border-radius: 9px; cursor: pointer; font-size: 12px; }
+.deviceSettings { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; padding: 18px 24px; border-top: 1px solid #28384d; background: #0b1525; }
+.deviceSettings label { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: 11px; color: #b7c4d8; }
+.deviceSettings select { width: 100%; padding: 9px; border: 1px solid #344660; border-radius: 7px; background: #17253b; color: #e0e8f3; font-size: 11px; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.checkButton { display: inline-flex; align-items: center; gap: 7px; padding: 9px 13px; background: var(--surface, #17253b); border: 1px solid var(--line, #344660); border-radius: 9px; color: var(--ink, #e0e8f3); font-size: 12px; font-weight: 550; cursor: pointer; }
+.checkButton:disabled { opacity: .45; cursor: not-allowed; }
+.checkOverlay { position: fixed; inset: 0; z-index: 10000; background: #020617b8; backdrop-filter: blur(8px); display: grid; place-items: center; padding: 20px; }
+.checkDialog { width: min(520px, 100%); border: 1px solid #374861; border-radius: 20px; padding: 24px; background: #111e31; color: #e7effa; box-shadow: 0 25px 80px #0006; }
+.checkHeading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.checkHeading h2 { font-size: 19px; margin: 0; }
+.checkHeading button { background: transparent; border: none; color: #bccbe0; padding: 6px; cursor: pointer; }
+.checkDescription { font-size: 12px; line-height: 1.6; color: #99abc5; margin: 10px 0 20px; }
+.checkPreview { aspect-ratio: 16/9; border-radius: 12px; border: 1px solid #334760; background: #091324; overflow: hidden; position: relative; }
+.checkPreview video { width: 100%; height: 100%; object-fit: contain; }
+.checkPlaceholder { position: absolute; inset: 0; display: grid; place-items: center; color: #788ea9; font-size: 12px; }
+.checkResults { display: flex; flex-direction: column; gap: 10px; padding: 18px 0; }
+.checkResult { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #b9c9df; }
+.checkResult small { margin-left: auto; font-size: 10px; color: #83d9bd; }
+.micMeter { width: 100%; height: 6px; border-radius: 4px; background: #253750; overflow: hidden; }
+.micMeter span { display: block; height: 100%; background: #5bd3ad; transition: width .08s; }
+.checkActions { display: flex; gap: 9px; margin-top: 12px; }
+.checkActions button { display: flex; align-items: center; justify-content: center; gap: 7px; flex: 1; border: 1px solid #41668f; border-radius: 9px; background: #234266; color: #eef5ff; padding: 11px; font-size: 12px; cursor: pointer; }
+.checkActions button:disabled { opacity: .45; }
+.checkError { font-size: 12px; color: #ffb9c5; line-height: 1.5; padding: 10px; background: #452b35; border-radius: 8px; }
+.checkFootnote { margin: 16px 0 0; font-size: 10px; color: #7e94ae; line-height: 1.6; }
+:is(.control, .endCall, .checkButton, .checkActions button, .deviceSettings select):focus-visible { outline: 2px solid #8ac6ff; outline-offset: 3px; }
+@media (max-width: 850px) { .footerBrand { display: none; } .callFooter { flex-direction: column-reverse; gap: 13px; } .connectionInfo { max-width: none; } }
+@media (max-width: 600px) { .callHeader { padding: 15px; align-items: flex-start; gap: 10px; } .peerIcon { display: none; } .peerIdentity h2 { font-size: 15px; } .eyebrow { font-size: 8px; } .sessionStatus { flex-wrap: wrap; justify-content: flex-end; font-size: 10px; gap: 5px; } .sessionStatus time { margin-left: 0; padding-left: 8px; } .videoStage { width: calc(100% - 20px); margin: 10px; min-height: 270px; aspect-ratio: 4/3; } .participantPlaceholder { padding-bottom: 58px; } .participantPlaceholder h3 { font-size: 18px; } .participantPlaceholder p { max-width: 75%; text-align: center; font-size: 11px; } .avatar { width: 66px; height: 66px; border-radius: 22px; font-size: 24px; } .localPreview { width: 112px; right: 10px; bottom: 10px; } .stagePeer { max-width: calc(100% - 150px); font-size: 9px; left: 10px; bottom: 12px; } .callFooter { padding: 12px 10px 16px; } .callControls { width: 100%; justify-content: center; gap: 5px; } .control, .endCall { min-width: 0; padding: 10px 8px; flex: 1; border-radius: 9px; } .control span, .endCall span { font-size: 9px; } .endCall { margin-left: 4px; } .shareNotice { margin: 5px 10px 10px; font-size: 10px; flex-wrap: wrap; } .deviceSettings { grid-template-columns: 1fr; padding: 16px; } .checkDialog { padding: 18px; } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }

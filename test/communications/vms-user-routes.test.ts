@@ -6,6 +6,7 @@ import { CommunicationCallService } from '../../src/communications/services/call
 import { CommunicationPresenceService } from '../../src/communications/services/presence.service.js';
 import { CommunicationMessagingService } from '../../src/communications/services/messaging.service.js';
 import { DeviceEnrollmentService } from '../../src/communications/services/device-enrollment.service.js';
+import { DeviceCredentialService } from '../../src/communications/services/device-credential.service.js';
 import * as media from '../../src/communications/providers/voice-media.provider.js';
 
 const tenantId = '00000000-0000-4000-8000-000000000001';
@@ -249,4 +250,47 @@ describe('VMS user communication routes', () => {
     expect(response.json().error).toBe('branch_not_found');
     expect(query.mock.calls.some(([sql]) => sql.includes('SET unlinked_at'))).toBe(false);
   });
+
+  it.each(['OPERATOR', 'DEVICE', 'BRANCH'])('scopes a %s message thread to the authenticated operator', async (contactType) => {
+    const response = await app.inject(`/v1/communications/direct-messages?contactType=${contactType}&contactId=${employeeId}`);
+    expect(response.statusCode).toBe(200);
+    const messageQuery = query.mock.calls.find(([sql]) => sql.includes('FROM communication_direct_messages m'));
+    expect(messageQuery?.[1]).toEqual([tenantId, 'OPERATOR', callerId, null, contactType, employeeId]);
+    expect(messageQuery?.[0]).toContain('m.sender_type = $2 AND m.sender_id = $3 AND m.recipient_type = $5 AND m.recipient_id = $6');
+    expect(messageQuery?.[0]).toContain('m.sender_type = $5 AND m.sender_id = $6');
+  });
+
+  it.each([
+    'contactType=OPERATOR', `contactId=${employeeId}`, 'contactType=OTHER&contactId=bad',
+    'contactType=DEVICE&contactId=bad',
+  ])('rejects an invalid message thread query: %s', async (params) => {
+    const response = await app.inject(`/v1/communications/direct-messages?${params}`);
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe('invalid_message_contact');
+    expect(query.mock.calls.some(([sql]) => sql.includes('FROM communication_direct_messages m'))).toBe(false);
+  });
+
+  it('requires a valid operator identity before loading a message thread', async () => {
+    callerExists = false;
+    expect((await app.inject(`/v1/communications/direct-messages?contactType=OPERATOR&contactId=${employeeId}`)).statusCode).toBe(401);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it.each([['BRANCH_SHARED', branchId], ['EMPLOYEE_PHONE', null]])(
+    'loads a device thread with the %s inbox scope', async (deviceType, inboxId) => {
+      vi.spyOn(DeviceCredentialService.prototype, 'verifyDeviceCredential').mockResolvedValue({
+        valid: true, deviceId: callId, tenantId, branchId,
+      } as any);
+      const existingQuery = query.getMockImplementation()!;
+      query.mockImplementation(async (sql, params) => sql.includes('SELECT device_type FROM communication_devices')
+        ? { rows: [{ device_type: deviceType }], rowCount: 1 } : existingQuery(sql, params));
+      const response = await app.inject({
+        url: `/v1/communications/device-direct-messages?contactType=OPERATOR&contactId=${employeeId}`,
+        headers: { authorization: 'Bearer device-credential' },
+      });
+      expect(response.statusCode).toBe(200);
+      const messageQuery = query.mock.calls.find(([sql]) => sql.includes('FROM communication_direct_messages m'));
+      expect(messageQuery?.[1]).toEqual([tenantId, 'DEVICE', callId, inboxId, 'OPERATOR', employeeId]);
+    },
+  );
 });

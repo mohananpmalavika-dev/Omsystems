@@ -446,9 +446,11 @@ class CommunicationAPIClient {
   // MESSAGING
   // ============================================================================
 
-  async getDirectMessages(isDevice = false): Promise<DirectMessage[]> {
+  async getDirectMessages(isDevice = false, contact?: { type: DirectMessage['recipientType']; id: string }): Promise<DirectMessage[]> {
+    const path = isDevice ? '/v1/communications/device-direct-messages' : '/v1/communications/direct-messages';
+    const query = contact ? `?${new URLSearchParams({ contactType: contact.type, contactId: contact.id })}` : '';
     const response = await this.request<{ data: DirectMessage[] }>(
-      isDevice ? '/v1/communications/device-direct-messages' : '/v1/communications/direct-messages',
+      `${path}${query}`,
       { signal: AbortSignal.timeout(12_000) },
     );
     return response.data;

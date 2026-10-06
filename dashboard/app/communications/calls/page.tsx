@@ -1,28 +1,29 @@
 "use client";
 
-import { FieldVisual } from "@/components/field-visual";
+import { CallWorkspace } from '@/components/communications/call-workspace';
+import { MediaDeviceCheck } from '@/components/communications/media-device-check';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
-  Phone, PhoneOff, Mic, MicOff, Volume2, Search, 
+  Phone, PhoneOff, Search,
   Building2, User, Clock, CheckCircle2, XCircle, 
   PhoneMissed, AlertCircle, MessageSquare, RefreshCw,
   Radio, ChevronRight, Filter, Video, VideoOff, ScreenShare,
-  Shield, Users, Monitor
+  Shield, Users
 } from 'lucide-react';
 import { communicationAPI } from '@/services/communication-api';
 import { useCommunicationSignaling } from '@/hooks/use-communication-signaling';
+import { useDirectMessages } from '@/hooks/use-direct-messages';
 import { useWebRTCCall, type CallModality } from '@/hooks/use-webrtc-call';
 import type { 
   BranchContact, 
   EmployeeContact, 
   CommunicationEmployee,
   CallSession,
-  DirectMessage,
   WebRTCCredentials,
   CommunicationPresence,
   CommunicationCallStatus 
 } from '@/services/communication-api';
-import type { CallInviteEvent, CallStatusEvent } from '@/hooks/use-communication-signaling';
+import type { CallInviteEvent } from '@/hooks/use-communication-signaling';
 
 // ============================================================================
 // TYPES
@@ -138,27 +139,32 @@ export default function CommunicationsCallsPage() {
   const [selectedContact, setSelectedContact] = useState<SelectedContact>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [callStarting, setCallStarting] = useState(false);
+  const startingCallRef = useRef(false);
   
   // Call state
   const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
   const activeCallRef = useRef<ActiveCall | null>(null);
+  const offeredCallRef = useRef<string | null>(null);
   const [incomingCall, setIncomingCall] = useState<CallInviteEvent | null>(null);
   const [callDuration, setCallDuration] = useState(0);
   const [callHistory, setCallHistory] = useState<CallSession[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [directMessages, setDirectMessages] = useState<DirectMessage[]>([]);
   const [directMessageText, setDirectMessageText] = useState('');
-  const [messagesError, setMessagesError] = useState<string | null>(null);
-  const [messageRouteMissing, setMessageRouteMissing] = useState(false);
   
   // Hooks
   const signaling = useCommunicationSignaling();
   const webrtc = useWebRTCCall();
+  const messageContactType = selectedContact?.type === 'BRANCH' ? 'BRANCH'
+    : selectedContact?.type === 'INTERNAL_USER' ? 'OPERATOR'
+    : selectedContact?.type === 'EMPLOYEE' ? 'DEVICE' : undefined;
+  const messageContactId = selectedContact?.type === 'BRANCH' ? selectedContact.branch.branchId
+    : selectedContact?.type === 'INTERNAL_USER' ? selectedContact.user.employeeId
+    : selectedContact?.type === 'EMPLOYEE' ? selectedContact.employee.deviceId : undefined;
+  const { directMessages, messagesError, messageRouteMissing, messagesLoading, loadDirectMessages } =
+    useDirectMessages(messageContactType, messageContactId, signaling.onMessageCreated);
   
   // Refs
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
-  const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const durationIntervalRef = useRef<number | null>(null);
 
   // Detect logged-in user to identify own station
@@ -174,20 +180,6 @@ export default function CommunicationsCallsPage() {
     }
   }, []);
 
-  useEffect(() => {
-    if (remoteVideoRef.current && webrtc.remoteStream) {
-      remoteVideoRef.current.srcObject = webrtc.remoteStream;
-      remoteVideoRef.current.play().catch(() => {});
-    }
-  }, [webrtc.remoteStream]);
-
-  useEffect(() => {
-    if (localVideoRef.current && webrtc.localStream) {
-      localVideoRef.current.srcObject = webrtc.localStream;
-      localVideoRef.current.play().catch(() => {});
-    }
-  }, [webrtc.localStream]);
-  
   // ============================================================================
   // LOAD DIRECTORY
   // ============================================================================
@@ -218,29 +210,6 @@ export default function CommunicationsCallsPage() {
   useEffect(() => {
     void loadDirectory();
   }, [loadDirectory]);
-
-  const loadDirectMessages = useCallback(async () => {
-    try {
-      setDirectMessages(await communicationAPI.getDirectMessages());
-      setMessagesError(null);
-      setMessageRouteMissing(false);
-    } catch (cause) {
-      console.warn('[Communications] Messages unavailable', cause);
-      const missing = cause instanceof Error && 'status' in cause && cause.status === 404;
-      setMessageRouteMissing(missing);
-      setMessagesError(missing
-        ? 'Messaging is unavailable on this server.'
-        : 'Unable to load messages. Please refresh to retry.');
-    }
-  }, []);
-
-  useEffect(() => {
-    if (messageRouteMissing) return;
-    void loadDirectMessages();
-    const timer = window.setInterval(() => void loadDirectMessages(), 15_000);
-    const unsubscribe = signaling.onMessageCreated(() => void loadDirectMessages());
-    return () => { window.clearInterval(timer); unsubscribe(); };
-  }, [loadDirectMessages, messageRouteMissing, signaling]);
 
   const handleSendDirectMessage = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -308,7 +277,8 @@ export default function CommunicationsCallsPage() {
     });
     const unsubMediaReady = signaling.onCallMediaReady((event) => {
       const currentCall = activeCallRef.current;
-      if (currentCall && event.callId === currentCall.session.id) {
+      if (currentCall && event.callId === currentCall.session.id && offeredCallRef.current !== event.callId) {
+        offeredCallRef.current = event.callId;
         void (async () => {
           const offer = await webrtc.createOffer(currentCall.credentials, currentCall.modality || 'audio', (candidate) => signaling.sendWebRtcIceCandidate(event.callId, candidate));
           if (offer) signaling.sendWebRtcOffer(event.callId, offer);
@@ -459,47 +429,54 @@ export default function CommunicationsCallsPage() {
   // ============================================================================
   
   const handleCallBranch = useCallback(async (branch: BranchContact, modality: CallModality = 'audio') => {
+    if (startingCallRef.current || activeCallRef.current) return;
+    startingCallRef.current = true; setCallStarting(true);
+    let startedCallId: string | null = null;
     try {
       setError(null);
+      if (modality === 'screenshare' && !(await webrtc.startScreenShare())) return;
       const stream = await webrtc.initializeMedia({
         audio: true,
         video: modality === 'video',
       });
-      if (!stream) return;
+      if (!stream) { webrtc.disconnect(); return; }
       
       const started = await communicationAPI.callBranch(branch.branchId, 'VMS operator calling');
-      await signaling.joinCall(started.call.id);
+      startedCallId = started.call.id;
       const nextCall = { session: started.call, credentials: started.credentials, startTime: new Date(), modality };
       activeCallRef.current = nextCall;
       setActiveCall(nextCall);
+      await signaling.joinCall(started.call.id);
 
-      if (modality === 'screenshare') {
-        setTimeout(async () => {
-          await webrtc.startScreenShare();
-        }, 500);
-      }
     } catch (err: any) {
+      webrtc.disconnect();
+      activeCallRef.current = null; setActiveCall(null);
+      if (startedCallId) void communicationAPI.cancelCall(startedCallId).catch(() => {});
       console.error('[Communications] Failed to call branch:', err);
       setError(err.message || 'Failed to initiate call');
-    }
+    } finally { startingCallRef.current = false; setCallStarting(false); }
   }, [webrtc, signaling]);
   
   const handleCallEmployee = useCallback(async (
     target: { employeeId: string; deviceId?: string; employeeName?: string; branchName?: string; role?: string; employeeRole?: string },
     modality: CallModality = 'audio'
   ) => {
+    if (startingCallRef.current || activeCallRef.current) return;
+    startingCallRef.current = true; setCallStarting(true);
+    let startedCallId: string | null = null;
     try {
       setError(null);
+      if (modality === 'screenshare' && !(await webrtc.startScreenShare())) return;
       const stream = await webrtc.initializeMedia({
         audio: true,
         video: modality === 'video',
       });
-      if (!stream) return;
+      if (!stream) { webrtc.disconnect(); return; }
       
       const started = target.deviceId
         ? await communicationAPI.callRegisteredDevice(target.deviceId)
         : await communicationAPI.callEmployee(target.employeeId, 'VMS operator calling');
-      await signaling.joinCall(started.call.id);
+      startedCallId = started.call.id;
       const session = started.call;
       const enhancedSession: CallSession = {
         ...session,
@@ -510,37 +487,43 @@ export default function CommunicationsCallsPage() {
       const nextCall = { session: enhancedSession, credentials: started.credentials, startTime: new Date(), modality };
       activeCallRef.current = nextCall;
       setActiveCall(nextCall);
+      await signaling.joinCall(started.call.id);
 
-      if (modality === 'screenshare') {
-        setTimeout(async () => {
-          await webrtc.startScreenShare();
-        }, 500);
-      }
     } catch (err: any) {
+      webrtc.disconnect();
+      activeCallRef.current = null; setActiveCall(null);
+      if (startedCallId) void communicationAPI.cancelCall(startedCallId).catch(() => {});
       console.error('[Communications] Failed to call operator/employee:', err);
       setError(err.message || 'Failed to initiate call');
-    }
+    } finally { startingCallRef.current = false; setCallStarting(false); }
   }, [webrtc, signaling]);
   
   const handleAcceptCall = useCallback(async (modality: CallModality = 'video') => {
-    if (!incomingCall) return;
+    if (!incomingCall || startingCallRef.current || activeCallRef.current) return;
+    startingCallRef.current = true; setCallStarting(true);
+    let acceptedCallId: string | null = null;
     
     try {
       setError(null);
-      await webrtc.initializeMedia({ audio: true, video: modality === 'video' });
+      const stream = await webrtc.initializeMedia({ audio: true, video: modality === 'video' });
+      if (!stream) return;
       const { call, credentials } = await communicationAPI.acceptCall(incomingCall.callId);
+      acceptedCallId = call.id;
       
-      await signaling.joinCall(call.id);
       const nextCall = { session: call, credentials, startTime: new Date(), modality };
       activeCallRef.current = nextCall;
       setActiveCall(nextCall);
+      await signaling.joinCall(call.id);
       signaling.sendCallMediaReady(call.id);
       setIncomingCall(null);
     } catch (err: any) {
+      webrtc.disconnect();
+      activeCallRef.current = null; setActiveCall(null);
+      if (acceptedCallId) void communicationAPI.endCall(acceptedCallId).catch(() => {});
       console.error('[Communications] Failed to accept call:', err);
       setError(err.message || 'Failed to accept call');
       setIncomingCall(null);
-    }
+    } finally { startingCallRef.current = false; setCallStarting(false); }
   }, [incomingCall, webrtc, signaling]);
   
   const handleRejectCall = useCallback(async () => {
@@ -582,6 +565,7 @@ export default function CommunicationsCallsPage() {
   const handleCallEnd = useCallback(() => {
     webrtc.disconnect();
     activeCallRef.current = null;
+    offeredCallRef.current = null;
     setActiveCall(null);
     setCallDuration(0);
     
@@ -590,23 +574,6 @@ export default function CommunicationsCallsPage() {
       void loadCallHistory();
     }
   }, [webrtc, viewMode, loadCallHistory]);
-  
-  // ============================================================================
-  // PLAY REMOTE AUDIO
-  // ============================================================================
-  
-  useEffect(() => {
-    if (webrtc.remoteStream && audioRef.current) {
-      audioRef.current.srcObject = webrtc.remoteStream;
-      void audioRef.current.play().catch(err => {
-        console.error('[Communications] Failed to play remote audio:', err);
-      });
-    }
-  }, [webrtc.remoteStream]);
-  
-  // ============================================================================
-  // FILTERED CONTACTS
-  // ============================================================================
   
   const query = searchQuery.trim().toLowerCase();
 
@@ -639,12 +606,13 @@ export default function CommunicationsCallsPage() {
         <div className="comm-brand">
           <Phone size={24} className="comm-icon" />
           <div>
-            <h1>KryptoVision Communications</h1>
-            <p>Branch and employee calling</p>
+            <h1>Communications</h1>
+            <p>Connect with your team, wherever they work</p>
           </div>
         </div>
         
         <div className="comm-header-right">
+          <MediaDeviceCheck disabled={callStarting || !!activeCall} />
           <div className={`service-status ${signaling.connected ? 'online' : 'offline'}`}>
             <Radio size={14} className={signaling.connected ? 'pulse' : ''} />
             <span>{signaling.connected ? 'Service Online' : 'Calling Offline'}</span>
@@ -660,7 +628,7 @@ export default function CommunicationsCallsPage() {
             Refresh
           </button>
         </div>
-      <FieldVisual /></header>
+      </header>
       
       {/* View Mode Tabs */}
       <div className="view-tabs">
@@ -766,13 +734,11 @@ export default function CommunicationsCallsPage() {
                           const isSelf = currentUserId && user.employeeId === currentUserId;
                           const isSelected = selectedContact?.type === 'INTERNAL_USER' && selectedContact.user.employeeId === user.employeeId;
                           return (
-                            <button
+                            <div
                               key={`vms-user-${user.employeeId}`}
-                              type="button"
                               className={`internal-user-item ${isSelected ? 'selected' : ''}`}
-                              onClick={() => setSelectedContact({ type: 'INTERNAL_USER', user })}
                             >
-                              <div className="user-item-main">
+                              <button type="button" className="user-item-main" onClick={() => setSelectedContact({ type: 'INTERNAL_USER', user })} aria-pressed={isSelected}>
                                 <div className="user-avatar-wrap">
                                   <Shield size={15} />
                                   <span className={`presence-dot ${getPresenceColor(user.presence)}`} />
@@ -784,7 +750,7 @@ export default function CommunicationsCallsPage() {
                                   </div>
                                   <span className="user-role">{user.employeeRole || 'VMS Operator'}</span>
                                 </div>
-                              </div>
+                              </button>
 
                               <div className="quick-actions" onClick={e => e.stopPropagation()}>
                                 <button
@@ -792,7 +758,7 @@ export default function CommunicationsCallsPage() {
                                   className="quick-icon-btn"
                                   title="Video Call"
                                   onClick={() => handleCallEmployee(user, 'video')}
-                                  disabled={Boolean(isSelf) || user.presence === 'OFFLINE' || !!activeCall}
+                                  disabled={Boolean(isSelf) || user.presence === 'OFFLINE' || !!activeCall || callStarting}
                                 >
                                   <Video size={13} />
                                 </button>
@@ -801,12 +767,12 @@ export default function CommunicationsCallsPage() {
                                   className="quick-icon-btn"
                                   title="Voice Call"
                                   onClick={() => handleCallEmployee(user, 'audio')}
-                                  disabled={Boolean(isSelf) || user.presence === 'OFFLINE' || !!activeCall}
+                                  disabled={Boolean(isSelf) || user.presence === 'OFFLINE' || !!activeCall || callStarting}
                                 >
                                   <Phone size={13} />
                                 </button>
                               </div>
-                            </button>
+                            </div>
                           );
                         })}
                       </div>
@@ -882,6 +848,7 @@ export default function CommunicationsCallsPage() {
             
             {/* Contact Details Panel */}
             <main className="contact-panel">
+              <div className="panel-kicker">TEAM WORKSPACE <span>Calls & messages</span></div>
               {selectedContact ? (
                 selectedContact.type === 'BRANCH' ? (
                   <div className="contact-details">
@@ -909,7 +876,7 @@ export default function CommunicationsCallsPage() {
                         className="call-btn primary"
                         style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#fff' }}
                         onClick={() => handleCallBranch(selectedContact.branch, 'video')}
-                        disabled={selectedContact.branch.presence === 'OFFLINE' || !!activeCall}
+                        disabled={selectedContact.branch.presence === 'OFFLINE' || !!activeCall || callStarting}
                         title="Start HD Video Call"
                       >
                         <Video size={18} />
@@ -920,7 +887,7 @@ export default function CommunicationsCallsPage() {
                         type="button"
                         className="call-btn primary"
                         onClick={() => handleCallBranch(selectedContact.branch, 'audio')}
-                        disabled={selectedContact.branch.presence === 'OFFLINE' || !!activeCall}
+                        disabled={selectedContact.branch.presence === 'OFFLINE' || !!activeCall || callStarting}
                         title="Start Voice Call"
                       >
                         <Phone size={18} />
@@ -932,7 +899,7 @@ export default function CommunicationsCallsPage() {
                         className="call-btn primary"
                         style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff' }}
                         onClick={() => handleCallBranch(selectedContact.branch, 'screenshare')}
-                        disabled={selectedContact.branch.presence === 'OFFLINE' || !!activeCall}
+                        disabled={selectedContact.branch.presence === 'OFFLINE' || !!activeCall || callStarting}
                         title="Start Call with Screen Sharing"
                       >
                         <ScreenShare size={18} />
@@ -961,7 +928,7 @@ export default function CommunicationsCallsPage() {
                                   className="mini-btn"
                                   style={{ color: '#38bdf8' }}
                                   onClick={() => handleCallEmployee(employee, 'video')}
-                                  disabled={employee.presence === 'OFFLINE' || !!activeCall}
+                                  disabled={employee.presence === 'OFFLINE' || !!activeCall || callStarting}
                                   title="Video Call"
                                 >
                                   <Video size={13} />
@@ -971,7 +938,7 @@ export default function CommunicationsCallsPage() {
                                   type="button"
                                   className="mini-btn"
                                   onClick={() => handleCallEmployee(employee, 'audio')}
-                                  disabled={employee.presence === 'OFFLINE' || !!activeCall}
+                                  disabled={employee.presence === 'OFFLINE' || !!activeCall || callStarting}
                                   title="Voice Call"
                                 >
                                   <Phone size={13} />
@@ -1015,7 +982,7 @@ export default function CommunicationsCallsPage() {
                         className="call-btn primary"
                         style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#fff' }}
                         onClick={() => handleCallEmployee(selectedContact.user, 'video')}
-                        disabled={currentUserId === selectedContact.user.employeeId || selectedContact.user.presence === 'OFFLINE' || !!activeCall}
+                        disabled={currentUserId === selectedContact.user.employeeId || selectedContact.user.presence === 'OFFLINE' || !!activeCall || callStarting}
                         title="Start HD Video Call"
                       >
                         <Video size={18} />
@@ -1026,7 +993,7 @@ export default function CommunicationsCallsPage() {
                         type="button"
                         className="call-btn primary"
                         onClick={() => handleCallEmployee(selectedContact.user, 'audio')}
-                        disabled={currentUserId === selectedContact.user.employeeId || selectedContact.user.presence === 'OFFLINE' || !!activeCall}
+                        disabled={currentUserId === selectedContact.user.employeeId || selectedContact.user.presence === 'OFFLINE' || !!activeCall || callStarting}
                         title="Start Voice Call"
                       >
                         <Phone size={18} />
@@ -1038,7 +1005,7 @@ export default function CommunicationsCallsPage() {
                         className="call-btn primary"
                         style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff' }}
                         onClick={() => handleCallEmployee(selectedContact.user, 'screenshare')}
-                        disabled={currentUserId === selectedContact.user.employeeId || selectedContact.user.presence === 'OFFLINE' || !!activeCall}
+                        disabled={currentUserId === selectedContact.user.employeeId || selectedContact.user.presence === 'OFFLINE' || !!activeCall || callStarting}
                         title="Start Call with Screen Sharing"
                       >
                         <ScreenShare size={18} />
@@ -1056,8 +1023,8 @@ export default function CommunicationsCallsPage() {
                         <span className="value">Central SOC / {selectedContact.user.branchName || 'Command Center'}</span>
                       </div>
                       <div className="info-box">
-                        <span className="label">Signaling Channel</span>
-                        <span className="value" style={{ color: '#22c55e' }}>Secure Direct WebRTC</span>
+                        <span className="label">Availability</span>
+                        <span className="value">{getPresenceText(selectedContact.user.presence)}</span>
                       </div>
                       <div className="info-box">
                         <span className="label">Call Capabilities</span>
@@ -1089,7 +1056,7 @@ export default function CommunicationsCallsPage() {
                         className="call-btn primary"
                         style={{ background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', color: '#fff' }}
                         onClick={() => handleCallEmployee(selectedContact.employee, 'video')}
-                        disabled={selectedContact.employee.presence === 'OFFLINE' || !!activeCall}
+                        disabled={selectedContact.employee.presence === 'OFFLINE' || !!activeCall || callStarting}
                         title="Start HD Video Call"
                       >
                         <Video size={18} />
@@ -1100,7 +1067,7 @@ export default function CommunicationsCallsPage() {
                         type="button"
                         className="call-btn primary"
                         onClick={() => handleCallEmployee(selectedContact.employee, 'audio')}
-                        disabled={selectedContact.employee.presence === 'OFFLINE' || !!activeCall}
+                        disabled={selectedContact.employee.presence === 'OFFLINE' || !!activeCall || callStarting}
                         title="Start Voice Call"
                       >
                         <Phone size={18} />
@@ -1112,7 +1079,7 @@ export default function CommunicationsCallsPage() {
                         className="call-btn primary"
                         style={{ background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', color: '#fff' }}
                         onClick={() => handleCallEmployee(selectedContact.employee, 'screenshare')}
-                        disabled={selectedContact.employee.presence === 'OFFLINE' || !!activeCall}
+                        disabled={selectedContact.employee.presence === 'OFFLINE' || !!activeCall || callStarting}
                         title="Start Call with Screen Sharing"
                       >
                         <ScreenShare size={18} />
@@ -1128,13 +1095,15 @@ export default function CommunicationsCallsPage() {
                   <p>Choose an internal VMS operator or branch to initiate calls</p>
                 </div>
               )}
-              <section style={{ margin: '16px', padding: '16px', border: '1px solid #334155', borderRadius: '16px', background: '#0f172a', color: '#fff' }}>
+              <section className="message-thread" style={{ margin: '16px', padding: '16px', border: '1px solid #334155', borderRadius: '16px', background: 'var(--surface)', color: 'var(--ink)' }}>
                 <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700 }}><MessageSquare size={16} /> Messages</h3>
                 <div style={{ maxHeight: '180px', overflowY: 'auto', margin: '12px 0', display: 'grid', gap: '8px' }} aria-live="polite">
-                  {messagesError ? <p role="status" style={{ color: '#fca5a5', fontSize: '12px' }}>{messagesError}</p> :
+                  {!selectedContact ? <p style={{ color: '#94a3b8', fontSize: '12px' }}>Select a contact or branch to view messages.</p> :
+                    messagesError ? <p role="status" style={{ color: '#fca5a5', fontSize: '12px' }}>{messagesError}</p> :
+                    messagesLoading ? <p style={{ color: '#94a3b8', fontSize: '12px' }}>Loading messages...</p> :
                     directMessages.length === 0 ? <p style={{ color: '#94a3b8', fontSize: '12px' }}>No messages yet.</p> :
                     directMessages.slice(-20).map((message) => (
-                      <div key={message.id} style={{ background: '#1e293b', padding: '8px 10px', borderRadius: '8px', fontSize: '12px' }}>
+                      <div key={message.id} style={{ background: 'var(--surface-soft)', padding: '10px 12px', borderRadius: '8px', fontSize: '12px' }}>
                         <div style={{ color: '#94a3b8' }}>{message.senderId === currentUserId ? 'You' : message.senderName || message.senderType} · {new Date(message.createdAt).toLocaleString()}</div>
                         <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{message.body}</div>
                       </div>
@@ -1143,7 +1112,7 @@ export default function CommunicationsCallsPage() {
                 <form onSubmit={handleSendDirectMessage} style={{ display: 'flex', gap: '8px' }}>
                   <input value={directMessageText} onChange={(event) => setDirectMessageText(event.target.value)} maxLength={4000}
                     placeholder={selectedContact ? 'Write a message to the selected contact' : 'Select a contact or branch to message'}
-                    style={{ minWidth: 0, flex: 1, padding: '9px', borderRadius: '8px', border: '1px solid #475569', background: '#020617', color: '#fff' }} />
+                    style={{ minWidth: 0, flex: 1, padding: '9px', borderRadius: '8px', border: '1px solid #475569', background: 'var(--canvas)', color: 'var(--ink)' }} />
                   <button type="submit" disabled={messageRouteMissing || !selectedContact || !directMessageText.trim()}
                     style={{ padding: '9px 14px', borderRadius: '8px', background: '#2563eb', color: '#fff', opacity: messageRouteMissing || !selectedContact || !directMessageText.trim() ? 0.5 : 1 }}>Send</button>
                 </form>
@@ -1263,145 +1232,20 @@ export default function CommunicationsCallsPage() {
         )}
       </div>
       
-      {/* Active Call Overlay */}
+      {/* Active Call Workspace */}
       {activeCall && (
-        <div className="call-overlay">
-          <div className="call-card">
-            <div className="call-card-header">
-              <div className="call-info">
-                {activeCall.session.targetBranchId && (
-                  <>
-                    <Building2 size={24} />
-                    <div>
-                      <h3>{activeCall.session.targetBranchName || 'Branch'}</h3>
-                      <p className="call-subtitle">Branch call</p>
-                    </div>
-                  </>
-                )}
-                {activeCall.session.targetEmployeeId && (
-                  <>
-                    {activeCall.session.targetBranchId ? (
-                      <User size={24} />
-                    ) : (
-                      <Shield size={24} style={{ color: '#38bdf8' }} />
-                    )}
-                    <div>
-                      <h3>{activeCall.session.targetEmployeeName || 'Operator'}</h3>
-                      <p className="call-subtitle">{activeCall.session.targetBranchName || 'Internal VMS Operator'}</p>
-                    </div>
-                  </>
-                )}
-              </div>
-              
-              <div className="call-status-indicator">
-                <span className={`status-dot ${activeCall.session.status === 'CONNECTED' ? 'connected' : 'ringing'}`} />
-                <span>{getCallStatusText(activeCall.session.status)}</span>
-              </div>
-            </div>
-            
-            <div className="call-duration">
-              {activeCall.session.status === 'CONNECTED' ? (
-                <span className="duration-text">{formatCallDuration(callDuration)}</span>
-              ) : activeCall.session.status === 'RINGING' ? (
-                <span className="ringing-text">Ringing...</span>
-              ) : (
-                <span className="connecting-text">{getCallStatusText(activeCall.session.status)}</span>
-              )}
-            </div>
-            
-            {/* Video Stage if camera or screen sharing is active */}
-            {(webrtc.cameraEnabled || webrtc.isScreenSharing || webrtc.remoteStream?.getVideoTracks().length) ? (
-              <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', borderRadius: '12px', overflow: 'hidden', margin: '16px 0', border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <video
-                  ref={remoteVideoRef}
-                  autoPlay
-                  playsInline
-                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                />
-                {(webrtc.cameraEnabled || webrtc.isScreenSharing) && (
-                  <div style={{ position: 'absolute', bottom: '12px', right: '12px', width: '120px', aspectRatio: '16/9', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.3)', background: '#0f172a' }}>
-                    <video
-                      ref={localVideoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                    <div style={{ position: 'absolute', top: '2px', left: '4px', fontSize: '9px', fontFamily: 'monospace', background: 'rgba(0,0,0,0.6)', color: '#fff', padding: '1px 4px', borderRadius: '4px' }}>
-                      {webrtc.isScreenSharing ? 'Screen' : 'You'}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : null}
-
-            {activeCall.session.status === 'CONNECTED' && (
-              <>
-                <div className="call-controls">
-                  <button
-                    type="button"
-                    className={`control-btn ${webrtc.microphoneEnabled ? 'active' : 'muted'}`}
-                    onClick={() => webrtc.toggleMute()}
-                  >
-                    {webrtc.microphoneEnabled ? <Mic size={20} /> : <MicOff size={20} />}
-                    <span>{webrtc.microphoneEnabled ? 'Mute' : 'Unmute'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`control-btn ${webrtc.cameraEnabled ? 'active' : ''}`}
-                    onClick={() => void webrtc.toggleCamera()}
-                  >
-                    {webrtc.cameraEnabled ? <Video size={20} /> : <VideoOff size={20} />}
-                    <span>{webrtc.cameraEnabled ? 'Cam Off' : 'Cam On'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className={`control-btn ${webrtc.isScreenSharing ? 'active' : ''}`}
-                    onClick={() => {
-                      if (webrtc.isScreenSharing) {
-                        void webrtc.stopScreenShare();
-                      } else {
-                        void webrtc.startScreenShare();
-                      }
-                    }}
-                  >
-                    <ScreenShare size={20} />
-                    <span>{webrtc.isScreenSharing ? 'Stop Share' : 'Share Screen'}</span>
-                  </button>
-                </div>
-                
-                {webrtc.quality && (
-                  <div className="call-quality">
-                    <span>Connection Quality:</span>
-                    <span className={getQualityColor(
-                      webrtc.quality.rtt && webrtc.quality.rtt < 150 ? 'GOOD' :
-                      webrtc.quality.rtt && webrtc.quality.rtt < 300 ? 'DEGRADED' : 'POOR'
-                    )}>
-                      {webrtc.quality.rtt && webrtc.quality.rtt < 150 ? 'GOOD' :
-                       webrtc.quality.rtt && webrtc.quality.rtt < 300 ? 'DEGRADED' : 'POOR'}
-                    </span>
-                    {webrtc.quality.rtt && (
-                      <span className="quality-detail">RTT: {webrtc.quality.rtt.toFixed(0)}ms</span>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-            
-            <button
-              type="button"
-              className="end-call-btn"
-              onClick={activeCall.session.status === 'CONNECTED' ? handleEndCall : handleCancelCall}
-            >
-              <PhoneOff size={20} />
-              {activeCall.session.status === 'CONNECTED' ? 'End Call' : 'Cancel'}
-            </button>
+        <div className="call-overlay" role="dialog" aria-modal="true" aria-label="Call workspace">
+          <div className="call-workspace-container">
+            <CallWorkspace media={webrtc}
+              peerName={activeCall.session.direction === 'INBOUND'
+                ? activeCall.session.sourceEmployeeName || activeCall.session.sourceBranchName || 'Incoming caller'
+                : activeCall.session.targetEmployeeName || activeCall.session.targetBranchName || 'Call participant'}
+              status={activeCall.session.status} duration={formatCallDuration(callDuration)}
+              onEnd={() => void (activeCall.session.status === 'CONNECTED' || webrtc.state === 'CONNECTED' ? handleEndCall() : handleCancelCall())} />
           </div>
         </div>
       )}
-      
+
       {/* Incoming Call Modal */}
       {incomingCall && !activeCall && (
         <div className="incoming-call-modal">
@@ -1459,8 +1303,6 @@ export default function CommunicationsCallsPage() {
         </div>
       )}
       
-      {/* Hidden audio element for remote stream */}
-      <audio ref={audioRef} autoPlay playsInline />
       
       <style jsx>{`
         .communications-page {
@@ -2302,158 +2144,6 @@ export default function CommunicationsCallsPage() {
           backdrop-filter: blur(4px);
         }
         
-        .call-card {
-          width: min(100%, 400px);
-          padding: 32px 24px;
-          background: var(--surface);
-          border: 1px solid var(--line);
-          border-radius: 16px;
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-        }
-        
-        .call-card-header {
-          margin-bottom: 24px;
-        }
-        
-        .call-info {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          margin-bottom: 12px;
-        }
-        
-        .call-info h3 {
-          margin: 0;
-          font-size: 20px;
-          font-weight: 700;
-        }
-        
-        .call-subtitle {
-          margin: 4px 0 0;
-          font-size: 14px;
-          color: var(--muted);
-        }
-        
-        .call-status-indicator {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px 12px;
-          background: var(--surface-soft);
-          border-radius: 6px;
-          font-size: 14px;
-          font-weight: 600;
-        }
-        
-        .status-dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-        }
-        
-        .status-dot.connected {
-          background: #22c55e;
-          box-shadow: 0 0 8px #22c55e;
-        }
-        
-        .status-dot.ringing {
-          background: #3b82f6;
-          animation: pulse 2s ease-in-out infinite;
-        }
-        
-        .call-duration {
-          text-align: center;
-          margin-bottom: 24px;
-        }
-        
-        .duration-text {
-          font-size: 48px;
-          font-weight: 700;
-          font-family: monospace;
-          color: var(--ink);
-        }
-        
-        .ringing-text, .connecting-text {
-          font-size: 18px;
-          color: var(--muted);
-        }
-        
-        .call-controls {
-          display: flex;
-          justify-content: center;
-          gap: 16px;
-          margin-bottom: 16px;
-        }
-        
-        .control-btn {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 6px;
-          padding: 16px 24px;
-          border: 1px solid var(--line);
-          border-radius: 12px;
-          background: var(--surface-soft);
-          color: var(--muted);
-          font-size: 13px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .control-btn:hover {
-          background: var(--blue-soft);
-          border-color: var(--blue);
-          color: var(--blue-dark);
-        }
-        
-        .control-btn.active {
-          background: var(--blue-soft);
-          border-color: var(--blue);
-          color: var(--blue-dark);
-        }
-        
-        .control-btn.muted {
-          background: rgba(239, 68, 68, 0.1);
-          border-color: rgba(239, 68, 68, 0.3);
-          color: #ef4444;
-        }
-        
-        .call-quality {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          margin-bottom: 16px;
-          font-size: 13px;
-        }
-        
-        .quality-detail {
-          color: var(--muted);
-          font-size: 12px;
-        }
-        
-        .end-call-btn {
-          width: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          padding: 14px;
-          border: none;
-          border-radius: 12px;
-          background: #ef4444;
-          color: white;
-          font-size: 16px;
-          font-weight: 700;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .end-call-btn:hover {
-          background: #dc2626;
-        }
-        
         .incoming-call-modal {
           position: fixed;
           inset: 0;
@@ -2539,6 +2229,44 @@ export default function CommunicationsCallsPage() {
           background: #16a34a;
         }
         
+        .communications-page { height: calc(100dvh - 80px); min-height: 580px; }
+        .comm-header { padding: 22px 28px; gap: 20px; }
+        .comm-brand h1 { font-size: 23px; letter-spacing: -.04em; }
+        .comm-icon { padding: 10px; width: 44px; height: 44px; border-radius: 13px; background: var(--blue-soft); border: 1px solid var(--line); }
+        .view-tabs { padding: 12px 28px; gap: 8px; }
+        .view-tab { border-radius: 9px; font-size: 12px; padding: 9px 16px; }
+        .directory-sidebar { width: 340px; }
+        .search-box { padding: 18px 16px; border-bottom: none; }
+        .search-box input { padding: 10px; border-radius: 9px; min-width: 0; }
+        .directory-section-header { text-transform: uppercase; font-size: 9px; letter-spacing: .08em; padding: 18px 16px 10px; }
+        .internal-user-item, .branch-item { border-radius: 10px; margin: 4px 10px; width: calc(100% - 20px); padding: 13px 12px; }
+        button.user-item-main { flex: 1; min-width: 0; border: none; background: transparent; padding: 0; color: inherit; text-align: left; cursor: pointer; }
+        .contact-panel { padding: 28px; background: var(--canvas); }
+        .panel-kicker { display: flex; align-items: center; justify-content: space-between; max-width: 780px; font-size: 9px; letter-spacing: .13em; font-weight: 650; color: var(--muted); margin-bottom: 23px; }
+        .panel-kicker span { letter-spacing: 0; font-size: 11px; font-weight: 400; }
+        .contact-details { max-width: 780px; padding: 26px; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; }
+        .contact-header h2 { font-size: 25px; letter-spacing: -.035em; }
+        .contact-actions { gap: 10px; }
+        .operator-details-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .call-btn { border-radius: 10px; font-size: 12px; padding: 12px 17px; }
+        .message-thread { max-width: 780px; margin: 18px 0 0 !important; padding: 22px !important; border-color: var(--line) !important; }
+        .empty-selection { max-width: 780px; min-height: 300px; background: var(--surface); border: 1px dashed var(--line); border-radius: 18px; }
+        .empty-selection h3 { font-size: 22px; letter-spacing: -.03em; }
+        .call-overlay { padding: 24px; overflow-y: auto; background: #030917bd; backdrop-filter: blur(10px); }
+        .call-workspace-container { width: min(1040px, 100%); max-height: calc(100dvh - 48px); overflow-y: auto; border-radius: 22px; }
+        @media (max-width: 600px) {
+          .communications-page { height: auto; min-height: calc(100dvh - 60px); }
+          .comm-header { flex-wrap: wrap; padding: 16px; }
+          .comm-header-right { width: 100%; flex-wrap: wrap; gap: 8px; }
+          .comm-brand h1 { font-size: 20px; }
+          .view-tabs { padding: 12px 16px; }
+          .contact-panel { padding: 16px; max-height: none !important; }
+          .contact-details { padding: 18px; }
+          .contact-actions { flex-wrap: wrap; }
+          .call-btn { flex: 1; justify-content: center; }
+          .call-overlay { padding: 10px; }
+          .call-workspace-container { max-height: calc(100dvh - 20px); }
+        }
         @media (max-width: 768px) {
           .comm-content {
             flex-direction: column;

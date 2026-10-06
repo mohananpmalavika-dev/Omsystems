@@ -2,16 +2,19 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
-  Phone, PhoneOff, Mic, MicOff, Video, VideoOff, 
-  ScreenShare, Volume2, AlertCircle, User, Building2, 
+  Phone, PhoneOff, Video,
+  ScreenShare, AlertCircle, User, Building2,
   Radio, Clock, CheckCircle2, RefreshCw, Laptop, 
   Smartphone, ShieldCheck, Camera, Disc, MessageSquare, 
-  Send, Paperclip, Minimize2, Megaphone, Maximize2, X
+  Send, Paperclip, Minimize2, Megaphone, X
 } from 'lucide-react';
+import { CallWorkspace } from '@/components/communications/call-workspace';
+import { MediaDeviceCheck } from '@/components/communications/media-device-check';
 import { communicationAPI } from '@/services/communication-api';
 import { useCommunicationSignaling } from '@/hooks/use-communication-signaling';
+import { useDirectMessages } from '@/hooks/use-direct-messages';
 import { useWebRTCCall, type CallModality } from '@/hooks/use-webrtc-call';
-import type { BranchContact, CallSession, CommunicationEmployee, DirectMessage, WebRTCCredentials } from '@/services/communication-api';
+import type { BranchContact, CallSession, CommunicationEmployee, WebRTCCredentials } from '@/services/communication-api';
 import type { CallInviteEvent } from '@/hooks/use-communication-signaling';
 
 interface BranchOption {
@@ -57,7 +60,6 @@ export default function KryptoVisionConnectPage() {
   const [linkedEmployees, setLinkedEmployees] = useState<CommunicationEmployee[]>([]);
   const [deviceDirectory, setDeviceDirectory] = useState<BranchContact[]>([]);
   const [vmsUsers, setVmsUsers] = useState<CommunicationEmployee[]>([]);
-  const [directMessages, setDirectMessages] = useState<DirectMessage[]>([]);
   const [directMessageText, setDirectMessageText] = useState('');
   const [loadingCallDirectory, setLoadingCallDirectory] = useState(false);
   const [callTarget, setCallTarget] = useState<DeviceCallTarget>({ type: 'VMS', label: 'VMS Command Center' });
@@ -76,9 +78,12 @@ export default function KryptoVisionConnectPage() {
   // Calling state
   const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
   const activeCallRef = useRef<ActiveCall | null>(null);
+  const offeredCallRef = useRef<string | null>(null);
   const [incomingCall, setIncomingCall] = useState<CallInviteEvent | null>(null);
   const [callDuration, setCallDuration] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [callStarting, setCallStarting] = useState(false);
+  const startingCallRef = useRef(false);
 
   // In-Call Tools Drawer (Chat, Evidence, CCTV inject)
   const [activeDrawer, setActiveDrawer] = useState<'none' | 'chat' | 'cctv'>('none');
@@ -90,10 +95,14 @@ export default function KryptoVisionConnectPage() {
   // Media & WebRTC
   const signaling = useCommunicationSignaling('device');
   const webrtc = useWebRTCCall();
+  const messageContactType = callTarget.type === 'VMS' ? undefined
+    : callTarget.type === 'VMS_USER' ? 'OPERATOR' : callTarget.type === 'BRANCH' ? 'BRANCH' : 'DEVICE';
+  const messageContactId = callTarget.type === 'VMS' ? undefined : callTarget.id;
+  const { directMessages, messagesError, messageRouteMissing, messagesLoading, loadDirectMessages } =
+    useDirectMessages(messageContactType, messageContactId, signaling.onMessageCreated, true,
+      deviceEnrolled && deviceStatus === 'ACTIVE');
 
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
-  const localVideoRef = useRef<HTMLVideoElement | null>(null);
-  const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const durationIntervalRef = useRef<number | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -209,19 +218,6 @@ export default function KryptoVisionConnectPage() {
       })
       .finally(() => setLoadingCallDirectory(false));
   }, [deviceEnrolled, deviceStatus, linkedEmployee?.id]);
-
-  const loadDirectMessages = useCallback(async () => {
-    try { setDirectMessages(await communicationAPI.getDirectMessages(true)); }
-    catch (cause) { console.warn('[Connect Device] Messages unavailable', cause); }
-  }, []);
-
-  useEffect(() => {
-    if (!deviceEnrolled || deviceStatus !== 'ACTIVE') return;
-    void loadDirectMessages();
-    const timer = window.setInterval(() => void loadDirectMessages(), 15_000);
-    const unsubscribe = signaling.onMessageCreated(() => void loadDirectMessages());
-    return () => { window.clearInterval(timer); unsubscribe(); };
-  }, [deviceEnrolled, deviceStatus, loadDirectMessages, signaling]);
 
   // The single-use admin code supplies the branch. Setup needs no VMS session.
   const resolveEnrollmentCode = async () => {
@@ -396,11 +392,13 @@ export default function KryptoVisionConnectPage() {
 
     const unsubAccepted = signaling.onCallAccepted((event) => {
       if (!activeCall || event.callId !== activeCall.session.id) return;
+      setActiveCall(prev => prev ? { ...prev, session: { ...prev.session, status: 'CONNECTED' } } : null);
     });
 
     const unsubMediaReady = signaling.onCallMediaReady((event) => {
       const currentCall = activeCallRef.current;
-      if (!currentCall || event.callId !== currentCall.session.id) return;
+      if (!currentCall || event.callId !== currentCall.session.id || offeredCallRef.current === event.callId) return;
+      offeredCallRef.current = event.callId;
       void (async () => {
         const offer = await webrtc.createOffer(currentCall.credentials, currentCall.modality, (candidate) => signaling.sendWebRtcIceCandidate(event.callId, candidate));
         if (offer) signaling.sendWebRtcOffer(event.callId, offer);
@@ -494,21 +492,6 @@ export default function KryptoVisionConnectPage() {
     };
   }, [activeCall]);
 
-  // 6. Connect video/audio streams to video/audio tags
-  useEffect(() => {
-    if (remoteVideoRef.current && webrtc.remoteStream) {
-      remoteVideoRef.current.srcObject = webrtc.remoteStream;
-      remoteVideoRef.current.play().catch(() => {});
-    }
-  }, [webrtc.remoteStream]);
-
-  useEffect(() => {
-    if (localVideoRef.current && webrtc.localStream) {
-      localVideoRef.current.srcObject = webrtc.localStream;
-      localVideoRef.current.play().catch(() => {});
-    }
-  }, [webrtc.localStream]);
-
   // Keyboard shortcut for PTT (Spacebar hold to talk)
   useEffect(() => {
     if (!webrtc.isPttMode || !activeCall) return;
@@ -537,14 +520,18 @@ export default function KryptoVisionConnectPage() {
 
   // 7. Make a password-less call as the registered device or current shift user.
   const handleStartCall = async (modality: CallModality, target: DeviceCallTarget = callTarget) => {
+    if (startingCallRef.current || activeCallRef.current) return;
+    startingCallRef.current = true; setCallStarting(true);
+    let startedCallId: string | null = null;
     try {
       setError(null);
       if (deviceStatus !== 'ACTIVE') throw new Error('Device is awaiting administrator approval');
+      if (modality === 'screenshare' && !(await webrtc.startScreenShare())) return;
       const stream = await webrtc.initializeMedia({
         audio: true,
         video: modality === 'video',
       });
-      if (!stream) return;
+      if (!stream) { webrtc.disconnect(); return; }
 
       const actorEmployeeId = linkedEmployees.some((employee) => employee.employeeId === linkedEmployee?.id)
         ? linkedEmployee?.id : undefined;
@@ -556,20 +543,19 @@ export default function KryptoVisionConnectPage() {
         : target.type === 'BRANCH'
           ? await communicationAPI.callDeviceBranch(target.id, actorEmployeeId)
           : await communicationAPI.callDeviceToDevice(target.id, actorEmployeeId);
-      await signaling.joinCall(started.call.id);
+      startedCallId = started.call.id;
       const nextCall = { session: started.call, credentials: started.credentials, startTime: new Date(), modality, peerLabel: target.label };
       activeCallRef.current = nextCall;
       setActiveCall(nextCall);
+      await signaling.joinCall(started.call.id);
 
-      if (modality === 'screenshare') {
-        setTimeout(async () => {
-          await webrtc.startScreenShare();
-        }, 600);
-      }
     } catch (err: any) {
+      webrtc.disconnect();
+      activeCallRef.current = null; setActiveCall(null);
+      if (startedCallId) void communicationAPI.cancelCall(startedCallId, true).catch(() => {});
       console.error('[Connect Device] Call initiation failed:', err);
       setError(err.message || `Failed to call ${target.label}`);
-    }
+    } finally { startingCallRef.current = false; setCallStarting(false); }
   };
 
   const handleSendDirectMessage = async (event: React.FormEvent) => {
@@ -602,11 +588,15 @@ export default function KryptoVisionConnectPage() {
 
   // Accept incoming call
   const handleAcceptCall = async (modality: CallModality = 'video') => {
-    if (!incomingCall) return;
+    if (!incomingCall || startingCallRef.current || activeCallRef.current) return;
+    startingCallRef.current = true; setCallStarting(true);
+    let acceptedCallId: string | null = null;
     try {
       setError(null);
-      await webrtc.initializeMedia({ audio: true, video: modality === 'video' });
+      const stream = await webrtc.initializeMedia({ audio: true, video: modality === 'video' });
+      if (!stream) return;
       const { call, credentials } = await communicationAPI.acceptCall(incomingCall.callId, true);
+      acceptedCallId = call.id;
 
       const nextCall = {
         session: call,
@@ -622,10 +612,13 @@ export default function KryptoVisionConnectPage() {
       await signaling.joinCall(call.id);
       signaling.sendCallMediaReady(call.id);
     } catch (err: any) {
+      webrtc.disconnect();
+      activeCallRef.current = null; setActiveCall(null);
+      if (acceptedCallId) void communicationAPI.endCall(acceptedCallId, true).catch(() => {});
       console.error('[Connect Device] Failed to accept call:', err);
       setError(err.message || 'Failed to accept call');
       setIncomingCall(null);
-    }
+    } finally { startingCallRef.current = false; setCallStarting(false); }
   };
 
   const handleRejectCall = async () => {
@@ -641,7 +634,8 @@ export default function KryptoVisionConnectPage() {
   const handleEndCall = async () => {
     if (!activeCall) return;
     try {
-      await communicationAPI.endCall(activeCall.session.id, true);
+      if (activeCall.session.status === 'CONNECTED' || webrtc.state === 'CONNECTED') await communicationAPI.endCall(activeCall.session.id, true);
+      else await communicationAPI.cancelCall(activeCall.session.id, true);
       handleCallEnd();
     } catch {
       handleCallEnd();
@@ -651,6 +645,7 @@ export default function KryptoVisionConnectPage() {
   const handleCallEnd = () => {
     webrtc.disconnect();
     activeCallRef.current = null;
+    offeredCallRef.current = null;
     setActiveCall(null);
     setCallDuration(0);
     setActiveDrawer('none');
@@ -843,14 +838,11 @@ export default function KryptoVisionConnectPage() {
   // VIEW: REGISTERED CALLING KIOSK (Isolated Calling Experience)
   // ============================================================================
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between p-4 sm:p-6 select-none">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col p-4 sm:p-6">
       {/* Top Status Bar */}
-      <header className="w-full max-w-5xl mx-auto flex items-center justify-between py-3 px-4 rounded-2xl bg-slate-900/80 border border-slate-800/80 backdrop-blur-md">
+      <header className="w-full max-w-6xl mx-auto flex flex-wrap gap-4 items-center justify-between py-3 px-4 rounded-2xl bg-slate-900/80 border border-slate-800/80 backdrop-blur-md">
         <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse" />
-            <div className="absolute inset-0 rounded-full bg-blue-500/40 animate-ping" />
-          </div>
+          <div className="w-10 h-10 rounded-xl border border-slate-700 bg-slate-800 flex items-center justify-center text-blue-300"><Phone className="w-5 h-5" /></div>
           <div>
             <div className="text-sm font-bold text-white flex items-center gap-2">
               {deviceName}
@@ -873,6 +865,7 @@ export default function KryptoVisionConnectPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <MediaDeviceCheck disabled={callStarting || !!activeCall} />
           {/* PA Emergency Broadcast button */}
           <button
             onClick={() => void handleTriggerPaAnnouncement()}
@@ -898,13 +891,16 @@ export default function KryptoVisionConnectPage() {
       </header>
 
       {deviceStatus !== 'ACTIVE' && (
-        <div className="w-full max-w-5xl mx-auto mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+        <div className="w-full max-w-6xl mx-auto mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           This device is registered and awaiting administrator approval. Calling becomes available after approval.
         </div>
       )}
 
       {/* Main Calling Stage */}
-      <main className="w-full max-w-5xl mx-auto my-auto py-4">
+      <main className="w-full max-w-6xl mx-auto my-auto py-4">
+        {webrtc.error && !activeCall && <div role="alert" className="mb-5 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />{webrtc.error}
+        </div>}
         {error && (
           <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-sm flex items-center gap-2 max-w-lg mx-auto">
             <AlertCircle className="w-5 h-5 shrink-0" />
@@ -914,87 +910,13 @@ export default function KryptoVisionConnectPage() {
 
         {/* ACTIVE CALL STAGE */}
         {activeCall ? (
-          <div className="w-full bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl p-4 sm:p-6 space-y-4">
-            {/* Call Header */}
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-3.5 h-3.5 rounded-full bg-blue-500 animate-ping" />
-                <div>
-                  <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                    Call in Progress
-                    {webrtc.isRecording && (
-                      <span className="flex items-center gap-1 text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse">
-                        <Disc className="w-3 h-3 text-red-500 animate-spin" />
-                        REC {formatCallDuration(webrtc.recordingDuration)}
-                      </span>
-                    )}
-                  </h2>
-                  <p className="text-xs text-slate-400 font-mono">
-                    Connected with {activeCall.peerLabel} • {formatCallDuration(callDuration)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Call Telemetry Badges */}
-              <div className="flex items-center gap-2 text-xs font-mono">
-                {webrtc.quality.rtt && (
-                  <span className="px-2 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700">
-                    RTT: {webrtc.quality.rtt}ms
-                  </span>
-                )}
-                {webrtc.quality.packetLoss !== undefined && (
-                  <span className="px-2 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700">
-                    Loss: {webrtc.quality.packetLoss}%
-                  </span>
-                )}
-              </div>
-            </div>
-
+          <div className="w-full space-y-4">
             {/* Video Canvas Container & Side Drawer */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-              <div className={`${activeDrawer !== 'none' ? 'lg:col-span-3' : 'lg:col-span-4'} relative w-full aspect-video bg-black rounded-2xl overflow-hidden flex items-center justify-center border border-slate-800 shadow-inner`}>
-                {/* Remote Stream Video */}
-                <video
-                  ref={remoteVideoRef}
-                  autoPlay
-                  playsInline
-                  className="w-full h-full object-contain"
-                />
-
-                {/* Local PiP Thumbnail */}
-                {webrtc.cameraEnabled || webrtc.isScreenSharing ? (
-                  <div className="absolute bottom-4 right-4 w-40 aspect-video rounded-xl overflow-hidden border-2 border-slate-700 shadow-2xl bg-slate-950">
-                    <video
-                      ref={localVideoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute top-1 left-1.5 text-[9px] font-mono px-1.5 py-0.5 rounded bg-black/60 text-white">
-                      {webrtc.isScreenSharing ? 'Screen' : 'You'}
-                    </div>
-                  </div>
-                ) : null}
-
-                {/* Voice-only Graphic if no video tracks */}
-                {!webrtc.remoteStream?.getVideoTracks().length && (
-                  <div className="text-center space-y-3 p-6">
-                    <div className="w-20 h-20 rounded-full bg-blue-600/20 border-2 border-blue-500/40 text-blue-400 flex items-center justify-center mx-auto animate-pulse">
-                      <Radio className="w-10 h-10" />
-                    </div>
-                    <div className="text-sm font-semibold text-slate-300">Voice Audio Active</div>
-                    <div className="text-xs text-slate-400">VMS Command Center Operator</div>
-                  </div>
-                )}
-
-                {/* PTT Active Banner overlay */}
-                {webrtc.isPttMode && webrtc.isPttActive && (
-                  <div className="absolute top-4 left-4 px-3 py-1.5 rounded-full bg-blue-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-lg animate-pulse">
-                    <Radio className="w-4 h-4 animate-spin" />
-                    TRANSMITTING (PTT)
-                  </div>
-                )}
+              <div className={activeDrawer !== 'none' ? 'lg:col-span-3' : 'lg:col-span-4'}>
+                <CallWorkspace media={webrtc} peerName={activeCall.peerLabel}
+                  status={activeCall.session.status} duration={formatCallDuration(callDuration)}
+                  onEnd={() => void handleEndCall()} remoteVideoRef={remoteVideoRef} />
               </div>
 
               {/* In-Call Side Drawer (Chat / CCTV Inject) */}
@@ -1119,20 +1041,7 @@ export default function KryptoVisionConnectPage() {
                   <Radio className={`w-4 h-4 ${webrtc.isPttActive ? 'animate-spin' : ''}`} />
                   {webrtc.isPttActive ? 'Transmitting...' : 'Hold PTT to Talk'}
                 </button>
-              ) : (
-                /* Regular Mic Mute */
-                <button
-                  onClick={() => webrtc.toggleMute()}
-                  className={`p-3 px-3.5 rounded-2xl flex items-center gap-1.5 font-medium text-xs transition-all ${
-                    webrtc.microphoneEnabled
-                      ? 'bg-slate-800 hover:bg-slate-700 text-white'
-                      : 'bg-red-500/20 text-red-300 border border-red-500/40'
-                  }`}
-                >
-                  {webrtc.microphoneEnabled ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4 text-red-400" />}
-                  {webrtc.microphoneEnabled ? 'Mute' : 'Unmuted'}
-                </button>
-              )}
+              ) : null}
 
               {/* PTT Mode Switch */}
               <button
@@ -1145,38 +1054,6 @@ export default function KryptoVisionConnectPage() {
                 title="Toggle Walkie-Talkie Push-to-Talk Mode"
               >
                 PTT Mode: {webrtc.isPttMode ? 'ON' : 'OFF'}
-              </button>
-
-              {/* Video Camera Toggle */}
-              <button
-                onClick={() => void webrtc.toggleCamera()}
-                className={`p-3 px-3.5 rounded-2xl flex items-center gap-1.5 font-medium text-xs transition-all ${
-                  webrtc.cameraEnabled
-                    ? 'bg-blue-600 hover:bg-blue-500 text-white'
-                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                }`}
-              >
-                {webrtc.cameraEnabled ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
-                {webrtc.cameraEnabled ? 'Cam On' : 'Start Cam'}
-              </button>
-
-              {/* Screen Sharing Toggle */}
-              <button
-                onClick={() => {
-                  if (webrtc.isScreenSharing) {
-                    void webrtc.stopScreenShare();
-                  } else {
-                    void webrtc.startScreenShare();
-                  }
-                }}
-                className={`p-3 px-3.5 rounded-2xl flex items-center gap-1.5 font-medium text-xs transition-all ${
-                  webrtc.isScreenSharing
-                    ? 'bg-purple-600 hover:bg-purple-500 text-white'
-                    : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                }`}
-              >
-                <ScreenShare className="w-4 h-4" />
-                {webrtc.isScreenSharing ? 'Stop Share' : 'Share Screen'}
               </button>
 
               {/* Call Recording Toggle */}
@@ -1248,22 +1125,13 @@ export default function KryptoVisionConnectPage() {
                 <Minimize2 className="w-4 h-4" />
               </button>
 
-              {/* End Call */}
-              <button
-                onClick={() => void handleEndCall()}
-                className="p-3 px-5 rounded-2xl bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-red-600/30 transition-all ml-1"
-                title="Disconnect call"
-              >
-                <PhoneOff className="w-4 h-4" />
-                End Call
-              </button>
             </div>
           </div>
         ) : (
           /* IDLE / READY FOR CALL STAGE */
-          <div className="space-y-8 text-center">
+          <div className="space-y-6 text-center">
             <div className="space-y-2">
-              <h2 className="text-3xl font-extrabold text-white">Call {callTarget.label}</h2>
+              <h2 className="text-2xl font-semibold tracking-tight text-white">Call {callTarget.label}</h2>
               <p className="text-sm text-slate-400 max-w-md mx-auto">
                 Choose a VMS user, employee, or branch—then select your calling mode.
               </p>
@@ -1343,15 +1211,15 @@ export default function KryptoVisionConnectPage() {
               {/* Option 1: Video Call */}
               <button
                 onClick={() => void handleStartCall('video', callTarget)}
-                disabled={deviceStatus !== 'ACTIVE' || !signaling.connected}
-                className="group p-6 rounded-3xl bg-gradient-to-b from-blue-600/10 to-blue-600/5 hover:from-blue-600/20 hover:to-blue-600/10 border border-blue-500/30 hover:border-blue-500/60 transition-all text-center space-y-3 flex flex-col items-center justify-center shadow-xl hover:scale-[1.02] active:scale-[0.98]"
+                disabled={deviceStatus !== 'ACTIVE' || !signaling.connected || callStarting}
+                className="group p-5 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-blue-500/60 transition-colors text-left space-y-3 flex flex-col items-start disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <div className="w-16 h-16 rounded-2xl bg-blue-600/20 text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-all flex items-center justify-center shadow-lg shadow-blue-600/20">
+                <div className="w-11 h-11 rounded-xl bg-blue-500/10 text-blue-300 flex items-center justify-center border border-blue-500/20">
                   <Video className="w-8 h-8" />
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white">Video Call</h3>
-                  <p className="text-xs text-slate-400 mt-1">2-way HD video with front/back camera support</p>
+                  <p className="text-xs text-slate-400 mt-1">Meet face to face with your selected contact</p>
                 </div>
                 <span className="text-[11px] font-semibold text-blue-400 group-hover:text-blue-300 flex items-center gap-1 pt-1">
                   Start Video Call &rarr;
@@ -1361,15 +1229,15 @@ export default function KryptoVisionConnectPage() {
               {/* Option 2: Audio Voice Call */}
               <button
                 onClick={() => void handleStartCall('audio', callTarget)}
-                disabled={deviceStatus !== 'ACTIVE' || !signaling.connected}
-                className="group p-6 rounded-3xl bg-gradient-to-b from-blue-600/10 to-blue-600/5 hover:from-blue-600/20 hover:to-blue-600/10 border border-blue-500/30 hover:border-blue-500/60 transition-all text-center space-y-3 flex flex-col items-center justify-center shadow-xl hover:scale-[1.02] active:scale-[0.98]"
+                disabled={deviceStatus !== 'ACTIVE' || !signaling.connected || callStarting}
+                className="group p-5 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-blue-500/60 transition-colors text-left space-y-3 flex flex-col items-start disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <div className="w-16 h-16 rounded-2xl bg-blue-600/20 text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-all flex items-center justify-center shadow-lg shadow-blue-600/20">
+                <div className="w-11 h-11 rounded-xl bg-blue-500/10 text-blue-300 flex items-center justify-center border border-blue-500/20">
                   <Phone className="w-8 h-8" />
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white">Audio Call</h3>
-                  <p className="text-xs text-slate-400 mt-1">Crystal clear voice with noise cancellation</p>
+                  <p className="text-xs text-slate-400 mt-1">Connect by voice, with camera off</p>
                 </div>
                 <span className="text-[11px] font-semibold text-blue-400 group-hover:text-blue-300 flex items-center gap-1 pt-1">
                   Start Voice Call &rarr;
@@ -1379,15 +1247,15 @@ export default function KryptoVisionConnectPage() {
               {/* Option 3: Screen Sharing */}
               <button
                 onClick={() => void handleStartCall('screenshare', callTarget)}
-                disabled={deviceStatus !== 'ACTIVE' || !signaling.connected}
-                className="group p-6 rounded-3xl bg-gradient-to-b from-purple-600/10 to-purple-600/5 hover:from-purple-600/20 hover:to-purple-600/10 border border-purple-500/30 hover:border-purple-500/60 transition-all text-center space-y-3 flex flex-col items-center justify-center shadow-xl hover:scale-[1.02] active:scale-[0.98]"
+                disabled={deviceStatus !== 'ACTIVE' || !signaling.connected || callStarting}
+                className="group p-5 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-blue-500/60 transition-colors text-left space-y-3 flex flex-col items-start disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <div className="w-16 h-16 rounded-2xl bg-purple-600/20 text-purple-400 group-hover:bg-purple-600 group-hover:text-white transition-all flex items-center justify-center shadow-lg shadow-purple-600/20">
+                <div className="w-11 h-11 rounded-xl bg-blue-500/10 text-blue-300 flex items-center justify-center border border-blue-500/20">
                   <ScreenShare className="w-8 h-8" />
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white">Screen Share</h3>
-                  <p className="text-xs text-slate-400 mt-1">Share full desktop screen, CCTV window, or tab</p>
+                  <p className="text-xs text-slate-400 mt-1">Present a screen, window, or browser tab</p>
                 </div>
                 <span className="text-[11px] font-semibold text-purple-400 group-hover:text-purple-300 flex items-center gap-1 pt-1">
                   Start Screen Share &rarr;
@@ -1398,7 +1266,10 @@ export default function KryptoVisionConnectPage() {
             <section className="max-w-3xl mx-auto rounded-2xl border border-slate-700 bg-slate-900/70 p-4 text-left space-y-3">
               <h3 className="flex items-center gap-2 text-sm font-semibold text-white"><MessageSquare className="h-4 w-4 text-blue-400" /> Messages</h3>
               <div className="max-h-48 overflow-y-auto space-y-2" aria-live="polite">
-                {directMessages.length === 0 ? <p className="text-xs text-slate-400">No messages yet.</p> :
+                {callTarget.type === 'VMS' ? <p className="text-xs text-slate-400">Select a named user, employee, or branch to view messages.</p> :
+                  messagesError ? <p role="status" className="text-xs text-red-300">{messagesError}</p> :
+                  messagesLoading ? <p className="text-xs text-slate-400">Loading messages...</p> :
+                  directMessages.length === 0 ? <p className="text-xs text-slate-400">No messages yet.</p> :
                   directMessages.slice(-20).map((message) => (
                     <div key={message.id} className="rounded-lg bg-slate-800 px-3 py-2 text-xs">
                       <div className="text-slate-400">{message.senderId === deviceId ? 'You' : message.senderName || message.senderType} · {new Date(message.createdAt).toLocaleString()}</div>
@@ -1410,7 +1281,7 @@ export default function KryptoVisionConnectPage() {
                 <input value={directMessageText} onChange={(event) => setDirectMessageText(event.target.value)}
                   maxLength={4000} placeholder={callTarget.type === 'VMS' ? 'Select a named user, employee, or branch to message' : `Message ${callTarget.label}`}
                   className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" />
-                <button type="submit" disabled={deviceStatus !== 'ACTIVE' || !directMessageText.trim() || callTarget.type === 'VMS'}
+                <button type="submit" disabled={messageRouteMissing || deviceStatus !== 'ACTIVE' || !directMessageText.trim() || callTarget.type === 'VMS'}
                   className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"><Send className="h-4 w-4" /></button>
               </form>
             </section>
@@ -1429,7 +1300,7 @@ export default function KryptoVisionConnectPage() {
       </main>
 
       {/* Hidden Audio Tag for incoming sound */}
-      <audio ref={remoteAudioRef} autoPlay playsInline />
+
 
       {/* INCOMING CALL MODAL (Ring-All / First-Answer-Wins) */}
       {incomingCall && (
