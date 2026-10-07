@@ -126,6 +126,8 @@ services:
       ANALYTICS_ENGINE_URL: http://analytics-engine:8092
       # Pilot allowlist; '*' expands HD capture only after field validation.
       HELMET_HD_CAPTURE_CAMERAS: "${HELMET_HD_CAPTURE_CAMERAS:-}"
+      EDGE_PACKAGED_UPDATE_VERSION: "${EDGE_PACKAGED_UPDATE_VERSION:-}"
+      EDGE_PACKAGED_UPDATE_TARGET_AGENTS: "${EDGE_PACKAGED_UPDATE_TARGET_AGENTS:-}"
       BOOTSTRAP_SUPERADMIN_PASSWORD: ${BOOTSTRAP_SUPERADMIN_PASSWORD:-SentinelMasterAdmin2026!}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.groq.com/openai/v1}

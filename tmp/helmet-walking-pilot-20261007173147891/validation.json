@@ -1,0 +1,82 @@
+{
+  "stamp": "20261007173147891",
+  "camera": "e66e3498-1c13-4f59-91d7-5a3386d269d2",
+  "agent": "e9b95595-1aa6-4a14-9f5d-bd0c958d3f34",
+  "version": "0.1.49",
+  "files": [
+    {
+      "file": "src/app.ts",
+      "sha256": "0baf565471e15c4ebc31fd876901c9b92c3e00076de70c229239a3668ab3f863"
+    },
+    {
+      "file": "src/config.ts",
+      "sha256": "4f068a3845e6fc40511709241eb272a46b8d308601b2851dca7d017ee34b33c5"
+    },
+    {
+      "file": "src/index.ts",
+      "sha256": "3ff85298fdaf61a1beb95faaa5010185c0c599e99fa298ad78d71841b13fd8f8"
+    },
+    {
+      "file": "src/routes/edge-gateway-operations.routes.ts",
+      "sha256": "318d7fadaed8b493b3ae43eaee37e86297ce93ce91716e658128cbd5c03f0007"
+    },
+    {
+      "file": "analytics-engine/src/app.ts",
+      "sha256": "81658e2b0a5e4198d71d350925c3b241d737c8cf9cdf83b668955881023cc668"
+    },
+    {
+      "file": "analytics-engine/src/detectors/helmet-detector.ts",
+      "sha256": "e0f39d952e2a45e3e6d06357166f629a2d99ec7df69f4227b3a0db1a15d352ed"
+    },
+    {
+      "file": "analytics-engine/src/inference/helmet-head-verification.ts",
+      "sha256": "85d269baf246494a80357a7d10c6dd0b5215fed13fa6901b41aa16d454e14be4"
+    },
+    {
+      "file": "analytics-engine/Dockerfile",
+      "sha256": "5fa281fd761b5c15f9784cab188c58560a7261119a416998a25ed97d0c9b82da"
+    },
+    {
+      "file": "edge-agent/release/updates/0.1.49/edge-agent.bundle",
+      "sha256": "81da32392a4f5ddca982f787cb681324a7c60ef91c03d106a2d4b75ce3215805"
+    }
+  ],
+  "runtime": [
+    {
+      "container": "control",
+      "file": "src/app.js",
+      "sha256": "74a5e9a51c932b33b80551c3cf8a98a6ce08054bd6328ee12c79c056e1b15458"
+    },
+    {
+      "container": "control",
+      "file": "src/config.js",
+      "sha256": "686380b79fa03669acfbf73b5b68601387d008853395ddacc23fb3989bd7bcbb"
+    },
+    {
+      "container": "control",
+      "file": "src/index.js",
+      "sha256": "bed2a75bf1d63d080f5909735ac5ebb5e4a279fdac8c90e3ef35e5ab955dadf9"
+    },
+    {
+      "container": "control",
+      "file": "src/routes/edge-gateway-operations.routes.js",
+      "sha256": "122979b8c73f09971535c7eadeda0b93f233bee91ab00a2c705ecd47067032d6"
+    },
+    {
+      "container": "analytics",
+      "file": "analytics-engine/src/app.js",
+      "sha256": "2e50af0152cafe150369eb88709ad2226c0e24936b3527d17cb10b5840ff9146"
+    },
+    {
+      "container": "analytics",
+      "file": "analytics-engine/src/detectors/helmet-detector.js",
+      "sha256": "e303a9bc20b0b77201f6cccfe85b76f5ec0a125a4f24d5c45bf77bf576576d92"
+    },
+    {
+      "container": "analytics",
+      "file": "analytics-engine/src/inference/helmet-head-verification.js",
+      "sha256": "448cedb3dbe673f43b51d7f4e7f38a5ff15a36c3b426f97b4be523598c44f27d"
+    }
+  ],
+  "bundleSha256": "81da32392a4f5ddca982f787cb681324a7c60ef91c03d106a2d4b75ce3215805"
+}

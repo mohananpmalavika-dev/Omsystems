@@ -53,15 +53,8 @@ export async function registerEdgeGatewayOperationsRoutes(
   } = {},
 ) {
   const updateForAgent = async (edgeAgentId: string, currentVersion: string, allowPackagedFallback = true) => {
-    const targets=new Set((options.packagedUpdateTargetAgents??"").split(",").map(id=>id.trim()).filter(Boolean));
-    const stagedTargetAllowed=!options.packagedUpdateVersion || targets.has(edgeAgentId);
     const assigned = await store.getEdgeUpdateReleaseForAgent(edgeAgentId, currentVersion);
-    if (assigned && compareVersions(assigned.version, currentVersion) > 0) {
-      // A persisted release of this same staged version must obey its canary
-      // scope too, including when an automated publisher registers it globally.
-      if (assigned.version===options.packagedUpdateVersion && !stagedTargetAllowed) return undefined;
-      return assigned;
-    }
+    if (assigned && compareVersions(assigned.version, currentVersion) > 0) return assigned;
     // A fleet rollout must respect the persisted release's deterministic
     // rollout bucket. Falling back to a locally packaged build here would let
     // a canary-only release reach every gateway.
@@ -69,7 +62,10 @@ export async function registerEdgeGatewayOperationsRoutes(
     // An explicitly staged patch must not silently reach the whole fleet.
     // This also lets a signed application patch advance independently of the
     // full Windows installer version and its Authenticode release workflow.
-    if (!stagedTargetAllowed) return undefined;
+    if (options.packagedUpdateVersion) {
+      const targets=new Set((options.packagedUpdateTargetAgents??"").split(",").map(id=>id.trim()).filter(Boolean));
+      if (!targets.has(edgeAgentId)) return undefined;
+    }
     return packagedEdgeUpdate(options, currentVersion);
   };
   app.post("/v1/branches/:branchId/edge-activations", async (request, reply) => {

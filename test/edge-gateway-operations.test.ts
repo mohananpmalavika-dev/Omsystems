@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { MemoryStore } from "../src/store.js";
-import { verifyEdgeUpdateManifest } from "../src/security/edge-update-signing.js";
+import { verifyEdgeUpdateManifest, signEdgeUpdateManifest } from "../src/security/edge-update-signing.js";
 import { openSealedCommand } from "../edge-agent/src/security/camera-credential-vault.js";
 
 describe("secure edge gateway operations", () => {
@@ -574,6 +574,40 @@ describe("secure edge gateway operations", () => {
     });
     expect(repeated.statusCode).toBe(202);
     expect(repeated.json()).toMatchObject({ queued: 0, commandAlreadyPending: 1 });
+  });
+
+  it.each([true,false])("limits a staged patch to its target gateway and fails closed without targets (target=%s)",async target=>{
+    const artifactRoot=await mkdtemp(join(tmpdir(),"sentinel-targeted-edge-update-"));
+    temporaryRoots.push(artifactRoot);
+    await mkdir(join(artifactRoot,"release","updates","1.2.1"),{recursive:true});
+    await writeFile(join(artifactRoot,"package.json"),JSON.stringify({version:"1.2.0"}));
+    await writeFile(join(artifactRoot,"release","updates","1.2.1","edge-agent.bundle"),"canary-only");
+    const {privateKey,publicKey}=generateKeyPairSync("ed25519");
+    const store=testStore();
+    const pilot=await store.registerEdgeAgent("branch-blr-001","Pilot","1.1.0");
+    const other=await store.registerEdgeAgent("branch-blr-001","Other","1.1.0");
+    const app=await buildApp({store,edgeAgentArtifactRoot:artifactRoot,
+      edgeUpdateSigningPrivateKey:privateKey.export({type:"pkcs8",format:"pem"}).toString(),
+      controlPlanePublicUrl:"https://control.example.com",edgePackagedUpdateVersion:"1.2.1",
+      edgePackagedUpdateTargetAgents:target?pilot.id:""});
+    apps.push(app);
+    const get=(id:string,version="1.1.0")=>app.inject({method:"GET",
+      url:`/v1/edge-agents/${id}/updates/next?version=${version}`,headers:{"x-user-id":"user-global-admin"}});
+    const candidate=await get(pilot.id);
+    expect(candidate.statusCode,candidate.body).toBe(200);
+    if(target){
+      expect(candidate.json()).toMatchObject({version:"1.2.1",sha256:createHash("sha256").update("canary-only").digest("hex")});
+      expect(verifyEdgeUpdateManifest(candidate.json(),candidate.json().signature,
+        publicKey.export({type:"spki",format:"pem"}).toString())).toBe(true);
+    }else expect(candidate.json()).toBeNull();
+    expect((await get(other.id)).json()).toBeNull();
+    expect((await get(pilot.id,"1.2.1")).json()).toBeNull();
+    const manifest={version:"1.2.1",artifactUrl:"https://control.example.com/v1/edge-updates/artifacts/1.2.1/edge-agent.bundle",
+      sha256:createHash("sha256").update("canary-only").digest("hex"),notes:"Published canary"};
+    await store.createEdgeUpdateRelease({...manifest,signature:signEdgeUpdateManifest(manifest,
+      privateKey.export({type:"pkcs8",format:"pem"}).toString()),enabled:true,rolloutPercentage:100,createdBy:"user-global-admin"});
+    expect((await get(other.id)).json()).toBeNull();
+    expect((await get(pilot.id)).json()?.version??null).toBe(target?"1.2.1":null);
   });
 
   it("publishes the packaged application patch on demand without a full installer", async () => {

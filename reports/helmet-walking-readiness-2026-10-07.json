@@ -1,0 +1,82 @@
+{
+  "control": {
+    "checkedAt": "2026-10-07T17:29:29.651Z",
+    "rules": [
+      {
+        "min_confidence": "0.7000",
+        "cameras": 41
+      }
+    ],
+    "camera": {
+      "id": "e66e3498-1c13-4f59-91d7-5a3386d269d2",
+      "channel": 9,
+      "recorder_channel": null,
+      "agent_id": "e9b95595-1aa6-4a14-9f5d-bd0c958d3f34",
+      "agent_version": "0.1.48",
+      "agent_status": "online",
+      "last_seen_at": "2026-10-07T17:28:05.852Z"
+    },
+    "cameraRules": [
+      {
+        "enabled": true,
+        "min_confidence": "0.7000",
+        "min_duration_seconds": "1.000",
+        "cooldown_seconds": 60
+      }
+    ],
+    "alerts": [],
+    "hdCaptureCameras": "e66e3498-1c13-4f59-91d7-5a3386d269d2",
+    "frame": {
+      "capturedAt": "2026-10-07T17:28:01.426Z",
+      "width": 640,
+      "height": 360,
+      "imageEncoding": "rgb24",
+      "bytes": 691200,
+      "ageSeconds": 88.227
+    }
+  },
+  "analytics": {
+    "checkedAt": "2026-10-07T17:29:30.539Z",
+    "aiState": "AI_OPERATIONAL",
+    "helmet": {
+      "status": "healthy",
+      "details": "Helmet classifier active; production crop alerts require independent head localization and classification agreement"
+    },
+    "models": {
+      "ready": true,
+      "loaded": [
+        "yolov8n",
+        "fire-smoke",
+        "helmet",
+        "face-detector",
+        "face-embedding",
+        "anpr-detector",
+        "anpr-recognizer",
+        "pose-estimator",
+        "helmet-head-localizer",
+        "helmet-head-evidence"
+      ]
+    },
+    "modelVersion": "1.3.2",
+    "detectorSha256": "e303a9bc20b0b77201f6cccfe85b76f5ec0a125a4f24d5c45bf77bf576576d92",
+    "sourcePixelPersonGate": true,
+    "relativePersonGate": false,
+    "jpegIngress": true,
+    "headEvidenceCameras": "*",
+    "fastAlert": "true",
+    "configuredConfidence": "0.75"
+  },
+  "localDetectorSha256": "e303a9bc20b0b77201f6cccfe85b76f5ec0a125a4f24d5c45bf77bf576576d92",
+  "runtimeMatchesLocal": true,
+  "checks": {
+    "helmetHealthy": true,
+    "sourcePixelPersonGate": true,
+    "jpegIngress": true,
+    "runtimeMatchesLocal": true,
+    "hdRequested": true,
+    "gatewayVersionReady": false,
+    "frameFresh": false,
+    "hdFrame": false
+  },
+  "ready": false
+}

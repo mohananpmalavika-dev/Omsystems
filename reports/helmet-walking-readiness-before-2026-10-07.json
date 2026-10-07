@@ -1,0 +1,286 @@
+{
+  "control": {
+    "checkedAt": "2026-10-07T17:06:50.791Z",
+    "rules": [
+      {
+        "min_confidence": "0.7000",
+        "cameras": 41
+      }
+    ],
+    "camera": {
+      "id": "e66e3498-1c13-4f59-91d7-5a3386d269d2",
+      "channel": 9,
+      "recorder_channel": null,
+      "agent_id": "e9b95595-1aa6-4a14-9f5d-bd0c958d3f34",
+      "agent_version": "0.1.48",
+      "agent_status": "online",
+      "last_seen_at": "2026-10-07T17:05:44.231Z"
+    },
+    "cameraRules": [
+      {
+        "enabled": true,
+        "min_confidence": "0.7000",
+        "min_duration_seconds": "1.000",
+        "cooldown_seconds": 60
+      }
+    ],
+    "alerts": [],
+    "hdCaptureCameras": null,
+    "frame": {
+      "capturedAt": "2026-10-07T17:05:28.358Z",
+      "width": null,
+      "height": null,
+      "imageEncoding": "unspecified",
+      "bytes": 691200,
+      "ageSeconds": 82.437
+    }
+  },
+  "analytics": {
+    "checkedAt": "2026-10-07T17:06:51.891Z",
+    "aiState": "AI_OPERATIONAL",
+    "helmet": {
+      "status": "healthy",
+      "details": "Helmet classifier active; production crop alerts require independent head localization and classification agreement"
+    },
+    "models": {
+      "ready": true,
+      "configured": 20,
+      "required": 6,
+      "requiredReady": 6,
+      "loaded": 8,
+      "missingRequired": [],
+      "models": [
+        {
+          "id": "yolov8n",
+          "name": "YOLOX Tiny COCO object detector",
+          "task": "object-detection",
+          "required": true,
+          "status": "loaded",
+          "configuredPath": "detection/yolox_tiny.onnx",
+          "resolvedPath": "/app/models/detection/yolox_tiny.onnx",
+          "sizeBytes": 20219662,
+          "reason": null
+        },
+        {
+          "id": "fire-smoke",
+          "name": "Fire and smoke detector",
+          "task": "object-detection",
+          "required": false,
+          "status": "available",
+          "configuredPath": "safety/fire-smoke.onnx",
+          "resolvedPath": "/app/models/safety/fire-smoke.onnx",
+          "sizeBytes": 271142,
+          "reason": null
+        },
+        {
+          "id": "helmet",
+          "name": "Motorcycle helmet head classifier (EfficientNet-B0)",
+          "task": "helmet-classification",
+          "required": true,
+          "status": "loaded",
+          "configuredPath": "safety/helmet-motorcycle.onnx",
+          "resolvedPath": "/app/models/safety/helmet-motorcycle.onnx",
+          "sizeBytes": 16570770,
+          "reason": null
+        },
+        {
+          "id": "face-detector",
+          "name": "OpenCV Zoo YuNet face detector",
+          "task": "object-detection",
+          "required": true,
+          "status": "loaded",
+          "configuredPath": "face/face-detector.onnx",
+          "resolvedPath": "/app/models/face/face-detector.onnx",
+          "sizeBytes": 232589,
+          "reason": null
+        },
+        {
+          "id": "face-embedding",
+          "name": "OpenCV Zoo SFace embedding model (INT8)",
+          "task": "face-embedding",
+          "required": true,
+          "status": "loaded",
+          "configuredPath": "face/face-embedding.onnx",
+          "resolvedPath": "/app/models/face/face-embedding.onnx",
+          "sizeBytes": 9896933,
+          "reason": null
+        },
+        {
+          "id": "arcface-r100",
+          "name": "ArcFace ResNet100 (Production-Grade Face Recognition)",
+          "task": "face-embedding",
+          "required": false,
+          "status": "available",
+          "configuredPath": "/app/models/face/arcface_r100.onnx",
+          "resolvedPath": "/app/models/face/arcface_r100.onnx",
+          "sizeBytes": 261036388,
+          "reason": null
+        },
+        {
+          "id": "face-quality",
+          "name": "Face Quality Assessment Model (SER-FIQ)",
+          "task": "face-quality-assessment",
+          "required": false,
+          "status": "missing",
+          "configuredPath": "face/face-quality.onnx",
+          "resolvedPath": "/app/models/face/face-quality.onnx",
+          "sizeBytes": null,
+          "reason": "model file not found"
+        },
+        {
+          "id": "face-liveness",
+          "name": "Face Anti-Spoofing (Liveness Detection)",
+          "task": "face-liveness",
+          "required": false,
+          "status": "missing",
+          "configuredPath": "face/face-liveness.onnx",
+          "resolvedPath": "/app/models/face/face-liveness.onnx",
+          "sizeBytes": null,
+          "reason": "model file not found"
+        },
+        {
+          "id": "anpr-detector",
+          "name": "OpenCV Zoo LPD-YuNet plate detector",
+          "task": "object-detection",
+          "required": true,
+          "status": "loaded",
+          "configuredPath": "vehicle/license-plate-detector.onnx",
+          "resolvedPath": "/app/models/vehicle/license-plate-detector.onnx",
+          "sizeBytes": 4146213,
+          "reason": null
+        },
+        {
+          "id": "anpr-recognizer",
+          "name": "OpenCV Zoo CRNN English plate recognizer (INT8)",
+          "task": "ctc-text-recognition",
+          "required": true,
+          "status": "loaded",
+          "configuredPath": "vehicle/license-plate-recognizer.onnx",
+          "resolvedPath": "/app/models/vehicle/license-plate-recognizer.onnx",
+          "sizeBytes": 16378030,
+          "reason": null
+        },
+        {
+          "id": "pose-estimator",
+          "name": "Pose estimation model (YOLOv8-Pose)",
+          "task": "pose-estimation",
+          "required": false,
+          "status": "available",
+          "configuredPath": "pose/yolov8n-pose.onnx",
+          "resolvedPath": "/app/models/pose/yolov8n-pose.onnx",
+          "sizeBytes": 1883936,
+          "reason": null
+        },
+        {
+          "id": "attribute-estimator",
+          "name": "Person attribute estimator (age, gender, emotion)",
+          "task": "attribute-estimation",
+          "required": false,
+          "status": "missing",
+          "configuredPath": "attributes/age-gender-emotion.onnx",
+          "resolvedPath": "/app/models/attributes/age-gender-emotion.onnx",
+          "sizeBytes": null,
+          "reason": "model file not found"
+        },
+        {
+          "id": "vehicle-reid",
+          "name": "Vehicle re-identification model",
+          "task": "vehicle-reid",
+          "required": false,
+          "status": "missing",
+          "configuredPath": "vehicle/vehicle-reid.onnx",
+          "resolvedPath": "/app/models/vehicle/vehicle-reid.onnx",
+          "sizeBytes": null,
+          "reason": "model file not found"
+        },
+        {
+          "id": "person-reid",
+          "name": "Person re-identification model (OSNet)",
+          "task": "person-reid",
+          "required": false,
+          "status": "missing",
+          "configuredPath": "tracking/osnet-reid.onnx",
+          "resolvedPath": "/app/models/tracking/osnet-reid.onnx",
+          "sizeBytes": null,
+          "reason": "model file not found"
+        },
+        {
+          "id": "weapon-detector",
+          "name": "Weapon detector (handgun, rifle, knife, bat)",
+          "task": "object-detection",
+          "required": false,
+          "status": "available",
+          "configuredPath": "security/weapon-detector.onnx",
+          "resolvedPath": "/app/models/security/weapon-detector.onnx",
+          "sizeBytes": 271142,
+          "reason": null
+        },
+        {
+          "id": "atm-tamper-detector",
+          "name": "ATM physical tamper detector (skimmer, gas cutter, flame)",
+          "task": "object-detection",
+          "required": false,
+          "status": "available",
+          "configuredPath": "security/atm-tamper-detector.onnx",
+          "resolvedPath": "/app/models/security/atm-tamper-detector.onnx",
+          "sizeBytes": 271150,
+          "reason": null
+        },
+        {
+          "id": "acoustic-security",
+          "name": "Acoustic security classifier (glass break, gunshot, scream)",
+          "task": "audio-classification",
+          "required": false,
+          "status": "available",
+          "configuredPath": "audio/acoustic-security.onnx",
+          "resolvedPath": "/app/models/audio/acoustic-security.onnx",
+          "sizeBytes": 2366,
+          "reason": null
+        },
+        {
+          "id": "emotion-recognition",
+          "name": "MindSense Emotion Recognition (FER2013 CNN)",
+          "task": "emotion-recognition",
+          "required": false,
+          "status": "missing",
+          "configuredPath": "mindsense/emotion-recognition.onnx",
+          "resolvedPath": "/app/models/mindsense/emotion-recognition.onnx",
+          "sizeBytes": null,
+          "reason": "model file not found"
+        },
+        {
+          "id": "helmet-head-localizer",
+          "name": "Helmet/head localization verifier (YOLOv5)",
+          "task": "object-detection",
+          "required": false,
+          "status": "loaded",
+          "configuredPath": "safety/helmet-head-localizer.onnx",
+          "resolvedPath": "/app/models/safety/helmet-head-localizer.onnx",
+          "sizeBytes": 28207460,
+          "reason": null
+        },
+        {
+          "id": "helmet-head-evidence",
+          "name": "Motorcycle helmet head evidence (CLIP linear probe)",
+          "task": "helmet-classification",
+          "required": false,
+          "status": "loaded",
+          "configuredPath": "safety/helmet-head-embedding.onnx",
+          "resolvedPath": "/app/models/safety/helmet-head-embedding.onnx",
+          "sizeBytes": 89117001,
+          "reason": null
+        }
+      ]
+    },
+    "modelVersion": "1.3.1",
+    "detectorSha256": "393bcca403d432f40b65fdf3bdd9caed879ae07ff957e6ae609a482103d1f8a0",
+    "sourcePixelPersonGate": false,
+    "relativePersonGate": true,
+    "jpegIngress": false,
+    "headEvidenceCameras": "*",
+    "fastAlert": "true",
+    "configuredConfidence": "0.75"
+  },
+  "localDetectorSha256": "e303a9bc20b0b77201f6cccfe85b76f5ec0a125a4f24d5c45bf77bf576576d92",
+  "runtimeMatchesLocal": false
+}
