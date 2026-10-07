@@ -47,6 +47,7 @@ describe("edge analytics frame transport", () => {
       analyticsEngineSharedKey: analyticsKey,
       analyticsSourceSharedKey: analyticsSourceKey,
       analyticsEngineUrl: "http://analytics.example",
+      helmetHdCaptureCameras: "cam-001",
     });
   });
 
@@ -114,6 +115,23 @@ describe("edge analytics frame transport", () => {
     expect(response.statusCode).toBe(202);
     expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0]![1]!.body))).toMatchObject({
       imageEncoding:"jpeg",width:1280,height:720});
+  });
+
+  it("keeps another helmet camera outside the pilot allowlist at 640x360",async()=>{
+    const first=store.cameras.get("cam-001")!;
+    const second=store.cameras.get("cam-002")!;
+    second.edgeAgentId=first.edgeAgentId;
+    second.branchId=first.branchId;
+    await store.createAnalyticsRule("omsystems","cam-002",undefined,{
+      name:"Helmet",detectionType:"helmet-worn",enabled:true,objectClasses:["person"],minConfidence:.7,
+      minDurationSeconds:0,direction:"any",severity:"P2",cooldownSeconds:60,recipients:[],
+      recordingPolicy:"event-recording",preRollSeconds:30,postRollSeconds:120,
+    });
+    const response=await app.inject({method:"GET",url:`/v1/edge-agents/${first.edgeAgentId}/cameras/monitoring`,
+      headers:{"x-edge-bridge-key":bridgeKey,"x-edge-agent-version":"0.1.48"}});
+    expect(response.statusCode,response.body).toBe(200);
+    expect(response.json().data.find((camera:{id:string})=>camera.id==="cam-002").analyticsResolution)
+      .toEqual({width:640,height:360});
   });
 
   it("reports an event submission failure to the edge agent", async () => {

@@ -67,6 +67,7 @@ const configSchema = z.object({
     z.string().url().optional(),
   ),
   ANALYTICS_ENGINE_URL: optionalServiceUrl,
+  HELMET_HD_CAPTURE_CAMERAS: z.string().default(""),
   FEDERATION_SHARED_KEY: z.preprocess(
     (value) => value === "" ? undefined : value,
     z.string().min(32).optional(),

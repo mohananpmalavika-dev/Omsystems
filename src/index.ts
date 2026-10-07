@@ -109,6 +109,7 @@ const app = await buildApp({
   ...(config.ANALYTICS_ENGINE_URL
     ? { analyticsEngineUrl: config.ANALYTICS_ENGINE_URL }
     : {}),
+  helmetHdCaptureCameras: config.HELMET_HD_CAPTURE_CAMERAS,
   ...(config.FEDERATION_SHARED_KEY
     ? { federationSharedKey: config.FEDERATION_SHARED_KEY }
     : {}),

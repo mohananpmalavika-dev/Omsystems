@@ -509,6 +509,7 @@ export async function buildApp(options?: {
   analyticsEngineSharedKey?: string;
   analyticsSourceSharedKey?: string;
   analyticsEngineUrl?: string;
+  helmetHdCaptureCameras?: string;
   authMode?: "development" | "session" | "oidc";
   recordingRoot?: string;
   controlPlanePublicUrl?: string;
@@ -1369,6 +1370,7 @@ export async function buildApp(options?: {
     );
     if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
     const cameras = await store.listCamerasByEdgeAgent(id);
+    const hdCameras = new Set((options?.helmetHdCaptureCameras ?? "").split(",").map(id=>id.trim()).filter(Boolean));
     const analyticsEnabledByCamera = new Map(await Promise.all(cameras.map(async (camera) => [
       camera.id,
       (await store.listAnalyticsRules(camera.id)).filter((rule) => rule.enabled),
@@ -1382,7 +1384,8 @@ export async function buildApp(options?: {
         connectionSecretRef: camera.connectionSecretRef,
         analyticsEnabled: Boolean(analyticsEnabledByCamera.get(camera.id)?.length) || Boolean(options?.analyticsEngineUrl),
         // Distant helmet heads need source detail before inference resizes/crops.
-        analyticsResolution: analyticsEnabledByCamera.get(camera.id)?.some(rule => rule.detectionType === "helmet-worn")
+        analyticsResolution: (hdCameras.has("*") || hdCameras.has(camera.id)) &&
+          analyticsEnabledByCamera.get(camera.id)?.some(rule => rule.detectionType === "helmet-worn")
           ? {width:1280, height:720} : {width:640, height:360},
         ...(camera.ipAddress ? { ipAddress: camera.ipAddress.replace(/\/\d+$/, "").trim() } : {}),
         ...(camera.vendor ? { vendor: camera.vendor } : {}),
