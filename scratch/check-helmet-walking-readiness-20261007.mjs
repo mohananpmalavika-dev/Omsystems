@@ -5,7 +5,7 @@ import {gzipSync} from 'node:zlib';
 
 const cameraId='e66e3498-1c13-4f59-91d7-5a3386d269d2';
 const control=`
-import pg from 'pg';import {createClient} from 'redis';
+import pg from 'pg';import {createClient} from 'redis';import fs from 'node:fs';import {createHash} from 'node:crypto';
 import {loadConfig} from '/app/dist/src/config.js';
 const config=loadConfig(),pool=new pg.Pool({connectionString:config.DATABASE_URL});
 const redis=createClient({url:config.REDIS_URL});await redis.connect();
@@ -17,6 +17,8 @@ try{
  const raw=await redis.get('analytics:latest-frame:${cameraId}'),frame=raw?JSON.parse(raw):null;
  console.log('CONTROL_RESULT '+JSON.stringify({checkedAt:new Date().toISOString(),rules,camera,cameraRules,alerts,
   hdCaptureCameras:config.HELMET_HD_CAPTURE_CAMERAS??null,
+  patchVersion:config.EDGE_PACKAGED_UPDATE_VERSION??null,patchTargets:config.EDGE_PACKAGED_UPDATE_TARGET_AGENTS??null,
+  controlRoutesSha256:createHash('sha256').update(fs.readFileSync('/app/dist/src/routes/edge-gateway-operations.routes.js')).digest('hex'),
   frame:frame?{capturedAt:frame.capturedAt,width:frame.width??null,height:frame.height??null,
    imageEncoding:frame.imageEncoding??'unspecified',bytes:Buffer.from(frame.imageBase64,'base64').length,
    ageSeconds:(Date.now()-Date.parse(frame.capturedAt))/1000}:null}));
@@ -55,13 +57,17 @@ const report={control:parse('CONTROL_RESULT '),analytics:parse('ANALYTICS_RESULT
 const local=fs.readFileSync('analytics-engine/dist/analytics-engine/src/detectors/helmet-detector.js');
 report.localDetectorSha256=createHash('sha256').update(local).digest('hex');
 report.runtimeMatchesLocal=report.localDetectorSha256===report.analytics.detectorSha256;
+report.localControlRoutesSha256=createHash('sha256').update(fs.readFileSync('dist/src/routes/edge-gateway-operations.routes.js')).digest('hex');
+report.controlRoutesMatchLocal=report.localControlRoutesSha256===report.control.controlRoutesSha256;
 const hdScope=new Set((report.control.hdCaptureCameras??'').split(',').map(id=>id.trim()).filter(Boolean));
 const gatewayVersion=(report.control.camera?.agent_version??'0.0.0').split('.').map(Number);
 const gatewayReady=gatewayVersion[0]>0||gatewayVersion[1]>1||(gatewayVersion[1]===1&&gatewayVersion[2]>=49);
 const frame=report.control.frame;
 report.checks={helmetHealthy:report.analytics.helmet?.status==='healthy',
  sourcePixelPersonGate:report.analytics.sourcePixelPersonGate,jpegIngress:report.analytics.jpegIngress,
- runtimeMatchesLocal:report.runtimeMatchesLocal,hdRequested:hdScope.has('*')||hdScope.has(cameraId),
+ runtimeMatchesLocal:report.runtimeMatchesLocal,controlRoutesMatchLocal:report.controlRoutesMatchLocal,
+ pilotPatchScope:report.control.patchVersion==='0.1.49'&&report.control.patchTargets==='e9b95595-1aa6-4a14-9f5d-bd0c958d3f34',
+ hdRequested:hdScope.has('*')||hdScope.has(cameraId),
  gatewayVersionReady:gatewayReady,frameFresh:!!frame&&frame.ageSeconds>=0&&frame.ageSeconds<=10,
  hdFrame:frame?.width===1280&&frame?.height===720&&frame?.imageEncoding==='jpeg'};
 report.ready=Object.values(report.checks).every(Boolean);

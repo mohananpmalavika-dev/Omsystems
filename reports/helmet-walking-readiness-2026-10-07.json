@@ -1,6 +1,6 @@
 {
   "control": {
-    "checkedAt": "2026-10-07T17:29:29.651Z",
+    "checkedAt": "2026-10-07T17:33:04.541Z",
     "rules": [
       {
         "min_confidence": "0.7000",
@@ -26,17 +26,13 @@
     ],
     "alerts": [],
     "hdCaptureCameras": "e66e3498-1c13-4f59-91d7-5a3386d269d2",
-    "frame": {
-      "capturedAt": "2026-10-07T17:28:01.426Z",
-      "width": 640,
-      "height": 360,
-      "imageEncoding": "rgb24",
-      "bytes": 691200,
-      "ageSeconds": 88.227
-    }
+    "patchVersion": "0.1.49",
+    "patchTargets": "e9b95595-1aa6-4a14-9f5d-bd0c958d3f34",
+    "controlRoutesSha256": "122979b8c73f09971535c7eadeda0b93f233bee91ab00a2c705ecd47067032d6",
+    "frame": null
   },
   "analytics": {
-    "checkedAt": "2026-10-07T17:29:30.539Z",
+    "checkedAt": "2026-10-07T17:33:05.454Z",
     "aiState": "AI_OPERATIONAL",
     "helmet": {
       "status": "healthy",
@@ -68,11 +64,15 @@
   },
   "localDetectorSha256": "e303a9bc20b0b77201f6cccfe85b76f5ec0a125a4f24d5c45bf77bf576576d92",
   "runtimeMatchesLocal": true,
+  "localControlRoutesSha256": "122979b8c73f09971535c7eadeda0b93f233bee91ab00a2c705ecd47067032d6",
+  "controlRoutesMatchLocal": true,
   "checks": {
     "helmetHealthy": true,
     "sourcePixelPersonGate": true,
     "jpegIngress": true,
     "runtimeMatchesLocal": true,
+    "controlRoutesMatchLocal": true,
+    "pilotPatchScope": true,
     "hdRequested": true,
     "gatewayVersionReady": false,
     "frameFresh": false,
