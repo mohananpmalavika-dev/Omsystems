@@ -63,14 +63,22 @@ data:
   ANALYTICS_MODEL_LICENSES_ACCEPTED: "true"
   
   # ============================================================================
-  # Face Recognition BFSI Compliance
+  # Face Recognition BFSI Compliance - FALSE ALARM PREVENTION
+  # ============================================================================
+  # Updated: 2026-10-07 to reduce false alerts on known persons
+  # Changes:
+  # - Temporal frames: 3 → 5 (requires more sustained presence)
+  # - Temporal window: 2s → 10s (handles movement/occlusion better)
+  # - Review threshold: 0.60 → 0.65 (fewer marginal match alerts)
+  # - Cooldown: Added 5-minute per-person alert cooldown
   # ============================================================================
   FACE_MATCH_THRESHOLD: "0.70"
-  FACE_REVIEW_THRESHOLD: "0.60"
+  FACE_REVIEW_THRESHOLD: "0.65"              # Raised from 0.60
   FACE_MINIMUM_QUALITY: "0.55"
   FACE_LIVENESS_THRESHOLD: "0.95"
-  FACE_TEMPORAL_CONFIRMATION_FRAMES: "3"
-  FACE_TEMPORAL_WINDOW_SECONDS: "2"
+  FACE_TEMPORAL_CONFIRMATION_FRAMES: "5"     # Raised from 3
+  FACE_TEMPORAL_WINDOW_SECONDS: "10"         # Raised from 2
+  FACE_ALERT_COOLDOWN_MINUTES: "5"           # New: prevents alert spam
   FACE_REQUIRE_CONSENT: "true"
   FACE_REQUIRE_LIVENESS: "true"
   FACE_REQUIRE_HUMAN_REVIEW: "true"

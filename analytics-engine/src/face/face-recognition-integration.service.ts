@@ -69,8 +69,12 @@ export interface FaceRecognitionResult {
 export class FaceRecognitionIntegrationService {
   // Temporal confirmation tracking
   private readonly temporalTracks = new Map<string, TemporalConfirmation>();
-  private readonly TEMPORAL_WINDOW_MS = 5000; // 5 second window
+  private readonly TEMPORAL_WINDOW_MS = 10000; // 10 second window (increased from 5s)
   private readonly CLEANUP_INTERVAL_MS = 60000; // Cleanup every minute
+  
+  // Alert cooldown tracking to prevent spam
+  private readonly ALERT_COOLDOWN_MS = 300000; // 5 minutes cooldown
+  private readonly alertCooldowns = new Map<string, number>(); // personId -> lastAlertTime
   
   constructor(
     private readonly db: Pool,
@@ -161,8 +165,8 @@ export class FaceRecognitionIntegrationService {
     }
 
     const matchThreshold = watchlist.match_threshold || 0.70;
-    const reviewThreshold = watchlist.review_threshold || 0.60;
-    const temporalFramesRequired = watchlist.temporal_confirmation_frames || 3;
+    const reviewThreshold = watchlist.review_threshold || 0.65; // Raised from 0.60
+    const temporalFramesRequired = watchlist.temporal_confirmation_frames || 5; // Raised from 3
 
     // Determine if match is definitive or needs review
     const isDefinitiveMatch = bestMatch.bestSimilarity >= matchThreshold;
@@ -188,6 +192,31 @@ export class FaceRecognitionIntegrationService {
       };
     }
 
+    // Check alert cooldown to prevent spam
+    const personKey = `${input.tenantId}:${bestMatch.personId}`;
+    const lastAlert = this.alertCooldowns.get(personKey);
+    const now = Date.now();
+    
+    if (lastAlert && (now - lastAlert) < this.ALERT_COOLDOWN_MS) {
+      // Person was alerted recently - suppress alert but maintain tracking
+      return {
+        matched: isDefinitiveMatch,
+        personId: bestMatch.personId,
+        personName: bestMatch.displayName,
+        watchlistId: bestMatch.watchlistId,
+        watchlistName: bestMatch.watchlistName,
+        similarity: bestMatch.bestSimilarity,
+        confidence: bestMatch.supportingEmbeddings,
+        needsReview: false,
+        alertGenerated: false, // Suppressed due to cooldown
+        temporalConfirmation: track,
+        governanceResult: {
+          accepted: false,
+          reason: `Alert cooldown active (${Math.round((this.ALERT_COOLDOWN_MS - (now - lastAlert)) / 60000)} minutes remaining)`,
+        },
+      };
+    }
+    
     // Temporal confirmation achieved - validate with governance
     const branchId = input.branchId || await this.getCameraBranchId(input.cameraId, input.tenantId);
     
@@ -263,6 +292,11 @@ export class FaceRecognitionIntegrationService {
 
     // Alert should be generated
     const alertGenerated = track.confirmed && governanceValidation.accepted;
+    
+    // Record cooldown timestamp if alert was generated
+    if (alertGenerated) {
+      this.alertCooldowns.set(personKey, now);
+    }
 
     return {
       matched: isDefinitiveMatch,
@@ -414,15 +448,23 @@ export class FaceRecognitionIntegrationService {
   }
 
   /**
-   * Cleanup stale temporal tracks
+   * Cleanup stale temporal tracks and old cooldowns
    */
   private cleanupStaleTracks(): void {
     const now = Date.now();
-    const staleThreshold = now - this.TEMPORAL_WINDOW_MS * 2; // 10 seconds
+    const staleThreshold = now - this.TEMPORAL_WINDOW_MS * 3; // 30 seconds (increased from 10s)
 
+    // Cleanup stale tracks
     for (const [key, track] of this.temporalTracks.entries()) {
       if (track.lastSeen.getTime() < staleThreshold) {
         this.temporalTracks.delete(key);
+      }
+    }
+    
+    // Cleanup expired cooldowns (after 2x cooldown period)
+    for (const [key, timestamp] of this.alertCooldowns.entries()) {
+      if (now - timestamp > this.ALERT_COOLDOWN_MS * 2) {
+        this.alertCooldowns.delete(key);
       }
     }
   }
