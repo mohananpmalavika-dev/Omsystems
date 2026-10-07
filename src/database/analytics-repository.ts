@@ -358,7 +358,7 @@ export class AnalyticsRepository {
           durationSeconds: input.durationSeconds,
           correlatedDetectionCount: correlationCount(input.metadata),
         });
-        const cooldownSeconds = Math.max(rule.cooldownSeconds || 60, 30);
+        const cooldownSeconds = Math.max(rule.cooldownSeconds || 60, 10);
         const recent = isConfirmedShutterTransition(input) ? {rows:[]} : await client.query(
           `SELECT * FROM analytics_alerts
            WHERE rule_id=$1 AND camera_id=$2
