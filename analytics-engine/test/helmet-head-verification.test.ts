@@ -37,15 +37,15 @@ describe("independent helmet head verification", () => {
     expect(await new LocalizedHelmetHeadVerifier(localizer(),classifier).verify(frame(),person,.9167))
       .toEqual({boundingBox:box,classificationConfidence:.97,localizationConfidence:.8});
   });
-  it("accepts a head-labelled helmet only when the full head and context both classify positive", async () => {
+  it("rejects objects localized as 'head' rather than 'helmet'", async () => {
     const classifier={run:vi.fn(async()=>score(.99))};
-    expect(await new LocalizedHelmetHeadVerifier(localizer("head"),classifier).verify(frame(),person,.9167))
-      .toMatchObject({boundingBox:box,classificationConfidence:.99,localizationConfidence:.8});
+    expect(await new LocalizedHelmetHeadVerifier(localizer("head"),classifier).verify(frame(),person,.9167)).toBeNull();
+    expect(classifier.run).not.toHaveBeenCalled();
   });
-  it.each(["head", "helmet"])("rejects Rajkot hair classified positive in tight %s crops when wider context disagrees", async label => {
+  it("rejects Rajkot hair classified positive in tight helmet crops when wider context disagrees", async () => {
     const classifier={run:vi.fn().mockResolvedValueOnce(score(.99998))
       .mockResolvedValueOnce(score(.99999)).mockResolvedValueOnce(score(.1362))};
-    expect(await new LocalizedHelmetHeadVerifier(localizer(label),classifier).verify(frame(),person,.9167)).toBeNull();
+    expect(await new LocalizedHelmetHeadVerifier(localizer("helmet"),classifier).verify(frame(),person,.9167)).toBeNull();
     // A contradictory surrounding crop must never fall back to the crown.
     expect(classifier.run).toHaveBeenCalledTimes(3);
   });

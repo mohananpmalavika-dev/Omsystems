@@ -159,12 +159,12 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
       }
     }
 
-    // 3. HELMET & HEAD LOCALIZER (YOLOv5)
-    // "head" localizes the visible head, including exposed faces underneath
-    // helmets. The independent classifier must establish helmet evidence.
-    const candidates = objects.filter(head =>
-      (head.label === "head" || head.label === "helmet") && (head.confidence ?? 0) >= 0.25 &&
-      validHead(frame, person, head.boundingBox));
+    // 3. HELMET LOCALIZER (YOLOv5)
+    // Only independently localized helmet observations may establish helmet evidence.
+    // Bare heads (label === "head") indicate an unhelmeted person and must never be promoted to a helmet.
+    const candidates = objects.filter(item =>
+      item.label === "helmet" && (item.confidence ?? 0) >= 0.25 &&
+      validHead(frame, person, item.boundingBox));
 
     for (const candidate of candidates.sort((a,b) => (b.confidence ?? 0) - (a.confidence ?? 0))) {
       const box = candidate.boundingBox;
