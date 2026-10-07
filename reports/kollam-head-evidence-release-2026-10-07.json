@@ -1,0 +1,37 @@
+{
+  "checkedAt": "2026-10-07T11:57:12.934Z",
+  "aiState": "AI_OPERATIONAL",
+  "helmet": {
+    "status": "healthy",
+    "details": "Helmet classifier active; production crop alerts require independent head localization and classification agreement"
+  },
+  "cameras": "3da93c6e-6824-43dc-9bba-7332707d5856,fb465a8f-5d79-4a3f-9cb8-b8cec471708d",
+  "probeSha256": "95946d4e327c75cf20b86f1947047c7e3fc64fe4948f0fd2d8a526a1698e9883",
+  "modelSha256": "583fd1110a514667812fee7d684952aaf82a99b959760c8d7dca7e0ab9839299",
+  "runtime": [
+    {
+      "file": "detectors/helmet-detector.js",
+      "sha256": "aa0955e6b0ee1fbe3bb841fcaf52881e09e2c168a23395e7f0f5eb33a7b62b4e"
+    },
+    {
+      "file": "inference/configured-model-inference.js",
+      "sha256": "a97bd5f82c30ed514345c067520e641d4d73e88f7e70c3f533b85033206042fd"
+    },
+    {
+      "file": "inference/helmet-head-verification.js",
+      "sha256": "5fad36ad1a775f2071c434f4bc31b87aa1f6f17744bcb553c62b6435cd661708"
+    },
+    {
+      "file": "inference/helmet-head-classification.js",
+      "sha256": "859b6c88455583cfe07cfe888feeee560892e81fc267b0c1f5ce6aa206122cd6"
+    },
+    {
+      "file": "inference/helmet-head-probe.js",
+      "sha256": "f23a81f5a3d1d93edaea3396f6d36789c9ade24508d8a3982031704777a2c135"
+    },
+    {
+      "file": "model-manager.js",
+      "sha256": "870aaf8427162d6f76e9d9ed4aecabf8bca5c3c07a9cfe89cf8d4b21ac8f0c77"
+    }
+  ]
+}

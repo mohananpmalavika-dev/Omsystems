@@ -18,6 +18,74 @@ const localizer = (label="helmet", boundingBox=box) => ({run:vi.fn(async()=>[{la
 beforeEach(() => vi.clearAllMocks());
 
 describe("independent helmet head verification", () => {
+  it("applies wildcard head evidence to existing and newly added cameras", async () => {
+    const evidence={run:vi.fn(async()=>score(.96))};
+    const verifier=new LocalizedHelmetHeadVerifier(localizer("head"),{run:vi.fn(async()=>score(.01))},null,null,evidence,new Set(["*"]));
+    for(const cameraId of ["bettaih","another-branch-camera","new-camera"]){
+      expect(await verifier.verify({...frame(),cameraId},person,.8)).toMatchObject({headEvidence:true,classificationConfidence:.96});
+    }
+  });
+  it("loads the evidence model for wildcard configuration and alerts outside Kollam", async () => {
+    vi.stubEnv("HELMET_HEAD_EVIDENCE_CAMERAS","*");
+    try {
+      loaders.classifier.mockImplementation(async()=>({run:vi.fn(async()=>score(.95))}));
+      loaders.objects.mockResolvedValue(localizer("head"));
+      const detector=new HelmetDetector(null,.75,null,true);await detector.initialize();
+      expect(loaders.classifier).toHaveBeenCalledWith("helmet-head-evidence");
+      expect((await detector.detect({...frame(),cameraId:"new-camera"}))[0]).toMatchObject({requiresAlert:true,confidence:.95});
+      await detector.cleanup();
+    }finally{vi.unstubAllEnvs();}
+  });
+  it("uses full-head evidence on configured cameras even when a helmet is labelled head and the face is visible", async () => {
+    const legacy={run:vi.fn(async()=>score(.999))};
+    const evidence={run:vi.fn(async()=>score(.96))};
+    const faceDetector={run:vi.fn(async()=>[{label:"face",confidence:.95,boundingBox:box}])};
+    const verifier=new LocalizedHelmetHeadVerifier(localizer("head"),legacy,faceDetector,null,evidence,new Set(["bettaih"]));
+    expect(await verifier.verify(frame(),person,.8)).toMatchObject({boundingBox:box,headEvidence:true,classificationConfidence:.96});
+    expect(evidence.run).toHaveBeenCalledTimes(2);
+    expect(legacy.run).not.toHaveBeenCalled();
+    expect(await verifier.verify({...frame(),cameraId:"other"},person,.8)).toBeNull();
+  });
+  it("does not override contrary full-head evidence with legacy crown crops", async () => {
+    const legacy={run:vi.fn(async()=>score(.999))};
+    const evidence={run:vi.fn().mockResolvedValueOnce(score(.99)).mockResolvedValueOnce(score(.2))};
+    expect(await new LocalizedHelmetHeadVerifier(localizer(),legacy,null,null,evidence).verify(frame(),person,.8)).toBeNull();
+    expect(legacy.run).not.toHaveBeenCalled();
+  });
+  it("requires a real person and rejects clipped heads for adapted evidence", async () => {
+    const evidence={run:vi.fn(async()=>score(.999))},legacy={run:vi.fn(async()=>score(.999))};
+    const verifier=new LocalizedHelmetHeadVerifier(localizer("head",{...box,x:0}),legacy,null,null,evidence);
+    expect(await verifier.verify(frame(),person,.8)).toBeNull();
+    expect(await verifier.verifyDirect(frame(),.8)).toBeNull();
+    expect(evidence.run).not.toHaveBeenCalled();
+  });
+  it("permits strong adapted evidence in fast mode without combining distant people", async () => {
+    const verifier=new LocalizedHelmetHeadVerifier(localizer("head"),{run:vi.fn(async()=>score(.01))},null,null,{run:vi.fn(async()=>score(.95))});
+    const detector=new HelmetDetector(null,.75,{run:vi.fn(async()=>score(.01))},true,verifier);await detector.initialize();
+    expect((await detector.detect(frame()))[0]).toMatchObject({detectionType:"helmet-worn",requiresAlert:true,confidence:.95});
+    const weak=frame();weak.metadata!.detections[0].confidence=.7;
+    expect(await detector.detect(weak)).toEqual([]);
+    await detector.cleanup();
+  });
+  it("still requires consecutive captures for weaker adapted head evidence", async () => {
+    const verifier=new LocalizedHelmetHeadVerifier(localizer("head"),{run:vi.fn(async()=>score(.01))},null,null,{run:vi.fn(async()=>score(.85))});
+    const detector=new HelmetDetector(null,.75,{run:vi.fn(async()=>score(.01))},true,verifier);await detector.initialize();
+    expect(await detector.detect(frame())).toEqual([]);
+    expect(await detector.detect(frame())).toEqual([]);
+    expect((await detector.detect({...frame(),timestamp:new Date(2000)}))[0]).toMatchObject({requiresAlert:true});
+    await detector.cleanup();
+  });
+  it("fails closed if an explicitly configured head evidence model is missing", async () => {
+    vi.stubEnv("HELMET_HEAD_EVIDENCE_CAMERAS","bettaih");
+    try {
+      loaders.classifier.mockImplementation(async(id)=>{if(id==="helmet-head-evidence")throw new Error("Missing head evidence");return {run:vi.fn(async()=>score(.99))};});
+      loaders.objects.mockResolvedValue({run:vi.fn(async()=>[])});
+      const detector=new HelmetDetector(null,.75,null,true);await detector.initialize();
+      expect(detector.getHealth().status).toBe("degraded");
+      expect((await detector.detect(frame())).some(result=>result.requiresAlert)).toBe(false);
+      await detector.cleanup();
+    } finally {vi.unstubAllEnvs();}
+  });
   it("rejects crop-only evidence when the head detector finds nothing", async () => {
     const classifier={run:vi.fn(async()=>score(.999))};
     const verifier=new LocalizedHelmetHeadVerifier({run:vi.fn(async()=>[])},classifier);

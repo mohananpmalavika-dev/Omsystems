@@ -1,0 +1,101 @@
+{
+  "checkedAt": "2026-10-07T12:00:34.537Z",
+  "events": [
+    {
+      "id": "5b0cf621-e6ab-460f-a330-edb986ea1d13",
+      "camera_id": "fb465a8f-5d79-4a3f-9cb8-b8cec471708d",
+      "occurred_at": "2026-10-07T11:59:05.851Z",
+      "confidence": "0.9614",
+      "model_version": "1.3.0",
+      "head_model": "helmet-head-evidence",
+      "probe_sha256": "95946d4e327c75cf20b86f1947047c7e3fc64fe4948f0fd2d8a526a1698e9883",
+      "evidence_source": "localized-head-classification",
+      "snapshot": "tmp/helmet-head-live-alert-5b0cf621-e6ab-460f-a330-edb986ea1d13.jpg",
+      "snapshotSha256": "d860ef40d4871ebbd9e6e25e45121a9e1ad7f8c320690b95ed1a4eebd5fbe832"
+    },
+    {
+      "id": "f611814e-cb66-4038-a2e9-81e587ad2e25",
+      "camera_id": "fb465a8f-5d79-4a3f-9cb8-b8cec471708d",
+      "occurred_at": "2026-10-07T11:58:49.597Z",
+      "confidence": "0.9911",
+      "model_version": "1.3.0",
+      "head_model": "helmet-head-evidence",
+      "probe_sha256": "95946d4e327c75cf20b86f1947047c7e3fc64fe4948f0fd2d8a526a1698e9883",
+      "evidence_source": "localized-head-classification",
+      "snapshot": "tmp/helmet-head-live-alert-f611814e-cb66-4038-a2e9-81e587ad2e25.jpg",
+      "snapshotSha256": "4e5e2d5c1d82714768473b94d97772eeb1138a2cc73a10e8d8676613ffdc2a93"
+    },
+    {
+      "id": "40db332a-970f-4aa9-8f8d-1171edb392e2",
+      "camera_id": "3da93c6e-6824-43dc-9bba-7332707d5856",
+      "occurred_at": "2026-10-07T11:58:49.142Z",
+      "confidence": "0.9832",
+      "model_version": "1.3.0",
+      "head_model": "helmet-head-evidence",
+      "probe_sha256": "95946d4e327c75cf20b86f1947047c7e3fc64fe4948f0fd2d8a526a1698e9883",
+      "evidence_source": "localized-head-classification",
+      "snapshot": "tmp/helmet-head-live-alert-40db332a-970f-4aa9-8f8d-1171edb392e2.jpg",
+      "snapshotSha256": "3eb818fc3dbb2f887597162119151bc78c51d779a1d60effc17f353f265fb46a"
+    },
+    {
+      "id": "6bf7e39e-60b9-49a4-99ec-315bb87dc9a5",
+      "camera_id": "fb465a8f-5d79-4a3f-9cb8-b8cec471708d",
+      "occurred_at": "2026-10-07T11:58:37.602Z",
+      "confidence": "0.9961",
+      "model_version": "1.3.0",
+      "head_model": "helmet-head-evidence",
+      "probe_sha256": "95946d4e327c75cf20b86f1947047c7e3fc64fe4948f0fd2d8a526a1698e9883",
+      "evidence_source": "localized-head-classification",
+      "snapshot": "tmp/helmet-head-live-alert-6bf7e39e-60b9-49a4-99ec-315bb87dc9a5.jpg",
+      "snapshotSha256": "f6484c1d2f73c9c1dbfac8e4cb99b904c30bd077b65c524af44932d53be2739a"
+    },
+    {
+      "id": "f82e00b7-7ff0-4382-b318-964fd86a743e",
+      "camera_id": "3da93c6e-6824-43dc-9bba-7332707d5856",
+      "occurred_at": "2026-10-07T11:58:23.692Z",
+      "confidence": "0.9325",
+      "model_version": "1.3.0",
+      "head_model": "helmet-head-evidence",
+      "probe_sha256": "95946d4e327c75cf20b86f1947047c7e3fc64fe4948f0fd2d8a526a1698e9883",
+      "evidence_source": "localized-head-classification",
+      "snapshot": "tmp/helmet-head-live-alert-f82e00b7-7ff0-4382-b318-964fd86a743e.jpg",
+      "snapshotSha256": "f937bd102139540264cf06fff011e36b6018e249e59f529070345365cc26be76"
+    },
+    {
+      "id": "d26d440d-f79d-4f60-9f37-0a59d563ea3f",
+      "camera_id": "fb465a8f-5d79-4a3f-9cb8-b8cec471708d",
+      "occurred_at": "2026-10-07T11:58:23.591Z",
+      "confidence": "0.9741",
+      "model_version": "1.3.0",
+      "head_model": "helmet-head-evidence",
+      "probe_sha256": "95946d4e327c75cf20b86f1947047c7e3fc64fe4948f0fd2d8a526a1698e9883",
+      "evidence_source": "localized-head-classification",
+      "snapshot": "tmp/helmet-head-live-alert-d26d440d-f79d-4f60-9f37-0a59d563ea3f.jpg",
+      "snapshotSha256": "e35cedbe0b26b2e57def58d39cdc19cda4b33a0c67518736ffde78a8cd64d5d9"
+    },
+    {
+      "id": "7f9d599c-ee3d-4e73-887e-c53478a89805",
+      "camera_id": "3da93c6e-6824-43dc-9bba-7332707d5856",
+      "occurred_at": "2026-10-07T11:58:17.483Z",
+      "confidence": "0.9207",
+      "model_version": "1.3.0",
+      "head_model": "helmet-head-evidence",
+      "probe_sha256": "95946d4e327c75cf20b86f1947047c7e3fc64fe4948f0fd2d8a526a1698e9883",
+      "evidence_source": "localized-head-classification",
+      "snapshot": "tmp/helmet-head-live-alert-7f9d599c-ee3d-4e73-887e-c53478a89805.jpg",
+      "snapshotSha256": "883e9808b4260e720bac1f4130d221fd677761d52529fe1766ef6637c824580c"
+    },
+    {
+      "id": "a5ae96fd-48e8-47ed-b1cc-2dbd35c52752",
+      "camera_id": "fb465a8f-5d79-4a3f-9cb8-b8cec471708d",
+      "occurred_at": "2026-10-07T11:58:09.542Z",
+      "confidence": "0.9917",
+      "model_version": "1.3.0",
+      "head_model": "helmet-head-evidence",
+      "probe_sha256": "95946d4e327c75cf20b86f1947047c7e3fc64fe4948f0fd2d8a526a1698e9883",
+      "evidence_source": "localized-head-classification",
+      "snapshot": "tmp/helmet-head-live-alert-a5ae96fd-48e8-47ed-b1cc-2dbd35c52752.jpg",
+      "snapshotSha256": "f35ee9ad6fd45984bb29b6c14c323f96960561df3c2c1a10477dc86286e07230"
+    }
+  ]
+}

@@ -6,6 +6,7 @@
 import { BaseDetector, calculateIoU, getInferenceObjects, hasInferenceObjects, shouldRunLocalSpecialtyInference } from "./base-detector.js";
 import { loadHelmetClassificationInference, loadObjectInference, loadPoseInference, modelUnavailableReason, } from "../inference/configured-model-inference.js";
 import { LocalizedHelmetHeadVerifier } from "../inference/helmet-head-verification.js";
+import { HELMET_HEAD_PROBE_SHA256 } from "../inference/helmet-head-probe.js";
 export class HelmetDetector extends BaseDetector {
     headVerifier;
     isModelLoaded = false;
@@ -25,10 +26,10 @@ export class HelmetDetector extends BaseDetector {
     HEAD_REGION_OVERLAP_THRESHOLD = 0.6;
     // Keep the existing alert confidence floor when selecting the motorcycle
     // classifier; generic object-presence thresholds are too low for alerts.
-    HELMET_WORN_ALERT_CONFIDENCE = 0.80; // Lowered from 0.9167 to allow alerts while maintaining multi-model verification
+    HELMET_WORN_ALERT_CONFIDENCE = 0.9167;
     // A person crop is only an approximate helmet location. Require a second
     // independent frame when no helmet box is supplied.
-    CLASSIFIED_HEAD_CONFIDENCE = 0.80; // Lowered from 0.9167 to allow alerts
+    CLASSIFIED_HEAD_CONFIDENCE = 0.9167;
     // Upscaling a thin, distant hair/forehead strip to 224px produced the
     // Hajipur bare-head alarms. Compact fallback needs usable source pixels
     // and agreement from a crop including the area above the person's box.
@@ -40,7 +41,7 @@ export class HelmetDetector extends BaseDetector {
     fastAlert;
     verificationRequired = false;
     constructor(inference = null, confidenceThreshold = 0.88, classifier = null, fastAlert = process.env.HELMET_FAST_ALERT === "true", headVerifier = null) {
-        super("helmet", "1.2.2");
+        super("helmet", "1.3.0");
         this.headVerifier = headVerifier;
         this.inference = inference;
         this.classifier = classifier;
@@ -53,6 +54,10 @@ export class HelmetDetector extends BaseDetector {
                 this.verificationRequired = true;
                 this.classifier ??= await loadHelmetClassificationInference("helmet");
                 const localizer = await loadObjectInference("helmet-head-localizer", 0.25);
+                const evidenceCameras = new Set((process.env.HELMET_HEAD_EVIDENCE_CAMERAS ?? "")
+                    .split(",").map(id => id.trim()).filter(Boolean));
+                const headClassifier = evidenceCameras.size
+                    ? await loadHelmetClassificationInference("helmet-head-evidence") : null;
                 let faceDetector = null;
                 let poseEstimator = null;
                 const shouldLoadAuxModels = process.env.HELMET_MULTI_MODEL === "true" || !process.env.VITEST;
@@ -66,7 +71,7 @@ export class HelmetDetector extends BaseDetector {
                     }
                     catch { }
                 }
-                this.headVerifier ??= new LocalizedHelmetHeadVerifier(localizer, this.classifier, faceDetector, poseEstimator);
+                this.headVerifier ??= new LocalizedHelmetHeadVerifier(localizer, this.classifier, faceDetector, poseEstimator, headClassifier, evidenceCameras);
             }
             this.isModelLoaded = true;
             this.modelLoadError = null;
@@ -132,6 +137,9 @@ export class HelmetDetector extends BaseDetector {
                 durationSeconds: 1,
                 objects: compliantObjects,
                 metadata: {
+                    ...(helmetWearers.some(d => d.headEvidence) ? {
+                        headEvidenceModel: "helmet-head-evidence", headEvidenceProbeSha256: HELMET_HEAD_PROBE_SHA256,
+                    } : {}),
                     compliantCount: helmetWearers.length,
                     threatType: "helmet_worn_inside_facility",
                     evidenceSource: helmetWearers.some((detection) => detection.evidenceSource === "observed-helmet")
@@ -248,8 +256,14 @@ export class HelmetDetector extends BaseDetector {
                 presence.confidence = Math.min(presence.confidence ?? 1, upperResult.wearingHelmetConfidence, standardResult.wearingHelmetConfidence);
             }
             if (!presence && runLocal && this.headVerifier && frame.imageData && frame.imageData.length > 0) {
-                const verified = await this.headVerifier.verify(frame, person.boundingBox, Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE));
+                const verified = await this.headVerifier.verify(frame, person.boundingBox, this.headEvidenceThreshold(frame));
                 if (verified) {
+                    // Adapted head evidence needs a substantial independently detected
+                    // person. Never promote a spare helmet or background head to a wearer.
+                    if (verified.headEvidence && ((person.confidence ?? 0) < 0.8 || person.boundingBox.height < 0.35)) {
+                        this.clearPendingHead(frame.cameraId, person.boundingBox);
+                        continue;
+                    }
                     const candidate = {
                         personBoundingBox: person.boundingBox,
                         helmetBoundingBox: verified.boundingBox,
@@ -257,10 +271,15 @@ export class HelmetDetector extends BaseDetector {
                         evidenceSource: "localized-head-classification",
                         confidence: verified.classificationConfidence,
                         localizationConfidence: verified.localizationConfidence,
+                        headEvidence: verified.headEvidence,
                         personConfidence: person.confidence ?? 0,
                         riskLevel: "violation",
                     };
-                    const confirmations = this.fastAlert
+                    // Strong, localized complete-head evidence can alert on one capture,
+                    // like an explicit helmet observation. Weaker scores retain temporal
+                    // confirmation rather than joining people across six-second gaps.
+                    const confirmations = this.fastAlert && verified.headEvidence && verified.classificationConfidence >= 0.9
+                        ? 1 : this.fastAlert
                         ? 2
                         : ((person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ? 2 : 3);
                     if (this.confirmClassifiedHead(frame.cameraId, person.boundingBox, frame.timestamp.getTime(), confirmations)) {
@@ -418,7 +437,7 @@ export class HelmetDetector extends BaseDetector {
             this.clearPendingHead(frame.cameraId, candidate.personBoundingBox);
             return null;
         }
-        const verified = await this.headVerifier.verify(frame, candidate.personBoundingBox, Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE));
+        const verified = await this.headVerifier.verify(frame, candidate.personBoundingBox, this.headEvidenceThreshold(frame));
         if (!verified) {
             this.clearPendingHead(frame.cameraId, candidate.personBoundingBox);
             return null;
@@ -426,6 +445,9 @@ export class HelmetDetector extends BaseDetector {
         return { ...candidate, helmetBoundingBox: verified.boundingBox,
             confidence: Math.min(candidate.confidence ?? 0, verified.classificationConfidence),
             localizationConfidence: verified.localizationConfidence, evidenceSource: "localized-head-classification" };
+    }
+    headEvidenceThreshold(frame) {
+        return Math.max(this.MIN_CONFIDENCE, this.headVerifier?.usesHeadEvidence?.(frame) ? 0.8 : this.HELMET_WORN_ALERT_CONFIDENCE);
     }
     hasRaisedHeadCandidate(person) {
         const minConf = this.headVerifier ? 0.35 : 0.8; // Lowered to 0.35 for walking persons

@@ -1,0 +1,133 @@
+[
+  {
+    "file": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007112719996.jpg",
+    "group": "channel4-feedback",
+    "split": "train",
+    "expectedHelmet": false,
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.7322041572738271,
+        "boundingBox": {
+          "x": 0.3061257690191269,
+          "y": 0.17346475919087728,
+          "width": 0.07583888173103331,
+          "height": 0.12853316201104065
+        },
+        "expectedHelmet": true
+      },
+      {
+        "label": "head",
+        "confidence": 0.43991775073934747,
+        "boundingBox": {
+          "x": 0.16371361017227173,
+          "y": 0.36783975495232474,
+          "width": 0.061337661743164046,
+          "height": 0.10963163375854484
+        },
+        "expectedHelmet": false
+      }
+    ]
+  },
+  {
+    "file": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007112725919.jpg",
+    "group": "channel4-feedback",
+    "split": "train",
+    "expectedHelmet": false,
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.7620559957392459,
+        "boundingBox": {
+          "x": 0.0036345601081848146,
+          "y": 0.43940919240315757,
+          "width": 0.11679944992065429,
+          "height": 0.22332666185167083
+        },
+        "expectedHelmet": true
+      },
+      {
+        "label": "head",
+        "confidence": 0.6015712001344582,
+        "boundingBox": {
+          "x": 0.16364972293376923,
+          "y": 0.3728097120920817,
+          "width": 0.05783520340919496,
+          "height": 0.08991643057929144
+        },
+        "expectedHelmet": false
+      },
+      {
+        "label": "head",
+        "confidence": 0.4571198360479478,
+        "boundingBox": {
+          "x": 0.16047647297382356,
+          "y": 0.40083057085673013,
+          "width": 0.05904602408409118,
+          "height": 0.10805192523532448
+        },
+        "expectedHelmet": false
+      }
+    ]
+  },
+  {
+    "file": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007112732039.jpg",
+    "group": "channel4-feedback",
+    "split": "train",
+    "expectedHelmet": false,
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.7136537983172957,
+        "boundingBox": {
+          "x": 0.7471746623516082,
+          "y": 0.13773291905721027,
+          "width": 0.11071258783340454,
+          "height": 0.19350948333740234
+        },
+        "expectedHelmet": true
+      },
+      {
+        "label": "head",
+        "confidence": 0.5424845678773771,
+        "boundingBox": {
+          "x": 0.15983257591724395,
+          "y": 0.3707084920671251,
+          "width": 0.05947887301445007,
+          "height": 0.09463614357842343
+        },
+        "expectedHelmet": false
+      }
+    ]
+  },
+  {
+    "file": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007112738142.jpg",
+    "group": "channel4-feedback",
+    "split": "train",
+    "expectedHelmet": false,
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.7597031461630621,
+        "boundingBox": {
+          "x": 0.3058857798576355,
+          "y": 0.2205886681874593,
+          "width": 0.08837616443634033,
+          "height": 0.1587726487053765
+        },
+        "expectedHelmet": true
+      },
+      {
+        "label": "head",
+        "confidence": 0.5343484183819669,
+        "boundingBox": {
+          "x": 0.16022373139858245,
+          "y": 0.40235035684373643,
+          "width": 0.05976269841194154,
+          "height": 0.10999366972181535
+        },
+        "expectedHelmet": false
+      }
+    ]
+  }
+]

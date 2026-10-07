@@ -1,0 +1,252 @@
+{
+  "config": {
+    "threshold": 0.75,
+    "fastAlert": true,
+    "face": true,
+    "pose": true
+  },
+  "samples": [
+    {
+      "cameraId": "3da93c6e-6824-43dc-9bba-7332707d5856",
+      "capturedAt": "2026-10-07T11:57:55.485Z",
+      "checkedAt": "2026-10-07T11:58:08.049Z",
+      "persons": [
+        {
+          "label": "person",
+          "confidence": 0.8703914914610387,
+          "boundingBox": {
+            "x": 0.2839320548848646,
+            "y": 0.2163023760901316,
+            "width": 0.14902574847612038,
+            "height": 0.6072245671786276
+          }
+        }
+      ],
+      "heads": [
+        {
+          "label": "head",
+          "confidence": 0.7866458758378059,
+          "boundingBox": {
+            "x": 0.27547703981399535,
+            "y": 0.19082640012105306,
+            "width": 0.08660514354705812,
+            "height": 0.15087783601548937
+          }
+        }
+      ],
+      "faces": [],
+      "poses": [],
+      "classificationCalls": [
+        {
+          "classifierKind": "head-evidence",
+          "crop": {
+            "x": 0.2624862682819366,
+            "y": 0.16819472471872965,
+            "width": 0.1125866866111756,
+            "height": 0.19614118682013615
+          },
+          "result": {
+            "wearingHelmet": true,
+            "confidence": 0.8583283746918376,
+            "wearingHelmetConfidence": 0.8583283746918376,
+            "unwearingHelmetConfidence": 0.14167162530816235
+          }
+        },
+        {
+          "classifierKind": "head-evidence",
+          "crop": {
+            "x": 0.25382575392723083,
+            "y": 0.1531069411171807,
+            "width": 0.12990771532058715,
+            "height": 0.2263167540232341
+          },
+          "result": {
+            "wearingHelmet": true,
+            "confidence": 0.6082022131039987,
+            "wearingHelmetConfidence": 0.6082022131039987,
+            "unwearingHelmetConfidence": 0.3917977868960013
+          }
+        }
+      ],
+      "results": [],
+      "pending": [],
+      "eventsSubmitted": 0,
+      "rawFile": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007115755485.rgb",
+      "snapshot": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007115755485.jpg"
+    },
+    {
+      "cameraId": "3da93c6e-6824-43dc-9bba-7332707d5856",
+      "capturedAt": "2026-10-07T11:58:01.708Z",
+      "checkedAt": "2026-10-07T11:58:08.606Z",
+      "persons": [
+        {
+          "label": "person",
+          "confidence": 0.8622704402410264,
+          "boundingBox": {
+            "x": 0.3130697223819389,
+            "y": 0.3312539032680602,
+            "width": 0.1831390663201652,
+            "height": 0.6666375353207463
+          }
+        }
+      ],
+      "heads": [
+        {
+          "label": "head",
+          "confidence": 0.8218224865194657,
+          "boundingBox": {
+            "x": 0.3051482796669006,
+            "y": 0.29611789915296766,
+            "width": 0.1416874647140503,
+            "height": 0.24148239559597445
+          }
+        }
+      ],
+      "faces": [],
+      "poses": [],
+      "classificationCalls": [
+        {
+          "classifierKind": "head-evidence",
+          "crop": {
+            "x": 0.2838951599597931,
+            "y": 0.2598955398135715,
+            "width": 0.18419370412826536,
+            "height": 0.3139271142747667
+          },
+          "result": {
+            "wearingHelmet": true,
+            "confidence": 0.8138473021268435,
+            "wearingHelmetConfidence": 0.8138473021268435,
+            "unwearingHelmetConfidence": 0.18615269787315647
+          }
+        },
+        {
+          "classifierKind": "head-evidence",
+          "crop": {
+            "x": 0.26972641348838805,
+            "y": 0.23574730025397406,
+            "width": 0.21253119707107543,
+            "height": 0.3622235933939617
+          },
+          "result": {
+            "wearingHelmet": true,
+            "confidence": 0.7866331325770015,
+            "wearingHelmetConfidence": 0.7866331325770015,
+            "unwearingHelmetConfidence": 0.21336686742299849
+          }
+        }
+      ],
+      "results": [],
+      "pending": [],
+      "eventsSubmitted": 0,
+      "rawFile": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007115801708.rgb",
+      "snapshot": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007115801708.jpg"
+    },
+    {
+      "cameraId": "3da93c6e-6824-43dc-9bba-7332707d5856",
+      "capturedAt": "2026-10-07T11:58:09.474Z",
+      "checkedAt": "2026-10-07T11:58:12.242Z",
+      "persons": [
+        {
+          "label": "person",
+          "confidence": 0.897544859910937,
+          "boundingBox": {
+            "x": 0.32066332685551446,
+            "y": 0.24348410400410572,
+            "width": 0.16519453733575923,
+            "height": 0.7258722716550832
+          }
+        }
+      ],
+      "heads": [
+        {
+          "label": "head",
+          "confidence": 0.8117392867929567,
+          "boundingBox": {
+            "x": 0.3209547609090805,
+            "y": 0.23519156773885092,
+            "width": 0.08978307843208316,
+            "height": 0.16048039330376518
+          }
+        }
+      ],
+      "faces": [],
+      "poses": [],
+      "classificationCalls": [
+        {
+          "classifierKind": "head-evidence",
+          "crop": {
+            "x": 0.30748729914426803,
+            "y": 0.21111950874328614,
+            "width": 0.11671800196170806,
+            "height": 0.2086245112948947
+          },
+          "result": {
+            "wearingHelmet": true,
+            "confidence": 0.6157333926681144,
+            "wearingHelmetConfidence": 0.6157333926681144,
+            "unwearingHelmetConfidence": 0.38426660733188556
+          }
+        }
+      ],
+      "results": [],
+      "pending": [],
+      "eventsSubmitted": 0,
+      "rawFile": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007115809474.rgb",
+      "snapshot": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007115809474.jpg"
+    },
+    {
+      "cameraId": "3da93c6e-6824-43dc-9bba-7332707d5856",
+      "capturedAt": "2026-10-07T11:58:18.792Z",
+      "checkedAt": "2026-10-07T11:58:19.892Z",
+      "persons": [
+        {
+          "label": "person",
+          "confidence": 0.8791405410714681,
+          "boundingBox": {
+            "x": 0.556851050500919,
+            "y": 0.17033800921656256,
+            "width": 0.19953740924091767,
+            "height": 0.760758575093601
+          }
+        }
+      ],
+      "heads": [
+        {
+          "label": "head",
+          "confidence": 0.8317604277095398,
+          "boundingBox": {
+            "x": 0.5505019009113312,
+            "y": 0.17000787523057725,
+            "width": 0.10554202795028678,
+            "height": 0.20122655232747394
+          }
+        }
+      ],
+      "faces": [],
+      "poses": [],
+      "classificationCalls": [
+        {
+          "classifierKind": "head-evidence",
+          "crop": {
+            "x": 0.5346705967187882,
+            "y": 0.13982389238145615,
+            "width": 0.13720463633537272,
+            "height": 0.26159451802571615
+          },
+          "result": {
+            "wearingHelmet": false,
+            "confidence": 0.6730458718130322,
+            "wearingHelmetConfidence": 0.3269541281869678,
+            "unwearingHelmetConfidence": 0.6730458718130322
+          }
+        }
+      ],
+      "results": [],
+      "pending": [],
+      "eventsSubmitted": 0,
+      "rawFile": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007115818792.rgb",
+      "snapshot": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007115818792.jpg"
+    }
+  ]
+}

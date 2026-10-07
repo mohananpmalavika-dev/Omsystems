@@ -51,3 +51,16 @@ Separate exploratory **JPEG** studies tested a person-head crop with the current
 Study artifacts: `reports/kollam-localization-study-2026-10-07.json` and `reports/kollam-alternate-localizers-2026-10-07.json`.
 
 No additional production code, model, rule, alert record, or service was changed during this follow-up. Only temporary diagnostic scripts were written remotely. **The localization miss remains unresolved; a suitable motorcycle-helmet localizer and validation against genuine and bare-head examples are still required.**
+
+## Subsequent correction and production confirmation, 17:25–17:30 IST
+
+The earlier unresolved status above is superseded by
+`reports/kollam-head-evidence-fix-2026-10-07.md`. Detector 1.3.0 and a complete-head
+evidence model were deployed for Kollam CH4/CH8 with persistent source, image,
+model and configuration changes. Production is healthy, and the user's walking
+test generated three genuine CH4 events and two new application alerts at
+17:28 IST. CH8 also generated new alerts. Event evidence images were verified
+as the helmet wearer, and the recorded classifier checksum matches deployment.
+101 relevant tests passed; 19 confirmed negative replay images generated zero
+alerts. Some weak or clipped views still fail verification; this does not claim
+perfect per-frame accuracy or validation on other cameras.

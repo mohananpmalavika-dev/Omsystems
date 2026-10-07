@@ -16,7 +16,7 @@ try {
   const {data,info}=decoded;
   for(const [index,head] of item.heads.entries()) {
    const b=head.boundingBox;
-   for(const padding of item.split==='train'?[0,.1,.2]:[0,.15]) {
+   for(const padding of [.15,.25]) {
     const left=Math.max(0,Math.floor((b.x-b.width*padding)*info.width));
     const top=Math.max(0,Math.floor((b.y-b.height*padding)*info.height));
     const right=Math.min(info.width,Math.ceil((b.x+b.width*(1+padding))*info.width));

@@ -1,0 +1,47 @@
+{
+  "stamp": "20261007115503422",
+  "cameras": "3da93c6e-6824-43dc-9bba-7332707d5856,fb465a8f-5d79-4a3f-9cb8-b8cec471708d",
+  "replay": {
+    "ch4Frames": 4,
+    "ch8Frames": 9,
+    "ch4AlertFrames": 1,
+    "ch8AlertFrames": 2,
+    "negativeFrames": 19,
+    "negativeAlertFrames": 0,
+    "labels": "CH8 wearer confirmed by user; absence/clipping is an abstention, not a bare-head negative"
+  },
+  "files": [
+    {
+      "file": "analytics-engine/src/detectors/helmet-detector.ts",
+      "sha256": "4baeafeb4beb025266dee71a91ad723e4fbc691ea09597d4c978c0b63d04c6f7"
+    },
+    {
+      "file": "analytics-engine/src/inference/configured-model-inference.ts",
+      "sha256": "cc165e9ca0dbb9f975d3ca04b2ea14d08294e539869f70c4584f00b9f9a6f8f3"
+    },
+    {
+      "file": "analytics-engine/src/inference/helmet-head-verification.ts",
+      "sha256": "5c6bf24d85d8b50ada69c9437ff2bc30945a8e2d0f8f6ea11b5c231475d0cb57"
+    },
+    {
+      "file": "analytics-engine/src/inference/helmet-head-classification.ts",
+      "sha256": "903aea7f3852779b19a0084f5f4709cab99568f0c01cc485f6e1a1271c630b36"
+    },
+    {
+      "file": "analytics-engine/src/inference/helmet-head-probe.ts",
+      "sha256": "7ac96f15f0b33b163be7bc1c9ffcc18846e8d57b7f5c09981025a99d8c1c5621"
+    },
+    {
+      "file": "analytics-engine/src/model-manager.ts",
+      "sha256": "5075d7d8c5c3bf55bde0ff1c8d35e3c151ebb3d4700a4ca438e2ea0ba10e953c"
+    },
+    {
+      "file": "analytics-engine/THIRD_PARTY_MODELS.md",
+      "sha256": "ba60f2089c1ea402f3f4a07e12bedd9dce4d326e4651d77cbc889edd6c2d4370"
+    },
+    {
+      "file": "analytics-engine/models/safety/helmet-head-embedding.onnx",
+      "sha256": "583fd1110a514667812fee7d684952aaf82a99b959760c8d7dca7e0ab9839299"
+    }
+  ]
+}

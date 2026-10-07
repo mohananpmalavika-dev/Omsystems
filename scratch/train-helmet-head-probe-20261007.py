@@ -15,6 +15,9 @@ for row in rows:
         row['group']='kollam-feedback'
     elif 'tmp/pilot-wearer-' in row['file']:
         row['split']='test'
+feedback=Path('reports/helmet-channel4-feedback-features-2026-10-07.json')
+if feedback.exists():
+    rows.extend(json.loads(feedback.read_text()))
 training=[r for r in rows if r['split']=='train']
 testing=[r for r in rows if r['split']=='test']
 assert not {r['file'] for r in training} & {r['file'] for r in testing}
@@ -57,6 +60,8 @@ for split in ['train','test']:
 artifact={'schemaVersion':1,'dimensions':512,'weights':weight.detach().tolist(),'bias':bias.item(),
           'featureModelSha256':'583fd1110a514667812fee7d684952aaf82a99b959760c8d7dca7e0ab9839299',
           'trainingFeatureSha256':hashlib.sha256(Path('reports/helmet-semantic-features-2026-10-07.json').read_bytes()).hexdigest(),
+          'channel4FeedbackSha256':hashlib.sha256(feedback.read_bytes()).hexdigest() if feedback.exists() else None,
+          'runtimeCropPadding':[.15,.25],
           'seed':20261007,'regularization':.0001,'trainingImages':sorted({r['file'] for r in training}),
           'heldOutImages':sorted({r['file'] for r in testing}), 'summary':summary}
 stage=Path('tmp/helmet-clip-candidate-20261007')

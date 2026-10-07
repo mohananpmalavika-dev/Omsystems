@@ -269,6 +269,8 @@ services:
       FACE_RECOGNITION_ENABLED: "true"
       HELMET_FAST_ALERT: "true"
       HELMET_MULTI_MODEL: "true"
+      # '*' enables complete-head helmet evidence for every camera, including new cameras.
+      HELMET_HEAD_EVIDENCE_CAMERAS: "${HELMET_HEAD_EVIDENCE_CAMERAS:-*}"
       HELMET_CONFIDENCE_THRESHOLD: "0.75"
       PERSON_CONFIDENCE_THRESHOLD: "0.35"
       ENABLE_POSE_ESTIMATION: "true"

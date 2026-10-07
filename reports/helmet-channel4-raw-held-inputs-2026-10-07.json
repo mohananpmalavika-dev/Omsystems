@@ -1,0 +1,97 @@
+[
+  {
+    "file": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007114035560.rgb",
+    "width": 640,
+    "height": 360,
+    "group": "channel4-new-raw-held-pass",
+    "split": "test",
+    "expectedHelmet": false,
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.8162920892459482,
+        "boundingBox": {
+          "x": 0.7745272278785705,
+          "y": 0.153551271226671,
+          "width": 0.12159297466278074,
+          "height": 0.19455329047309028
+        },
+        "expectedHelmet": true
+      }
+    ]
+  },
+  {
+    "file": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007114041708.rgb",
+    "width": 640,
+    "height": 360,
+    "group": "channel4-new-raw-held-pass",
+    "split": "test",
+    "expectedHelmet": false,
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.5325187399573572,
+        "boundingBox": {
+          "x": 0.00256730318069458,
+          "y": 0.6139698452419705,
+          "width": 0.2190762996673584,
+          "height": 0.3860301547580295
+        },
+        "expectedHelmet": true
+      },
+      {
+        "label": "head",
+        "confidence": 0.30868821287023707,
+        "boundingBox": {
+          "x": 0.10847247242927552,
+          "y": 0.5069934368133545,
+          "width": 0.06710985898971558,
+          "height": 0.1116687456766764
+        },
+        "expectedHelmet": false
+      }
+    ]
+  },
+  {
+    "file": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007114048319.rgb",
+    "width": 640,
+    "height": 360,
+    "group": "channel4-new-raw-held-pass",
+    "split": "test",
+    "expectedHelmet": false,
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.7911191339909251,
+        "boundingBox": {
+          "x": 0.4046986669301987,
+          "y": 0.1745021767086453,
+          "width": 0.07914083600044247,
+          "height": 0.13850751452975793
+        },
+        "expectedHelmet": true
+      }
+    ]
+  },
+  {
+    "file": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007114053652.rgb",
+    "width": 640,
+    "height": 360,
+    "group": "channel4-new-raw-held-pass",
+    "split": "test",
+    "expectedHelmet": false,
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.6111732209389587,
+        "boundingBox": {
+          "x": 0.7302350878715516,
+          "y": 0.19548811382717557,
+          "width": 0.10927345752716056,
+          "height": 0.2121615727742513
+        },
+        "expectedHelmet": true
+      }
+    ]
+  }
+]
