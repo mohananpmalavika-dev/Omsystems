@@ -1,0 +1,12 @@
+{
+  "source": "https://huggingface.co/vivekvar/helmet-v5/resolve/4ea2eb67301722073555448b477178330e40f7d1/models/helmet_head_v2.pt",
+  "revision": "4ea2eb67301722073555448b477178330e40f7d1",
+  "sha256": "6066036baf4906f83642dbbcf5f99fbf37d75bd30128d9dbcaf3ca338363f77b",
+  "bytes": 16341425,
+  "license": "Apache-2.0",
+  "preprocessor": "imagenet-zero-letterbox",
+  "labels": [
+    "wearing_helmet",
+    "unwearing_helmet"
+  ]
+}

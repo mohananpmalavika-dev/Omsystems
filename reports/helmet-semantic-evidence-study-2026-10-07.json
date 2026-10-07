@@ -1,0 +1,1404 @@
+[
+  {
+    "file": "tmp/kollam-live-fb465a8f-5d79-4a3f-9cb8-b8cec471708d-20261007102517107.jpg",
+    "heads": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.765607089532125,
+          "boundingBox": {
+            "x": 0.3209194839000702,
+            "y": 0.06258540683322483,
+            "width": 0.12378174066543579,
+            "height": 0.21301617092556424
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.8478197279209388,
+              "bare_head": 0.013469690329699371,
+              "cap_or_hat": 0.06360053459202478,
+              "hood_or_headscarf": 0.03804299316733212,
+              "furniture": 0.004549562123333381,
+              "background_object": 0.03251749186667145
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.2759897212203639,
+              "bare_head": 0.2345674609437193,
+              "cap_or_hat": 0.25008925969688506,
+              "hood_or_headscarf": 0.24495021013159818,
+              "furniture": 0.22371335085544566,
+              "background_object": 0.2433808224967692
+            },
+            "milliseconds": 113.94540000000052
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.8927644425356046,
+              "bare_head": 0.007403858492752599,
+              "cap_or_hat": 0.0658977909236649,
+              "hood_or_headscarf": 0.02279392197175648,
+              "furniture": 0.0013361361867516254,
+              "background_object": 0.00980384988946959
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.28616514579993974,
+              "bare_head": 0.2382419309832765,
+              "cap_or_hat": 0.2601029673537175,
+              "hood_or_headscarf": 0.24948685736304546,
+              "furniture": 0.22111973822179734,
+              "background_object": 0.2410496697046612
+            },
+            "milliseconds": 151.95809999999983
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "tmp/kollam-live-fb465a8f-5d79-4a3f-9cb8-b8cec471708d-20261007102525317.jpg",
+    "heads": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.40213707594126546,
+          "boundingBox": {
+            "x": 0.15837736129760743,
+            "y": 0.45391242769029405,
+            "width": 0.07530598640441893,
+            "height": 0.13272944556342248
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.5060106569387541,
+              "bare_head": 0.2113887239945155,
+              "cap_or_hat": 0.10353993944644245,
+              "hood_or_headscarf": 0.08206275236668943,
+              "furniture": 0.012486617590925744,
+              "background_object": 0.08451130966267273
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.2657946298213481,
+              "bare_head": 0.25706603984272436,
+              "cap_or_hat": 0.24992862678566424,
+              "hood_or_headscarf": 0.24760389479282208,
+              "furniture": 0.22877562730013912,
+              "background_object": 0.24789790619494217
+            },
+            "milliseconds": 236.95669999999973
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.3907101733925072,
+              "bare_head": 0.3146037810791724,
+              "cap_or_hat": 0.05379743267394793,
+              "hood_or_headscarf": 0.08834854140318094,
+              "furniture": 0.012052058238101883,
+              "background_object": 0.14048801321308968
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.25680554364271896,
+              "bare_head": 0.2546390233290425,
+              "cap_or_hat": 0.23697814069878542,
+              "hood_or_headscarf": 0.24193878012992093,
+              "furniture": 0.22201823777156374,
+              "background_object": 0.2465771049358945
+            },
+            "milliseconds": 169.4323000000004
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "scratch/helmet-alert-ch6.jpg",
+    "heads": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.7060828786081856,
+          "boundingBox": {
+            "x": 0.44510601460933685,
+            "y": 0.2528352949354384,
+            "width": 0.09926989674568176,
+            "height": 0.17317428588867184
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.7980758671772131,
+              "bare_head": 0.03223125732979469,
+              "cap_or_hat": 0.08892092282586926,
+              "hood_or_headscarf": 0.05454339753325335,
+              "furniture": 0.002185827833754937,
+              "background_object": 0.024042727300114527
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.2745015795472809,
+              "bare_head": 0.24240890996376438,
+              "cap_or_hat": 0.25255701757347476,
+              "hood_or_headscarf": 0.2476695095996297,
+              "furniture": 0.21549948918224335,
+              "background_object": 0.23947786841802945
+            },
+            "milliseconds": 400.7536
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.42532026891795716,
+              "bare_head": 0.030164936911690282,
+              "cap_or_hat": 0.2689832806383281,
+              "hood_or_headscarf": 0.23057460239801528,
+              "furniture": 0.006050773161321246,
+              "background_object": 0.038906137972687986
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.2711184455108875,
+              "bare_head": 0.24465682312483797,
+              "cap_or_hat": 0.26653651315943344,
+              "hood_or_headscarf": 0.2649957655676099,
+              "furniture": 0.22859188151171334,
+              "background_object": 0.24720154118712073
+            },
+            "milliseconds": 117.78600000000006
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.3653410366583465,
+          "boundingBox": {
+            "x": 0.4475298851728439,
+            "y": 0.2552133666144477,
+            "width": 0.09585009217262269,
+            "height": 0.16666999393039278
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.5229765471901411,
+              "bare_head": 0.1210567482433287,
+              "cap_or_hat": 0.1327041914569391,
+              "hood_or_headscarf": 0.155512851042141,
+              "furniture": 0.006392177923388935,
+              "background_object": 0.06135748414406114
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.26818478524601624,
+              "bare_head": 0.25355201333790917,
+              "cap_or_hat": 0.2544706443119054,
+              "hood_or_headscarf": 0.25605670275953185,
+              "furniture": 0.22414016947791104,
+              "background_object": 0.24675659059045724
+            },
+            "milliseconds": 147.30549999999948
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.6120889921235378,
+              "bare_head": 0.03582404914621461,
+              "cap_or_hat": 0.18871140190863525,
+              "hood_or_headscarf": 0.11265583736728424,
+              "furniture": 0.0046314471100808875,
+              "background_object": 0.04608827234424719
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.2718087562134614,
+              "bare_head": 0.24342617369173597,
+              "cap_or_hat": 0.2600421681145681,
+              "hood_or_headscarf": 0.2548833542159196,
+              "furniture": 0.22296867307476279,
+              "background_object": 0.2459455645907368
+            },
+            "milliseconds": 182.9402
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "tmp/helmet-channel-6.jpg",
+    "heads": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8402697201999274,
+          "boundingBox": {
+            "x": 0.3540926516056061,
+            "y": 0.18231630325317383,
+            "width": 0.1535752177238464,
+            "height": 0.2786030027601454
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.5506211172839584,
+              "bare_head": 0.1441750988504529,
+              "cap_or_hat": 0.05050015834553723,
+              "hood_or_headscarf": 0.0834380596491263,
+              "furniture": 0.02000757192371423,
+              "background_object": 0.15125799394721093
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.25277780712535214,
+              "bare_head": 0.239377622924698,
+              "cap_or_hat": 0.228887102391719,
+              "hood_or_headscarf": 0.23390838323317642,
+              "furniture": 0.2196284456543056,
+              "background_object": 0.23985720715398157
+            },
+            "milliseconds": 293.1316999999999
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.7767379570785962,
+              "bare_head": 0.04248848600593635,
+              "cap_or_hat": 0.06252877436560544,
+              "hood_or_headscarf": 0.08812908519810618,
+              "furniture": 0.00447738291770353,
+              "background_object": 0.025638314434052213
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.2728379270528842,
+              "bare_head": 0.24377922783097508,
+              "cap_or_hat": 0.24764316502024447,
+              "hood_or_headscarf": 0.25107492278295224,
+              "furniture": 0.22127728366956861,
+              "background_object": 0.23872777551569263
+            },
+            "milliseconds": 201.2548999999999
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+    "heads": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8733342278857634,
+          "boundingBox": {
+            "x": 0.30393700003623964,
+            "y": 0.37344029744466145,
+            "width": 0.1250325322151184,
+            "height": 0.22819875081380214
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.2472991726711684,
+              "bare_head": 0.22530772702528673,
+              "cap_or_hat": 0.04562140681445211,
+              "hood_or_headscarf": 0.06223020817805623,
+              "furniture": 0.049038448449521994,
+              "background_object": 0.3705030368615145
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.25490419805199155,
+              "bare_head": 0.2539728811957941,
+              "cap_or_hat": 0.23800198030173128,
+              "hood_or_headscarf": 0.24110661519999654,
+              "furniture": 0.23872425628782826,
+              "background_object": 0.25894682617483333
+            },
+            "milliseconds": 192.33939999999984
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.1994065298177764,
+              "bare_head": 0.08326427168940465,
+              "cap_or_hat": 0.2456611136243079,
+              "hood_or_headscarf": 0.09549730306900675,
+              "furniture": 0.034305761579279774,
+              "background_object": 0.34186502022022447
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.24480087644723378,
+              "bare_head": 0.23606761586273325,
+              "cap_or_hat": 0.2468869503969509,
+              "hood_or_headscarf": 0.2374384004737376,
+              "furniture": 0.22720055356538738,
+              "background_object": 0.2501915802183916
+            },
+            "milliseconds": 231.33170000000064
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8347121058056359,
+          "boundingBox": {
+            "x": 0.4069895625114441,
+            "y": 0.07280316352844238,
+            "width": 0.09027416706085206,
+            "height": 0.17204529444376637
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.28254686496979,
+              "bare_head": 0.3160260812982847,
+              "cap_or_hat": 0.11586245242984153,
+              "hood_or_headscarf": 0.14212965745507114,
+              "furniture": 0.046204276542743575,
+              "background_object": 0.09723066730426899
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.2482526310290978,
+              "bare_head": 0.2493724341831884,
+              "cap_or_hat": 0.23933822405011373,
+              "hood_or_headscarf": 0.2413815839404995,
+              "furniture": 0.2301449103204774,
+              "background_object": 0.23758504841333766
+            },
+            "milliseconds": 137.66620000000057
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.15818157602128116,
+              "bare_head": 0.0825197373049462,
+              "cap_or_hat": 0.06828325703454081,
+              "hood_or_headscarf": 0.1597958049021489,
+              "furniture": 0.08837802371582502,
+              "background_object": 0.44284160102125797
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.23574837285726022,
+              "bare_head": 0.22924131202004186,
+              "cap_or_hat": 0.22734758295155788,
+              "hood_or_headscarf": 0.23584990478027726,
+              "furniture": 0.2299271703545459,
+              "background_object": 0.24604305843550908
+            },
+            "milliseconds": 144.38290000000052
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8248573138658344,
+          "boundingBox": {
+            "x": 0.6860997676849365,
+            "y": 0.4721510781182183,
+            "width": 0.14810724258422847,
+            "height": 0.2400012969970703
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.2950730863944266,
+              "bare_head": 0.2227490450405917,
+              "cap_or_hat": 0.05778579751755924,
+              "hood_or_headscarf": 0.09310639254007877,
+              "furniture": 0.023925891847807728,
+              "background_object": 0.3073597866595361
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.24117253417150597,
+              "bare_head": 0.23836076120212618,
+              "cap_or_hat": 0.22486773368801788,
+              "hood_or_headscarf": 0.22963773186090836,
+              "furniture": 0.21604991554465905,
+              "background_object": 0.24158049345920143
+            },
+            "milliseconds": 129.65309999999954
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.6000079904058214,
+              "bare_head": 0.1226436129514983,
+              "cap_or_hat": 0.039804072111665145,
+              "hood_or_headscarf": 0.05496601181461548,
+              "furniture": 0.014960485752588428,
+              "background_object": 0.1676178269638113
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.2527141282879457,
+              "bare_head": 0.2368375255026695,
+              "cap_or_hat": 0.22558439077744144,
+              "hood_or_headscarf": 0.22881184883529232,
+              "furniture": 0.21579882298436062,
+              "background_object": 0.23996156404848096
+            },
+            "milliseconds": 170.48059999999896
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8122307625328631,
+          "boundingBox": {
+            "x": 0.7387882828712463,
+            "y": 0.05556226306491428,
+            "width": 0.1723896741867066,
+            "height": 0.3493368996514215
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.33000701150164785,
+              "bare_head": 0.049592863476635184,
+              "cap_or_hat": 0.15249014341504868,
+              "hood_or_headscarf": 0.10888469461909776,
+              "furniture": 0.05977123786545183,
+              "background_object": 0.29925404912211867
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.2551993709799861,
+              "bare_head": 0.23624670138648596,
+              "cap_or_hat": 0.24747923157403803,
+              "hood_or_headscarf": 0.2441111267157143,
+              "furniture": 0.2381134776989185,
+              "background_object": 0.25422116072036627
+            },
+            "milliseconds": 159.66020000000026
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.05790035725495975,
+              "bare_head": 0.016258197161063123,
+              "cap_or_hat": 0.03210187288825851,
+              "hood_or_headscarf": 0.033127532326986966,
+              "furniture": 0.229265414660919,
+              "background_object": 0.6313466257078126
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.24259534844359382,
+              "bare_head": 0.22989408511862033,
+              "cap_or_hat": 0.23669725663455465,
+              "hood_or_headscarf": 0.2370117601858448,
+              "furniture": 0.2563569163799319,
+              "background_object": 0.26648666328896614
+            },
+            "milliseconds": 126.14020000000164
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.5031011885218248,
+          "boundingBox": {
+            "x": 0.16202624440193175,
+            "y": 0,
+            "width": 0.164853036403656,
+            "height": 0.31211524539523655
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.18022173816214965,
+              "bare_head": 0.053451494592547846,
+              "cap_or_hat": 0.13327645351259157,
+              "hood_or_headscarf": 0.12734079349746313,
+              "furniture": 0.04952164009413835,
+              "background_object": 0.45618788014110956
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.22974489922997218,
+              "bare_head": 0.2175907655109092,
+              "cap_or_hat": 0.22672727520333594,
+              "hood_or_headscarf": 0.22627168857467064,
+              "furniture": 0.21682711699229434,
+              "background_object": 0.23903206694080026
+            },
+            "milliseconds": 140.91790000000037
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.13602372233916665,
+              "bare_head": 0.05203110874903416,
+              "cap_or_hat": 0.2523719429770301,
+              "hood_or_headscarf": 0.16462432556245585,
+              "furniture": 0.06501865761562053,
+              "background_object": 0.3299302427566927
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.23066820079893136,
+              "bare_head": 0.2210583256528144,
+              "cap_or_hat": 0.23684894743945017,
+              "hood_or_headscarf": 0.23257656843647437,
+              "furniture": 0.2232866504935137,
+              "background_object": 0.2395287202693325
+            },
+            "milliseconds": 121.10919999999896
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.41504924755894734,
+          "boundingBox": {
+            "x": 0.39600529670715334,
+            "y": 0.3383079210917155,
+            "width": 0.0816781997680664,
+            "height": 0.11614589691162108
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.2647317034798928,
+              "bare_head": 0.23427611960779232,
+              "cap_or_hat": 0.13505976586728585,
+              "hood_or_headscarf": 0.02907330663735918,
+              "furniture": 0.08190642638128974,
+              "background_object": 0.2549526780263801
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.24897461934951232,
+              "bare_head": 0.2477524547955756,
+              "cap_or_hat": 0.24224462452126047,
+              "hood_or_headscarf": 0.22688565517044004,
+              "furniture": 0.23724322515501517,
+              "background_object": 0.24859823013096655
+            },
+            "milliseconds": 132.2536
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.18461035214950247,
+              "bare_head": 0.11231910325852412,
+              "cap_or_hat": 0.08480504131768242,
+              "hood_or_headscarf": 0.015738292111313282,
+              "furniture": 0.12433312949607939,
+              "background_object": 0.47819408166689836
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.23847195782382496,
+              "bare_head": 0.23350292339505924,
+              "cap_or_hat": 0.23069303373601507,
+              "hood_or_headscarf": 0.21385045113901952,
+              "furniture": 0.2345191287460237,
+              "background_object": 0.2479896506174572
+            },
+            "milliseconds": 122.58109999999942
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "scratch/helmet-false-f0b4f55e-00c0-442c-a0e1-3d6a05150bdf.jpg",
+    "heads": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8030402511352577,
+          "boundingBox": {
+            "x": 0.5282607674598694,
+            "y": 0.14496731228298612,
+            "width": 0.18622653484344487,
+            "height": 0.33975745307074656
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.14457390148114008,
+              "bare_head": 0.08457176873774984,
+              "cap_or_hat": 0.1860927564015241,
+              "hood_or_headscarf": 0.13424274570905215,
+              "furniture": 0.035407625747827826,
+              "background_object": 0.415111201922706
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.23440712941874184,
+              "bare_head": 0.22904522644179187,
+              "cap_or_hat": 0.23693167375860955,
+              "hood_or_headscarf": 0.23366571832363908,
+              "furniture": 0.22033849349667886,
+              "background_object": 0.24495468576898716
+            },
+            "milliseconds": 109.20470000000023
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.22784795731185636,
+              "bare_head": 0.03359237796944476,
+              "cap_or_hat": 0.07760532594299366,
+              "hood_or_headscarf": 0.046105683311365456,
+              "furniture": 0.14852351160329116,
+              "background_object": 0.46632514386104856
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.255451530028275,
+              "bare_head": 0.23630773645302583,
+              "cap_or_hat": 0.24468110508334398,
+              "hood_or_headscarf": 0.23947410674860553,
+              "furniture": 0.2511721772321958,
+              "background_object": 0.262613575746445
+            },
+            "milliseconds": 104.40440000000126
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.799310755115556,
+          "boundingBox": {
+            "x": 0.39115355014801023,
+            "y": 0.717768308851454,
+            "width": 0.13735022544860842,
+            "height": 0.21097929212782118
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.360619018035784,
+              "bare_head": 0.2000944729592932,
+              "cap_or_hat": 0.03098112901739533,
+              "hood_or_headscarf": 0.01411212133702413,
+              "furniture": 0.02468439122184225,
+              "background_object": 0.36950886742866107
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.25255901935176744,
+              "bare_head": 0.24666869505636388,
+              "cap_or_hat": 0.2280145816357356,
+              "hood_or_headscarf": 0.2201511398319362,
+              "furniture": 0.22574250995361914,
+              "background_object": 0.25280254624375065
+            },
+            "milliseconds": 108.66200000000026
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.22764977349320534,
+              "bare_head": 0.38134335122521457,
+              "cap_or_hat": 0.08106793603853744,
+              "hood_or_headscarf": 0.05982790526019802,
+              "furniture": 0.026281283977826104,
+              "background_object": 0.2238297500050186
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.25199309481581755,
+              "bare_head": 0.2571520126840175,
+              "cap_or_hat": 0.2416678863445112,
+              "hood_or_headscarf": 0.23862973310039348,
+              "furniture": 0.2304035816480634,
+              "background_object": 0.2518238683303393
+            },
+            "milliseconds": 103.06450000000041
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.7368487269703294,
+          "boundingBox": {
+            "x": 0.14306443333625793,
+            "y": 0.09514569176567925,
+            "width": 0.09938083887100221,
+            "height": 0.18017565409342448
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.4384658799920701,
+              "bare_head": 0.3770911397445005,
+              "cap_or_hat": 0.08381095630085061,
+              "hood_or_headscarf": 0.07182542452413142,
+              "furniture": 0.006220344502843382,
+              "background_object": 0.022586254935604136
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.2534336523553253,
+              "bare_head": 0.2519257014570075,
+              "cap_or_hat": 0.23688646979872907,
+              "hood_or_headscarf": 0.23534321752866405,
+              "furniture": 0.21087908529010693,
+              "background_object": 0.22377424770050539
+            },
+            "milliseconds": 126.88780000000042
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.36409886391024476,
+              "bare_head": 0.24922873636811102,
+              "cap_or_hat": 0.11099035082310216,
+              "hood_or_headscarf": 0.10409154966014332,
+              "furniture": 0.023654579147271388,
+              "background_object": 0.1479359200911275
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.23298371252202704,
+              "bare_head": 0.2291931691203854,
+              "cap_or_hat": 0.2211038908530681,
+              "hood_or_headscarf": 0.22046216614405945,
+              "furniture": 0.20564502534939505,
+              "background_object": 0.22397725024941942
+            },
+            "milliseconds": 151.1901999999991
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.6984191166527438,
+          "boundingBox": {
+            "x": 0.34942456185817716,
+            "y": 0.05905016793145074,
+            "width": 0.0965336620807648,
+            "height": 0.1807257546318902
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.052786682690011674,
+              "bare_head": 0.37383231729292327,
+              "cap_or_hat": 0.10457674810360619,
+              "hood_or_headscarf": 0.2649729569849401,
+              "furniture": 0.04602449239671952,
+              "background_object": 0.1578068025317993
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.22946470978287287,
+              "bare_head": 0.24904019388560103,
+              "cap_or_hat": 0.23630133274623816,
+              "hood_or_headscarf": 0.2455983981283384,
+              "furniture": 0.2280938573936676,
+              "background_object": 0.24041583557217577
+            },
+            "milliseconds": 110.32890000000043
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.03308273366677193,
+              "bare_head": 0.1566083846931993,
+              "cap_or_hat": 0.09028604718014094,
+              "hood_or_headscarf": 0.3196147819966302,
+              "furniture": 0.07152738293573586,
+              "background_object": 0.3288806695275218
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.215260563122029,
+              "bare_head": 0.2308079313163493,
+              "cap_or_hat": 0.2253002773961595,
+              "hood_or_headscarf": 0.2379416127178585,
+              "furniture": 0.22297125161914128,
+              "background_object": 0.23822739785777533
+            },
+            "milliseconds": 82.6148000000012
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "scratch/helmet-new-false-alert-raw.jpg",
+    "heads": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.7875189524681048,
+          "boundingBox": {
+            "x": 0.6897942364215851,
+            "y": 0.1622307777404785,
+            "width": 0.11611236333847041,
+            "height": 0.21862095726860897
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.19231845012901855,
+              "bare_head": 0.2863546736013006,
+              "cap_or_hat": 0.06663720331718252,
+              "hood_or_headscarf": 0.09088052753439393,
+              "furniture": 0.032535521312718904,
+              "background_object": 0.33127362410538547
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.22092206225974217,
+              "bare_head": 0.22490284793469545,
+              "cap_or_hat": 0.2103231666342206,
+              "hood_or_headscarf": 0.2134259939316503,
+              "furniture": 0.2031538608942743,
+              "background_object": 0.226359983262846
+            },
+            "milliseconds": 83.91949999999997
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.161335158668452,
+              "bare_head": 0.27070323207576824,
+              "cap_or_hat": 0.2163018376925567,
+              "hood_or_headscarf": 0.20999549136625092,
+              "furniture": 0.02945010719193519,
+              "background_object": 0.11221417300503692
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.23414764931522056,
+              "bare_head": 0.23932304135722088,
+              "cap_or_hat": 0.23707955828435667,
+              "hood_or_headscarf": 0.23678367060279357,
+              "furniture": 0.2171397854936192,
+              "background_object": 0.23051690303705868
+            },
+            "milliseconds": 94.4966000000004
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "scratch/helmet-rajkot-original-0.jpg",
+    "heads": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.6033853238321285,
+          "boundingBox": {
+            "x": 0.19186515212059022,
+            "y": 0.35959728029039173,
+            "width": 0.07662469148635861,
+            "height": 0.13242066701253252
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.12264097929502413,
+              "bare_head": 0.6750866543836098,
+              "cap_or_hat": 0.033469424717439834,
+              "hood_or_headscarf": 0.03997315973952033,
+              "furniture": 0.004857366854811155,
+              "background_object": 0.12397241500959476
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.2526980591083192,
+              "bare_head": 0.2697538575067853,
+              "cap_or_hat": 0.2397117701825054,
+              "hood_or_headscarf": 0.24148752913557317,
+              "furniture": 0.22041041182845486,
+              "background_object": 0.25280603772438187
+            },
+            "milliseconds": 84.2400000000016
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.36090199717891996,
+              "bare_head": 0.10588271421448986,
+              "cap_or_hat": 0.1179857805048048,
+              "hood_or_headscarf": 0.08503438750932503,
+              "furniture": 0.008369278871400807,
+              "background_object": 0.3218258417210596
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.24070256550718944,
+              "bare_head": 0.22843982117048958,
+              "cap_or_hat": 0.22952214218208883,
+              "hood_or_headscarf": 0.22624705838812653,
+              "furniture": 0.20306217829646725,
+              "background_object": 0.23955660640205284
+            },
+            "milliseconds": 82.52779999999984
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.4444565994756644,
+          "boundingBox": {
+            "x": 0.19038414359092712,
+            "y": 0.3583924929300944,
+            "width": 0.07808486223220826,
+            "height": 0.13077225155300565
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.17278825923100943,
+              "bare_head": 0.29440296735103394,
+              "cap_or_hat": 0.07662405855154221,
+              "hood_or_headscarf": 0.06907815887941778,
+              "furniture": 0.020927493647441446,
+              "background_object": 0.3661790623395551
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.24790402340303608,
+              "bare_head": 0.25323284896628256,
+              "cap_or_hat": 0.2397724653824795,
+              "hood_or_headscarf": 0.23873574031424155,
+              "furniture": 0.22679399210508228,
+              "background_object": 0.25541457885633695
+            },
+            "milliseconds": 100.35900000000038
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.36228184326194346,
+              "bare_head": 0.0777641480794256,
+              "cap_or_hat": 0.1025081435345876,
+              "hood_or_headscarf": 0.11222074426575669,
+              "furniture": 0.008617711890455189,
+              "background_object": 0.3366074089678314
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.23873579137594814,
+              "bare_head": 0.22334837159524845,
+              "cap_or_hat": 0.22611098900693094,
+              "hood_or_headscarf": 0.2270162451865588,
+              "furniture": 0.20134976263649718,
+              "background_object": 0.23800073948860875
+            },
+            "milliseconds": 116.15269999999873
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.4412296801669342,
+          "boundingBox": {
+            "x": 0,
+            "y": 0.3360127449035645,
+            "width": 0.04479180723428726,
+            "height": 0.14560790591769757
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.11553824306139639,
+              "bare_head": 0.7656655310884481,
+              "cap_or_hat": 0.013977366197617845,
+              "hood_or_headscarf": 0.01976236259546955,
+              "furniture": 0.02862083129761917,
+              "background_object": 0.05643566575944898
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.252038301210323,
+              "bare_head": 0.2709497396801458,
+              "cap_or_hat": 0.23091667858293322,
+              "hood_or_headscarf": 0.23438007786838685,
+              "furniture": 0.23808363356863063,
+              "background_object": 0.2448732986738095
+            },
+            "milliseconds": 83.84680000000117
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.2425197455030346,
+              "bare_head": 0.5693996605669854,
+              "cap_or_hat": 0.018898990354450567,
+              "hood_or_headscarf": 0.019664898110708103,
+              "furniture": 0.027919505967543043,
+              "background_object": 0.12159719949727833
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.2586648047244199,
+              "bare_head": 0.2671997991934423,
+              "cap_or_hat": 0.2331450584086372,
+              "hood_or_headscarf": 0.23354232565244293,
+              "furniture": 0.23704722923789864,
+              "background_object": 0.2517611127944133
+            },
+            "milliseconds": 92.42920000000049
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.28024459713139294,
+          "boundingBox": {
+            "x": 0.17281887531280518,
+            "y": 0.3359562979804145,
+            "width": 0.07512311935424804,
+            "height": 0.10922313266330297
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.25587315054553195,
+              "bare_head": 0.16840492315839303,
+              "cap_or_hat": 0.10156286068005763,
+              "hood_or_headscarf": 0.07097522658376694,
+              "furniture": 0.02519723488018546,
+              "background_object": 0.37798660415206503
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.24895181109571954,
+              "bare_head": 0.24476870629865632,
+              "cap_or_hat": 0.23971177217406503,
+              "hood_or_headscarf": 0.23612830188376116,
+              "furniture": 0.2257723355509758,
+              "background_object": 0.25285358049817885
+            },
+            "milliseconds": 87.39789999999994
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.12859684033046204,
+              "bare_head": 0.06790563017039705,
+              "cap_or_hat": 0.13317568194114554,
+              "hood_or_headscarf": 0.06721212381918291,
+              "furniture": 0.021181213535712565,
+              "background_object": 0.5819285102030999
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.23342485837529295,
+              "bare_head": 0.22703922545464836,
+              "cap_or_hat": 0.23377472769204494,
+              "hood_or_headscarf": 0.22693657241007587,
+              "furniture": 0.2153891823061079,
+              "background_object": 0.2485215120125925
+            },
+            "milliseconds": 90.48600000000079
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "scratch/helmet-rajkot-original-1.jpg",
+    "heads": [
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.6572948983172893,
+          "boundingBox": {
+            "x": 0.17777586579322815,
+            "y": 0.37128956582811146,
+            "width": 0.07894338369369505,
+            "height": 0.12057326634724935
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.32643827247500196,
+              "bare_head": 0.06489019270173689,
+              "cap_or_hat": 0.09486367922145253,
+              "hood_or_headscarf": 0.05588725060277586,
+              "furniture": 0.008852933445028044,
+              "background_object": 0.4490676715540047
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.2438443094665884,
+              "bare_head": 0.22768886572382005,
+              "cap_or_hat": 0.23148630979587823,
+              "hood_or_headscarf": 0.22619526353149105,
+              "furniture": 0.2077693894089888,
+              "background_object": 0.24703363666627268
+            },
+            "milliseconds": 85.84280000000035
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.26637204721753927,
+              "bare_head": 0.10099707635176722,
+              "cap_or_hat": 0.07148106671453432,
+              "hood_or_headscarf": 0.08101661937634971,
+              "furniture": 0.009056281951912258,
+              "background_object": 0.4710769083878971
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.24339189594922928,
+              "bare_head": 0.23369387159034177,
+              "cap_or_hat": 0.23023728203062707,
+              "hood_or_headscarf": 0.23148949900736313,
+              "furniture": 0.20957754244866192,
+              "background_object": 0.24909316957758335
+            },
+            "milliseconds": 86.69360000000052
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.36970070521983445,
+          "boundingBox": {
+            "x": 0.31640870571136476,
+            "y": 0.39710940255059135,
+            "width": 0.061647987365722634,
+            "height": 0.09400208791097009
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.2586692281899922,
+              "bare_head": 0.45258307930960284,
+              "cap_or_hat": 0.06257498108621705,
+              "hood_or_headscarf": 0.04722136693612059,
+              "furniture": 0.046251607280016,
+              "background_object": 0.13269973719805134
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.2538848611705795,
+              "bare_head": 0.25947907329767156,
+              "cap_or_hat": 0.23969301517855487,
+              "hood_or_headscarf": 0.23687782462278711,
+              "furniture": 0.23667032198150456,
+              "background_object": 0.24721024943710096
+            },
+            "milliseconds": 92.75840000000062
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.2440013626907081,
+              "bare_head": 0.4764744839252436,
+              "cap_or_hat": 0.08281493165454053,
+              "hood_or_headscarf": 0.0824630746289252,
+              "furniture": 0.032066064081261315,
+              "background_object": 0.08218008301932128
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.2548177767445429,
+              "bare_head": 0.2615101803708899,
+              "cap_or_hat": 0.2440121224350373,
+              "hood_or_headscarf": 0.24396954477269944,
+              "furniture": 0.2345240214156103,
+              "background_object": 0.2439351683804666
+            },
+            "milliseconds": 106.92649999999958
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.36461534052401134,
+          "boundingBox": {
+            "x": 0.0020928412675857546,
+            "y": 0.34258367750379776,
+            "width": 0.05579193234443664,
+            "height": 0.12622316148546003
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.16297325071077726,
+              "bare_head": 0.5922399675193445,
+              "cap_or_hat": 0.028909919386491244,
+              "hood_or_headscarf": 0.02728867458902978,
+              "furniture": 0.02777308051235435,
+              "background_object": 0.1608151072820029
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.2518459132044108,
+              "bare_head": 0.26474917142461146,
+              "cap_or_hat": 0.23455190006764498,
+              "hood_or_headscarf": 0.2339747700506811,
+              "furniture": 0.23415072463841546,
+              "background_object": 0.2517126054226054
+            },
+            "milliseconds": 107.59289999999964
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.13197432157235367,
+              "bare_head": 0.5651796682127095,
+              "cap_or_hat": 0.040094612116154456,
+              "hood_or_headscarf": 0.05599450288512558,
+              "furniture": 0.021640437189026147,
+              "background_object": 0.1851164580246306
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.24608095203069208,
+              "bare_head": 0.26062631510382533,
+              "cap_or_hat": 0.2341672979704181,
+              "hood_or_headscarf": 0.2375074135610097,
+              "furniture": 0.22800051489543985,
+              "background_object": 0.24946472962810085
+            },
+            "milliseconds": 87.36390000000029
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "file": "scratch/helmet-rajkot-original-2.jpg",
+    "heads": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.6505667972742586,
+          "boundingBox": {
+            "x": 0,
+            "y": 0.33944885465833874,
+            "width": 0.049667266011238095,
+            "height": 0.14675757090250652
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.1085492983750113,
+              "bare_head": 0.733694390892289,
+              "cap_or_hat": 0.01884446596008573,
+              "hood_or_headscarf": 0.02185325208695377,
+              "furniture": 0.026398550448645253,
+              "background_object": 0.09066004223701495
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.25379277454969945,
+              "bare_head": 0.2729016560300763,
+              "cap_or_hat": 0.23628292310048432,
+              "hood_or_headscarf": 0.23776422769675673,
+              "furniture": 0.23965382123674195,
+              "background_object": 0.2519918973367395
+            },
+            "milliseconds": 87.83220000000074
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.3094393610591438,
+              "bare_head": 0.4282029870640177,
+              "cap_or_hat": 0.030678189442072817,
+              "hood_or_headscarf": 0.03884407589203245,
+              "furniture": 0.016521638285231875,
+              "background_object": 0.17631374825750135
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.25687227127237766,
+              "bare_head": 0.2601206233179756,
+              "cap_or_hat": 0.23376016940288136,
+              "hood_or_headscarf": 0.23612020558299326,
+              "furniture": 0.22757135912788576,
+              "background_object": 0.2512473004834317
+            },
+            "milliseconds": 78.3802999999989
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.6205678511941528,
+          "boundingBox": {
+            "x": 0.17646356225013732,
+            "y": 0.3472823037041558,
+            "width": 0.08684262037277224,
+            "height": 0.1482479943169488
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.20325199968308372,
+              "bare_head": 0.2204629736497152,
+              "cap_or_hat": 0.12222395101754528,
+              "hood_or_headscarf": 0.13836705712048453,
+              "furniture": 0.0111629121611738,
+              "background_object": 0.30453110636799746
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.2419394333377834,
+              "bare_head": 0.24275226507690487,
+              "cap_or_hat": 0.23685351772898874,
+              "hood_or_headscarf": 0.2380940673512431,
+              "furniture": 0.21292093616113988,
+              "background_object": 0.24598269984352014
+            },
+            "milliseconds": 95.62850000000071
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.45183452233018906,
+              "bare_head": 0.11014681690628415,
+              "cap_or_hat": 0.12282823414635621,
+              "hood_or_headscarf": 0.10372999899440827,
+              "furniture": 0.005916124923762663,
+              "background_object": 0.2055443026989996
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.25069851085896855,
+              "bare_head": 0.23658349249156682,
+              "cap_or_hat": 0.2376732198317952,
+              "hood_or_headscarf": 0.23598326433884792,
+              "furniture": 0.2073421673501566,
+              "background_object": 0.2428219666974655
+            },
+            "milliseconds": 92.88020000000142
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.43170726360982314,
+          "boundingBox": {
+            "x": 0.178065025806427,
+            "y": 0.3487039936913384,
+            "width": 0.08406140804290771,
+            "height": 0.1458461019727919
+          }
+        },
+        "scores": [
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.17940543259685376,
+              "bare_head": 0.18677886547871939,
+              "cap_or_hat": 0.0918944974847428,
+              "hood_or_headscarf": 0.10594412020426805,
+              "furniture": 0.011336378990401736,
+              "background_object": 0.42464070524501446
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.23938245463415428,
+              "bare_head": 0.23978522611773878,
+              "cap_or_hat": 0.23269238384754537,
+              "hood_or_headscarf": 0.2341150901944144,
+              "furniture": 0.2117661416650811,
+              "background_object": 0.24799840644164778
+            },
+            "milliseconds": 89.05879999999888
+          },
+          {
+            "probabilities": {
+              "motorcycle_helmet": 0.41112317643177126,
+              "bare_head": 0.11694533572629574,
+              "cap_or_hat": 0.13047977172755743,
+              "hood_or_headscarf": 0.10354727967838599,
+              "furniture": 0.012814160066487395,
+              "background_object": 0.22509027636950216
+            },
+            "similarities": {
+              "motorcycle_helmet": 0.24777368690482035,
+              "bare_head": 0.23520182431143083,
+              "cap_or_hat": 0.23629694030368292,
+              "hood_or_headscarf": 0.23398504138426315,
+              "furniture": 0.2130902663620983,
+              "background_object": 0.24174977371582068
+            },
+            "milliseconds": 92.46550000000025
+          }
+        ]
+      }
+    ]
+  }
+]

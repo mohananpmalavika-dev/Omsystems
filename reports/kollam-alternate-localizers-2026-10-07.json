@@ -1,0 +1,1937 @@
+[
+  {
+    "model": "tmp/helmet-localizer-candidates/v2-helmetv2_int8.onnx",
+    "file": "tmp/kollam-live-fb465a8f-5d79-4a3f-9cb8-b8cec471708d-20261007102517107.jpg",
+    "full": [
+      {
+        "label": "bare-head",
+        "confidence": 0.7300345102626125,
+        "boundingBox": {
+          "x": 0.32441381812095643,
+          "y": 0.06269619199964735,
+          "width": 0.11789833307266234,
+          "height": 0.22336385515001086
+        }
+      }
+    ],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.765607089532125,
+          "boundingBox": {
+            "x": 0.3209194839000702,
+            "y": 0.06258540683322483,
+            "width": 0.12378174066543579,
+            "height": 0.21301617092556424
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.7586864403874642,
+            "boundingBox": {
+              "x": 0.22062351703643798,
+              "y": 0.21792337857759916,
+              "width": 0.544693899154663,
+              "height": 0.5524262765737681
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/v2-helmetv2_int8.onnx",
+    "file": "tmp/kollam-live-fb465a8f-5d79-4a3f-9cb8-b8cec471708d-20261007102525317.jpg",
+    "full": [
+      {
+        "label": "bare-head",
+        "confidence": 0.42416988076396933,
+        "boundingBox": {
+          "x": 0.16084913313388824,
+          "y": 0.45500182575649684,
+          "width": 0.07102636694908143,
+          "height": 0.13357002470228396
+        }
+      }
+    ],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.40213707594126546,
+          "boundingBox": {
+            "x": 0.15837736129760743,
+            "y": 0.45391242769029405,
+            "width": 0.07530598640441893,
+            "height": 0.13272944556342248
+          }
+        },
+        "detections": []
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/v2-helmetv2_int8.onnx",
+    "file": "scratch/helmet-alert-ch6.jpg",
+    "full": [
+      {
+        "label": "bare-head",
+        "confidence": 0.7266120576100263,
+        "boundingBox": {
+          "x": 0.44263358116149903,
+          "y": 0.25127742555406357,
+          "width": 0.10312499999999997,
+          "height": 0.17822212643093532
+        }
+      },
+      {
+        "label": "helmet",
+        "confidence": 0.4753863125950062,
+        "boundingBox": {
+          "x": 0.44693360328674314,
+          "y": 0.2551682631174723,
+          "width": 0.09728116989135749,
+          "height": 0.16246264775594077
+        }
+      }
+    ],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.7060828786081856,
+          "boundingBox": {
+            "x": 0.44510601460933685,
+            "y": 0.2528352949354384,
+            "width": 0.09926989674568176,
+            "height": 0.17317428588867184
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.7907807636817665,
+            "boundingBox": {
+              "x": 0.2564791917800903,
+              "y": 0.27488317320832106,
+              "width": 0.5207170009613038,
+              "height": 0.4631588100332075
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.3653410366583465,
+          "boundingBox": {
+            "x": 0.4475298851728439,
+            "y": 0.2552133666144477,
+            "width": 0.09585009217262269,
+            "height": 0.16666999393039278
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.7848699083798891,
+            "boundingBox": {
+              "x": 0.2842243194580078,
+              "y": 0.269728886315582,
+              "width": 0.45606155395507814,
+              "height": 0.4875618750895929
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/v2-helmetv2_int8.onnx",
+    "file": "tmp/helmet-channel-6.jpg",
+    "full": [
+      {
+        "label": "bare-head",
+        "confidence": 0.7792297415501395,
+        "boundingBox": {
+          "x": 0.3576621234416962,
+          "y": 0.19574251174926757,
+          "width": 0.1476346611976624,
+          "height": 0.25674716101752393
+        }
+      }
+    ],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8402697201999274,
+          "boundingBox": {
+            "x": 0.3540926516056061,
+            "y": 0.18231630325317383,
+            "width": 0.1535752177238464,
+            "height": 0.2786030027601454
+          }
+        },
+        "detections": [
+          {
+            "label": "helmet",
+            "confidence": 0.6069562867761391,
+            "boundingBox": {
+              "x": 0.29160345484701433,
+              "y": 0.2762084722518921,
+              "width": 0.4331615244404654,
+              "height": 0.3846241474151611
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/v2-helmetv2_int8.onnx",
+    "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+    "full": [
+      {
+        "label": "bare-head",
+        "confidence": 0.8378507088309561,
+        "boundingBox": {
+          "x": 0.3056223154067993,
+          "y": 0.3692932340833876,
+          "width": 0.12280583381652832,
+          "height": 0.23305880228678383
+        }
+      },
+      {
+        "label": "bare-head",
+        "confidence": 0.8350718507244892,
+        "boundingBox": {
+          "x": 0.40813822448253634,
+          "y": 0.0752884758843316,
+          "width": 0.0911969244480133,
+          "height": 0.16666666666666666
+        }
+      },
+      {
+        "label": "bare-head",
+        "confidence": 0.8310707298135114,
+        "boundingBox": {
+          "x": 0.741576224565506,
+          "y": 0.03725299835205078,
+          "width": 0.16193879842758174,
+          "height": 0.3921606699625651
+        }
+      },
+      {
+        "label": "bare-head",
+        "confidence": 0.7852151654093404,
+        "boundingBox": {
+          "x": 0.6888611853122711,
+          "y": 0.46578275892469617,
+          "width": 0.1467878222465515,
+          "height": 0.25000000000000006
+        }
+      },
+      {
+        "label": "bare-head",
+        "confidence": 0.44191605594272687,
+        "boundingBox": {
+          "x": 0.15759251713752748,
+          "y": 0,
+          "width": 0.1619387984275818,
+          "height": 0.2975940492418077
+        }
+      }
+    ],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8733342278857634,
+          "boundingBox": {
+            "x": 0.30393700003623964,
+            "y": 0.37344029744466145,
+            "width": 0.1250325322151184,
+            "height": 0.22819875081380214
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.8253230404581586,
+            "boundingBox": {
+              "x": 0.28565845226419384,
+              "y": 0.2750040054321289,
+              "width": 0.46864256234004587,
+              "height": 0.474502182006836
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8347121058056359,
+          "boundingBox": {
+            "x": 0.4069895625114441,
+            "y": 0.07280316352844238,
+            "width": 0.09027416706085206,
+            "height": 0.17204529444376637
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.7982549937949557,
+            "boundingBox": {
+              "x": 0.2778702290852864,
+              "y": 0.252500581741333,
+              "width": 0.48017995198567714,
+              "height": 0.4987181663513183
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8248573138658344,
+          "boundingBox": {
+            "x": 0.6860997676849365,
+            "y": 0.4721510781182183,
+            "width": 0.14810724258422847,
+            "height": 0.2400012969970703
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.7573714777130363,
+            "boundingBox": {
+              "x": 0.24922046661376954,
+              "y": 0.30456434259047876,
+              "width": 0.48750000000000004,
+              "height": 0.406522599550394
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8122307625328631,
+          "boundingBox": {
+            "x": 0.7387882828712463,
+            "y": 0.05556226306491428,
+            "width": 0.1723896741867066,
+            "height": 0.3493368996514215
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.5031011885218248,
+          "boundingBox": {
+            "x": 0.16202624440193175,
+            "y": 0,
+            "width": 0.164853036403656,
+            "height": 0.31211524539523655
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.2848585798342924,
+            "boundingBox": {
+              "x": 0.21081535816192626,
+              "y": 0.0009192613106739672,
+              "width": 0.544693899154663,
+              "height": 0.6949627037289776
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.41504924755894734,
+          "boundingBox": {
+            "x": 0.39600529670715334,
+            "y": 0.3383079210917155,
+            "width": 0.0816781997680664,
+            "height": 0.11614589691162108
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.33401831162950657,
+            "boundingBox": {
+              "x": 0.016890335083007812,
+              "y": 0.46482330560684204,
+              "width": 0.3625,
+              "height": 0.5282591581344604
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/v2-helmetv2_int8.onnx",
+    "file": "scratch/helmet-false-f0b4f55e-00c0-442c-a0e1-3d6a05150bdf.jpg",
+    "full": [
+      {
+        "label": "bare-head",
+        "confidence": 0.7848699083798891,
+        "boundingBox": {
+          "x": 0.5225060939788818,
+          "y": 0.1463107638888889,
+          "width": 0.20498781204223637,
+          "height": 0.338888888888889
+        }
+      },
+      {
+        "label": "bare-head",
+        "confidence": 0.7848699083798891,
+        "boundingBox": {
+          "x": 0.3888611853122711,
+          "y": 0.6976301405164931,
+          "width": 0.1467878222465515,
+          "height": 0.25
+        }
+      },
+      {
+        "label": "bare-head",
+        "confidence": 0.7135762098661971,
+        "boundingBox": {
+          "x": 0.34721593260765077,
+          "y": 0.04840310414632162,
+          "width": 0.10197297334671018,
+          "height": 0.19847407870822487
+        }
+      },
+      {
+        "label": "bare-head",
+        "confidence": 0.6258896587903351,
+        "boundingBox": {
+          "x": 0.13982693552970887,
+          "y": 0.09418706893920899,
+          "width": 0.10756546258926392,
+          "height": 0.18940363989935982
+        }
+      }
+    ],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8030402511352577,
+          "boundingBox": {
+            "x": 0.5282607674598694,
+            "y": 0.14496731228298612,
+            "width": 0.18622653484344487,
+            "height": 0.33975745307074656
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.7982549937949557,
+            "boundingBox": {
+              "x": 0.23846490294434305,
+              "y": 0.267478609085083,
+              "width": 0.5598946591310723,
+              "height": 0.49871816635131844
+            }
+          },
+          {
+            "label": "helmet",
+            "confidence": 0.5629743174051178,
+            "boundingBox": {
+              "x": 0.002763837603635566,
+              "y": 0.2661288022994995,
+              "width": 0.12296069688575213,
+              "height": 0.24323220252990724
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.799310755115556,
+          "boundingBox": {
+            "x": 0.39115355014801023,
+            "y": 0.717768308851454,
+            "width": 0.13735022544860842,
+            "height": 0.21097929212782118
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.7368487269703294,
+          "boundingBox": {
+            "x": 0.14306443333625793,
+            "y": 0.09514569176567925,
+            "width": 0.09938083887100221,
+            "height": 0.18017565409342448
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.8143283712653897,
+            "boundingBox": {
+              "x": 0.3256263533882473,
+              "y": 0.24543282985687256,
+              "width": 0.37433166503906246,
+              "height": 0.38462414741516116
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.6984191166527438,
+          "boundingBox": {
+            "x": 0.34942456185817716,
+            "y": 0.05905016793145074,
+            "width": 0.0965336620807648,
+            "height": 0.1807257546318902
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.6651365287028739,
+            "boundingBox": {
+              "x": 0.28194518089294435,
+              "y": 0.25250058174133305,
+              "width": 0.4501687049865723,
+              "height": 0.4987181663513184
+            }
+          },
+          {
+            "label": "helmet",
+            "confidence": 0.36072109697541066,
+            "boundingBox": {
+              "x": 0.5913711428642273,
+              "y": 0.08167916536331177,
+              "width": 0.15564987659454343,
+              "height": 0.11164166927337646
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/v2-helmetv2_int8.onnx",
+    "file": "scratch/helmet-new-false-alert-raw.jpg",
+    "full": [
+      {
+        "label": "bare-head",
+        "confidence": 0.7821175077169187,
+        "boundingBox": {
+          "x": 0.6951819658279419,
+          "y": 0.1474922604031033,
+          "width": 0.10236067771911617,
+          "height": 0.26057103474934906
+        }
+      }
+    ],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.7875189524681048,
+          "boundingBox": {
+            "x": 0.6897942364215851,
+            "y": 0.1622307777404785,
+            "width": 0.11611236333847041,
+            "height": 0.21862095726860897
+          }
+        },
+        "detections": []
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/v2-helmetv2_int8.onnx",
+    "file": "scratch/helmet-rajkot-original-0.jpg",
+    "full": [
+      {
+        "label": "bare-head",
+        "confidence": 0.8073725855429075,
+        "boundingBox": {
+          "x": 0.1925200939178467,
+          "y": 0.35563022825453017,
+          "width": 0.0765676975250244,
+          "height": 0.14729429880778
+        }
+      },
+      {
+        "label": "bare-head",
+        "confidence": 0.49791061878204346,
+        "boundingBox": {
+          "x": 0,
+          "y": 0.3462199687957764,
+          "width": 0.04454442858695984,
+          "height": 0.13357002470228407
+        }
+      }
+    ],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.6033853238321285,
+          "boundingBox": {
+            "x": 0.19186515212059022,
+            "y": 0.35959728029039173,
+            "width": 0.07662469148635861,
+            "height": 0.13242066701253252
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.7145630638307807,
+            "boundingBox": {
+              "x": 0.1662149667739868,
+              "y": 0.23962112788496348,
+              "width": 0.5446938991546632,
+              "height": 0.510182951784682
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.4444565994756644,
+          "boundingBox": {
+            "x": 0.19038414359092712,
+            "y": 0.3583924929300944,
+            "width": 0.07808486223220826,
+            "height": 0.13077225155300565
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.612655699055459,
+            "boundingBox": {
+              "x": 0.2474963665008545,
+              "y": 0.2680932835971608,
+              "width": 0.45016870498657224,
+              "height": 0.4524384319081026
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.4412296801669342,
+          "boundingBox": {
+            "x": 0,
+            "y": 0.3360127449035645,
+            "width": 0.04479180723428726,
+            "height": 0.14560790591769757
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.28024459713139294,
+          "boundingBox": {
+            "x": 0.17281887531280518,
+            "y": 0.3359562979804145,
+            "width": 0.07512311935424804,
+            "height": 0.10922313266330297
+          }
+        },
+        "detections": []
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/v2-helmetv2_int8.onnx",
+    "file": "scratch/helmet-rajkot-original-1.jpg",
+    "full": [
+      {
+        "label": "bare-head",
+        "confidence": 0.6425842950027985,
+        "boundingBox": {
+          "x": 0.17683961391448974,
+          "y": 0.3685716364118788,
+          "width": 0.08037123680114747,
+          "height": 0.13763530519273565
+        }
+      }
+    ],
+    "crops": [
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.6572948983172893,
+          "boundingBox": {
+            "x": 0.17777586579322815,
+            "y": 0.37128956582811146,
+            "width": 0.07894338369369505,
+            "height": 0.12057326634724935
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.28442405689241923,
+            "boundingBox": {
+              "x": 0.31585121154785156,
+              "y": 0.29445609925668453,
+              "width": 0.3823566436767578,
+              "height": 0.43189076532291454
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.36970070521983445,
+          "boundingBox": {
+            "x": 0.31640870571136476,
+            "y": 0.39710940255059135,
+            "width": 0.061647987365722634,
+            "height": 0.09400208791097009
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.36461534052401134,
+          "boundingBox": {
+            "x": 0.0020928412675857546,
+            "y": 0.34258367750379776,
+            "width": 0.05579193234443664,
+            "height": 0.12622316148546003
+          }
+        },
+        "detections": []
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/v2-helmetv2_int8.onnx",
+    "file": "scratch/helmet-rajkot-original-2.jpg",
+    "full": [
+      {
+        "label": "bare-head",
+        "confidence": 0.8299677481118124,
+        "boundingBox": {
+          "x": 0.17525171339511872,
+          "y": 0.3440571520063612,
+          "width": 0.08788868784904477,
+          "height": 0.16246264775594077
+        }
+      },
+      {
+        "label": "bare-head",
+        "confidence": 0.6258896587903351,
+        "boundingBox": {
+          "x": 0,
+          "y": 0.3462199687957764,
+          "width": 0.051023900508880615,
+          "height": 0.13357002470228407
+        }
+      }
+    ],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.6505667972742586,
+          "boundingBox": {
+            "x": 0,
+            "y": 0.33944885465833874,
+            "width": 0.049667266011238095,
+            "height": 0.14675757090250652
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.7583299454300914,
+            "boundingBox": {
+              "x": 0,
+              "y": 0.2612770557403564,
+              "width": 0.6049339040120444,
+              "height": 0.4226073265075684
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.6205678511941528,
+          "boundingBox": {
+            "x": 0.17646356225013732,
+            "y": 0.3472823037041558,
+            "width": 0.08684262037277224,
+            "height": 0.1482479943169488
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.6121220409409815,
+            "boundingBox": {
+              "x": 0.2846689701080322,
+              "y": 0.2816055273272327,
+              "width": 0.4501687049865722,
+              "height": 0.5192838639328161
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.43170726360982314,
+          "boundingBox": {
+            "x": 0.178065025806427,
+            "y": 0.3487039936913384,
+            "width": 0.08406140804290771,
+            "height": 0.1458461019727919
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.612409802781599,
+            "boundingBox": {
+              "x": 0.2819451808929443,
+              "y": 0.31313104728857677,
+              "width": 0.45016870498657224,
+              "height": 0.4314116458098094
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/pooja-best.onnx",
+    "file": "tmp/kollam-live-fb465a8f-5d79-4a3f-9cb8-b8cec471708d-20261007102517107.jpg",
+    "full": [
+      {
+        "label": "bare-head",
+        "confidence": 0.9253654479980469,
+        "boundingBox": {
+          "x": 0.29693262577056884,
+          "y": 0.08022189670138889,
+          "width": 0.21439168453216556,
+          "height": 0.9197781032986111
+        }
+      }
+    ],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.765607089532125,
+          "boundingBox": {
+            "x": 0.3209194839000702,
+            "y": 0.06258540683322483,
+            "width": 0.12378174066543579,
+            "height": 0.21301617092556424
+          }
+        },
+        "detections": []
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/pooja-best.onnx",
+    "file": "tmp/kollam-live-fb465a8f-5d79-4a3f-9cb8-b8cec471708d-20261007102525317.jpg",
+    "full": [],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.40213707594126546,
+          "boundingBox": {
+            "x": 0.15837736129760743,
+            "y": 0.45391242769029405,
+            "width": 0.07530598640441893,
+            "height": 0.13272944556342248
+          }
+        },
+        "detections": []
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/pooja-best.onnx",
+    "file": "scratch/helmet-alert-ch6.jpg",
+    "full": [
+      {
+        "label": "bare-head",
+        "confidence": 0.8197391629219055,
+        "boundingBox": {
+          "x": 0.4278299331665039,
+          "y": 0.2684073554144965,
+          "width": 0.19551963806152345,
+          "height": 0.7013450622558595
+        }
+      }
+    ],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.7060828786081856,
+          "boundingBox": {
+            "x": 0.44510601460933685,
+            "y": 0.2528352949354384,
+            "width": 0.09926989674568176,
+            "height": 0.17317428588867184
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.3653410366583465,
+          "boundingBox": {
+            "x": 0.4475298851728439,
+            "y": 0.2552133666144477,
+            "width": 0.09585009217262269,
+            "height": 0.16666999393039278
+          }
+        },
+        "detections": []
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/pooja-best.onnx",
+    "file": "tmp/helmet-channel-6.jpg",
+    "full": [
+      {
+        "label": "bare-head",
+        "confidence": 0.47381678223609924,
+        "boundingBox": {
+          "x": 0.3102553844451904,
+          "y": 0.21127149793836805,
+          "width": 0.269114351272583,
+          "height": 0.7887285020616319
+        }
+      },
+      {
+        "label": "helmet",
+        "confidence": 0.2683594822883606,
+        "boundingBox": {
+          "x": 0.3102553844451904,
+          "y": 0.21127149793836805,
+          "width": 0.269114351272583,
+          "height": 0.7887285020616319
+        }
+      }
+    ],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8402697201999274,
+          "boundingBox": {
+            "x": 0.3540926516056061,
+            "y": 0.18231630325317383,
+            "width": 0.1535752177238464,
+            "height": 0.2786030027601454
+          }
+        },
+        "detections": []
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/pooja-best.onnx",
+    "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+    "full": [
+      {
+        "label": "bare-head",
+        "confidence": 0.28699812293052673,
+        "boundingBox": {
+          "x": 0.3785501003265381,
+          "y": 0.09639629787868924,
+          "width": 0.16845364570617677,
+          "height": 0.26702355278862844
+        }
+      }
+    ],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8733342278857634,
+          "boundingBox": {
+            "x": 0.30393700003623964,
+            "y": 0.37344029744466145,
+            "width": 0.1250325322151184,
+            "height": 0.22819875081380214
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8347121058056359,
+          "boundingBox": {
+            "x": 0.4069895625114441,
+            "y": 0.07280316352844238,
+            "width": 0.09027416706085206,
+            "height": 0.17204529444376637
+          }
+        },
+        "detections": [
+          {
+            "label": "helmet",
+            "confidence": 0.3402087986469269,
+            "boundingBox": {
+              "x": 0.12928136189778647,
+              "y": 0.2729053497314453,
+              "width": 0.8273018900553385,
+              "height": 0.7270946502685547
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8248573138658344,
+          "boundingBox": {
+            "x": 0.6860997676849365,
+            "y": 0.4721510781182183,
+            "width": 0.14810724258422847,
+            "height": 0.2400012969970703
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8122307625328631,
+          "boundingBox": {
+            "x": 0.7387882828712463,
+            "y": 0.05556226306491428,
+            "width": 0.1723896741867066,
+            "height": 0.3493368996514215
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.5031011885218248,
+          "boundingBox": {
+            "x": 0.16202624440193175,
+            "y": 0,
+            "width": 0.164853036403656,
+            "height": 0.31211524539523655
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.41504924755894734,
+          "boundingBox": {
+            "x": 0.39600529670715334,
+            "y": 0.3383079210917155,
+            "width": 0.0816781997680664,
+            "height": 0.11614589691162108
+          }
+        },
+        "detections": []
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/pooja-best.onnx",
+    "file": "scratch/helmet-false-f0b4f55e-00c0-442c-a0e1-3d6a05150bdf.jpg",
+    "full": [],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8030402511352577,
+          "boundingBox": {
+            "x": 0.5282607674598694,
+            "y": 0.14496731228298612,
+            "width": 0.18622653484344487,
+            "height": 0.33975745307074656
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.799310755115556,
+          "boundingBox": {
+            "x": 0.39115355014801023,
+            "y": 0.717768308851454,
+            "width": 0.13735022544860842,
+            "height": 0.21097929212782118
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.7368487269703294,
+          "boundingBox": {
+            "x": 0.14306443333625793,
+            "y": 0.09514569176567925,
+            "width": 0.09938083887100221,
+            "height": 0.18017565409342448
+          }
+        },
+        "detections": [
+          {
+            "label": "helmet",
+            "confidence": 0.5609820485115051,
+            "boundingBox": {
+              "x": 0.09355270344278087,
+              "y": 0.26885032653808594,
+              "width": 0.8553655810978101,
+              "height": 0.7311496734619141
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.6984191166527438,
+          "boundingBox": {
+            "x": 0.34942456185817716,
+            "y": 0.05905016793145074,
+            "width": 0.0965336620807648,
+            "height": 0.1807257546318902
+          }
+        },
+        "detections": []
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/pooja-best.onnx",
+    "file": "scratch/helmet-new-false-alert-raw.jpg",
+    "full": [
+      {
+        "label": "bare-head",
+        "confidence": 0.9279948472976685,
+        "boundingBox": {
+          "x": 0.6532467365264892,
+          "y": 0.17601648966471353,
+          "width": 0.18351263999938972,
+          "height": 0.8206272549099393
+        }
+      }
+    ],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.7875189524681048,
+          "boundingBox": {
+            "x": 0.6897942364215851,
+            "y": 0.1622307777404785,
+            "width": 0.11611236333847041,
+            "height": 0.21862095726860897
+          }
+        },
+        "detections": []
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/pooja-best.onnx",
+    "file": "scratch/helmet-rajkot-original-0.jpg",
+    "full": [],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.6033853238321285,
+          "boundingBox": {
+            "x": 0.19186515212059022,
+            "y": 0.35959728029039173,
+            "width": 0.07662469148635861,
+            "height": 0.13242066701253252
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.4444565994756644,
+          "boundingBox": {
+            "x": 0.19038414359092712,
+            "y": 0.3583924929300944,
+            "width": 0.07808486223220826,
+            "height": 0.13077225155300565
+          }
+        },
+        "detections": [
+          {
+            "label": "helmet",
+            "confidence": 0.4584490954875946,
+            "boundingBox": {
+              "x": 0.11750394105911255,
+              "y": 0.2528326617970186,
+              "width": 0.26345041990280155,
+              "height": 0.699965914557962
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.4412296801669342,
+          "boundingBox": {
+            "x": 0,
+            "y": 0.3360127449035645,
+            "width": 0.04479180723428726,
+            "height": 0.14560790591769757
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.28024459713139294,
+          "boundingBox": {
+            "x": 0.17281887531280518,
+            "y": 0.3359562979804145,
+            "width": 0.07512311935424804,
+            "height": 0.10922313266330297
+          }
+        },
+        "detections": []
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/pooja-best.onnx",
+    "file": "scratch/helmet-rajkot-original-1.jpg",
+    "full": [],
+    "crops": [
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.6572948983172893,
+          "boundingBox": {
+            "x": 0.17777586579322815,
+            "y": 0.37128956582811146,
+            "width": 0.07894338369369505,
+            "height": 0.12057326634724935
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.36970070521983445,
+          "boundingBox": {
+            "x": 0.31640870571136476,
+            "y": 0.39710940255059135,
+            "width": 0.061647987365722634,
+            "height": 0.09400208791097009
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.36461534052401134,
+          "boundingBox": {
+            "x": 0.0020928412675857546,
+            "y": 0.34258367750379776,
+            "width": 0.05579193234443664,
+            "height": 0.12622316148546003
+          }
+        },
+        "detections": []
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/pooja-best.onnx",
+    "file": "scratch/helmet-rajkot-original-2.jpg",
+    "full": [
+      {
+        "label": "bike",
+        "confidence": 0.35090750455856323,
+        "boundingBox": {
+          "x": 0.002975654602050781,
+          "y": 0.09108763800726996,
+          "width": 0.4004930019378662,
+          "height": 0.8738502078586154
+        }
+      }
+    ],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.6505667972742586,
+          "boundingBox": {
+            "x": 0,
+            "y": 0.33944885465833874,
+            "width": 0.049667266011238095,
+            "height": 0.14675757090250652
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.6205678511941528,
+          "boundingBox": {
+            "x": 0.17646356225013732,
+            "y": 0.3472823037041558,
+            "width": 0.08684262037277224,
+            "height": 0.1482479943169488
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.43170726360982314,
+          "boundingBox": {
+            "x": 0.178065025806427,
+            "y": 0.3487039936913384,
+            "width": 0.08406140804290771,
+            "height": 0.1458461019727919
+          }
+        },
+        "detections": []
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/traffic-stage2.onnx",
+    "file": "tmp/kollam-live-fb465a8f-5d79-4a3f-9cb8-b8cec471708d-20261007102517107.jpg",
+    "full": [
+      {
+        "label": "helmet",
+        "confidence": 0.42004621028900146,
+        "boundingBox": {
+          "x": 0.6390465259552002,
+          "y": 0.9231418185763889,
+          "width": 0.20856747627258299,
+          "height": 0.07570571899414058
+        }
+      },
+      {
+        "label": "helmet",
+        "confidence": 0.31079989671707153,
+        "boundingBox": {
+          "x": 0,
+          "y": 0.4597103542751736,
+          "width": 0.19057252407073974,
+          "height": 0.26922098795572913
+        }
+      }
+    ],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.765607089532125,
+          "boundingBox": {
+            "x": 0.3209194839000702,
+            "y": 0.06258540683322483,
+            "width": 0.12378174066543579,
+            "height": 0.21301617092556424
+          }
+        },
+        "detections": []
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/traffic-stage2.onnx",
+    "file": "tmp/kollam-live-fb465a8f-5d79-4a3f-9cb8-b8cec471708d-20261007102525317.jpg",
+    "full": [
+      {
+        "label": "helmet",
+        "confidence": 0.48246127367019653,
+        "boundingBox": {
+          "x": 0,
+          "y": 0.45669809977213544,
+          "width": 0.2028804063796997,
+          "height": 0.2756553649902344
+        }
+      }
+    ],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.40213707594126546,
+          "boundingBox": {
+            "x": 0.15837736129760743,
+            "y": 0.45391242769029405,
+            "width": 0.07530598640441893,
+            "height": 0.13272944556342248
+          }
+        },
+        "detections": [
+          {
+            "label": "helmet",
+            "confidence": 0.4902382493019104,
+            "boundingBox": {
+              "x": 0.3119128465652466,
+              "y": 0.3049072980880737,
+              "width": 0.4107593774795532,
+              "height": 0.36739838123321533
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/traffic-stage2.onnx",
+    "file": "scratch/helmet-alert-ch6.jpg",
+    "full": [],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.7060828786081856,
+          "boundingBox": {
+            "x": 0.44510601460933685,
+            "y": 0.2528352949354384,
+            "width": 0.09926989674568176,
+            "height": 0.17317428588867184
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.3653410366583465,
+          "boundingBox": {
+            "x": 0.4475298851728439,
+            "y": 0.2552133666144477,
+            "width": 0.09585009217262269,
+            "height": 0.16666999393039278
+          }
+        },
+        "detections": []
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/traffic-stage2.onnx",
+    "file": "tmp/helmet-channel-6.jpg",
+    "full": [
+      {
+        "label": "helmet",
+        "confidence": 0.5417772531509399,
+        "boundingBox": {
+          "x": 0.3678588390350342,
+          "y": 0.2073507097032335,
+          "width": 0.12088718414306637,
+          "height": 0.20730773078070747
+        }
+      }
+    ],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8402697201999274,
+          "boundingBox": {
+            "x": 0.3540926516056061,
+            "y": 0.18231630325317383,
+            "width": 0.1535752177238464,
+            "height": 0.2786030027601454
+          }
+        },
+        "detections": [
+          {
+            "label": "helmet",
+            "confidence": 0.8780791759490967,
+            "boundingBox": {
+              "x": 0.29547320858816084,
+              "y": 0.2728224039077759,
+              "width": 0.3820211083701487,
+              "height": 0.40273845195770264
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/traffic-stage2.onnx",
+    "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+    "full": [],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8733342278857634,
+          "boundingBox": {
+            "x": 0.30393700003623964,
+            "y": 0.37344029744466145,
+            "width": 0.1250325322151184,
+            "height": 0.22819875081380214
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.9067384004592896,
+            "boundingBox": {
+              "x": 0.26995099758279734,
+              "y": 0.282406497001648,
+              "width": 0.44635231971740724,
+              "height": 0.4475845575332642
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8347121058056359,
+          "boundingBox": {
+            "x": 0.4069895625114441,
+            "y": 0.07280316352844238,
+            "width": 0.09027416706085206,
+            "height": 0.17204529444376637
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8248573138658344,
+          "boundingBox": {
+            "x": 0.6860997676849365,
+            "y": 0.4721510781182183,
+            "width": 0.14810724258422847,
+            "height": 0.2400012969970703
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8122307625328631,
+          "boundingBox": {
+            "x": 0.7387882828712463,
+            "y": 0.05556226306491428,
+            "width": 0.1723896741867066,
+            "height": 0.3493368996514215
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.5031011885218248,
+          "boundingBox": {
+            "x": 0.16202624440193175,
+            "y": 0,
+            "width": 0.164853036403656,
+            "height": 0.31211524539523655
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.41504924755894734,
+          "boundingBox": {
+            "x": 0.39600529670715334,
+            "y": 0.3383079210917155,
+            "width": 0.0816781997680664,
+            "height": 0.11614589691162108
+          }
+        },
+        "detections": []
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/traffic-stage2.onnx",
+    "file": "scratch/helmet-false-f0b4f55e-00c0-442c-a0e1-3d6a05150bdf.jpg",
+    "full": [],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.8030402511352577,
+          "boundingBox": {
+            "x": 0.5282607674598694,
+            "y": 0.14496731228298612,
+            "width": 0.18622653484344487,
+            "height": 0.33975745307074656
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.799310755115556,
+          "boundingBox": {
+            "x": 0.39115355014801023,
+            "y": 0.717768308851454,
+            "width": 0.13735022544860842,
+            "height": 0.21097929212782118
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.7368487269703294,
+          "boundingBox": {
+            "x": 0.14306443333625793,
+            "y": 0.09514569176567925,
+            "width": 0.09938083887100221,
+            "height": 0.18017565409342448
+          }
+        },
+        "detections": [
+          {
+            "label": "plate",
+            "confidence": 0.7496194839477539,
+            "boundingBox": {
+              "x": 0.0013420362057893172,
+              "y": 0.14554171562194826,
+              "width": 0.9986579637942107,
+              "height": 0.8538836956024171
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.6984191166527438,
+          "boundingBox": {
+            "x": 0.34942456185817716,
+            "y": 0.05905016793145074,
+            "width": 0.0965336620807648,
+            "height": 0.1807257546318902
+          }
+        },
+        "detections": []
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/traffic-stage2.onnx",
+    "file": "scratch/helmet-new-false-alert-raw.jpg",
+    "full": [],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.7875189524681048,
+          "boundingBox": {
+            "x": 0.6897942364215851,
+            "y": 0.1622307777404785,
+            "width": 0.11611236333847041,
+            "height": 0.21862095726860897
+          }
+        },
+        "detections": [
+          {
+            "label": "plate",
+            "confidence": 0.901153564453125,
+            "boundingBox": {
+              "x": 0.00031598691587094905,
+              "y": 0.18533432483673093,
+              "width": 0.999684013084129,
+              "height": 0.8137679815292358
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/traffic-stage2.onnx",
+    "file": "scratch/helmet-rajkot-original-0.jpg",
+    "full": [],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.6033853238321285,
+          "boundingBox": {
+            "x": 0.19186515212059022,
+            "y": 0.35959728029039173,
+            "width": 0.07662469148635861,
+            "height": 0.13242066701253252
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.578220009803772,
+            "boundingBox": {
+              "x": 0.29520926475524906,
+              "y": 0.4145998242257655,
+              "width": 0.42578315734863287,
+              "height": 0.27745364232995046
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.4444565994756644,
+          "boundingBox": {
+            "x": 0.19038414359092712,
+            "y": 0.3583924929300944,
+            "width": 0.07808486223220826,
+            "height": 0.13077225155300565
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.45715731382369995,
+            "boundingBox": {
+              "x": 0.3125617504119873,
+              "y": 0.41771723354563994,
+              "width": 0.4157434940338135,
+              "height": 0.2900262956058278
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.4412296801669342,
+          "boundingBox": {
+            "x": 0,
+            "y": 0.3360127449035645,
+            "width": 0.04479180723428726,
+            "height": 0.14560790591769757
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.28024459713139294,
+          "boundingBox": {
+            "x": 0.17281887531280518,
+            "y": 0.3359562979804145,
+            "width": 0.07512311935424804,
+            "height": 0.10922313266330297
+          }
+        },
+        "detections": []
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/traffic-stage2.onnx",
+    "file": "scratch/helmet-rajkot-original-1.jpg",
+    "full": [],
+    "crops": [
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.6572948983172893,
+          "boundingBox": {
+            "x": 0.17777586579322815,
+            "y": 0.37128956582811146,
+            "width": 0.07894338369369505,
+            "height": 0.12057326634724935
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.36970070521983445,
+          "boundingBox": {
+            "x": 0.31640870571136476,
+            "y": 0.39710940255059135,
+            "width": 0.061647987365722634,
+            "height": 0.09400208791097009
+          }
+        },
+        "detections": []
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.36461534052401134,
+          "boundingBox": {
+            "x": 0.0020928412675857546,
+            "y": 0.34258367750379776,
+            "width": 0.05579193234443664,
+            "height": 0.12622316148546003
+          }
+        },
+        "detections": [
+          {
+            "label": "bare-head",
+            "confidence": 0.3255917727947235,
+            "boundingBox": {
+              "x": 0.06842767366996179,
+              "y": 0.3291050910949707,
+              "width": 0.5561270356178282,
+              "height": 0.4150059700012207
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "model": "tmp/helmet-localizer-candidates/traffic-stage2.onnx",
+    "file": "scratch/helmet-rajkot-original-2.jpg",
+    "full": [],
+    "crops": [
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.6505667972742586,
+          "boundingBox": {
+            "x": 0,
+            "y": 0.33944885465833874,
+            "width": 0.049667266011238095,
+            "height": 0.14675757090250652
+          }
+        },
+        "detections": [
+          {
+            "label": "helmet",
+            "confidence": 0.2908075749874115,
+            "boundingBox": {
+              "x": 0,
+              "y": 0.02500102519989014,
+              "width": 0.213672129313151,
+              "height": 0.30658950805664065
+            }
+          },
+          {
+            "label": "bare-head",
+            "confidence": 0.27672600746154785,
+            "boundingBox": {
+              "x": 0,
+              "y": 0.30981059074401857,
+              "width": 0.5237549845377605,
+              "height": 0.32257137298583977
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "head",
+          "confidence": 0.6205678511941528,
+          "boundingBox": {
+            "x": 0.17646356225013732,
+            "y": 0.3472823037041558,
+            "width": 0.08684262037277224,
+            "height": 0.1482479943169488
+          }
+        },
+        "detections": [
+          {
+            "label": "plate",
+            "confidence": 0.39673149585723877,
+            "boundingBox": {
+              "x": 0.0030814170837402343,
+              "y": 0.16441744676570302,
+              "width": 0.9969185829162597,
+              "height": 0.835252938811312
+            }
+          }
+        ]
+      },
+      {
+        "head": {
+          "label": "helmet",
+          "confidence": 0.43170726360982314,
+          "boundingBox": {
+            "x": 0.178065025806427,
+            "y": 0.3487039936913384,
+            "width": 0.08406140804290771,
+            "height": 0.1458461019727919
+          }
+        },
+        "detections": [
+          {
+            "label": "plate",
+            "confidence": 0.7232416868209839,
+            "boundingBox": {
+              "x": 0.013380813598632812,
+              "y": 0.15573828021685282,
+              "width": 0.9866191864013671,
+              "height": 0.8425155838330585
+            }
+          }
+        ]
+      }
+    ]
+  }
+]

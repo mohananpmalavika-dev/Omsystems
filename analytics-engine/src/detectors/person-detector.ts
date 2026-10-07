@@ -30,7 +30,9 @@ export class PersonDetector extends BaseDetector {
   // Configuration
   private readonly TRACKING_TIMEOUT_MS = 5000; // 5 seconds
   private readonly STATIONARY_THRESHOLD = 0.03;
-  private readonly MIN_CONFIDENCE = 0.5;
+  private readonly MIN_CONFIDENCE = process.env.PERSON_CONFIDENCE_THRESHOLD
+    ? Number(process.env.PERSON_CONFIDENCE_THRESHOLD)
+    : 0.35;
 
   constructor() {
     super("person", "2.0.0");

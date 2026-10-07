@@ -1,0 +1,63 @@
+{
+  "config": {
+    "threshold": 0.75,
+    "fastAlert": true,
+    "face": true,
+    "pose": true
+  },
+  "samples": [
+    {
+      "cameraId": "fb465a8f-5d79-4a3f-9cb8-b8cec471708d",
+      "capturedAt": "2026-10-07T10:23:59.087Z",
+      "checkedAt": "2026-10-07T10:24:08.441Z",
+      "persons": [],
+      "heads": [],
+      "faces": [],
+      "poses": [],
+      "classificationCalls": [],
+      "results": [],
+      "pending": [],
+      "eventsSubmitted": 0,
+      "snapshot": "tmp/kollam-live-fb465a8f-5d79-4a3f-9cb8-b8cec471708d-20261007.jpg"
+    },
+    {
+      "cameraId": "99455d3a-3411-43ad-b756-84a4ae17c026",
+      "capturedAt": "2026-10-07T10:24:02.067Z",
+      "checkedAt": "2026-10-07T10:24:09.724Z",
+      "persons": [],
+      "heads": [],
+      "faces": [],
+      "poses": [],
+      "classificationCalls": [],
+      "results": [],
+      "pending": [],
+      "eventsSubmitted": 0,
+      "snapshot": "tmp/kollam-live-99455d3a-3411-43ad-b756-84a4ae17c026-20261007.jpg"
+    },
+    {
+      "cameraId": "fb465a8f-5d79-4a3f-9cb8-b8cec471708d",
+      "capturedAt": "2026-10-07T10:24:07.059Z",
+      "checkedAt": "2026-10-07T10:24:10.902Z",
+      "persons": [
+        {
+          "label": "person",
+          "confidence": 0.8451478442760418,
+          "boundingBox": {
+            "x": 0.5225096324302161,
+            "y": 0.014585327157263836,
+            "width": 0.32554519589396236,
+            "height": 0.9825702665755631
+          }
+        }
+      ],
+      "heads": [],
+      "faces": [],
+      "poses": [],
+      "classificationCalls": [],
+      "results": [],
+      "pending": [],
+      "eventsSubmitted": 0,
+      "snapshot": "tmp/kollam-live-fb465a8f-5d79-4a3f-9cb8-b8cec471708d-20261007.jpg"
+    }
+  ]
+}

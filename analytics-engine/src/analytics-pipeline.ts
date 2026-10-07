@@ -168,7 +168,7 @@ export class AnalyticsPipeline {
     this.vehicleDetector = new VehicleDetector();
     this.helmetDetector = new HelmetDetector(
       null,
-      environmentProbability("HELMET_CONFIDENCE_THRESHOLD", 0.88),
+      environmentProbability("HELMET_CONFIDENCE_THRESHOLD", 0.75),
       null,
       process.env.HELMET_FAST_ALERT !== "false",
     );

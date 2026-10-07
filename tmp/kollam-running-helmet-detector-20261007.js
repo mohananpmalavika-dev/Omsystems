@@ -33,6 +33,9 @@ export class HelmetDetector extends BaseDetector {
     // Hajipur bare-head alarms. Compact fallback needs usable source pixels
     // and agreement from a crop including the area above the person's box.
     MIN_COMPACT_HEAD_PIXELS = 24;
+    // Use the same overlap gate when retaining, confirming and clearing a head.
+    // A walking person's consecutive boxes can overlap less than 0.5.
+    PENDING_HEAD_IOU = 0.2;
     pendingHeads = new Map();
     fastAlert;
     verificationRequired = false;
@@ -186,7 +189,7 @@ export class HelmetDetector extends BaseDetector {
         const pending = this.pendingHeads.get(frame.cameraId);
         if (pending) {
             this.pendingHeads.set(frame.cameraId, pending.filter((item) => indoorPersons.some((person) => (this.hasClassifiablePerson(person) || this.hasRaisedHeadCandidate(person)) &&
-                calculateIoU(item.personBox, person.boundingBox) >= 0.5)));
+                calculateIoU(item.personBox, person.boundingBox) >= this.PENDING_HEAD_IOU)));
         }
         for (const person of indoorPersons) {
             let presence = this.detectHelmetPresence(person, helmets);
@@ -432,20 +435,7 @@ export class HelmetDetector extends BaseDetector {
     confirmClassifiedHead(cameraId, personBox, observedAt, requiredConfirmations = 2, cropMode = "standard") {
         const pending = (this.pendingHeads.get(cameraId) ?? [])
             .filter((item) => observedAt - item.lastSeenAt <= 120_000 && observedAt >= item.lastSeenAt);
-        // Use very lenient IoU threshold (0.2) for walking persons to maintain confirmation chain
-        // Also check for spatial proximity even with low IoU (within 40% frame distance)
-        const previous = pending.find((item) => {
-            const iou = calculateIoU(item.personBox, personBox);
-            if (iou >= 0.2)
-                return true; // Overlapping even slightly
-            // Check spatial proximity for walking/running persons
-            const centerX1 = item.personBox.x + item.personBox.width / 2;
-            const centerY1 = item.personBox.y + item.personBox.height / 2;
-            const centerX2 = personBox.x + personBox.width / 2;
-            const centerY2 = personBox.y + personBox.height / 2;
-            const distance = Math.sqrt(Math.pow(centerX2 - centerX1, 2) + Math.pow(centerY2 - centerY1, 2));
-            return distance < 0.4; // Within 40% of frame diagonal for walking persons
-        });
+        const previous = this.matchPendingHead(pending, personBox);
         if (previous) {
             if (previous.cropMode !== cropMode)
                 previous.confirmations = 1;
@@ -465,19 +455,15 @@ export class HelmetDetector extends BaseDetector {
         const pending = this.pendingHeads.get(cameraId);
         if (!pending)
             return;
-        // Use same lenient matching as confirmClassifiedHead for consistency
-        this.pendingHeads.set(cameraId, pending.filter((item) => {
-            const iou = calculateIoU(item.personBox, personBox);
-            if (iou >= 0.2)
-                return false; // This is the same person, clear it
-            // Check spatial proximity
-            const centerX1 = item.personBox.x + item.personBox.width / 2;
-            const centerY1 = item.personBox.y + item.personBox.height / 2;
-            const centerX2 = personBox.x + personBox.width / 2;
-            const centerY2 = personBox.y + personBox.height / 2;
-            const distance = Math.sqrt(Math.pow(centerX2 - centerX1, 2) + Math.pow(centerY2 - centerY1, 2));
-            return distance >= 0.4; // Keep only if NOT the same person
-        }));
+        const previous = this.matchPendingHead(pending, personBox);
+        this.pendingHeads.set(cameraId, pending.filter(item => item !== previous));
+    }
+    matchPendingHead(pending, personBox) {
+        // Proximity alone can join two different people or clear a nearby wearer.
+        // Require overlap and select the strongest match instead of the first one.
+        return pending.map(item => ({ item, overlap: calculateIoU(item.personBox, personBox) }))
+            .filter(match => match.overlap >= this.PENDING_HEAD_IOU)
+            .sort((left, right) => right.overlap - left.overlap)[0]?.item;
     }
     /**
      * Generate stable identifier for person (trackId or bounding box hash)

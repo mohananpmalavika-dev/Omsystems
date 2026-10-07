@@ -269,6 +269,8 @@ services:
       FACE_RECOGNITION_ENABLED: "true"
       HELMET_FAST_ALERT: "true"
       HELMET_MULTI_MODEL: "true"
+      HELMET_CONFIDENCE_THRESHOLD: "0.75"
+      PERSON_CONFIDENCE_THRESHOLD: "0.35"
       ENABLE_POSE_ESTIMATION: "true"
       ENABLE_FACE_RECOGNITION: "true"
       # ArcFace model — downloaded from GCS by startup-script.sh before container starts
