@@ -27,7 +27,7 @@ data:
   
   # Helmet Detection
   HELMET_MODEL_PATH: "./models/safety/helmet.onnx"
-  HELMET_CONFIDENCE_THRESHOLD: "0.88"
+  HELMET_CONFIDENCE_THRESHOLD: "0.75"  # Lowered from 0.88 to allow alerts
   # DO NOT SET HELMET_FAST_ALERT - keep multi-frame confirmation
   
   # Pose Estimation - Verifies human anatomy (shoulders, nose, body structure)
@@ -116,7 +116,7 @@ data:
   # ============================================================================
   # Detection Thresholds
   # ============================================================================
-  PERSON_CONFIDENCE_THRESHOLD: "0.5"
+  PERSON_CONFIDENCE_THRESHOLD: "0.45"  # Lowered from 0.5 to catch more helmets
   VEHICLE_CONFIDENCE_THRESHOLD: "0.6"
   ANPR_CONFIDENCE_THRESHOLD: "0.8"
   ANPR_PLATE_CONFIDENCE_THRESHOLD: "0.7"

@@ -34,7 +34,7 @@ export class HelmetDetector extends BaseDetector {
   private classifier: HelmetClassificationFrameInference | null;
   private modelLoadError: string | null = null;
   private readonly MIN_CONFIDENCE: number;
-  private readonly PERSON_CONFIDENCE = 0.50;
+  private readonly PERSON_CONFIDENCE = 0.35;  // Lowered to 0.35 for walking/moving persons
   // Crop classification cannot distinguish a helmet from every dark object.
   // Without a localized helmet observation, require strong independent person
   // evidence; the Hajipur empty-chair and bare-head alarms scored 0.67/0.83.
@@ -46,10 +46,10 @@ export class HelmetDetector extends BaseDetector {
   private readonly HEAD_REGION_OVERLAP_THRESHOLD = 0.6;
   // Keep the existing alert confidence floor when selecting the motorcycle
   // classifier; generic object-presence thresholds are too low for alerts.
-  private readonly HELMET_WORN_ALERT_CONFIDENCE = 0.9167;
+  private readonly HELMET_WORN_ALERT_CONFIDENCE = 0.80;  // Lowered from 0.9167 to allow alerts while maintaining multi-model verification
   // A person crop is only an approximate helmet location. Require a second
   // independent frame when no helmet box is supplied.
-  private readonly CLASSIFIED_HEAD_CONFIDENCE = 0.9167;
+  private readonly CLASSIFIED_HEAD_CONFIDENCE = 0.80;  // Lowered from 0.9167 to allow alerts
   // Upscaling a thin, distant hair/forehead strip to 224px produced the
   // Hajipur bare-head alarms. Compact fallback needs usable source pixels
   // and agreement from a crop including the area above the person's box.
@@ -468,8 +468,8 @@ export class HelmetDetector extends BaseDetector {
   }
 
   private hasClassifiablePerson(person: { confidence?: number; boundingBox: HelmetDetection["personBoundingBox"] }) {
-    const minConf = this.headVerifier ? 0.45 : this.FULL_PERSON_CONFIDENCE;
-    const minHeight = this.headVerifier ? 0.25 : 0.75;
+    const minConf = this.headVerifier ? 0.35 : this.FULL_PERSON_CONFIDENCE;  // Lowered to 0.35 for walking persons
+    const minHeight = this.headVerifier ? 0.20 : 0.75;  // Lowered to 0.20 for partially visible walking persons
     return (person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ||
       ((person.confidence ?? 0) >= minConf && person.boundingBox.height >= minHeight);
   }
@@ -492,26 +492,26 @@ export class HelmetDetector extends BaseDetector {
   }
 
   private hasRaisedHeadCandidate(person: { confidence?: number; boundingBox: HelmetDetection["personBoundingBox"] }) {
-    const minConf = this.headVerifier ? 0.45 : 0.8;
-    const minHeight = this.headVerifier ? 0.25 : 0.7;
+    const minConf = this.headVerifier ? 0.35 : 0.8;  // Lowered to 0.35 for walking persons
+    const minHeight = this.headVerifier ? 0.20 : 0.7;  // Lowered to 0.20 for partially visible walking persons
     return (person.confidence ?? 0) >= minConf && person.boundingBox.height >= minHeight;
   }
 
   private confirmClassifiedHead(cameraId: string, personBox: HelmetDetection["personBoundingBox"], observedAt: number, requiredConfirmations = 2, cropMode: "standard" | "raised" = "standard") {
     const pending = (this.pendingHeads.get(cameraId) ?? [])
       .filter((item) => observedAt - item.lastSeenAt <= 120_000 && observedAt >= item.lastSeenAt);
-    // Use more lenient IoU threshold (0.3) for moving persons to maintain confirmation chain
-    // Also check for spatial proximity even with low IoU (within 30% frame distance)
+    // Use very lenient IoU threshold (0.2) for walking persons to maintain confirmation chain
+    // Also check for spatial proximity even with low IoU (within 40% frame distance)
     const previous = pending.find((item) => {
       const iou = calculateIoU(item.personBox, personBox);
-      if (iou >= 0.3) return true; // Overlapping significantly
-      // Check spatial proximity for fast-moving persons
+      if (iou >= 0.2) return true; // Overlapping even slightly
+      // Check spatial proximity for walking/running persons
       const centerX1 = item.personBox.x + item.personBox.width / 2;
       const centerY1 = item.personBox.y + item.personBox.height / 2;
       const centerX2 = personBox.x + personBox.width / 2;
       const centerY2 = personBox.y + personBox.height / 2;
       const distance = Math.sqrt(Math.pow(centerX2 - centerX1, 2) + Math.pow(centerY2 - centerY1, 2));
-      return distance < 0.3; // Within 30% of frame diagonal
+      return distance < 0.4; // Within 40% of frame diagonal for walking persons
     });
     if (previous) {
       if (previous.cropMode !== cropMode) previous.confirmations = 1;
@@ -532,14 +532,14 @@ export class HelmetDetector extends BaseDetector {
     // Use same lenient matching as confirmClassifiedHead for consistency
     this.pendingHeads.set(cameraId, pending.filter((item) => {
       const iou = calculateIoU(item.personBox, personBox);
-      if (iou >= 0.3) return false; // This is the same person, clear it
+      if (iou >= 0.2) return false; // This is the same person, clear it
       // Check spatial proximity
       const centerX1 = item.personBox.x + item.personBox.width / 2;
       const centerY1 = item.personBox.y + item.personBox.height / 2;
       const centerX2 = personBox.x + personBox.width / 2;
       const centerY2 = personBox.y + personBox.height / 2;
       const distance = Math.sqrt(Math.pow(centerX2 - centerX1, 2) + Math.pow(centerY2 - centerY1, 2));
-      return distance >= 0.3; // Keep only if NOT the same person
+      return distance >= 0.4; // Keep only if NOT the same person
     }));
   }
 

@@ -1,9 +1,11 @@
 import { execSync } from 'child_process';
 
 const sql = `
-SELECT detection_type, cooldown_seconds, count(1) 
-FROM analytics_rules 
-GROUP BY detection_type, cooldown_seconds;
+SELECT id, title, severity, camera_id, created_at 
+FROM analytics_alerts 
+WHERE created_at >= NOW() - interval '10 minutes'
+ORDER BY created_at DESC 
+LIMIT 10;
 `;
 
 const b64 = Buffer.from(sql).toString('base64');
