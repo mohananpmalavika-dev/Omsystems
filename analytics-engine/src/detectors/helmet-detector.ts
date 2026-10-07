@@ -500,7 +500,19 @@ export class HelmetDetector extends BaseDetector {
   private confirmClassifiedHead(cameraId: string, personBox: HelmetDetection["personBoundingBox"], observedAt: number, requiredConfirmations = 2, cropMode: "standard" | "raised" = "standard") {
     const pending = (this.pendingHeads.get(cameraId) ?? [])
       .filter((item) => observedAt - item.lastSeenAt <= 120_000 && observedAt >= item.lastSeenAt);
-    const previous = pending.find((item) => calculateIoU(item.personBox, personBox) >= 0.5);
+    // Use more lenient IoU threshold (0.3) for moving persons to maintain confirmation chain
+    // Also check for spatial proximity even with low IoU (within 30% frame distance)
+    const previous = pending.find((item) => {
+      const iou = calculateIoU(item.personBox, personBox);
+      if (iou >= 0.3) return true; // Overlapping significantly
+      // Check spatial proximity for fast-moving persons
+      const centerX1 = item.personBox.x + item.personBox.width / 2;
+      const centerY1 = item.personBox.y + item.personBox.height / 2;
+      const centerX2 = personBox.x + personBox.width / 2;
+      const centerY2 = personBox.y + personBox.height / 2;
+      const distance = Math.sqrt(Math.pow(centerX2 - centerX1, 2) + Math.pow(centerY2 - centerY1, 2));
+      return distance < 0.3; // Within 30% of frame diagonal
+    });
     if (previous) {
       if (previous.cropMode !== cropMode) previous.confirmations = 1;
       else if (observedAt > previous.lastSeenAt) previous.confirmations += 1;
@@ -517,7 +529,18 @@ export class HelmetDetector extends BaseDetector {
   private clearPendingHead(cameraId: string, personBox: HelmetDetection["personBoundingBox"]) {
     const pending = this.pendingHeads.get(cameraId);
     if (!pending) return;
-    this.pendingHeads.set(cameraId, pending.filter((item) => calculateIoU(item.personBox, personBox) < 0.5));
+    // Use same lenient matching as confirmClassifiedHead for consistency
+    this.pendingHeads.set(cameraId, pending.filter((item) => {
+      const iou = calculateIoU(item.personBox, personBox);
+      if (iou >= 0.3) return false; // This is the same person, clear it
+      // Check spatial proximity
+      const centerX1 = item.personBox.x + item.personBox.width / 2;
+      const centerY1 = item.personBox.y + item.personBox.height / 2;
+      const centerX2 = personBox.x + personBox.width / 2;
+      const centerY2 = personBox.y + personBox.height / 2;
+      const distance = Math.sqrt(Math.pow(centerX2 - centerX1, 2) + Math.pow(centerY2 - centerY1, 2));
+      return distance >= 0.3; // Keep only if NOT the same person
+    }));
   }
 
   /**
