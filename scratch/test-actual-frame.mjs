@@ -13,12 +13,13 @@ sudo docker exec sentinel-gcp-control-plane node -e '
   }
   const data = JSON.parse(raw);
   console.log("CAPTURED_AT:", data.capturedAt);
+  console.log("BASE64_LEN:", data.imageBase64?.length);
 
   const res = await fetch("http://analytics-engine:8092/internal/frames", {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-analytics-source-key": "sentinel-analytics-secret-key-2026"
+      "x-analytics-source-key": "10bcf3c15292e4a76522e6c2b73644cd0f480e57fc67ab293ec60ac5c6a82844"
     },
     body: JSON.stringify({
       tenantId: "00000000-0000-0000-0000-000000000001",
@@ -39,7 +40,7 @@ sudo docker exec sentinel-gcp-control-plane node -e '
   });
   console.log("STATUS:", res.status);
   const json = await res.json();
-  console.log("RESULT:", JSON.stringify(json, null, 2));
+  console.log("RESPONSE:", JSON.stringify(json, null, 2));
 })();
 '
 `;
