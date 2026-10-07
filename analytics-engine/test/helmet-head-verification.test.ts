@@ -18,6 +18,20 @@ const localizer = (label="helmet", boundingBox=box) => ({run:vi.fn(async()=>[{la
 beforeEach(() => vi.clearAllMocks());
 
 describe("independent helmet head verification", () => {
+  it("retains a narrow side-on person with localized legacy helmet evidence", async () => {
+    const narrow={x:.2,y:.2,width:.04,height:.4};
+    const head={x:.205,y:.2,width:.028,height:.032};
+    const classifier={run:vi.fn(async()=>score(.99))};
+    const verifier=new LocalizedHelmetHeadVerifier(localizer("helmet",head),classifier);
+    const detector=new HelmetDetector(null,.75,classifier,true,verifier);
+    await detector.initialize();
+    const sample={...frame(),width:1280,height:720,imageData:Buffer.alloc(1280*720*3),
+      metadata:{inferenceMode:"local-onnx",detections:[{label:"person",confidence:.6,boundingBox:narrow}]}};
+    expect(await detector.detect(sample)).toEqual([]);
+    expect((await detector.detect({...sample,timestamp:new Date(2000)}))[0])
+      .toMatchObject({detectionType:"helmet-worn",requiresAlert:true});
+    await detector.cleanup();
+  });
   it("accepts a walking person below 35% frame height with enough native head pixels", async () => {
     const distant = {x:.2,y:.2,width:.12,height:.25};
     const head = {x:.24,y:.2,width:.035,height:.06};

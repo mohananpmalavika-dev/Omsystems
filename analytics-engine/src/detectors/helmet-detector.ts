@@ -504,8 +504,10 @@ export class HelmetDetector extends BaseDetector {
     if (frame && this.headVerifier?.usesHeadEvidence?.(frame)) {
       return (person.confidence ?? 0) >= 0.8 && person.boundingBox.height * frame.height >= 72;
     }
-    const minConf = this.headVerifier ? 0.35 : this.FULL_PERSON_CONFIDENCE;  // Lowered to 0.35 for walking persons
-    const minHeight = this.headVerifier ? 0.20 : 0.75;  // Lowered to 0.20 for partially visible walking persons
+    const minConf = this.headVerifier ? 0.35 : this.FULL_PERSON_CONFIDENCE;
+    const minHeight = this.headVerifier ? 0.20 : 0.75;
+    // Frame-relative width/aspect rules reject distant or side-on people.
+    // Independent head localization and source pixels establish usable evidence.
     return (person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ||
       ((person.confidence ?? 0) >= minConf && person.boundingBox.height >= minHeight);
   }
@@ -533,8 +535,8 @@ export class HelmetDetector extends BaseDetector {
   }
 
   private hasRaisedHeadCandidate(person: { confidence?: number; boundingBox: HelmetDetection["personBoundingBox"] }) {
-    const minConf = this.headVerifier ? 0.35 : 0.8;  // Lowered to 0.35 for walking persons
-    const minHeight = this.headVerifier ? 0.20 : 0.7;  // Lowered to 0.20 for partially visible walking persons
+    const minConf = this.headVerifier ? 0.35 : 0.8;
+    const minHeight = this.headVerifier ? 0.20 : 0.7;
     return (person.confidence ?? 0) >= minConf && person.boundingBox.height >= minHeight;
   }
 

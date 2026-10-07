@@ -1,0 +1,310 @@
+{
+  "configuration": {
+    "confidenceThreshold": 0.75,
+    "objectThreshold": 0.35,
+    "fastAlert": true,
+    "evidenceCameras": []
+  },
+  "health": {
+    "helmet": {
+      "status": "healthy",
+      "details": "Helmet classifier active; production crop alerts require independent head localization and classification agreement"
+    },
+    "loadedModels": [
+      "yolov8n",
+      "helmet",
+      "helmet-head-localizer",
+      "face-detector",
+      "pose-estimator"
+    ]
+  },
+  "results": [
+    {
+      "name": "CH4 saved walking pass",
+      "expectedHelmetWearers": 1,
+      "maxHelmetWearers": 0,
+      "minimumConfidence": null,
+      "passed": false,
+      "frames": [
+        {
+          "capturedAt": "2026-10-07T11:40:35.560Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.844112246823137,
+              "boundingBox": {
+                "x": 0.7403041183949014,
+                "y": 0.18944148507528777,
+                "width": 0.15524809589742827,
+                "height": 0.8104015664230464
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-07T11:40:41.708Z",
+          "width": 640,
+          "height": 360,
+          "persons": [],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-07T11:40:48.319Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.9061403008746254,
+              "boundingBox": {
+                "x": 0.3766322357548191,
+                "y": 0.19477097970361035,
+                "width": 0.14466515565212146,
+                "height": 0.62273331661384
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-07T11:40:53.652Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.8820751948009686,
+              "boundingBox": {
+                "x": 0.7207921638025722,
+                "y": 0.2154112360871351,
+                "width": 0.1711827956538864,
+                "height": 0.7845887639128649
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.39730400309103686,
+              "boundingBox": {
+                "x": 0.3822969651445106,
+                "y": 0.36579821390630907,
+                "width": 0.04244666480228504,
+                "height": 0.15092461464437545
+              }
+            }
+          ],
+          "results": []
+        }
+      ]
+    },
+    {
+      "name": "CH8 user-confirmed helmet walking pass",
+      "expectedHelmetWearers": 1,
+      "maxHelmetWearers": 0,
+      "minimumConfidence": null,
+      "passed": false,
+      "frames": [
+        {
+          "capturedAt": "2026-10-07T11:22:36.917Z",
+          "width": 640,
+          "height": 360,
+          "persons": [],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-07T11:22:42.886Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.9000373869094247,
+              "boundingBox": {
+                "x": 0.46299169941992285,
+                "y": 0.008884243111919148,
+                "width": 0.2936634493252262,
+                "height": 0.9911157568880808
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-07T11:22:48.119Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.8935970779226778,
+              "boundingBox": {
+                "x": 0.06277795659691317,
+                "y": 0.3043418921303856,
+                "width": 0.16146919917835195,
+                "height": 0.6851623298081977
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-07T11:22:49.087Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.8608586697010878,
+              "boundingBox": {
+                "x": 0.11444935517664881,
+                "y": 0.31380257999117706,
+                "width": 0.11385924598646516,
+                "height": 0.6832494991389064
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-07T11:22:57.000Z",
+          "width": 640,
+          "height": 360,
+          "persons": [],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-07T11:23:02.889Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.837902350840757,
+              "boundingBox": {
+                "x": 0.17045157902409108,
+                "y": 0.4225525162460346,
+                "width": 0.15433414427347197,
+                "height": 0.5774474837539654
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-07T11:23:10.985Z",
+          "width": 640,
+          "height": 360,
+          "persons": [],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-07T11:23:18.630Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.4708276027668461,
+              "boundingBox": {
+                "x": 0.8433695766471023,
+                "y": 0.0017234574771655329,
+                "width": 0.15405024732002015,
+                "height": 0.9696804338558486
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-07T11:23:23.104Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.806970350051543,
+              "boundingBox": {
+                "x": 0.07769317317143305,
+                "y": 0.013425382199870987,
+                "width": 0.21306707378265505,
+                "height": 0.9681758647955121
+              }
+            }
+          ],
+          "results": []
+        }
+      ]
+    },
+    {
+      "name": "CH9 unrelated-background/clipped-view abstention control",
+      "expectedHelmetWearers": 0,
+      "maxHelmetWearers": 0,
+      "minimumConfidence": null,
+      "passed": true,
+      "frames": [
+        {
+          "capturedAt": "2026-10-07T12:52:23.184Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.40088496541204677,
+              "boundingBox": {
+                "x": 0.8056434922322607,
+                "y": 0.2145638952345449,
+                "width": 0.09779114864171023,
+                "height": 0.2662618919420388
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-07T12:53:01.107Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.4506055173815753,
+              "boundingBox": {
+                "x": 0.8105579538983478,
+                "y": 0.1976531196041627,
+                "width": 0.08671470009438709,
+                "height": 0.2735003625850127
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-07T12:53:02.174Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.4113280110349251,
+              "boundingBox": {
+                "x": 0.8018919441082815,
+                "y": 0.20855840999156278,
+                "width": 0.08307187268789584,
+                "height": 0.26181521508809247
+              }
+            }
+          ],
+          "results": []
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "cases": 3,
+    "passed": 1,
+    "failed": 2,
+    "productionEventsSubmitted": 0
+  }
+}
