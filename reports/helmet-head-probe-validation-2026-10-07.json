@@ -1,0 +1,2857 @@
+{
+  "summary": {
+    "train": {
+      "images": 8,
+      "crops": 51,
+      "minPositive": 0.7098492891274569,
+      "maxNegative": 0.30190503813301484,
+      "falsePositivesAt080": 0,
+      "missedPositivesAt080": 2
+    },
+    "test": {
+      "images": 16,
+      "crops": 138,
+      "minPositive": 0.5443332802093535,
+      "maxNegative": 0.4849236881308565,
+      "falsePositivesAt080": 0,
+      "missedPositivesAt080": 2
+    }
+  },
+  "evaluations": [
+    {
+      "file": "scratch/helmet-alert-ch6.jpg",
+      "group": "pilot-pink",
+      "split": "train",
+      "expectedHelmet": true,
+      "headIndex": 0,
+      "head": {
+        "x": 0.44510601460933685,
+        "y": 0.2528352949354384,
+        "width": 0.09926989674568176,
+        "height": 0.17317428588867184
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.951931448927802
+    },
+    {
+      "file": "scratch/helmet-alert-ch6.jpg",
+      "group": "pilot-pink",
+      "split": "train",
+      "expectedHelmet": true,
+      "headIndex": 0,
+      "head": {
+        "x": 0.44510601460933685,
+        "y": 0.2528352949354384,
+        "width": 0.09926989674568176,
+        "height": 0.17317428588867184
+      },
+      "padding": 0.1,
+      "wearingHelmetConfidence": 0.9183195206950945
+    },
+    {
+      "file": "scratch/helmet-alert-ch6.jpg",
+      "group": "pilot-pink",
+      "split": "train",
+      "expectedHelmet": true,
+      "headIndex": 0,
+      "head": {
+        "x": 0.44510601460933685,
+        "y": 0.2528352949354384,
+        "width": 0.09926989674568176,
+        "height": 0.17317428588867184
+      },
+      "padding": 0.2,
+      "wearingHelmetConfidence": 0.9099319448260229
+    },
+    {
+      "file": "scratch/helmet-alert-ch6.jpg",
+      "group": "pilot-pink",
+      "split": "train",
+      "expectedHelmet": true,
+      "headIndex": 1,
+      "head": {
+        "x": 0.4475298851728439,
+        "y": 0.2552133666144477,
+        "width": 0.09585009217262269,
+        "height": 0.16666999393039278
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.9031809110337099
+    },
+    {
+      "file": "scratch/helmet-alert-ch6.jpg",
+      "group": "pilot-pink",
+      "split": "train",
+      "expectedHelmet": true,
+      "headIndex": 1,
+      "head": {
+        "x": 0.4475298851728439,
+        "y": 0.2552133666144477,
+        "width": 0.09585009217262269,
+        "height": 0.16666999393039278
+      },
+      "padding": 0.1,
+      "wearingHelmetConfidence": 0.8530197178381608
+    },
+    {
+      "file": "scratch/helmet-alert-ch6.jpg",
+      "group": "pilot-pink",
+      "split": "train",
+      "expectedHelmet": true,
+      "headIndex": 1,
+      "head": {
+        "x": 0.4475298851728439,
+        "y": 0.2552133666144477,
+        "width": 0.09585009217262269,
+        "height": 0.16666999393039278
+      },
+      "padding": 0.2,
+      "wearingHelmetConfidence": 0.8647707806303465
+    },
+    {
+      "file": "tmp/helmet-channel-6.jpg",
+      "group": "pilot-blue",
+      "split": "train",
+      "expectedHelmet": true,
+      "headIndex": 0,
+      "head": {
+        "x": 0.3540926516056061,
+        "y": 0.18231630325317383,
+        "width": 0.1535752177238464,
+        "height": 0.2786030027601454
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.7477188924284769
+    },
+    {
+      "file": "tmp/helmet-channel-6.jpg",
+      "group": "pilot-blue",
+      "split": "train",
+      "expectedHelmet": true,
+      "headIndex": 0,
+      "head": {
+        "x": 0.3540926516056061,
+        "y": 0.18231630325317383,
+        "width": 0.1535752177238464,
+        "height": 0.2786030027601454
+      },
+      "padding": 0.1,
+      "wearingHelmetConfidence": 0.940444318677987
+    },
+    {
+      "file": "tmp/helmet-channel-6.jpg",
+      "group": "pilot-blue",
+      "split": "train",
+      "expectedHelmet": true,
+      "headIndex": 0,
+      "head": {
+        "x": 0.3540926516056061,
+        "y": 0.18231630325317383,
+        "width": 0.1535752177238464,
+        "height": 0.2786030027601454
+      },
+      "padding": 0.2,
+      "wearingHelmetConfidence": 0.8349847040678627
+    },
+    {
+      "file": "tmp/pilot-wearer-a85e6b3f-89c4-40b9-a51d-cab4499ddb7c-639269109585900000-20261007.jpg",
+      "group": "pilot-pink",
+      "split": "train",
+      "expectedHelmet": true,
+      "headIndex": 0,
+      "head": {
+        "x": 0.7336994171142578,
+        "y": 0.1012481795416938,
+        "width": 0.10884389877319334,
+        "height": 0.17081050872802733
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.8710340322811438
+    },
+    {
+      "file": "tmp/pilot-wearer-a85e6b3f-89c4-40b9-a51d-cab4499ddb7c-639269109585900000-20261007.jpg",
+      "group": "pilot-pink",
+      "split": "train",
+      "expectedHelmet": true,
+      "headIndex": 0,
+      "head": {
+        "x": 0.7336994171142578,
+        "y": 0.1012481795416938,
+        "width": 0.10884389877319334,
+        "height": 0.17081050872802733
+      },
+      "padding": 0.1,
+      "wearingHelmetConfidence": 0.8535514897262726
+    },
+    {
+      "file": "tmp/pilot-wearer-a85e6b3f-89c4-40b9-a51d-cab4499ddb7c-639269109585900000-20261007.jpg",
+      "group": "pilot-pink",
+      "split": "train",
+      "expectedHelmet": true,
+      "headIndex": 0,
+      "head": {
+        "x": 0.7336994171142578,
+        "y": 0.1012481795416938,
+        "width": 0.10884389877319334,
+        "height": 0.17081050872802733
+      },
+      "padding": 0.2,
+      "wearingHelmetConfidence": 0.7098492891274569
+    },
+    {
+      "file": "tmp/pilot-wearer-99965e01-8fb4-44e3-8b9f-615ec673274d-639269109527830000-20261007.jpg",
+      "group": "pilot-pink",
+      "split": "train",
+      "expectedHelmet": true,
+      "headIndex": 0,
+      "head": {
+        "x": 0.4003779411315918,
+        "y": 0.18788039949205187,
+        "width": 0.10902414321899417,
+        "height": 0.1806309382120767
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.9179518229448573
+    },
+    {
+      "file": "tmp/pilot-wearer-99965e01-8fb4-44e3-8b9f-615ec673274d-639269109527830000-20261007.jpg",
+      "group": "pilot-pink",
+      "split": "train",
+      "expectedHelmet": true,
+      "headIndex": 0,
+      "head": {
+        "x": 0.4003779411315918,
+        "y": 0.18788039949205187,
+        "width": 0.10902414321899417,
+        "height": 0.1806309382120767
+      },
+      "padding": 0.1,
+      "wearingHelmetConfidence": 0.8060937359858974
+    },
+    {
+      "file": "tmp/pilot-wearer-99965e01-8fb4-44e3-8b9f-615ec673274d-639269109527830000-20261007.jpg",
+      "group": "pilot-pink",
+      "split": "train",
+      "expectedHelmet": true,
+      "headIndex": 0,
+      "head": {
+        "x": 0.4003779411315918,
+        "y": 0.18788039949205187,
+        "width": 0.10902414321899417,
+        "height": 0.1806309382120767
+      },
+      "padding": 0.2,
+      "wearingHelmetConfidence": 0.8046203575870016
+    },
+    {
+      "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+      "group": "hajipur",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.30393700003623964,
+        "y": 0.37344029744466145,
+        "width": 0.1250325322151184,
+        "height": 0.22819875081380214
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.26581250081216906
+    },
+    {
+      "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+      "group": "hajipur",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.30393700003623964,
+        "y": 0.37344029744466145,
+        "width": 0.1250325322151184,
+        "height": 0.22819875081380214
+      },
+      "padding": 0.1,
+      "wearingHelmetConfidence": 0.1741554268505388
+    },
+    {
+      "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+      "group": "hajipur",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.30393700003623964,
+        "y": 0.37344029744466145,
+        "width": 0.1250325322151184,
+        "height": 0.22819875081380214
+      },
+      "padding": 0.2,
+      "wearingHelmetConfidence": 0.09868580960440866
+    },
+    {
+      "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+      "group": "hajipur",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.4069895625114441,
+        "y": 0.07280316352844238,
+        "width": 0.09027416706085206,
+        "height": 0.17204529444376637
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.13002802115623804
+    },
+    {
+      "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+      "group": "hajipur",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.4069895625114441,
+        "y": 0.07280316352844238,
+        "width": 0.09027416706085206,
+        "height": 0.17204529444376637
+      },
+      "padding": 0.1,
+      "wearingHelmetConfidence": 0.10611989188853443
+    },
+    {
+      "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+      "group": "hajipur",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.4069895625114441,
+        "y": 0.07280316352844238,
+        "width": 0.09027416706085206,
+        "height": 0.17204529444376637
+      },
+      "padding": 0.2,
+      "wearingHelmetConfidence": 0.1264657053208141
+    },
+    {
+      "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+      "group": "hajipur",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.6860997676849365,
+        "y": 0.4721510781182183,
+        "width": 0.14810724258422847,
+        "height": 0.2400012969970703
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.10612228844821815
+    },
+    {
+      "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+      "group": "hajipur",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.6860997676849365,
+        "y": 0.4721510781182183,
+        "width": 0.14810724258422847,
+        "height": 0.2400012969970703
+      },
+      "padding": 0.1,
+      "wearingHelmetConfidence": 0.08764235372139653
+    },
+    {
+      "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+      "group": "hajipur",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.6860997676849365,
+        "y": 0.4721510781182183,
+        "width": 0.14810724258422847,
+        "height": 0.2400012969970703
+      },
+      "padding": 0.2,
+      "wearingHelmetConfidence": 0.1831810403084863
+    },
+    {
+      "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+      "group": "hajipur",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.7387882828712463,
+        "y": 0.05556226306491428,
+        "width": 0.1723896741867066,
+        "height": 0.3493368996514215
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.2704113028683927
+    },
+    {
+      "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+      "group": "hajipur",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.7387882828712463,
+        "y": 0.05556226306491428,
+        "width": 0.1723896741867066,
+        "height": 0.3493368996514215
+      },
+      "padding": 0.1,
+      "wearingHelmetConfidence": 0.30190503813301484
+    },
+    {
+      "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+      "group": "hajipur",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.7387882828712463,
+        "y": 0.05556226306491428,
+        "width": 0.1723896741867066,
+        "height": 0.3493368996514215
+      },
+      "padding": 0.2,
+      "wearingHelmetConfidence": 0.09929684601533267
+    },
+    {
+      "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+      "group": "hajipur",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 4,
+      "head": {
+        "x": 0.16202624440193175,
+        "y": 0,
+        "width": 0.164853036403656,
+        "height": 0.31211524539523655
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.11812406342347961
+    },
+    {
+      "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+      "group": "hajipur",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 4,
+      "head": {
+        "x": 0.16202624440193175,
+        "y": 0,
+        "width": 0.164853036403656,
+        "height": 0.31211524539523655
+      },
+      "padding": 0.1,
+      "wearingHelmetConfidence": 0.2175007342072967
+    },
+    {
+      "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+      "group": "hajipur",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 4,
+      "head": {
+        "x": 0.16202624440193175,
+        "y": 0,
+        "width": 0.164853036403656,
+        "height": 0.31211524539523655
+      },
+      "padding": 0.2,
+      "wearingHelmetConfidence": 0.12229700723325304
+    },
+    {
+      "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+      "group": "hajipur",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 5,
+      "head": {
+        "x": 0.39600529670715334,
+        "y": 0.3383079210917155,
+        "width": 0.0816781997680664,
+        "height": 0.11614589691162108
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.14648616818648003
+    },
+    {
+      "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+      "group": "hajipur",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 5,
+      "head": {
+        "x": 0.39600529670715334,
+        "y": 0.3383079210917155,
+        "width": 0.0816781997680664,
+        "height": 0.11614589691162108
+      },
+      "padding": 0.1,
+      "wearingHelmetConfidence": 0.1096982928092111
+    },
+    {
+      "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+      "group": "hajipur",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 5,
+      "head": {
+        "x": 0.39600529670715334,
+        "y": 0.3383079210917155,
+        "width": 0.0816781997680664,
+        "height": 0.11614589691162108
+      },
+      "padding": 0.2,
+      "wearingHelmetConfidence": 0.12191150656711214
+    },
+    {
+      "file": "scratch/helmet-new-false-alert-raw.jpg",
+      "group": "older-false",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.6897942364215851,
+        "y": 0.1622307777404785,
+        "width": 0.11611236333847041,
+        "height": 0.21862095726860897
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.1065539238203709
+    },
+    {
+      "file": "scratch/helmet-new-false-alert-raw.jpg",
+      "group": "older-false",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.6897942364215851,
+        "y": 0.1622307777404785,
+        "width": 0.11611236333847041,
+        "height": 0.21862095726860897
+      },
+      "padding": 0.1,
+      "wearingHelmetConfidence": 0.2926418428778782
+    },
+    {
+      "file": "scratch/helmet-new-false-alert-raw.jpg",
+      "group": "older-false",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.6897942364215851,
+        "y": 0.1622307777404785,
+        "width": 0.11611236333847041,
+        "height": 0.21862095726860897
+      },
+      "padding": 0.2,
+      "wearingHelmetConfidence": 0.18908535466856413
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-0.jpg",
+      "group": "rajkot",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.19186515212059022,
+        "y": 0.35959728029039173,
+        "width": 0.07662469148635861,
+        "height": 0.13242066701253252
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.05790746446953798
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-0.jpg",
+      "group": "rajkot",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.19186515212059022,
+        "y": 0.35959728029039173,
+        "width": 0.07662469148635861,
+        "height": 0.13242066701253252
+      },
+      "padding": 0.1,
+      "wearingHelmetConfidence": 0.08093047140472351
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-0.jpg",
+      "group": "rajkot",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.19186515212059022,
+        "y": 0.35959728029039173,
+        "width": 0.07662469148635861,
+        "height": 0.13242066701253252
+      },
+      "padding": 0.2,
+      "wearingHelmetConfidence": 0.057025692448797044
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-0.jpg",
+      "group": "rajkot",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.19038414359092712,
+        "y": 0.3583924929300944,
+        "width": 0.07808486223220826,
+        "height": 0.13077225155300565
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.08523495762267562
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-0.jpg",
+      "group": "rajkot",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.19038414359092712,
+        "y": 0.3583924929300944,
+        "width": 0.07808486223220826,
+        "height": 0.13077225155300565
+      },
+      "padding": 0.1,
+      "wearingHelmetConfidence": 0.09563245901428473
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-0.jpg",
+      "group": "rajkot",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.19038414359092712,
+        "y": 0.3583924929300944,
+        "width": 0.07808486223220826,
+        "height": 0.13077225155300565
+      },
+      "padding": 0.2,
+      "wearingHelmetConfidence": 0.04592447039343694
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-0.jpg",
+      "group": "rajkot",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0,
+        "y": 0.3360127449035645,
+        "width": 0.04479180723428726,
+        "height": 0.14560790591769757
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.08399718385090267
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-0.jpg",
+      "group": "rajkot",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0,
+        "y": 0.3360127449035645,
+        "width": 0.04479180723428726,
+        "height": 0.14560790591769757
+      },
+      "padding": 0.1,
+      "wearingHelmetConfidence": 0.0986799198407922
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-0.jpg",
+      "group": "rajkot",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0,
+        "y": 0.3360127449035645,
+        "width": 0.04479180723428726,
+        "height": 0.14560790591769757
+      },
+      "padding": 0.2,
+      "wearingHelmetConfidence": 0.13987596669433272
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-0.jpg",
+      "group": "rajkot",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.17281887531280518,
+        "y": 0.3359562979804145,
+        "width": 0.07512311935424804,
+        "height": 0.10922313266330297
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.15038407389989444
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-0.jpg",
+      "group": "rajkot",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.17281887531280518,
+        "y": 0.3359562979804145,
+        "width": 0.07512311935424804,
+        "height": 0.10922313266330297
+      },
+      "padding": 0.1,
+      "wearingHelmetConfidence": 0.1589174384613909
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-0.jpg",
+      "group": "rajkot",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.17281887531280518,
+        "y": 0.3359562979804145,
+        "width": 0.07512311935424804,
+        "height": 0.10922313266330297
+      },
+      "padding": 0.2,
+      "wearingHelmetConfidence": 0.10137784009485135
+    },
+    {
+      "file": "tmp/kollam-live-fb465a8f-5d79-4a3f-9cb8-b8cec471708d-20261007102517107.jpg",
+      "group": "kollam",
+      "split": "test",
+      "expectedHelmet": true,
+      "headIndex": 0,
+      "head": {
+        "x": 0.3209194839000702,
+        "y": 0.06258540683322483,
+        "width": 0.12378174066543579,
+        "height": 0.21301617092556424
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.8798208662054932
+    },
+    {
+      "file": "tmp/kollam-live-fb465a8f-5d79-4a3f-9cb8-b8cec471708d-20261007102517107.jpg",
+      "group": "kollam",
+      "split": "test",
+      "expectedHelmet": true,
+      "headIndex": 0,
+      "head": {
+        "x": 0.3209194839000702,
+        "y": 0.06258540683322483,
+        "width": 0.12378174066543579,
+        "height": 0.21301617092556424
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.9436146205081459
+    },
+    {
+      "file": "tmp/kollam-live-fb465a8f-5d79-4a3f-9cb8-b8cec471708d-20261007102525317.jpg",
+      "group": "kollam",
+      "split": "test",
+      "expectedHelmet": true,
+      "headIndex": 0,
+      "head": {
+        "x": 0.15837736129760743,
+        "y": 0.45391242769029405,
+        "width": 0.07530598640441893,
+        "height": 0.13272944556342248
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.6188388675775737
+    },
+    {
+      "file": "tmp/kollam-live-fb465a8f-5d79-4a3f-9cb8-b8cec471708d-20261007102525317.jpg",
+      "group": "kollam",
+      "split": "test",
+      "expectedHelmet": true,
+      "headIndex": 0,
+      "head": {
+        "x": 0.15837736129760743,
+        "y": 0.45391242769029405,
+        "width": 0.07530598640441893,
+        "height": 0.13272944556342248
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.5443332802093535
+    },
+    {
+      "file": "scratch/helmet-false-f0b4f55e-00c0-442c-a0e1-3d6a05150bdf.jpg",
+      "group": "hajipur-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.5282607674598694,
+        "y": 0.14496731228298612,
+        "width": 0.18622653484344487,
+        "height": 0.33975745307074656
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.12556263651182692
+    },
+    {
+      "file": "scratch/helmet-false-f0b4f55e-00c0-442c-a0e1-3d6a05150bdf.jpg",
+      "group": "hajipur-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.5282607674598694,
+        "y": 0.14496731228298612,
+        "width": 0.18622653484344487,
+        "height": 0.33975745307074656
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.18125747961133473
+    },
+    {
+      "file": "scratch/helmet-false-f0b4f55e-00c0-442c-a0e1-3d6a05150bdf.jpg",
+      "group": "hajipur-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.39115355014801023,
+        "y": 0.717768308851454,
+        "width": 0.13735022544860842,
+        "height": 0.21097929212782118
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.236822418929242
+    },
+    {
+      "file": "scratch/helmet-false-f0b4f55e-00c0-442c-a0e1-3d6a05150bdf.jpg",
+      "group": "hajipur-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.39115355014801023,
+        "y": 0.717768308851454,
+        "width": 0.13735022544860842,
+        "height": 0.21097929212782118
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.11991455468085066
+    },
+    {
+      "file": "scratch/helmet-false-f0b4f55e-00c0-442c-a0e1-3d6a05150bdf.jpg",
+      "group": "hajipur-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.14306443333625793,
+        "y": 0.09514569176567925,
+        "width": 0.09938083887100221,
+        "height": 0.18017565409342448
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.0937468761968499
+    },
+    {
+      "file": "scratch/helmet-false-f0b4f55e-00c0-442c-a0e1-3d6a05150bdf.jpg",
+      "group": "hajipur-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.14306443333625793,
+        "y": 0.09514569176567925,
+        "width": 0.09938083887100221,
+        "height": 0.18017565409342448
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.0988793553323313
+    },
+    {
+      "file": "scratch/helmet-false-f0b4f55e-00c0-442c-a0e1-3d6a05150bdf.jpg",
+      "group": "hajipur-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.34942456185817716,
+        "y": 0.05905016793145074,
+        "width": 0.0965336620807648,
+        "height": 0.1807257546318902
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.08985633572989733
+    },
+    {
+      "file": "scratch/helmet-false-f0b4f55e-00c0-442c-a0e1-3d6a05150bdf.jpg",
+      "group": "hajipur-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.34942456185817716,
+        "y": 0.05905016793145074,
+        "width": 0.0965336620807648,
+        "height": 0.1807257546318902
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.0642391695802715
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-1.jpg",
+      "group": "rajkot-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.17777586579322815,
+        "y": 0.37128956582811146,
+        "width": 0.07894338369369505,
+        "height": 0.12057326634724935
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.3538923324025839
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-1.jpg",
+      "group": "rajkot-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.17777586579322815,
+        "y": 0.37128956582811146,
+        "width": 0.07894338369369505,
+        "height": 0.12057326634724935
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.16163112551958872
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-1.jpg",
+      "group": "rajkot-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.31640870571136476,
+        "y": 0.39710940255059135,
+        "width": 0.061647987365722634,
+        "height": 0.09400208791097009
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.20898992862522217
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-1.jpg",
+      "group": "rajkot-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.31640870571136476,
+        "y": 0.39710940255059135,
+        "width": 0.061647987365722634,
+        "height": 0.09400208791097009
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.22420038832316727
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-1.jpg",
+      "group": "rajkot-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.0020928412675857546,
+        "y": 0.34258367750379776,
+        "width": 0.05579193234443664,
+        "height": 0.12622316148546003
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.1351384499369667
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-1.jpg",
+      "group": "rajkot-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.0020928412675857546,
+        "y": 0.34258367750379776,
+        "width": 0.05579193234443664,
+        "height": 0.12622316148546003
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.11617439803769915
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-2.jpg",
+      "group": "rajkot-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0,
+        "y": 0.33944885465833874,
+        "width": 0.049667266011238095,
+        "height": 0.14675757090250652
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.10571052739351501
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-2.jpg",
+      "group": "rajkot-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0,
+        "y": 0.33944885465833874,
+        "width": 0.049667266011238095,
+        "height": 0.14675757090250652
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.07632324467829076
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-2.jpg",
+      "group": "rajkot-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.17646356225013732,
+        "y": 0.3472823037041558,
+        "width": 0.08684262037277224,
+        "height": 0.1482479943169488
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.11800159224544646
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-2.jpg",
+      "group": "rajkot-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.17646356225013732,
+        "y": 0.3472823037041558,
+        "width": 0.08684262037277224,
+        "height": 0.1482479943169488
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.16007878064061856
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-2.jpg",
+      "group": "rajkot-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.178065025806427,
+        "y": 0.3487039936913384,
+        "width": 0.08406140804290771,
+        "height": 0.1458461019727919
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.11965780468851336
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-2.jpg",
+      "group": "rajkot-held-frame",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.178065025806427,
+        "y": 0.3487039936913384,
+        "width": 0.08406140804290771,
+        "height": 0.1458461019727919
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.15100068704235575
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/0e556390-887c-472d-a0e4-b694e4cd1ea7.jpg",
+      "group": "recovered-0e556390-887c-472d-a0e4-b694e4cd1ea7",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.5010532259941101,
+        "y": 0.04184758928087023,
+        "width": 0.1921690225601198,
+        "height": 0.3321804046630859
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.2644057044556426
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/0e556390-887c-472d-a0e4-b694e4cd1ea7.jpg",
+      "group": "recovered-0e556390-887c-472d-a0e4-b694e4cd1ea7",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.5010532259941101,
+        "y": 0.04184758928087023,
+        "width": 0.1921690225601198,
+        "height": 0.3321804046630859
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.14141882887364804
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/0e556390-887c-472d-a0e4-b694e4cd1ea7.jpg",
+      "group": "recovered-0e556390-887c-472d-a0e4-b694e4cd1ea7",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.3383535861968994,
+        "y": 0.0377311282687717,
+        "width": 0.10273227691650388,
+        "height": 0.20733295016818573
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.08775897001109816
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/0e556390-887c-472d-a0e4-b694e4cd1ea7.jpg",
+      "group": "recovered-0e556390-887c-472d-a0e4-b694e4cd1ea7",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.3383535861968994,
+        "y": 0.0377311282687717,
+        "width": 0.10273227691650388,
+        "height": 0.20733295016818573
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.17440318442722805
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/0e556390-887c-472d-a0e4-b694e4cd1ea7.jpg",
+      "group": "recovered-0e556390-887c-472d-a0e4-b694e4cd1ea7",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.17205423712730408,
+        "y": 0.37750875684950086,
+        "width": 0.10932875871658324,
+        "height": 0.2061820983886719
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.12491551215091048
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/0e556390-887c-472d-a0e4-b694e4cd1ea7.jpg",
+      "group": "recovered-0e556390-887c-472d-a0e4-b694e4cd1ea7",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.17205423712730408,
+        "y": 0.37750875684950086,
+        "width": 0.10932875871658324,
+        "height": 0.2061820983886719
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.07478946041578054
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/0e556390-887c-472d-a0e4-b694e4cd1ea7.jpg",
+      "group": "recovered-0e556390-887c-472d-a0e4-b694e4cd1ea7",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.6086981773376465,
+        "y": 0.4343374146355523,
+        "width": 0.11133003234863281,
+        "height": 0.21448251936170792
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.199466750057414
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/0e556390-887c-472d-a0e4-b694e4cd1ea7.jpg",
+      "group": "recovered-0e556390-887c-472d-a0e4-b694e4cd1ea7",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.6086981773376465,
+        "y": 0.4343374146355523,
+        "width": 0.11133003234863281,
+        "height": 0.21448251936170792
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.2520647813120465
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/0e556390-887c-472d-a0e4-b694e4cd1ea7.jpg",
+      "group": "recovered-0e556390-887c-472d-a0e4-b694e4cd1ea7",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 4,
+      "head": {
+        "x": 0.8922776579856873,
+        "y": 0.19061027103000217,
+        "width": 0.10718624591827397,
+        "height": 0.248611323038737
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.23178675074406357
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/0e556390-887c-472d-a0e4-b694e4cd1ea7.jpg",
+      "group": "recovered-0e556390-887c-472d-a0e4-b694e4cd1ea7",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 4,
+      "head": {
+        "x": 0.8922776579856873,
+        "y": 0.19061027103000217,
+        "width": 0.10718624591827397,
+        "height": 0.248611323038737
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.18240188159319534
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/0e556390-887c-472d-a0e4-b694e4cd1ea7.jpg",
+      "group": "recovered-0e556390-887c-472d-a0e4-b694e4cd1ea7",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 5,
+      "head": {
+        "x": 0.2430428683757782,
+        "y": 0.4171775076124403,
+        "width": 0.09476844072341917,
+        "height": 0.18471881018744574
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.11200003274818507
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/0e556390-887c-472d-a0e4-b694e4cd1ea7.jpg",
+      "group": "recovered-0e556390-887c-472d-a0e4-b694e4cd1ea7",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 5,
+      "head": {
+        "x": 0.2430428683757782,
+        "y": 0.4171775076124403,
+        "width": 0.09476844072341917,
+        "height": 0.18471881018744574
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.10222305632436868
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/0e556390-887c-472d-a0e4-b694e4cd1ea7.jpg",
+      "group": "recovered-0e556390-887c-472d-a0e4-b694e4cd1ea7",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 6,
+      "head": {
+        "x": 0.16175467371940613,
+        "y": 0.07808138529459635,
+        "width": 0.14718652963638304,
+        "height": 0.24956605699327256
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.22129609663583896
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/0e556390-887c-472d-a0e4-b694e4cd1ea7.jpg",
+      "group": "recovered-0e556390-887c-472d-a0e4-b694e4cd1ea7",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 6,
+      "head": {
+        "x": 0.16175467371940613,
+        "y": 0.07808138529459635,
+        "width": 0.14718652963638304,
+        "height": 0.24956605699327256
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.12968518441117738
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/0e556390-887c-472d-a0e4-b694e4cd1ea7.jpg",
+      "group": "recovered-0e556390-887c-472d-a0e4-b694e4cd1ea7",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 7,
+      "head": {
+        "x": 0.5826696127653122,
+        "y": 0.47694990370008683,
+        "width": 0.06830220818519595,
+        "height": 0.14616987440321183
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.15704043311220836
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/0e556390-887c-472d-a0e4-b694e4cd1ea7.jpg",
+      "group": "recovered-0e556390-887c-472d-a0e4-b694e4cd1ea7",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 7,
+      "head": {
+        "x": 0.5826696127653122,
+        "y": 0.47694990370008683,
+        "width": 0.06830220818519595,
+        "height": 0.14616987440321183
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.11438717376464765
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/2889bea6-ca6e-4a0b-b8d3-9f9e5bc65c16.jpg",
+      "group": "recovered-2889bea6-ca6e-4a0b-b8d3-9f9e5bc65c16",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.40059768259525297,
+        "y": 0.06176680458916558,
+        "width": 0.0895250976085663,
+        "height": 0.16389357248942057
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.28698929951003804
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/2889bea6-ca6e-4a0b-b8d3-9f9e5bc65c16.jpg",
+      "group": "recovered-2889bea6-ca6e-4a0b-b8d3-9f9e5bc65c16",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.40059768259525297,
+        "y": 0.06176680458916558,
+        "width": 0.0895250976085663,
+        "height": 0.16389357248942057
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.12170999806928617
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/2889bea6-ca6e-4a0b-b8d3-9f9e5bc65c16.jpg",
+      "group": "recovered-2889bea6-ca6e-4a0b-b8d3-9f9e5bc65c16",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.0164594441652298,
+        "y": 0.09370628197987875,
+        "width": 0.0458656370639801,
+        "height": 0.0811117755042182
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.19479109581597787
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/2889bea6-ca6e-4a0b-b8d3-9f9e5bc65c16.jpg",
+      "group": "recovered-2889bea6-ca6e-4a0b-b8d3-9f9e5bc65c16",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.0164594441652298,
+        "y": 0.09370628197987875,
+        "width": 0.0458656370639801,
+        "height": 0.0811117755042182
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.35923471618216474
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/2889bea6-ca6e-4a0b-b8d3-9f9e5bc65c16.jpg",
+      "group": "recovered-2889bea6-ca6e-4a0b-b8d3-9f9e5bc65c16",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.5569748997688293,
+        "y": 0.30660737355550133,
+        "width": 0.15024850368499765,
+        "height": 0.2603702545166015
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.22590420633946323
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/2889bea6-ca6e-4a0b-b8d3-9f9e5bc65c16.jpg",
+      "group": "recovered-2889bea6-ca6e-4a0b-b8d3-9f9e5bc65c16",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.5569748997688293,
+        "y": 0.30660737355550133,
+        "width": 0.15024850368499765,
+        "height": 0.2603702545166015
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.2193088527299246
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/34181b1e-58c9-451b-b258-d2d865cb0d56.jpg",
+      "group": "recovered-34181b1e-58c9-451b-b258-d2d865cb0d56",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.603703773021698,
+        "y": 0.430239921145969,
+        "width": 0.10545494556427004,
+        "height": 0.20581959618462442
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.16930729570072986
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/34181b1e-58c9-451b-b258-d2d865cb0d56.jpg",
+      "group": "recovered-34181b1e-58c9-451b-b258-d2d865cb0d56",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.603703773021698,
+        "y": 0.430239921145969,
+        "width": 0.10545494556427004,
+        "height": 0.20581959618462442
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.4849236881308565
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/34181b1e-58c9-451b-b258-d2d865cb0d56.jpg",
+      "group": "recovered-34181b1e-58c9-451b-b258-d2d865cb0d56",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.1933946967124939,
+        "y": 0.3734501838684082,
+        "width": 0.13245227336883544,
+        "height": 0.230199580722385
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.17627817015792543
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/34181b1e-58c9-451b-b258-d2d865cb0d56.jpg",
+      "group": "recovered-34181b1e-58c9-451b-b258-d2d865cb0d56",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.1933946967124939,
+        "y": 0.3734501838684082,
+        "width": 0.13245227336883544,
+        "height": 0.230199580722385
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.13818780029308264
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/34181b1e-58c9-451b-b258-d2d865cb0d56.jpg",
+      "group": "recovered-34181b1e-58c9-451b-b258-d2d865cb0d56",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.37054831385612486,
+        "y": 0,
+        "width": 0.09535843133926392,
+        "height": 0.16816492610507539
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.1830241165138068
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/34181b1e-58c9-451b-b258-d2d865cb0d56.jpg",
+      "group": "recovered-34181b1e-58c9-451b-b258-d2d865cb0d56",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.37054831385612486,
+        "y": 0,
+        "width": 0.09535843133926392,
+        "height": 0.16816492610507539
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.2532943048230096
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/34181b1e-58c9-451b-b258-d2d865cb0d56.jpg",
+      "group": "recovered-34181b1e-58c9-451b-b258-d2d865cb0d56",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.5480423420667648,
+        "y": 0.008065674040052626,
+        "width": 0.07791147828102107,
+        "height": 0.12112349404229061
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.29607285886900697
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/34181b1e-58c9-451b-b258-d2d865cb0d56.jpg",
+      "group": "recovered-34181b1e-58c9-451b-b258-d2d865cb0d56",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.5480423420667648,
+        "y": 0.008065674040052626,
+        "width": 0.07791147828102107,
+        "height": 0.12112349404229061
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.4423789429048257
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/34181b1e-58c9-451b-b258-d2d865cb0d56.jpg",
+      "group": "recovered-34181b1e-58c9-451b-b258-d2d865cb0d56",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 4,
+      "head": {
+        "x": 0.16592140793800353,
+        "y": 0.08383304807874892,
+        "width": 0.14711464643478395,
+        "height": 0.2507697423299153
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.10842840852909849
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/34181b1e-58c9-451b-b258-d2d865cb0d56.jpg",
+      "group": "recovered-34181b1e-58c9-451b-b258-d2d865cb0d56",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 4,
+      "head": {
+        "x": 0.16592140793800353,
+        "y": 0.08383304807874892,
+        "width": 0.14711464643478395,
+        "height": 0.2507697423299153
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.12415724929765262
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/34181b1e-58c9-451b-b258-d2d865cb0d56.jpg",
+      "group": "recovered-34181b1e-58c9-451b-b258-d2d865cb0d56",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 5,
+      "head": {
+        "x": 0.893534779548645,
+        "y": 0.19651572969224718,
+        "width": 0.10588698387146,
+        "height": 0.24052270253499347
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.21573615689356004
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/34181b1e-58c9-451b-b258-d2d865cb0d56.jpg",
+      "group": "recovered-34181b1e-58c9-451b-b258-d2d865cb0d56",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 5,
+      "head": {
+        "x": 0.893534779548645,
+        "y": 0.19651572969224718,
+        "width": 0.10588698387146,
+        "height": 0.24052270253499347
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.11687919915675059
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/34181b1e-58c9-451b-b258-d2d865cb0d56.jpg",
+      "group": "recovered-34181b1e-58c9-451b-b258-d2d865cb0d56",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 6,
+      "head": {
+        "x": 0.5304649859666825,
+        "y": 0.4893391238318549,
+        "width": 0.08589505553245547,
+        "height": 0.15423241721259245
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.11961624616721356
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/34181b1e-58c9-451b-b258-d2d865cb0d56.jpg",
+      "group": "recovered-34181b1e-58c9-451b-b258-d2d865cb0d56",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 6,
+      "head": {
+        "x": 0.5304649859666825,
+        "y": 0.4893391238318549,
+        "width": 0.08589505553245547,
+        "height": 0.15423241721259245
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.15794009711090834
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/3d62d89e-6cd2-465e-b46c-f42837b01231.jpg",
+      "group": "recovered-3d62d89e-6cd2-465e-b46c-f42837b01231",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.603703773021698,
+        "y": 0.430239921145969,
+        "width": 0.10545494556427004,
+        "height": 0.20581959618462442
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.16930729570072986
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/3d62d89e-6cd2-465e-b46c-f42837b01231.jpg",
+      "group": "recovered-3d62d89e-6cd2-465e-b46c-f42837b01231",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.603703773021698,
+        "y": 0.430239921145969,
+        "width": 0.10545494556427004,
+        "height": 0.20581959618462442
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.4849236881308565
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/3d62d89e-6cd2-465e-b46c-f42837b01231.jpg",
+      "group": "recovered-3d62d89e-6cd2-465e-b46c-f42837b01231",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.1933946967124939,
+        "y": 0.3734501838684082,
+        "width": 0.13245227336883544,
+        "height": 0.230199580722385
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.17627817015792543
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/3d62d89e-6cd2-465e-b46c-f42837b01231.jpg",
+      "group": "recovered-3d62d89e-6cd2-465e-b46c-f42837b01231",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.1933946967124939,
+        "y": 0.3734501838684082,
+        "width": 0.13245227336883544,
+        "height": 0.230199580722385
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.13818780029308264
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/3d62d89e-6cd2-465e-b46c-f42837b01231.jpg",
+      "group": "recovered-3d62d89e-6cd2-465e-b46c-f42837b01231",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.37054831385612486,
+        "y": 0,
+        "width": 0.09535843133926392,
+        "height": 0.16816492610507539
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.1830241165138068
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/3d62d89e-6cd2-465e-b46c-f42837b01231.jpg",
+      "group": "recovered-3d62d89e-6cd2-465e-b46c-f42837b01231",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.37054831385612486,
+        "y": 0,
+        "width": 0.09535843133926392,
+        "height": 0.16816492610507539
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.2532943048230096
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/3d62d89e-6cd2-465e-b46c-f42837b01231.jpg",
+      "group": "recovered-3d62d89e-6cd2-465e-b46c-f42837b01231",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.5480423420667648,
+        "y": 0.008065674040052626,
+        "width": 0.07791147828102107,
+        "height": 0.12112349404229061
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.29607285886900697
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/3d62d89e-6cd2-465e-b46c-f42837b01231.jpg",
+      "group": "recovered-3d62d89e-6cd2-465e-b46c-f42837b01231",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.5480423420667648,
+        "y": 0.008065674040052626,
+        "width": 0.07791147828102107,
+        "height": 0.12112349404229061
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.4423789429048257
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/3d62d89e-6cd2-465e-b46c-f42837b01231.jpg",
+      "group": "recovered-3d62d89e-6cd2-465e-b46c-f42837b01231",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 4,
+      "head": {
+        "x": 0.16592140793800353,
+        "y": 0.08383304807874892,
+        "width": 0.14711464643478395,
+        "height": 0.2507697423299153
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.10842840852909849
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/3d62d89e-6cd2-465e-b46c-f42837b01231.jpg",
+      "group": "recovered-3d62d89e-6cd2-465e-b46c-f42837b01231",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 4,
+      "head": {
+        "x": 0.16592140793800353,
+        "y": 0.08383304807874892,
+        "width": 0.14711464643478395,
+        "height": 0.2507697423299153
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.12415724929765262
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/3d62d89e-6cd2-465e-b46c-f42837b01231.jpg",
+      "group": "recovered-3d62d89e-6cd2-465e-b46c-f42837b01231",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 5,
+      "head": {
+        "x": 0.893534779548645,
+        "y": 0.19651572969224718,
+        "width": 0.10588698387146,
+        "height": 0.24052270253499347
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.21573615689356004
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/3d62d89e-6cd2-465e-b46c-f42837b01231.jpg",
+      "group": "recovered-3d62d89e-6cd2-465e-b46c-f42837b01231",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 5,
+      "head": {
+        "x": 0.893534779548645,
+        "y": 0.19651572969224718,
+        "width": 0.10588698387146,
+        "height": 0.24052270253499347
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.11687919915675059
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/3d62d89e-6cd2-465e-b46c-f42837b01231.jpg",
+      "group": "recovered-3d62d89e-6cd2-465e-b46c-f42837b01231",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 6,
+      "head": {
+        "x": 0.5304649859666825,
+        "y": 0.4893391238318549,
+        "width": 0.08589505553245547,
+        "height": 0.15423241721259245
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.11961624616721356
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/3d62d89e-6cd2-465e-b46c-f42837b01231.jpg",
+      "group": "recovered-3d62d89e-6cd2-465e-b46c-f42837b01231",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 6,
+      "head": {
+        "x": 0.5304649859666825,
+        "y": 0.4893391238318549,
+        "width": 0.08589505553245547,
+        "height": 0.15423241721259245
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.15794009711090834
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4599426c-6cf4-4046-9fa6-59d09f077c23.jpg",
+      "group": "recovered-4599426c-6cf4-4046-9fa6-59d09f077c23",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.5791216313838958,
+        "y": 0.44400823381212023,
+        "width": 0.10580569505691528,
+        "height": 0.18262816535101994
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.0685364256025667
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4599426c-6cf4-4046-9fa6-59d09f077c23.jpg",
+      "group": "recovered-4599426c-6cf4-4046-9fa6-59d09f077c23",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.5791216313838958,
+        "y": 0.44400823381212023,
+        "width": 0.10580569505691528,
+        "height": 0.18262816535101994
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.12769121766216457
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4599426c-6cf4-4046-9fa6-59d09f077c23.jpg",
+      "group": "recovered-4599426c-6cf4-4046-9fa6-59d09f077c23",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.222453773021698,
+        "y": 0.35002935197618273,
+        "width": 0.11891567707061768,
+        "height": 0.2180165184868707
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.06033702505861619
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4599426c-6cf4-4046-9fa6-59d09f077c23.jpg",
+      "group": "recovered-4599426c-6cf4-4046-9fa6-59d09f077c23",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.222453773021698,
+        "y": 0.35002935197618273,
+        "width": 0.11891567707061768,
+        "height": 0.2180165184868707
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.11564123118346067
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4599426c-6cf4-4046-9fa6-59d09f077c23.jpg",
+      "group": "recovered-4599426c-6cf4-4046-9fa6-59d09f077c23",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.37216143906116483,
+        "y": 0,
+        "width": 0.08673514723777775,
+        "height": 0.13575739860534664
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.14280305529201695
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4599426c-6cf4-4046-9fa6-59d09f077c23.jpg",
+      "group": "recovered-4599426c-6cf4-4046-9fa6-59d09f077c23",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.37216143906116483,
+        "y": 0,
+        "width": 0.08673514723777775,
+        "height": 0.13575739860534664
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.19411819197145283
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4599426c-6cf4-4046-9fa6-59d09f077c23.jpg",
+      "group": "recovered-4599426c-6cf4-4046-9fa6-59d09f077c23",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.16699361205101013,
+        "y": 0.08388884862263997,
+        "width": 0.13512173891067505,
+        "height": 0.2358759350246853
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.10125722523176757
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4599426c-6cf4-4046-9fa6-59d09f077c23.jpg",
+      "group": "recovered-4599426c-6cf4-4046-9fa6-59d09f077c23",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.16699361205101013,
+        "y": 0.08388884862263997,
+        "width": 0.13512173891067505,
+        "height": 0.2358759350246853
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.12755042693278668
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4599426c-6cf4-4046-9fa6-59d09f077c23.jpg",
+      "group": "recovered-4599426c-6cf4-4046-9fa6-59d09f077c23",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 4,
+      "head": {
+        "x": 0.8957035839557648,
+        "y": 0.1944911003112793,
+        "width": 0.10357040166854858,
+        "height": 0.24010528988308377
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.16004608146952576
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4599426c-6cf4-4046-9fa6-59d09f077c23.jpg",
+      "group": "recovered-4599426c-6cf4-4046-9fa6-59d09f077c23",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 4,
+      "head": {
+        "x": 0.8957035839557648,
+        "y": 0.1944911003112793,
+        "width": 0.10357040166854858,
+        "height": 0.24010528988308377
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.19848984054745583
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4599426c-6cf4-4046-9fa6-59d09f077c23.jpg",
+      "group": "recovered-4599426c-6cf4-4046-9fa6-59d09f077c23",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 5,
+      "head": {
+        "x": 0.7227388113737107,
+        "y": 0.38718902269999184,
+        "width": 0.06092763543128965,
+        "height": 0.11811785168117944
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.21334656190013462
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4599426c-6cf4-4046-9fa6-59d09f077c23.jpg",
+      "group": "recovered-4599426c-6cf4-4046-9fa6-59d09f077c23",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 5,
+      "head": {
+        "x": 0.7227388113737107,
+        "y": 0.38718902269999184,
+        "width": 0.06092763543128965,
+        "height": 0.11811785168117944
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.12937848771696778
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4599426c-6cf4-4046-9fa6-59d09f077c23.jpg",
+      "group": "recovered-4599426c-6cf4-4046-9fa6-59d09f077c23",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 6,
+      "head": {
+        "x": 0.7384219586849212,
+        "y": 0.35051242510477704,
+        "width": 0.068287193775177,
+        "height": 0.12076978683471679
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.14866378098741098
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4599426c-6cf4-4046-9fa6-59d09f077c23.jpg",
+      "group": "recovered-4599426c-6cf4-4046-9fa6-59d09f077c23",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 6,
+      "head": {
+        "x": 0.7384219586849212,
+        "y": 0.35051242510477704,
+        "width": 0.068287193775177,
+        "height": 0.12076978683471679
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.1300191550844373
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4e39d73f-c089-4791-ba0a-ba8ece18b2b4.jpg",
+      "group": "recovered-4e39d73f-c089-4791-ba0a-ba8ece18b2b4",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.08324267864227294,
+        "y": 0.4566327095031738,
+        "width": 0.12899234294891357,
+        "height": 0.23313927120632594
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.05903249796073618
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4e39d73f-c089-4791-ba0a-ba8ece18b2b4.jpg",
+      "group": "recovered-4e39d73f-c089-4791-ba0a-ba8ece18b2b4",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.08324267864227294,
+        "y": 0.4566327095031738,
+        "width": 0.12899234294891357,
+        "height": 0.23313927120632594
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.0942651026448362
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/606e7e81-8b11-4f7c-ade2-48fd9beb9dd4.jpg",
+      "group": "recovered-606e7e81-8b11-4f7c-ade2-48fd9beb9dd4",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.4500110685825348,
+        "y": 0.1277310053507487,
+        "width": 0.12240399122238155,
+        "height": 0.21635254753960506
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.08824417552493548
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/606e7e81-8b11-4f7c-ade2-48fd9beb9dd4.jpg",
+      "group": "recovered-606e7e81-8b11-4f7c-ade2-48fd9beb9dd4",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.4500110685825348,
+        "y": 0.1277310053507487,
+        "width": 0.12240399122238155,
+        "height": 0.21635254753960506
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.06389471462822162
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/606e7e81-8b11-4f7c-ade2-48fd9beb9dd4.jpg",
+      "group": "recovered-606e7e81-8b11-4f7c-ade2-48fd9beb9dd4",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.41216410100460055,
+        "y": 0.6306465996636285,
+        "width": 0.07492831349372864,
+        "height": 0.14016181098090275
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.179791104513578
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/606e7e81-8b11-4f7c-ade2-48fd9beb9dd4.jpg",
+      "group": "recovered-606e7e81-8b11-4f7c-ade2-48fd9beb9dd4",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.41216410100460055,
+        "y": 0.6306465996636285,
+        "width": 0.07492831349372864,
+        "height": 0.14016181098090275
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.2080678899372259
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/606e7e81-8b11-4f7c-ade2-48fd9beb9dd4.jpg",
+      "group": "recovered-606e7e81-8b11-4f7c-ade2-48fd9beb9dd4",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.39468587636947633,
+        "y": 0.09092611206902398,
+        "width": 0.05567581653594972,
+        "height": 0.11633850733439119
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.19113952355558791
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/606e7e81-8b11-4f7c-ade2-48fd9beb9dd4.jpg",
+      "group": "recovered-606e7e81-8b11-4f7c-ade2-48fd9beb9dd4",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.39468587636947633,
+        "y": 0.09092611206902398,
+        "width": 0.05567581653594972,
+        "height": 0.11633850733439119
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.18804573696484966
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/606e7e81-8b11-4f7c-ade2-48fd9beb9dd4.jpg",
+      "group": "recovered-606e7e81-8b11-4f7c-ade2-48fd9beb9dd4",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.3441497504711151,
+        "y": 0.07278805838690863,
+        "width": 0.04742285013198849,
+        "height": 0.09218201107449009
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.18443610104603161
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/606e7e81-8b11-4f7c-ade2-48fd9beb9dd4.jpg",
+      "group": "recovered-606e7e81-8b11-4f7c-ade2-48fd9beb9dd4",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.3441497504711151,
+        "y": 0.07278805838690863,
+        "width": 0.04742285013198849,
+        "height": 0.09218201107449009
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.17892801612678677
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/606e7e81-8b11-4f7c-ade2-48fd9beb9dd4.jpg",
+      "group": "recovered-606e7e81-8b11-4f7c-ade2-48fd9beb9dd4",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 4,
+      "head": {
+        "x": 0.13435139060020446,
+        "y": 0.47261528438991973,
+        "width": 0.12882448434829713,
+        "height": 0.26176812913682723
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.29772273902257
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/606e7e81-8b11-4f7c-ade2-48fd9beb9dd4.jpg",
+      "group": "recovered-606e7e81-8b11-4f7c-ade2-48fd9beb9dd4",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 4,
+      "head": {
+        "x": 0.13435139060020446,
+        "y": 0.47261528438991973,
+        "width": 0.12882448434829713,
+        "height": 0.26176812913682723
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.23861942930570224
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b.jpg",
+      "group": "recovered-b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.14960797429084777,
+        "y": 0.15420922173394097,
+        "width": 0.10349906682968141,
+        "height": 0.1956566704644097
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.42053939942704166
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b.jpg",
+      "group": "recovered-b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.14960797429084777,
+        "y": 0.15420922173394097,
+        "width": 0.10349906682968141,
+        "height": 0.1956566704644097
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.4243785050299
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b.jpg",
+      "group": "recovered-b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.008916902542114257,
+        "y": 0.061307933595445424,
+        "width": 0.042166787385940555,
+        "height": 0.07055048412746856
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.12228560658753419
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b.jpg",
+      "group": "recovered-b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.008916902542114257,
+        "y": 0.061307933595445424,
+        "width": 0.042166787385940555,
+        "height": 0.07055048412746856
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.16374484499620698
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b.jpg",
+      "group": "recovered-b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.6808737397193909,
+        "y": 0.3614350530836317,
+        "width": 0.1830940008163452,
+        "height": 0.3491961373223201
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.12589910131595822
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b.jpg",
+      "group": "recovered-b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.6808737397193909,
+        "y": 0.3614350530836317,
+        "width": 0.1830940008163452,
+        "height": 0.3491961373223201
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.10237390163939777
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b.jpg",
+      "group": "recovered-b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.5774642765522003,
+        "y": 0.3153063456217448,
+        "width": 0.1542847037315368,
+        "height": 0.2765077379014757
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.3709943913789458
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b.jpg",
+      "group": "recovered-b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.5774642765522003,
+        "y": 0.3153063456217448,
+        "width": 0.1542847037315368,
+        "height": 0.2765077379014757
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.1635415075112057
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/c4864755-99b9-44d9-a030-5a86e8b96358.jpg",
+      "group": "recovered-c4864755-99b9-44d9-a030-5a86e8b96358",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.8392347872257233,
+        "y": 0.07647957271999783,
+        "width": 0.11738251447677606,
+        "height": 0.2345450931125217
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.20498517231730257
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/c4864755-99b9-44d9-a030-5a86e8b96358.jpg",
+      "group": "recovered-c4864755-99b9-44d9-a030-5a86e8b96358",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.8392347872257233,
+        "y": 0.07647957271999783,
+        "width": 0.11738251447677606,
+        "height": 0.2345450931125217
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.18995869706115437
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/c4864755-99b9-44d9-a030-5a86e8b96358.jpg",
+      "group": "recovered-c4864755-99b9-44d9-a030-5a86e8b96358",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.2677740901708603,
+        "y": 0.07876292864481609,
+        "width": 0.08020794987678526,
+        "height": 0.14356472227308487
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.3546549730237671
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/c4864755-99b9-44d9-a030-5a86e8b96358.jpg",
+      "group": "recovered-c4864755-99b9-44d9-a030-5a86e8b96358",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.2677740901708603,
+        "y": 0.07876292864481609,
+        "width": 0.08020794987678526,
+        "height": 0.14356472227308487
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.461895785038882
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/c4864755-99b9-44d9-a030-5a86e8b96358.jpg",
+      "group": "recovered-c4864755-99b9-44d9-a030-5a86e8b96358",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.2663182467222214,
+        "y": 0.4728050178951687,
+        "width": 0.0794175684452057,
+        "height": 0.11642168892754445
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.25087687070211956
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/c4864755-99b9-44d9-a030-5a86e8b96358.jpg",
+      "group": "recovered-c4864755-99b9-44d9-a030-5a86e8b96358",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.2663182467222214,
+        "y": 0.4728050178951687,
+        "width": 0.0794175684452057,
+        "height": 0.11642168892754445
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.20154619745239546
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/d8a4be2f-c231-433c-bdd8-d64736f9cfe5.jpg",
+      "group": "recovered-d8a4be2f-c231-433c-bdd8-d64736f9cfe5",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.23487845659255982,
+        "y": 0.3171759711371528,
+        "width": 0.1143921136856079,
+        "height": 0.21891242133246536
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.14845448849740875
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/d8a4be2f-c231-433c-bdd8-d64736f9cfe5.jpg",
+      "group": "recovered-d8a4be2f-c231-433c-bdd8-d64736f9cfe5",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.23487845659255982,
+        "y": 0.3171759711371528,
+        "width": 0.1143921136856079,
+        "height": 0.21891242133246536
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.15430740975912907
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/d8a4be2f-c231-433c-bdd8-d64736f9cfe5.jpg",
+      "group": "recovered-d8a4be2f-c231-433c-bdd8-d64736f9cfe5",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.35733845829963684,
+        "y": 0,
+        "width": 0.09987348318099976,
+        "height": 0.15924752023484975
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.15270433145635712
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/d8a4be2f-c231-433c-bdd8-d64736f9cfe5.jpg",
+      "group": "recovered-d8a4be2f-c231-433c-bdd8-d64736f9cfe5",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.35733845829963684,
+        "y": 0,
+        "width": 0.09987348318099976,
+        "height": 0.15924752023484975
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.07826577180178045
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/d8a4be2f-c231-433c-bdd8-d64736f9cfe5.jpg",
+      "group": "recovered-d8a4be2f-c231-433c-bdd8-d64736f9cfe5",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.5947640836238861,
+        "y": 0.43507052527533635,
+        "width": 0.10253468751907346,
+        "height": 0.18966441684299046
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.19810610311776894
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/d8a4be2f-c231-433c-bdd8-d64736f9cfe5.jpg",
+      "group": "recovered-d8a4be2f-c231-433c-bdd8-d64736f9cfe5",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.5947640836238861,
+        "y": 0.43507052527533635,
+        "width": 0.10253468751907346,
+        "height": 0.18966441684299046
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.31697963913425303
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/d8a4be2f-c231-433c-bdd8-d64736f9cfe5.jpg",
+      "group": "recovered-d8a4be2f-c231-433c-bdd8-d64736f9cfe5",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.4818422973155975,
+        "y": 0.05419430202907986,
+        "width": 0.18732677698135375,
+        "height": 0.30797797309027775
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.21641017848966854
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/d8a4be2f-c231-433c-bdd8-d64736f9cfe5.jpg",
+      "group": "recovered-d8a4be2f-c231-433c-bdd8-d64736f9cfe5",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.4818422973155975,
+        "y": 0.05419430202907986,
+        "width": 0.18732677698135375,
+        "height": 0.30797797309027775
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.1848632909970898
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/d8a4be2f-c231-433c-bdd8-d64736f9cfe5.jpg",
+      "group": "recovered-d8a4be2f-c231-433c-bdd8-d64736f9cfe5",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 4,
+      "head": {
+        "x": 0.8959026873111725,
+        "y": 0.18587496015760635,
+        "width": 0.1027508616447449,
+        "height": 0.24744190639919705
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.2899677111058301
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/d8a4be2f-c231-433c-bdd8-d64736f9cfe5.jpg",
+      "group": "recovered-d8a4be2f-c231-433c-bdd8-d64736f9cfe5",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 4,
+      "head": {
+        "x": 0.8959026873111725,
+        "y": 0.18587496015760635,
+        "width": 0.1027508616447449,
+        "height": 0.24744190639919705
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.2700001523118721
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/d8a4be2f-c231-433c-bdd8-d64736f9cfe5.jpg",
+      "group": "recovered-d8a4be2f-c231-433c-bdd8-d64736f9cfe5",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 5,
+      "head": {
+        "x": 0.39514531195163727,
+        "y": 0.3589742183685303,
+        "width": 0.0771032512187958,
+        "height": 0.11305572721693252
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.21706776211196102
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/d8a4be2f-c231-433c-bdd8-d64736f9cfe5.jpg",
+      "group": "recovered-d8a4be2f-c231-433c-bdd8-d64736f9cfe5",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 5,
+      "head": {
+        "x": 0.39514531195163727,
+        "y": 0.3589742183685303,
+        "width": 0.0771032512187958,
+        "height": 0.11305572721693252
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.2011257974106082
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/fbdd11e7-734d-47d0-8715-dfe0d25fa380.jpg",
+      "group": "recovered-fbdd11e7-734d-47d0-8715-dfe0d25fa380",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.5915421724319458,
+        "y": 0.4282497829861111,
+        "width": 0.12088294029235835,
+        "height": 0.2341127183702258
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.20013865238052242
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/fbdd11e7-734d-47d0-8715-dfe0d25fa380.jpg",
+      "group": "recovered-fbdd11e7-734d-47d0-8715-dfe0d25fa380",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.5915421724319458,
+        "y": 0.4282497829861111,
+        "width": 0.12088294029235835,
+        "height": 0.2341127183702258
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.1213181347322158
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/fbdd11e7-734d-47d0-8715-dfe0d25fa380.jpg",
+      "group": "recovered-fbdd11e7-734d-47d0-8715-dfe0d25fa380",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.5685168027877807,
+        "y": 0.055486541324191625,
+        "width": 0.09559988975524902,
+        "height": 0.1725499682956272
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.24075128719192349
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/fbdd11e7-734d-47d0-8715-dfe0d25fa380.jpg",
+      "group": "recovered-fbdd11e7-734d-47d0-8715-dfe0d25fa380",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 1,
+      "head": {
+        "x": 0.5685168027877807,
+        "y": 0.055486541324191625,
+        "width": 0.09559988975524902,
+        "height": 0.1725499682956272
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.19878599876601213
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/fbdd11e7-734d-47d0-8715-dfe0d25fa380.jpg",
+      "group": "recovered-fbdd11e7-734d-47d0-8715-dfe0d25fa380",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.24956151247024536,
+        "y": 0.3463854471842448,
+        "width": 0.10645978450775148,
+        "height": 0.20587209065755208
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.13254205909884306
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/fbdd11e7-734d-47d0-8715-dfe0d25fa380.jpg",
+      "group": "recovered-fbdd11e7-734d-47d0-8715-dfe0d25fa380",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 2,
+      "head": {
+        "x": 0.24956151247024536,
+        "y": 0.3463854471842448,
+        "width": 0.10645978450775148,
+        "height": 0.20587209065755208
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.08718145989533059
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/fbdd11e7-734d-47d0-8715-dfe0d25fa380.jpg",
+      "group": "recovered-fbdd11e7-734d-47d0-8715-dfe0d25fa380",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.33270766735076907,
+        "y": 0,
+        "width": 0.09598188400268554,
+        "height": 0.15339206589592833
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.1280491164153258
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/fbdd11e7-734d-47d0-8715-dfe0d25fa380.jpg",
+      "group": "recovered-fbdd11e7-734d-47d0-8715-dfe0d25fa380",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 3,
+      "head": {
+        "x": 0.33270766735076907,
+        "y": 0,
+        "width": 0.09598188400268554,
+        "height": 0.15339206589592833
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.20678801380034825
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/fbdd11e7-734d-47d0-8715-dfe0d25fa380.jpg",
+      "group": "recovered-fbdd11e7-734d-47d0-8715-dfe0d25fa380",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 4,
+      "head": {
+        "x": 0.16174949407577516,
+        "y": 0.08524770736694336,
+        "width": 0.14096858501434323,
+        "height": 0.2346222983466254
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.17416730108481515
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/fbdd11e7-734d-47d0-8715-dfe0d25fa380.jpg",
+      "group": "recovered-fbdd11e7-734d-47d0-8715-dfe0d25fa380",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 4,
+      "head": {
+        "x": 0.16174949407577516,
+        "y": 0.08524770736694336,
+        "width": 0.14096858501434323,
+        "height": 0.2346222983466254
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.15466278145822926
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/fbdd11e7-734d-47d0-8715-dfe0d25fa380.jpg",
+      "group": "recovered-fbdd11e7-734d-47d0-8715-dfe0d25fa380",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 5,
+      "head": {
+        "x": 0.9445022732019425,
+        "y": 0.4185480541653103,
+        "width": 0.055497726798057534,
+        "height": 0.21569997999403218
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.15477993240624793
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/fbdd11e7-734d-47d0-8715-dfe0d25fa380.jpg",
+      "group": "recovered-fbdd11e7-734d-47d0-8715-dfe0d25fa380",
+      "split": "test",
+      "expectedHelmet": false,
+      "headIndex": 5,
+      "head": {
+        "x": 0.9445022732019425,
+        "y": 0.4185480541653103,
+        "width": 0.055497726798057534,
+        "height": 0.21569997999403218
+      },
+      "padding": 0.15,
+      "wearingHelmetConfidence": 0.15696151951294202
+    },
+    {
+      "file": "tmp/helmet-negative-paddle.png",
+      "group": "hat-control",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.25,
+        "y": 0.15,
+        "width": 0.45,
+        "height": 0.7
+      },
+      "padding": 0,
+      "wearingHelmetConfidence": 0.2733273800324434
+    },
+    {
+      "file": "tmp/helmet-negative-paddle.png",
+      "group": "hat-control",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.25,
+        "y": 0.15,
+        "width": 0.45,
+        "height": 0.7
+      },
+      "padding": 0.1,
+      "wearingHelmetConfidence": 0.28742932480400063
+    },
+    {
+      "file": "tmp/helmet-negative-paddle.png",
+      "group": "hat-control",
+      "split": "train",
+      "expectedHelmet": false,
+      "headIndex": 0,
+      "head": {
+        "x": 0.25,
+        "y": 0.15,
+        "width": 0.45,
+        "height": 0.7
+      },
+      "padding": 0.2,
+      "wearingHelmetConfidence": 0.16882946378313146
+    }
+  ]
+}
