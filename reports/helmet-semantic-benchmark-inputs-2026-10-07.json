@@ -1,0 +1,1672 @@
+[
+  {
+    "file": "scratch/helmet-alert-ch6.jpg",
+    "expectedHelmet": true,
+    "split": "train",
+    "group": "pilot-pink",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.9073691705806937,
+        "boundingBox": {
+          "x": 0.42754830512771863,
+          "y": 0.27247770281110933,
+          "width": 0.19828404415294415,
+          "height": 0.6625133282060731
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.7060828786081856,
+        "boundingBox": {
+          "x": 0.44510601460933685,
+          "y": 0.2528352949354384,
+          "width": 0.09926989674568176,
+          "height": 0.17317428588867184
+        }
+      },
+      {
+        "label": "helmet",
+        "confidence": 0.3653410366583465,
+        "boundingBox": {
+          "x": 0.4475298851728439,
+          "y": 0.2552133666144477,
+          "width": 0.09585009217262269,
+          "height": 0.16666999393039278
+        }
+      }
+    ]
+  },
+  {
+    "file": "tmp/helmet-channel-6.jpg",
+    "expectedHelmet": true,
+    "split": "train",
+    "group": "pilot-blue",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.9165022142924926,
+        "boundingBox": {
+          "x": 0.30443606529365325,
+          "y": 0.21965613695855002,
+          "width": 0.27801713454647775,
+          "height": 0.78034386304145
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.8402697201999274,
+        "boundingBox": {
+          "x": 0.3540926516056061,
+          "y": 0.18231630325317383,
+          "width": 0.1535752177238464,
+          "height": 0.2786030027601454
+        }
+      }
+    ]
+  },
+  {
+    "file": "tmp/pilot-wearer-a85e6b3f-89c4-40b9-a51d-cab4499ddb7c-639269109585900000-20261007.jpg",
+    "expectedHelmet": true,
+    "split": "train",
+    "group": "pilot-pink",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.5357081784310509,
+        "boundingBox": {
+          "x": 0.7027089886824225,
+          "y": 0.10507668784723266,
+          "width": 0.15624682401267154,
+          "height": 0.6859094345023704
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.6923075870642492,
+        "boundingBox": {
+          "x": 0.7336994171142578,
+          "y": 0.1012481795416938,
+          "width": 0.10884389877319334,
+          "height": 0.17081050872802733
+        }
+      }
+    ]
+  },
+  {
+    "file": "tmp/pilot-wearer-99965e01-8fb4-44e3-8b9f-615ec673274d-639269109527830000-20261007.jpg",
+    "expectedHelmet": true,
+    "split": "train",
+    "group": "pilot-pink",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.763696659832334,
+        "boundingBox": {
+          "x": 0.38394813276070955,
+          "y": 0.21462716975158996,
+          "width": 0.18831695199379267,
+          "height": 0.7439725468222325
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.6840181530526657,
+        "boundingBox": {
+          "x": 0.4003779411315918,
+          "y": 0.18788039949205187,
+          "width": 0.10902414321899417,
+          "height": 0.1806309382120767
+        }
+      }
+    ]
+  },
+  {
+    "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+    "expectedHelmet": false,
+    "split": "train",
+    "group": "hajipur",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.9034892092718678,
+        "boundingBox": {
+          "x": 0.3789148269597444,
+          "y": 0.09051363099414342,
+          "width": 0.1716856161669464,
+          "height": 0.27892995047613534
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.8450591218944226,
+        "boundingBox": {
+          "x": 0.256972531914308,
+          "y": 0.40158749763335755,
+          "width": 0.2203762278014686,
+          "height": 0.5283955240746478
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.7849716450641608,
+        "boundingBox": {
+          "x": 0.5949383192771907,
+          "y": 0.5035365355996533,
+          "width": 0.2648579206881606,
+          "height": 0.4520177566773794
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.8733342278857634,
+        "boundingBox": {
+          "x": 0.30393700003623964,
+          "y": 0.37344029744466145,
+          "width": 0.1250325322151184,
+          "height": 0.22819875081380214
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8347121058056359,
+        "boundingBox": {
+          "x": 0.4069895625114441,
+          "y": 0.07280316352844238,
+          "width": 0.09027416706085206,
+          "height": 0.17204529444376637
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8248573138658344,
+        "boundingBox": {
+          "x": 0.6860997676849365,
+          "y": 0.4721510781182183,
+          "width": 0.14810724258422847,
+          "height": 0.2400012969970703
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8122307625328631,
+        "boundingBox": {
+          "x": 0.7387882828712463,
+          "y": 0.05556226306491428,
+          "width": 0.1723896741867066,
+          "height": 0.3493368996514215
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.5031011885218248,
+        "boundingBox": {
+          "x": 0.16202624440193175,
+          "y": 0,
+          "width": 0.164853036403656,
+          "height": 0.31211524539523655
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.41504924755894734,
+        "boundingBox": {
+          "x": 0.39600529670715334,
+          "y": 0.3383079210917155,
+          "width": 0.0816781997680664,
+          "height": 0.11614589691162108
+        }
+      }
+    ]
+  },
+  {
+    "file": "scratch/helmet-new-false-alert-raw.jpg",
+    "expectedHelmet": false,
+    "split": "train",
+    "group": "older-false",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.9066970414499878,
+        "boundingBox": {
+          "x": 0.6533124683392563,
+          "y": 0.17934878170187385,
+          "width": 0.1990024983087757,
+          "height": 0.812811633211879
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.7875189524681048,
+        "boundingBox": {
+          "x": 0.6897942364215851,
+          "y": 0.1622307777404785,
+          "width": 0.11611236333847041,
+          "height": 0.21862095726860897
+        }
+      }
+    ]
+  },
+  {
+    "file": "tmp/helmet-channel-7.jpg",
+    "expectedHelmet": false,
+    "split": "train",
+    "group": "pilot-bare",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.7353703658791488,
+        "boundingBox": {
+          "x": 0.649884984365354,
+          "y": 0.027898427026106384,
+          "width": 0.3039204354276641,
+          "height": 0.9645983759720762
+        }
+      }
+    ],
+    "heads": []
+  },
+  {
+    "file": "scratch/helmet-rajkot-original-0.jpg",
+    "expectedHelmet": false,
+    "split": "train",
+    "group": "rajkot",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.7319550912400885,
+        "boundingBox": {
+          "x": 0.17981929301942537,
+          "y": 0.36114936493364824,
+          "width": 0.16839687127879496,
+          "height": 0.43675067104916976
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.6033853238321285,
+        "boundingBox": {
+          "x": 0.19186515212059022,
+          "y": 0.35959728029039173,
+          "width": 0.07662469148635861,
+          "height": 0.13242066701253252
+        }
+      },
+      {
+        "label": "helmet",
+        "confidence": 0.4444565994756644,
+        "boundingBox": {
+          "x": 0.19038414359092712,
+          "y": 0.3583924929300944,
+          "width": 0.07808486223220826,
+          "height": 0.13077225155300565
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.4412296801669342,
+        "boundingBox": {
+          "x": 0,
+          "y": 0.3360127449035645,
+          "width": 0.04479180723428726,
+          "height": 0.14560790591769757
+        }
+      },
+      {
+        "label": "helmet",
+        "confidence": 0.28024459713139294,
+        "boundingBox": {
+          "x": 0.17281887531280518,
+          "y": 0.3359562979804145,
+          "width": 0.07512311935424804,
+          "height": 0.10922313266330297
+        }
+      }
+    ]
+  },
+  {
+    "file": "tmp/kollam-live-fb465a8f-5d79-4a3f-9cb8-b8cec471708d-20261007102517107.jpg",
+    "expectedHelmet": true,
+    "split": "test",
+    "group": "kollam",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.9143376988994873,
+        "boundingBox": {
+          "x": 0.29652243321041827,
+          "y": 0.07670727264385536,
+          "width": 0.21392570467529026,
+          "height": 0.92209836521284
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.765607089532125,
+        "boundingBox": {
+          "x": 0.3209194839000702,
+          "y": 0.06258540683322483,
+          "width": 0.12378174066543579,
+          "height": 0.21301617092556424
+        }
+      }
+    ]
+  },
+  {
+    "file": "tmp/kollam-live-fb465a8f-5d79-4a3f-9cb8-b8cec471708d-20261007102525317.jpg",
+    "expectedHelmet": true,
+    "split": "test",
+    "group": "kollam",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.776920951711098,
+        "boundingBox": {
+          "x": 0.1619438318540904,
+          "y": 0.48007935420276787,
+          "width": 0.08387721584862182,
+          "height": 0.5199206457972321
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.40213707594126546,
+        "boundingBox": {
+          "x": 0.15837736129760743,
+          "y": 0.45391242769029405,
+          "width": 0.07530598640441893,
+          "height": 0.13272944556342248
+        }
+      }
+    ]
+  },
+  {
+    "file": "scratch/helmet-false-f0b4f55e-00c0-442c-a0e1-3d6a05150bdf.jpg",
+    "expectedHelmet": false,
+    "split": "test",
+    "group": "hajipur-held-frame",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.9003163773819054,
+        "boundingBox": {
+          "x": 0.11666304935568958,
+          "y": 0.11102304201441744,
+          "width": 0.16910959374567322,
+          "height": 0.3479518909211893
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.8628010395562242,
+        "boundingBox": {
+          "x": 0.31144460603267254,
+          "y": 0.07140252169340296,
+          "width": 0.16906190324943193,
+          "height": 0.3960934653860849
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.7446333883740408,
+        "boundingBox": {
+          "x": 0.3971865092609075,
+          "y": 0.7241725029348677,
+          "width": 0.2420580097709144,
+          "height": 0.2702932349118694
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.8030402511352577,
+        "boundingBox": {
+          "x": 0.5282607674598694,
+          "y": 0.14496731228298612,
+          "width": 0.18622653484344487,
+          "height": 0.33975745307074656
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.799310755115556,
+        "boundingBox": {
+          "x": 0.39115355014801023,
+          "y": 0.717768308851454,
+          "width": 0.13735022544860842,
+          "height": 0.21097929212782118
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.7368487269703294,
+        "boundingBox": {
+          "x": 0.14306443333625793,
+          "y": 0.09514569176567925,
+          "width": 0.09938083887100221,
+          "height": 0.18017565409342448
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.6984191166527438,
+        "boundingBox": {
+          "x": 0.34942456185817716,
+          "y": 0.05905016793145074,
+          "width": 0.0965336620807648,
+          "height": 0.1807257546318902
+        }
+      }
+    ]
+  },
+  {
+    "file": "scratch/helmet-rajkot-original-1.jpg",
+    "expectedHelmet": false,
+    "split": "test",
+    "group": "rajkot-held-frame",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.6841369755545088,
+        "boundingBox": {
+          "x": 0.1633234098671439,
+          "y": 0.38586441581123937,
+          "width": 0.19574690206629625,
+          "height": 0.5096085640700041
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "helmet",
+        "confidence": 0.6572948983172893,
+        "boundingBox": {
+          "x": 0.17777586579322815,
+          "y": 0.37128956582811146,
+          "width": 0.07894338369369505,
+          "height": 0.12057326634724935
+        }
+      },
+      {
+        "label": "helmet",
+        "confidence": 0.36970070521983445,
+        "boundingBox": {
+          "x": 0.31640870571136476,
+          "y": 0.39710940255059135,
+          "width": 0.061647987365722634,
+          "height": 0.09400208791097009
+        }
+      },
+      {
+        "label": "helmet",
+        "confidence": 0.36461534052401134,
+        "boundingBox": {
+          "x": 0.0020928412675857546,
+          "y": 0.34258367750379776,
+          "width": 0.05579193234443664,
+          "height": 0.12622316148546003
+        }
+      }
+    ]
+  },
+  {
+    "file": "scratch/helmet-rajkot-original-2.jpg",
+    "expectedHelmet": false,
+    "split": "test",
+    "group": "rajkot-held-frame",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.7073250830416313,
+        "boundingBox": {
+          "x": 0.1677873028802773,
+          "y": 0.370497409236252,
+          "width": 0.19251500466935592,
+          "height": 0.43315641464631943
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.45288295719615235,
+        "boundingBox": {
+          "x": 0,
+          "y": 0.36790533256565094,
+          "width": 0.0991185803106532,
+          "height": 0.4831322542167382
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.6505667972742586,
+        "boundingBox": {
+          "x": 0,
+          "y": 0.33944885465833874,
+          "width": 0.049667266011238095,
+          "height": 0.14675757090250652
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.6205678511941528,
+        "boundingBox": {
+          "x": 0.17646356225013732,
+          "y": 0.3472823037041558,
+          "width": 0.08684262037277224,
+          "height": 0.1482479943169488
+        }
+      },
+      {
+        "label": "helmet",
+        "confidence": 0.43170726360982314,
+        "boundingBox": {
+          "x": 0.178065025806427,
+          "y": 0.3487039936913384,
+          "width": 0.08406140804290771,
+          "height": 0.1458461019727919
+        }
+      }
+    ]
+  },
+  {
+    "file": "tmp/helmet-permanent-benchmark/negative/0e556390-887c-472d-a0e4-b694e4cd1ea7.jpg",
+    "expectedHelmet": false,
+    "eventId": "0e556390-887c-472d-a0e4-b694e4cd1ea7",
+    "sha256": "3c432184c2352d33007fef2d078aec66ca6c0af0a60c0c56f0b6356dc3cef9fe",
+    "groundTruthSource": "previous false-alert regression corpus",
+    "split": "test",
+    "group": "recovered-0e556390-887c-472d-a0e4-b694e4cd1ea7",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.9016471577086094,
+        "boundingBox": {
+          "x": 0.33325962421097965,
+          "y": 0.059231636888614395,
+          "width": 0.1647542248041478,
+          "height": 0.30447868400626654
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.8138635756299806,
+        "boundingBox": {
+          "x": 0.5483836520628076,
+          "y": 0.46739662041140906,
+          "width": 0.21319815048946433,
+          "height": 0.5041767136433903
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.7439844116607475,
+        "boundingBox": {
+          "x": 0.15201218997156113,
+          "y": 0.4003749385777089,
+          "width": 0.21705361975874443,
+          "height": 0.41391064510989406
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.8486427910055738,
+        "boundingBox": {
+          "x": 0.5010532259941101,
+          "y": 0.04184758928087023,
+          "width": 0.1921690225601198,
+          "height": 0.3321804046630859
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8485636256981621,
+        "boundingBox": {
+          "x": 0.3383535861968994,
+          "y": 0.0377311282687717,
+          "width": 0.10273227691650388,
+          "height": 0.20733295016818573
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8294380461021547,
+        "boundingBox": {
+          "x": 0.17205423712730408,
+          "y": 0.37750875684950086,
+          "width": 0.10932875871658324,
+          "height": 0.2061820983886719
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8122499758452051,
+        "boundingBox": {
+          "x": 0.6086981773376465,
+          "y": 0.4343374146355523,
+          "width": 0.11133003234863281,
+          "height": 0.21448251936170792
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.7364784302476579,
+        "boundingBox": {
+          "x": 0.8922776579856873,
+          "y": 0.19061027103000217,
+          "width": 0.10718624591827397,
+          "height": 0.248611323038737
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.5848692832865652,
+        "boundingBox": {
+          "x": 0.2430428683757782,
+          "y": 0.4171775076124403,
+          "width": 0.09476844072341917,
+          "height": 0.18471881018744574
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.5066923120424462,
+        "boundingBox": {
+          "x": 0.16175467371940613,
+          "y": 0.07808138529459635,
+          "width": 0.14718652963638304,
+          "height": 0.24956605699327256
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.3371313895619892,
+        "boundingBox": {
+          "x": 0.5826696127653122,
+          "y": 0.47694990370008683,
+          "width": 0.06830220818519595,
+          "height": 0.14616987440321183
+        }
+      }
+    ]
+  },
+  {
+    "file": "tmp/helmet-permanent-benchmark/negative/2889bea6-ca6e-4a0b-b8d3-9f9e5bc65c16.jpg",
+    "expectedHelmet": false,
+    "eventId": "2889bea6-ca6e-4a0b-b8d3-9f9e5bc65c16",
+    "sha256": "5420c7a942d9eb7027be8712d51b98fafc8aefc8030fb3a9498c765b612827d1",
+    "groundTruthSource": "previous false-alert regression corpus",
+    "split": "test",
+    "group": "recovered-2889bea6-ca6e-4a0b-b8d3-9f9e5bc65c16",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.9170363449486985,
+        "boundingBox": {
+          "x": 0.38056800825891157,
+          "y": 0.07375391479337774,
+          "width": 0.15458264438698788,
+          "height": 0.4864338208038695
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.3822986100016408,
+        "boundingBox": {
+          "x": 0.3850792941943465,
+          "y": 0.8397435786101682,
+          "width": 0.1062200853848525,
+          "height": 0.15831471901079974
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.7803685054786698,
+        "boundingBox": {
+          "x": 0.40059768259525297,
+          "y": 0.06176680458916558,
+          "width": 0.0895250976085663,
+          "height": 0.16389357248942057
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.5568350297624605,
+        "boundingBox": {
+          "x": 0.0164594441652298,
+          "y": 0.09370628197987875,
+          "width": 0.0458656370639801,
+          "height": 0.0811117755042182
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.2989994071628388,
+        "boundingBox": {
+          "x": 0.5569748997688293,
+          "y": 0.30660737355550133,
+          "width": 0.15024850368499765,
+          "height": 0.2603702545166015
+        }
+      }
+    ]
+  },
+  {
+    "file": "tmp/helmet-permanent-benchmark/negative/34181b1e-58c9-451b-b258-d2d865cb0d56.jpg",
+    "expectedHelmet": false,
+    "eventId": "34181b1e-58c9-451b-b258-d2d865cb0d56",
+    "sha256": "c3758bb1545df8bac18e78f8777544e2e24e36de0e5767c147155908d4652ee7",
+    "groundTruthSource": "previous false-alert regression corpus",
+    "split": "test",
+    "group": "recovered-34181b1e-58c9-451b-b258-d2d865cb0d56",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.9021767963387077,
+        "boundingBox": {
+          "x": 0.3068139095890247,
+          "y": 0.008171648120455928,
+          "width": 0.19450559039543208,
+          "height": 0.3613558140021436
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.8128088859509575,
+        "boundingBox": {
+          "x": 0.5213783518953266,
+          "y": 0.4585014836652962,
+          "width": 0.22834836558988703,
+          "height": 0.49661159917894804
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.7810317393995945,
+        "boundingBox": {
+          "x": 0.1967952895819342,
+          "y": 0.341236815992454,
+          "width": 0.20084578666061093,
+          "height": 0.4222656427491978
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.6239496477678728,
+        "boundingBox": {
+          "x": 0.4992049743329704,
+          "y": 0.011667855181165004,
+          "width": 0.16937689712815007,
+          "height": 0.36741332435624063
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.3638617518309406,
+        "boundingBox": {
+          "x": 0.9040839913516626,
+          "y": 0.22915887223983158,
+          "width": 0.09591600864833738,
+          "height": 0.2364173220238779
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.8565396191071386,
+        "boundingBox": {
+          "x": 0.603703773021698,
+          "y": 0.430239921145969,
+          "width": 0.10545494556427004,
+          "height": 0.20581959618462442
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8147089271257499,
+        "boundingBox": {
+          "x": 0.1933946967124939,
+          "y": 0.3734501838684082,
+          "width": 0.13245227336883544,
+          "height": 0.230199580722385
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8086892559088241,
+        "boundingBox": {
+          "x": 0.37054831385612486,
+          "y": 0,
+          "width": 0.09535843133926392,
+          "height": 0.16816492610507539
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8031511926881194,
+        "boundingBox": {
+          "x": 0.5480423420667648,
+          "y": 0.008065674040052626,
+          "width": 0.07791147828102107,
+          "height": 0.12112349404229061
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.7652091229837765,
+        "boundingBox": {
+          "x": 0.16592140793800353,
+          "y": 0.08383304807874892,
+          "width": 0.14711464643478395,
+          "height": 0.2507697423299153
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.7389821625386617,
+        "boundingBox": {
+          "x": 0.893534779548645,
+          "y": 0.19651572969224718,
+          "width": 0.10588698387146,
+          "height": 0.24052270253499347
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.43266372733316416,
+        "boundingBox": {
+          "x": 0.5304649859666825,
+          "y": 0.4893391238318549,
+          "width": 0.08589505553245547,
+          "height": 0.15423241721259245
+        }
+      }
+    ]
+  },
+  {
+    "file": "tmp/helmet-permanent-benchmark/negative/3d62d89e-6cd2-465e-b46c-f42837b01231.jpg",
+    "expectedHelmet": false,
+    "eventId": "3d62d89e-6cd2-465e-b46c-f42837b01231",
+    "sha256": "c3758bb1545df8bac18e78f8777544e2e24e36de0e5767c147155908d4652ee7",
+    "groundTruthSource": "previous false-alert regression corpus",
+    "split": "test",
+    "group": "recovered-3d62d89e-6cd2-465e-b46c-f42837b01231",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.9021767963387077,
+        "boundingBox": {
+          "x": 0.3068139095890247,
+          "y": 0.008171648120455928,
+          "width": 0.19450559039543208,
+          "height": 0.3613558140021436
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.8128088859509575,
+        "boundingBox": {
+          "x": 0.5213783518953266,
+          "y": 0.4585014836652962,
+          "width": 0.22834836558988703,
+          "height": 0.49661159917894804
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.7810317393995945,
+        "boundingBox": {
+          "x": 0.1967952895819342,
+          "y": 0.341236815992454,
+          "width": 0.20084578666061093,
+          "height": 0.4222656427491978
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.6239496477678728,
+        "boundingBox": {
+          "x": 0.4992049743329704,
+          "y": 0.011667855181165004,
+          "width": 0.16937689712815007,
+          "height": 0.36741332435624063
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.3638617518309406,
+        "boundingBox": {
+          "x": 0.9040839913516626,
+          "y": 0.22915887223983158,
+          "width": 0.09591600864833738,
+          "height": 0.2364173220238779
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.8565396191071386,
+        "boundingBox": {
+          "x": 0.603703773021698,
+          "y": 0.430239921145969,
+          "width": 0.10545494556427004,
+          "height": 0.20581959618462442
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8147089271257499,
+        "boundingBox": {
+          "x": 0.1933946967124939,
+          "y": 0.3734501838684082,
+          "width": 0.13245227336883544,
+          "height": 0.230199580722385
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8086892559088241,
+        "boundingBox": {
+          "x": 0.37054831385612486,
+          "y": 0,
+          "width": 0.09535843133926392,
+          "height": 0.16816492610507539
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8031511926881194,
+        "boundingBox": {
+          "x": 0.5480423420667648,
+          "y": 0.008065674040052626,
+          "width": 0.07791147828102107,
+          "height": 0.12112349404229061
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.7652091229837765,
+        "boundingBox": {
+          "x": 0.16592140793800353,
+          "y": 0.08383304807874892,
+          "width": 0.14711464643478395,
+          "height": 0.2507697423299153
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.7389821625386617,
+        "boundingBox": {
+          "x": 0.893534779548645,
+          "y": 0.19651572969224718,
+          "width": 0.10588698387146,
+          "height": 0.24052270253499347
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.43266372733316416,
+        "boundingBox": {
+          "x": 0.5304649859666825,
+          "y": 0.4893391238318549,
+          "width": 0.08589505553245547,
+          "height": 0.15423241721259245
+        }
+      }
+    ]
+  },
+  {
+    "file": "tmp/helmet-permanent-benchmark/negative/4599426c-6cf4-4046-9fa6-59d09f077c23.jpg",
+    "expectedHelmet": false,
+    "eventId": "4599426c-6cf4-4046-9fa6-59d09f077c23",
+    "sha256": "cf64c9f544fd0aa0d6e8d10b94f91cce97cfdcb0b72f0d9d536a999f9411f0e1",
+    "groundTruthSource": "previous false-alert regression corpus",
+    "split": "test",
+    "group": "recovered-4599426c-6cf4-4046-9fa6-59d09f077c23",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.9038693474581336,
+        "boundingBox": {
+          "x": 0.33587913151685755,
+          "y": 0.0022397561042791733,
+          "width": 0.16254061358195582,
+          "height": 0.36186055442409554
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.8144872993561876,
+        "boundingBox": {
+          "x": 0.5210254785198762,
+          "y": 0.4699198422597029,
+          "width": 0.21728537467619802,
+          "height": 0.48204415123238026
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.738090277642911,
+        "boundingBox": {
+          "x": 0.20724094962731088,
+          "y": 0.3588354625523144,
+          "width": 0.22218908450004976,
+          "height": 0.40006644557387344
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.8203062236647156,
+        "boundingBox": {
+          "x": 0.5791216313838958,
+          "y": 0.44400823381212023,
+          "width": 0.10580569505691528,
+          "height": 0.18262816535101994
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8161553010771172,
+        "boundingBox": {
+          "x": 0.222453773021698,
+          "y": 0.35002935197618273,
+          "width": 0.11891567707061768,
+          "height": 0.2180165184868707
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8142129177376631,
+        "boundingBox": {
+          "x": 0.37216143906116483,
+          "y": 0,
+          "width": 0.08673514723777775,
+          "height": 0.13575739860534664
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8017669652606614,
+        "boundingBox": {
+          "x": 0.16699361205101013,
+          "y": 0.08388884862263997,
+          "width": 0.13512173891067505,
+          "height": 0.2358759350246853
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.6993597883204075,
+        "boundingBox": {
+          "x": 0.8957035839557648,
+          "y": 0.1944911003112793,
+          "width": 0.10357040166854858,
+          "height": 0.24010528988308377
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.5307659840636703,
+        "boundingBox": {
+          "x": 0.7227388113737107,
+          "y": 0.38718902269999184,
+          "width": 0.06092763543128965,
+          "height": 0.11811785168117944
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.35486386952207205,
+        "boundingBox": {
+          "x": 0.7384219586849212,
+          "y": 0.35051242510477704,
+          "width": 0.068287193775177,
+          "height": 0.12076978683471679
+        }
+      }
+    ]
+  },
+  {
+    "file": "tmp/helmet-permanent-benchmark/negative/4e39d73f-c089-4791-ba0a-ba8ece18b2b4.jpg",
+    "expectedHelmet": false,
+    "eventId": "4e39d73f-c089-4791-ba0a-ba8ece18b2b4",
+    "sha256": "8b44c84136c87f5f98edccc96b7c4cd96e935f566490f09205ac111e5da6e4c7",
+    "groundTruthSource": "previous false-alert regression corpus",
+    "split": "test",
+    "group": "recovered-4e39d73f-c089-4791-ba0a-ba8ece18b2b4",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.8210525862231677,
+        "boundingBox": {
+          "x": 0.7904046940346843,
+          "y": 0.1527607824380226,
+          "width": 0.20878979215218907,
+          "height": 0.8472392175619774
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.8148486476543155,
+        "boundingBox": {
+          "x": 0.07264258435920985,
+          "y": 0.47516044561358,
+          "width": 0.2930796167327357,
+          "height": 0.46101158970065786
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.8315569967776213,
+        "boundingBox": {
+          "x": 0.08324267864227294,
+          "y": 0.4566327095031738,
+          "width": 0.12899234294891357,
+          "height": 0.23313927120632594
+        }
+      }
+    ]
+  },
+  {
+    "file": "tmp/helmet-permanent-benchmark/negative/606e7e81-8b11-4f7c-ade2-48fd9beb9dd4.jpg",
+    "expectedHelmet": false,
+    "eventId": "606e7e81-8b11-4f7c-ade2-48fd9beb9dd4",
+    "sha256": "791bcd2b9cc39d99506bdea210e4b84ecf2a48d91139cc4d45e49cdfd530ecff",
+    "groundTruthSource": "previous false-alert regression corpus",
+    "split": "test",
+    "group": "recovered-606e7e81-8b11-4f7c-ade2-48fd9beb9dd4",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.853262853103459,
+        "boundingBox": {
+          "x": 0.3630519530122498,
+          "y": 0.13057685369819214,
+          "width": 0.3267235943555028,
+          "height": 0.6613489570229365
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.5421880931532996,
+        "boundingBox": {
+          "x": 0.27282485914830806,
+          "y": 0.007261317365120134,
+          "width": 0.12507559063517465,
+          "height": 0.4882781192626066
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.8566895704034039,
+        "boundingBox": {
+          "x": 0.4500110685825348,
+          "y": 0.1277310053507487,
+          "width": 0.12240399122238155,
+          "height": 0.21635254753960506
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.6353254194788605,
+        "boundingBox": {
+          "x": 0.41216410100460055,
+          "y": 0.6306465996636285,
+          "width": 0.07492831349372864,
+          "height": 0.14016181098090275
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.4873114477034193,
+        "boundingBox": {
+          "x": 0.39468587636947633,
+          "y": 0.09092611206902398,
+          "width": 0.05567581653594972,
+          "height": 0.11633850733439119
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.42537655539197416,
+        "boundingBox": {
+          "x": 0.3441497504711151,
+          "y": 0.07278805838690863,
+          "width": 0.04742285013198849,
+          "height": 0.09218201107449009
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.3072108042396451,
+        "boundingBox": {
+          "x": 0.13435139060020446,
+          "y": 0.47261528438991973,
+          "width": 0.12882448434829713,
+          "height": 0.26176812913682723
+        }
+      }
+    ]
+  },
+  {
+    "file": "tmp/helmet-permanent-benchmark/negative/b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b.jpg",
+    "expectedHelmet": false,
+    "eventId": "b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b",
+    "sha256": "a65b9060e5822cdf163b71dafcc725124fa1a3a606fd55fa1631d5346bb0720e",
+    "groundTruthSource": "previous false-alert regression corpus",
+    "split": "test",
+    "group": "recovered-b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.8092543010575071,
+        "boundingBox": {
+          "x": 0.15368935160646022,
+          "y": 0.17628910079608706,
+          "width": 0.19130242022716185,
+          "height": 0.7492141420691424
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.7753847478532805,
+        "boundingBox": {
+          "x": 0.14960797429084777,
+          "y": 0.15420922173394097,
+          "width": 0.10349906682968141,
+          "height": 0.1956566704644097
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.5038111491801942,
+        "boundingBox": {
+          "x": 0.008916902542114257,
+          "y": 0.061307933595445424,
+          "width": 0.042166787385940555,
+          "height": 0.07055048412746856
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.4022058391619687,
+        "boundingBox": {
+          "x": 0.6808737397193909,
+          "y": 0.3614350530836317,
+          "width": 0.1830940008163452,
+          "height": 0.3491961373223201
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.3484224150315569,
+        "boundingBox": {
+          "x": 0.5774642765522003,
+          "y": 0.3153063456217448,
+          "width": 0.1542847037315368,
+          "height": 0.2765077379014757
+        }
+      }
+    ]
+  },
+  {
+    "file": "tmp/helmet-permanent-benchmark/negative/c4864755-99b9-44d9-a030-5a86e8b96358.jpg",
+    "expectedHelmet": false,
+    "eventId": "c4864755-99b9-44d9-a030-5a86e8b96358",
+    "sha256": "2c7a0cc4f23bccfaeab11a175ec10b8362bd7c99a3b123142b09b698f2e40443",
+    "groundTruthSource": "previous false-alert regression corpus",
+    "split": "test",
+    "group": "recovered-c4864755-99b9-44d9-a030-5a86e8b96358",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.8151180680948613,
+        "boundingBox": {
+          "x": 0.7807371413396805,
+          "y": 0.1150753996049797,
+          "width": 0.1949813863569173,
+          "height": 0.8364801918862113
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.7867529289290829,
+        "boundingBox": {
+          "x": 0.24126231378514565,
+          "y": 0.0966731129237054,
+          "width": 0.11485018763697005,
+          "height": 0.25697330884559805
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.8441807018148069,
+        "boundingBox": {
+          "x": 0.8392347872257233,
+          "y": 0.07647957271999783,
+          "width": 0.11738251447677606,
+          "height": 0.2345450931125217
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8156765228967799,
+        "boundingBox": {
+          "x": 0.2677740901708603,
+          "y": 0.07876292864481609,
+          "width": 0.08020794987678526,
+          "height": 0.14356472227308487
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.32171649825103366,
+        "boundingBox": {
+          "x": 0.2663182467222214,
+          "y": 0.4728050178951687,
+          "width": 0.0794175684452057,
+          "height": 0.11642168892754445
+        }
+      }
+    ]
+  },
+  {
+    "file": "tmp/helmet-permanent-benchmark/negative/d8a4be2f-c231-433c-bdd8-d64736f9cfe5.jpg",
+    "expectedHelmet": false,
+    "eventId": "d8a4be2f-c231-433c-bdd8-d64736f9cfe5",
+    "sha256": "7c06fe9f6a9b44d0e0d61ebbe55884a2bb0cc540d466459c4a410b355aaa3781",
+    "groundTruthSource": "previous false-alert regression corpus",
+    "split": "test",
+    "group": "recovered-d8a4be2f-c231-433c-bdd8-d64736f9cfe5",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.9040788800089956,
+        "boundingBox": {
+          "x": 0.33919337211117917,
+          "y": 0.0014938282583710136,
+          "width": 0.16621474480803944,
+          "height": 0.3631215312696537
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.8068981220799536,
+        "boundingBox": {
+          "x": 0.21021193257261475,
+          "y": 0.3239453715228926,
+          "width": 0.21582901724369233,
+          "height": 0.4487423366786488
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.605449758654153,
+        "boundingBox": {
+          "x": 0.554901868589364,
+          "y": 0.4670651150761378,
+          "width": 0.20125178551989442,
+          "height": 0.4826010703647494
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.8251271411716417,
+        "boundingBox": {
+          "x": 0.23487845659255982,
+          "y": 0.3171759711371528,
+          "width": 0.1143921136856079,
+          "height": 0.21891242133246536
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8197673241951264,
+        "boundingBox": {
+          "x": 0.35733845829963684,
+          "y": 0,
+          "width": 0.09987348318099976,
+          "height": 0.15924752023484975
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8015988618221428,
+        "boundingBox": {
+          "x": 0.5947640836238861,
+          "y": 0.43507052527533635,
+          "width": 0.10253468751907346,
+          "height": 0.18966441684299046
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.7664127887367655,
+        "boundingBox": {
+          "x": 0.4818422973155975,
+          "y": 0.05419430202907986,
+          "width": 0.18732677698135375,
+          "height": 0.30797797309027775
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.686295166079276,
+        "boundingBox": {
+          "x": 0.8959026873111725,
+          "y": 0.18587496015760635,
+          "width": 0.1027508616447449,
+          "height": 0.24744190639919705
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.29570495958009246,
+        "boundingBox": {
+          "x": 0.39514531195163727,
+          "y": 0.3589742183685303,
+          "width": 0.0771032512187958,
+          "height": 0.11305572721693252
+        }
+      }
+    ]
+  },
+  {
+    "file": "tmp/helmet-permanent-benchmark/negative/fbdd11e7-734d-47d0-8715-dfe0d25fa380.jpg",
+    "expectedHelmet": false,
+    "eventId": "fbdd11e7-734d-47d0-8715-dfe0d25fa380",
+    "sha256": "9a7b2b3f03480c8cf19989c3643a1fd577e82d6f407b8364909fac757e57b7fb",
+    "groundTruthSource": "previous false-alert regression corpus",
+    "split": "test",
+    "group": "recovered-fbdd11e7-734d-47d0-8715-dfe0d25fa380",
+    "width": 640,
+    "height": 360,
+    "persons": [
+      {
+        "label": "person",
+        "confidence": 0.8973991423610173,
+        "boundingBox": {
+          "x": 0.5120116817864989,
+          "y": 0.07046751148239062,
+          "width": 0.16254191180266186,
+          "height": 0.30851412496878744
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.893267533378328,
+        "boundingBox": {
+          "x": 0.33511636221713104,
+          "y": 0,
+          "width": 0.15407605150421216,
+          "height": 0.3646255100608398
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.859112869123706,
+        "boundingBox": {
+          "x": 0.5405368369399791,
+          "y": 0.4499502741002906,
+          "width": 0.22419964349375765,
+          "height": 0.4720864115339523
+        }
+      },
+      {
+        "label": "person",
+        "confidence": 0.7555497566983433,
+        "boundingBox": {
+          "x": 0.23108565040647783,
+          "y": 0.36938086011522353,
+          "width": 0.21052184171117666,
+          "height": 0.41156292599387634
+        }
+      }
+    ],
+    "heads": [
+      {
+        "label": "head",
+        "confidence": 0.8430627926911853,
+        "boundingBox": {
+          "x": 0.5915421724319458,
+          "y": 0.4282497829861111,
+          "width": 0.12088294029235835,
+          "height": 0.2341127183702258
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8423584388269774,
+        "boundingBox": {
+          "x": 0.5685168027877807,
+          "y": 0.055486541324191625,
+          "width": 0.09559988975524902,
+          "height": 0.1725499682956272
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8317934232779223,
+        "boundingBox": {
+          "x": 0.24956151247024536,
+          "y": 0.3463854471842448,
+          "width": 0.10645978450775148,
+          "height": 0.20587209065755208
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.8191787228980587,
+        "boundingBox": {
+          "x": 0.33270766735076907,
+          "y": 0,
+          "width": 0.09598188400268554,
+          "height": 0.15339206589592833
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.6742919040688093,
+        "boundingBox": {
+          "x": 0.16174949407577516,
+          "y": 0.08524770736694336,
+          "width": 0.14096858501434323,
+          "height": 0.2346222983466254
+        }
+      },
+      {
+        "label": "head",
+        "confidence": 0.2915346213830077,
+        "boundingBox": {
+          "x": 0.9445022732019425,
+          "y": 0.4185480541653103,
+          "width": 0.055497726798057534,
+          "height": 0.21569997999403218
+        }
+      }
+    ]
+  }
+]

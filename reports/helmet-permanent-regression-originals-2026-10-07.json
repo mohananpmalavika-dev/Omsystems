@@ -1,0 +1,82 @@
+{
+  "samples": [
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/0e556390-887c-472d-a0e4-b694e4cd1ea7.jpg",
+      "expectedHelmet": false,
+      "eventId": "0e556390-887c-472d-a0e4-b694e4cd1ea7",
+      "sha256": "3c432184c2352d33007fef2d078aec66ca6c0af0a60c0c56f0b6356dc3cef9fe",
+      "groundTruthSource": "previous false-alert regression corpus"
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/2889bea6-ca6e-4a0b-b8d3-9f9e5bc65c16.jpg",
+      "expectedHelmet": false,
+      "eventId": "2889bea6-ca6e-4a0b-b8d3-9f9e5bc65c16",
+      "sha256": "5420c7a942d9eb7027be8712d51b98fafc8aefc8030fb3a9498c765b612827d1",
+      "groundTruthSource": "previous false-alert regression corpus"
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/34181b1e-58c9-451b-b258-d2d865cb0d56.jpg",
+      "expectedHelmet": false,
+      "eventId": "34181b1e-58c9-451b-b258-d2d865cb0d56",
+      "sha256": "c3758bb1545df8bac18e78f8777544e2e24e36de0e5767c147155908d4652ee7",
+      "groundTruthSource": "previous false-alert regression corpus"
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/3d62d89e-6cd2-465e-b46c-f42837b01231.jpg",
+      "expectedHelmet": false,
+      "eventId": "3d62d89e-6cd2-465e-b46c-f42837b01231",
+      "sha256": "c3758bb1545df8bac18e78f8777544e2e24e36de0e5767c147155908d4652ee7",
+      "groundTruthSource": "previous false-alert regression corpus"
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4599426c-6cf4-4046-9fa6-59d09f077c23.jpg",
+      "expectedHelmet": false,
+      "eventId": "4599426c-6cf4-4046-9fa6-59d09f077c23",
+      "sha256": "cf64c9f544fd0aa0d6e8d10b94f91cce97cfdcb0b72f0d9d536a999f9411f0e1",
+      "groundTruthSource": "previous false-alert regression corpus"
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4e39d73f-c089-4791-ba0a-ba8ece18b2b4.jpg",
+      "expectedHelmet": false,
+      "eventId": "4e39d73f-c089-4791-ba0a-ba8ece18b2b4",
+      "sha256": "8b44c84136c87f5f98edccc96b7c4cd96e935f566490f09205ac111e5da6e4c7",
+      "groundTruthSource": "previous false-alert regression corpus"
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/606e7e81-8b11-4f7c-ade2-48fd9beb9dd4.jpg",
+      "expectedHelmet": false,
+      "eventId": "606e7e81-8b11-4f7c-ade2-48fd9beb9dd4",
+      "sha256": "791bcd2b9cc39d99506bdea210e4b84ecf2a48d91139cc4d45e49cdfd530ecff",
+      "groundTruthSource": "previous false-alert regression corpus"
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b.jpg",
+      "expectedHelmet": false,
+      "eventId": "b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b",
+      "sha256": "a65b9060e5822cdf163b71dafcc725124fa1a3a606fd55fa1631d5346bb0720e",
+      "groundTruthSource": "previous false-alert regression corpus"
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/c4864755-99b9-44d9-a030-5a86e8b96358.jpg",
+      "expectedHelmet": false,
+      "eventId": "c4864755-99b9-44d9-a030-5a86e8b96358",
+      "sha256": "2c7a0cc4f23bccfaeab11a175ec10b8362bd7c99a3b123142b09b698f2e40443",
+      "groundTruthSource": "previous false-alert regression corpus"
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/d8a4be2f-c231-433c-bdd8-d64736f9cfe5.jpg",
+      "expectedHelmet": false,
+      "eventId": "d8a4be2f-c231-433c-bdd8-d64736f9cfe5",
+      "sha256": "7c06fe9f6a9b44d0e0d61ebbe55884a2bb0cc540d466459c4a410b355aaa3781",
+      "groundTruthSource": "previous false-alert regression corpus"
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/fbdd11e7-734d-47d0-8715-dfe0d25fa380.jpg",
+      "expectedHelmet": false,
+      "eventId": "fbdd11e7-734d-47d0-8715-dfe0d25fa380",
+      "sha256": "9a7b2b3f03480c8cf19989c3643a1fd577e82d6f407b8364909fac757e57b7fb",
+      "groundTruthSource": "previous false-alert regression corpus"
+    }
+  ],
+  "missingCount": 8
+}

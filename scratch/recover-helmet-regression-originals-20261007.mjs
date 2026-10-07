@@ -26,6 +26,6 @@ for(const line of result.stdout.split('\n')) {
  samples.push({file,expectedHelmet:false,eventId:row.id,cameraId:row.camera_id,occurredAt:row.occurred_at,
   sha256:createHash('sha256').update(bytes).digest('hex'),groundTruthSource:'previously visually verified false-alert regression corpus'});
 }
-if(samples.length!==ids.length)throw new Error('Missing regression originals: '+samples.length+'/'+ids.length);
-fs.writeFileSync('reports/helmet-permanent-regression-originals-2026-10-07.json',JSON.stringify(samples,null,2));
-console.log(JSON.stringify({originalsRecovered:samples.length,eventsSubmitted:0,output:'reports/helmet-permanent-regression-originals-2026-10-07.json'}));
+const missing=ids.filter(id=>!samples.some(s=>s.eventId===id));
+fs.writeFileSync('reports/helmet-permanent-regression-originals-2026-10-07.json',JSON.stringify({samples,missing},null,2));
+console.log(JSON.stringify({originalsRecovered:samples.length,missing:missing.length,eventsSubmitted:0,output:'reports/helmet-permanent-regression-originals-2026-10-07.json'}));
