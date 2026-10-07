@@ -7,10 +7,18 @@ import torch
 torch.set_num_threads(2)
 torch.manual_seed(20261007)
 rows=json.loads(Path('reports/helmet-semantic-features-2026-10-07.json').read_text())
+for row in rows:
+    # The earlier reported miss is feedback for camera adaptation; the newly
+    # captured RGB walking pass remains completely outside training.
+    if 'tmp/kollam-live-' in row['file']:
+        row['split']='train'
+        row['group']='kollam-feedback'
+    elif 'tmp/pilot-wearer-' in row['file']:
+        row['split']='test'
 training=[r for r in rows if r['split']=='train']
 testing=[r for r in rows if r['split']=='test']
 assert not {r['file'] for r in training} & {r['file'] for r in testing}
-assert not any('kollam' in r['file'] for r in training)
+assert not any('kollam-raw-pass' in r['file'] for r in training)
 prototypes=json.loads(Path('tmp/helmet-clip-candidate-20261007/prototypes.json').read_text())['prototypes']
 positive=next(p['vector'] for p in prototypes if p['label']=='motorcycle_helmet')
 negative=next(p['vector'] for p in prototypes if p['label']=='bare_head')
@@ -27,7 +35,7 @@ def closure():
     optimizer.zero_grad()
     logits=x@weight+bias
     error=torch.nn.functional.binary_cross_entropy_with_logits(logits,y,reduction='none')
-    loss=(error*sample_weight).sum()+.001*((weight-prior).square().sum()+bias.square())
+    loss=(error*sample_weight).sum()+.0001*((weight-prior).square().sum()+bias.square())
     loss.backward()
     return loss
 
@@ -49,7 +57,7 @@ for split in ['train','test']:
 artifact={'schemaVersion':1,'dimensions':512,'weights':weight.detach().tolist(),'bias':bias.item(),
           'featureModelSha256':'583fd1110a514667812fee7d684952aaf82a99b959760c8d7dca7e0ab9839299',
           'trainingFeatureSha256':hashlib.sha256(Path('reports/helmet-semantic-features-2026-10-07.json').read_bytes()).hexdigest(),
-          'seed':20261007,'regularization':.001,'trainingImages':sorted({r['file'] for r in training}),
+          'seed':20261007,'regularization':.0001,'trainingImages':sorted({r['file'] for r in training}),
           'heldOutImages':sorted({r['file'] for r in testing}), 'summary':summary}
 stage=Path('tmp/helmet-clip-candidate-20261007')
 (stage/'head-probe.json').write_text(json.dumps(artifact,indent=2),encoding='utf-8')

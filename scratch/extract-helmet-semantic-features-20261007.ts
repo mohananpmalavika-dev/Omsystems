@@ -1,15 +1,19 @@
 import sharp from 'sharp';
 import {InferenceSession,Tensor} from 'onnxruntime-node';
 import {readFile,writeFile} from 'node:fs/promises';
-const inputs=JSON.parse(await readFile('reports/helmet-semantic-benchmark-inputs-2026-10-07.json','utf8'));
-inputs.push({file:'tmp/helmet-negative-paddle.png',expectedHelmet:false,split:'train',group:'hat-control',
+const inputFile=process.argv[2]??'reports/helmet-semantic-benchmark-inputs-2026-10-07.json';
+const outputFile=process.argv[3]??'reports/helmet-semantic-features-2026-10-07.json';
+const inputs=JSON.parse(await readFile(inputFile,'utf8'));
+if(!process.argv[2])inputs.push({file:'tmp/helmet-negative-paddle.png',expectedHelmet:false,split:'train',group:'hat-control',
  heads:[{label:'head',confidence:1,boundingBox:{x:.25,y:.15,width:.45,height:.7}}]});
 const model=await InferenceSession.create('tmp/helmet-clip-candidate-20261007/vision_model_quantized.onnx',
  {executionProviders:['cpu'],intraOpNumThreads:2});
 const rows=[];
 try {
  for(const item of inputs) {
-  const {data,info}=await sharp(item.file).removeAlpha().raw().toBuffer({resolveWithObject:true});
+  const decoded=item.file.endsWith('.rgb')?{data:await readFile(item.file),info:{width:item.width,height:item.height}}:
+   await sharp(item.file).removeAlpha().raw().toBuffer({resolveWithObject:true});
+  const {data,info}=decoded;
   for(const [index,head] of item.heads.entries()) {
    const b=head.boundingBox;
    for(const padding of item.split==='train'?[0,.1,.2]:[0,.15]) {
@@ -23,12 +27,12 @@ try {
     for(let i=0;i<224*224;i++)for(let c=0;c<3;c++)chw[c*224*224+i]=(pixels[i*3+c]/255-mean[c])/std[c];
     const output=await model.run({pixel_values:new Tensor('float32',chw,[1,3,224,224])});
     const feature=Array.from(output.image_embeds.data as Float32Array),norm=Math.hypot(...feature);
-    rows.push({file:item.file,group:item.group,split:item.split,expectedHelmet:item.expectedHelmet,
+    rows.push({file:item.file,group:item.group,split:item.split,expectedHelmet:'expectedHelmet' in head?head.expectedHelmet:item.expectedHelmet,
      headIndex:index,head:head.boundingBox,padding,feature:feature.map(v=>v/norm)});
    }
   }
   console.log(JSON.stringify({file:item.file,split:item.split,heads:item.heads.length,features:rows.length}));
  }
- await writeFile('reports/helmet-semantic-features-2026-10-07.json',JSON.stringify(rows));
+ await writeFile(outputFile,JSON.stringify(rows));
 }finally{await model.release();}
 process.exit(0);

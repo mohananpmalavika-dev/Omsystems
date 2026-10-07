@@ -5,6 +5,7 @@ import { COCO_LABELS } from "./yolo-coco-inference.js";
 import { YoloDetectionInference } from "./yolo-detection-inference.js";
 import type { YoloDecoder, YoloPreprocessor } from "./yolo-detection-inference.js";
 import { LpdYuNetInference, YuNetFaceInference } from "./opencv-specialty-inference.js";
+import { HelmetHeadClassificationInference } from "./helmet-head-classification.js";
 import { 
   CtcTextInference, 
   FaceEmbeddingInference,
@@ -231,6 +232,9 @@ export async function loadHelmetClassificationInference(modelId: string): Promis
   }
   if (!manager.isModelAvailable(modelId)) throw new Error(modelUnavailableReason(modelId));
   const dimensions = inputDimensions(config);
+  if (config.postprocessor === "clip-linear-head") {
+    return new HelmetHeadClassificationInference(await manager.getModel(modelId) as InferenceSession);
+  }
   return new HelmetClassificationInference(
     await manager.getModel(modelId) as InferenceSession,
     dimensions.width,

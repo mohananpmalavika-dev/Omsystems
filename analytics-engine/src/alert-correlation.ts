@@ -88,6 +88,8 @@ export class AlertCorrelationEngine {
     enableDeduplication: true,
     deduplicationWindowSeconds: 60,
     enableTemporalFiltering: true,
+    // Note: minOccurrencesBeforeAlert is bypassed for critical safety/security detections
+    // like helmet-worn, fire, intrusion, etc. See processDetection() for the complete list.
     minOccurrencesBeforeAlert: 2,
     enableSpatialCorrelation: true,
     spatialProximityMeters: 10,
@@ -139,8 +141,16 @@ export class AlertCorrelationEngine {
     }
 
     // Check temporal filtering (must occur multiple times)
-    if (this.config.enableTemporalFiltering) {
-      const occurrences = this.countRecentOccurrences(detection.detectionType, cameraId);
+    // Bypass temporal filtering for critical safety/security detections that require immediate alerts
+    const immediateAlertTypes = new Set([
+      'fire', 'smoke', 'fire-smoke', 'helmet-worn', 'weapon', 'intrusion',
+      'fall', 'explosion', 'arc-flash', 'watchlist-match', 'atm-tampering',
+      'atm-skimming', 'person-in-vault-after-hours', 'dual-control-verification',
+      'strong-room-entry', 'vault-door-monitoring', 'forced-door-open'
+    ]);
+    
+    if (this.config.enableTemporalFiltering && !immediateAlertTypes.has(detection.detectionType)) {
+      const occurrences = this.countRecentOccurrences(detection.detectionType, cameraId, timestamp);
       if (occurrences < this.config.minOccurrencesBeforeAlert) {
         // Not enough occurrences yet, don't create alert
         return [];
@@ -248,12 +258,13 @@ export class AlertCorrelationEngine {
   /**
    * Count recent occurrences of detection type
    */
-  private countRecentOccurrences(detectionType: string, cameraId: string): number {
+  private countRecentOccurrences(detectionType: string, cameraId: string, currentTimestamp?: Date): number {
     const key = `${detectionType}:${cameraId}`;
     const detections = this.recentDetections.get(key) || [];
     
     const windowMs = this.config.deduplicationWindowSeconds * 1000;
-    const cutoff = new Date(Date.now() - windowMs);
+    const now = currentTimestamp ? currentTimestamp.getTime() : Date.now();
+    const cutoff = new Date(now - windowMs);
     
     return detections.filter(d => d.timestamp > cutoff).length;
   }

@@ -28,7 +28,7 @@ export interface ModelConfig {
   useGPU?: boolean;
   inputShape?: number[];
   outputShape?: number[];
-  preprocessor?: 'rgb-normalized-stretch' | 'rgb-normalized-letterbox' | 'yolox-letterbox-bgr' | 'opencv-bgr-stretch' | 'opencv-crnn-gray' | 'sface-rgb-align' | 'paddleclas-imagenet' | 'imagenet-stretch';
+  preprocessor?: 'rgb-normalized-stretch' | 'rgb-normalized-letterbox' | 'yolox-letterbox-bgr' | 'opencv-bgr-stretch' | 'opencv-crnn-gray' | 'sface-rgb-align' | 'paddleclas-imagenet' | 'imagenet-stretch' | 'clip-center-crop';
   postprocessor?: string;
   required?: boolean;
   task?: 'object-detection' | 'face-embedding' | 'ctc-text-recognition' | 'person-reid' | 'vehicle-reid' | 'pose-estimation' | 'attribute-estimation' | 'helmet-classification' | 'emotion-recognition';

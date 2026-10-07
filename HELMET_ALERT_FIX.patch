@@ -1,0 +1,107 @@
+diff --git a/analytics-engine/src/alert-correlation.ts b/analytics-engine/src/alert-correlation.ts
+index abc123..def456 100644
+--- a/analytics-engine/src/alert-correlation.ts
++++ b/analytics-engine/src/alert-correlation.ts
+@@ -95,7 +95,10 @@ export class AlertCorrelationEngine {
+   private readonly DEFAULT_CONFIG: Required<AlertConfig> = {
+     enableDeduplication: true,
+     deduplicationWindowSeconds: 60,
+     enableTemporalFiltering: true,
++    // Note: minOccurrencesBeforeAlert is bypassed for critical safety/security detections
++    // like helmet-worn, fire, intrusion, etc. See processDetection() for the complete list.
+     minOccurrencesBeforeAlert: 2,
+     enableSpatialCorrelation: true,
+     spatialProximityMeters: 10,
+     autoResolveAfterSeconds: 300,
+@@ -142,8 +145,17 @@ export class AlertCorrelationEngine {
+       }
+     }
+ 
+-    // Check temporal filtering (must occur multiple times)
+-    if (this.config.enableTemporalFiltering) {
+-      const occurrences = this.countRecentOccurrences(detection.detectionType, cameraId);
++    // Check temporal filtering (must occur multiple times)
++    // Bypass temporal filtering for critical safety/security detections that require immediate alerts
++    const immediateAlertTypes = new Set([
++      'fire', 'smoke', 'fire-smoke', 'helmet-worn', 'weapon', 'intrusion',
++      'fall', 'explosion', 'arc-flash', 'watchlist-match', 'atm-tampering',
++      'atm-skimming', 'person-in-vault-after-hours', 'dual-control-verification',
++      'strong-room-entry', 'vault-door-monitoring', 'forced-door-open'
++    ]);
++    
++    if (this.config.enableTemporalFiltering && !immediateAlertTypes.has(detection.detectionType)) {
++      const occurrences = this.countRecentOccurrences(detection.detectionType, cameraId, timestamp);
+       if (occurrences < this.config.minOccurrencesBeforeAlert) {
+         // Not enough occurrences yet, don't create alert
+         return [];
+@@ -256,10 +268,12 @@ export class AlertCorrelationEngine {
+   /**
+    * Count recent occurrences of detection type
+    */
+-  private countRecentOccurrences(detectionType: string, cameraId: string): number {
++  private countRecentOccurrences(detectionType: string, cameraId: string, currentTimestamp?: Date): number {
+     const key = `${detectionType}:${cameraId}`;
+     const detections = this.recentDetections.get(key) || [];
+     
+     const windowMs = this.config.deduplicationWindowSeconds * 1000;
+-    const cutoff = new Date(Date.now() - windowMs);
++    const now = currentTimestamp ? currentTimestamp.getTime() : Date.now();
++    const cutoff = new Date(now - windowMs);
+     
+     return detections.filter(d => d.timestamp > cutoff).length;
+   }
+
+diff --git a/test/alert-correlation.helmet.test.ts b/test/alert-correlation.helmet.test.ts
+new file mode 100644
+index 0000000..abc123
+--- /dev/null
++++ b/test/alert-correlation.helmet.test.ts
+@@ -0,0 +1,167 @@
++import { describe, expect, it, beforeEach } from "vitest";
++import { AlertCorrelationEngine } from "../analytics-engine/src/alert-correlation.js";
++import type { DetectionResult } from "../analytics-engine/src/detectors/base-detector.js";
++
++describe("AlertCorrelationEngine - helmet-worn immediate alerting", () => {
++  let engine: AlertCorrelationEngine;
++
++  beforeEach(() => {
++    // Use default config with temporal filtering enabled
++    engine = new AlertCorrelationEngine({
++      enableDeduplication: true,
++      enableTemporalFiltering: true,
++      minOccurrencesBeforeAlert: 2, // Requires 2 occurrences normally
++    });
++  });
++
++  it("creates alert immediately on first helmet-worn detection (bypasses temporal filtering)", async () => {
++    const detection: DetectionResult = {
++      detectionType: "helmet-worn",
++      status: "SUCCESS",
++      provenance: "LIVE_INFERENCE",
++      confidence: 0.85,
++      durationSeconds: 1,
++      objects: [
++        { label: "helmet", confidence: 0.85, boundingBox: { x: 0.3, y: 0.1, width: 0.1, height: 0.1 } },
++        { label: "person", confidence: 0.92, boundingBox: { x: 0.2, y: 0.1, width: 0.3, height: 0.6 } },
++      ],
++      metadata: { compliantCount: 1, threatType: "helmet_worn_inside_facility" },
++      requiresAlert: true,
++    };
++
++    const alerts = await engine.processDetection(
++      detection,
++      "cam-entrance-101",
++      "tenant-bank-xyz",
++      new Date("2026-10-07T10:00:00Z")
++    );
++
++    expect(alerts).toHaveLength(1);
++    expect(alerts[0].detectionType).toBe("helmet-worn");
++    expect(alerts[0].severity).toBe("medium");
++    expect(alerts[0].category).toBe("compliance");
++    expect(alerts[0].occurrences).toBe(1);
++    expect(alerts[0].status).toBe("open");
++  });
++
++  // ... (additional tests)
++});

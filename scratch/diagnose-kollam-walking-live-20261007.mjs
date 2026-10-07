@@ -1,6 +1,9 @@
 import fs from 'node:fs';
 import {spawnSync} from 'node:child_process';
 import {gzipSync} from 'node:zlib';
+const channel4=process.argv.includes('--channel4');
+const selectedCameras=channel4?['3da93c6e-6824-43dc-9bba-7332707d5856']:
+ ['fb465a8f-5d79-4a3f-9cb8-b8cec471708d','99455d3a-3411-43ad-b756-84a4ae17c026'];
 
 const reader = `
 import {createRequire} from 'node:module';
@@ -9,7 +12,7 @@ import {loadConfig} from '/app/dist/src/config.js';
 const r=createClient({url:loadConfig().REDIS_URL});await r.connect();
 try {
  for(let i=0;i<8;i++) {
-  for(const cameraId of ['fb465a8f-5d79-4a3f-9cb8-b8cec471708d','99455d3a-3411-43ad-b756-84a4ae17c026']) {
+  for(const cameraId of ${JSON.stringify(selectedCameras)}) {
    const raw=await r.get('analytics:latest-frame:'+cameraId);
    if(raw)console.log(JSON.stringify({...JSON.parse(raw),cameraId}));
   }
@@ -58,7 +61,7 @@ try {
    persons:detections.filter(o=>o.label==='person'),heads:await localizer.run(frame),
    faces:faces?await faces.run(frame):[],poses:poses?await poses.run(frame):[],classificationCalls:calls,
    results:results.map(r=>({type:r.detectionType,confidence:r.confidence,metadata:r.metadata})),
-   pending:helmet.pendingHeads.get(frame.cameraId)??[],eventsSubmitted:0,snapshotBase64}));
+   pending:helmet.pendingHeads.get(frame.cameraId)??[],eventsSubmitted:0,snapshotBase64,rawBase64:sample.imageBase64}));
  }
 }finally{if(helmet)await helmet.cleanup();await manager.shutdown();}
 process.exit(0);
@@ -81,10 +84,11 @@ for(const line of (result.stdout??'').split('\n')) {
  const sample=JSON.parse(line.slice(10));
  const snapshot='tmp/kollam-live-'+sample.cameraId+'-'+sample.capturedAt.replace(/[^0-9]/g,'')+'.jpg';
  fs.writeFileSync(snapshot,Buffer.from(sample.snapshotBase64,'base64'));delete sample.snapshotBase64;
+ if(sample.rawBase64){sample.rawFile=snapshot.replace(/\.jpg$/,'.rgb');fs.writeFileSync(sample.rawFile,Buffer.from(sample.rawBase64,'base64'));delete sample.rawBase64;}
  sample.snapshot=snapshot;samples.push(sample);
 }
-fs.writeFileSync('reports/kollam-walking-live-2026-10-07.json',JSON.stringify({config,samples},null,2));
-fs.writeFileSync('tmp/kollam-walking-live-20261007.log',(result.stdout??'').split('\n').filter(l=>!l.startsWith('DIAG_JSON ')).join('\n'));
+fs.writeFileSync(channel4?'reports/kollam-channel4-live-2026-10-07.json':'reports/kollam-walking-live-2026-10-07.json',JSON.stringify({config,samples},null,2));
+fs.writeFileSync(channel4?'tmp/kollam-channel4-live-20261007.log':'tmp/kollam-walking-live-20261007.log',(result.stdout??'').split('\n').filter(l=>!l.startsWith('DIAG_JSON ')).join('\n'));
 console.log(JSON.stringify({config,samples:samples.map(s=>({cameraId:s.cameraId,capturedAt:s.capturedAt,persons:s.persons,
  heads:s.heads,classificationCalls:s.classificationCalls,results:s.results,pending:s.pending,snapshot:s.snapshot}))},null,2));
 if(result.stderr)process.stderr.write(result.stderr);

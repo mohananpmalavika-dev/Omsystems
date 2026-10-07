@@ -503,6 +503,33 @@
         320,
         320
       ]
+    },
+    {
+      "id": "helmet-head-evidence",
+      "name": "Motorcycle helmet head evidence (CLIP linear probe)",
+      "path": "safety/helmet-head-embedding.onnx",
+      "sha256": "583fd1110a514667812fee7d684952aaf82a99b959760c8d7dca7e0ab9839299",
+      "sourceUrl": "https://huggingface.co/Xenova/clip-vit-base-patch32/resolve/d15189d7028b43f1d3e65039190477f6af591c2a/onnx/vision_model_quantized.onnx",
+      "sourceProject": "https://github.com/openai/CLIP",
+      "license": "MIT",
+      "type": "onnx",
+      "priority": "high",
+      "required": false,
+      "warmup": false,
+      "useGPU": true,
+      "task": "helmet-classification",
+      "preprocessor": "clip-center-crop",
+      "postprocessor": "clip-linear-head",
+      "labels": [
+        "wearing_helmet",
+        "unwearing_helmet"
+      ],
+      "inputShape": [
+        1,
+        3,
+        224,
+        224
+      ]
     }
   ]
 }
