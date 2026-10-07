@@ -158,6 +158,61 @@ describe("independent helmet head verification", () => {
     expect(await detector.detect({...frame(),timestamp:new Date(6000)})).toHaveLength(1);
   });
 
+  it.each([false, true])("confirms a walking wearer when consecutive person boxes overlap below 0.5 (fast=%s)", async fastAlert => {
+    const verify = vi.fn(async (_frame, personBox) => ({
+      boundingBox: {...box, x:personBox.x + .1}, classificationConfidence:.99, localizationConfidence:.8,
+    }));
+    const detector = new HelmetDetector(null,.88,{run:vi.fn(async()=>score(.01))},fastAlert,{verify});
+    await detector.initialize();
+    expect(await detector.detect(frame())).toEqual([]);
+    const moved = {...frame(),timestamp:new Date(2000),metadata:{inferenceMode:"local-onnx",
+      detections:[{label:"person",confidence:.95,boundingBox:{...person,x:.38}}]}};
+    expect(await detector.detect(moved)).toHaveLength(1);
+  });
+
+  it("retains three distinct verifications for a moving person with a lower person score", async () => {
+    const verify = vi.fn(async () => ({boundingBox:box,classificationConfidence:.99,localizationConfidence:.8}));
+    const detector = new HelmetDetector(null,.88,{run:vi.fn(async()=>score(.01))},false,{verify});
+    await detector.initialize();
+    for (const [index,x] of [.2,.38,.56].entries()) {
+      const sample = {...frame(),timestamp:new Date(index*2000),metadata:{inferenceMode:"local-onnx",
+        detections:[{label:"person",confidence:.6,boundingBox:{...person,x}}]}};
+      expect(await detector.detect(sample)).toHaveLength(index===2?1:0);
+    }
+  });
+
+  it("does not count a moved person box at a duplicate capture timestamp", async () => {
+    const verify = vi.fn(async () => ({boundingBox:box,classificationConfidence:.99,localizationConfidence:.8}));
+    const detector = new HelmetDetector(null,.88,{run:vi.fn(async()=>score(.01))},false,{verify});
+    await detector.initialize();
+    for (const [index,x] of [.2,.38,.56].entries()) {
+      const sample = {...frame(),timestamp:new Date(index===2?2000:0),metadata:{inferenceMode:"local-onnx",
+        detections:[{label:"person",confidence:.95,boundingBox:{...person,x}}]}};
+      expect(await detector.detect(sample)).toHaveLength(index===2?1:0);
+    }
+  });
+
+  it("does not combine positives from nearby non-overlapping people", async () => {
+    const verify = vi.fn(async () => ({boundingBox:box,classificationConfidence:.99,localizationConfidence:.8}));
+    const detector = new HelmetDetector(null,.88,{run:vi.fn(async()=>score(.01))},false,{verify});
+    await detector.initialize();
+    for (const [index,x] of [.1,.35].entries()) {
+      expect(await detector.detect({...frame(),timestamp:new Date(index*2000),metadata:{inferenceMode:"local-onnx",
+        detections:[{label:"person",confidence:.95,boundingBox:{...person,x,width:.2}}]}})).toEqual([]);
+    }
+  });
+
+  it("does not clear a wearer's confirmation when a nearby separate person has no verified helmet", async () => {
+    const verify = vi.fn(async (_frame, personBox) => personBox.x===.1
+      ? {boundingBox:box,classificationConfidence:.99,localizationConfidence:.8} : null);
+    const detector = new HelmetDetector(null,.88,{run:vi.fn(async()=>score(.01))},false,{verify});
+    await detector.initialize();
+    const sample = (time:number): DetectionFrame => ({...frame(),timestamp:new Date(time),metadata:{inferenceMode:"local-onnx",
+      detections:[.1,.35].map(x=>({label:"person",confidence:.95,boundingBox:{...person,x,width:.2}}))}});
+    expect(await detector.detect(sample(0))).toEqual([]);
+    expect(await detector.detect(sample(2000))).toHaveLength(1);
+  });
+
   it("rejects false alarms when face detector detects a clear bare face without helmet shell", async () => {
     const classifier = { run: vi.fn(async () => score(0.99)) };
     const faceBox = { x: 0.3, y: 0.22, width: 0.15, height: 0.15 };

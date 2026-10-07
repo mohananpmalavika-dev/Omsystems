@@ -1,12 +1,12 @@
 import { execSync } from 'child_process';
 
 const sql = process.argv[2] || `
-SELECT id, vendor, model, channel, recorder_channel, source_type, recorder_id, status, profiles, capabilities, connection_secret_ref 
-FROM cameras 
-WHERE branch_node_id = '921d336d-baa9-4b25-9f9f-f6542bba94cc' 
-ORDER BY channel ASC;
+SELECT c.id, c.ip_address, c.channel, c.status, rn.name as node_name
+FROM cameras c
+LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
+LIMIT 10;
 `;
 
 const base64 = Buffer.from(sql).toString('base64');
-const cmd = `gcloud compute ssh kryptovision-server --zone=asia-south1-b --command="echo '${base64}' | base64 -d | sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid -x"`;
+const cmd = `gcloud compute ssh kryptovision-server --zone=asia-south1-b --command="echo '${base64}' | base64 -d | sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid"`;
 console.log(execSync(cmd, { encoding: 'utf8' }));

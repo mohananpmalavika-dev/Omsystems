@@ -1,10 +1,11 @@
-import { runSSM } from './run-ssm.mjs';
+import { execSync } from 'child_process';
 
-const sql = `
-SELECT id, tenant_id, name, node_type, code FROM resource_nodes;
-SELECT enumlabel FROM pg_enum JOIN pg_type ON pg_enum.enumtypid = pg_type.oid WHERE pg_type.typname = 'user_role';
-SELECT id, username, email, role, status, tenant_id FROM users;
-`;
+export function queryDb(sql) {
+  const b64 = Buffer.from(sql).toString('base64');
+  const cmd = `gcloud compute ssh kryptovision-server --zone=asia-south1-b --project=project-7866fc3f-5dd5-4495-804 --quiet --command="echo '${b64}' | base64 -d | sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid"`;
+  return execSync(cmd, { encoding: 'utf8' });
+}
 
-const cmd = `docker exec -i sentinel-aws-postgres psql -U sentinel_admin -d sentinel_grid << 'EOF'\n${sql}\nEOF`;
-await runSSM(cmd);
+if (process.argv[2]) {
+  console.log(queryDb(process.argv.slice(2).join(' ')));
+}
