@@ -45,7 +45,7 @@ COPY --from=helmet-model /build/helmet-motorcycle.onnx analytics-engine/models/s
 
 # Provision audited open-license CPU models at build time. Every download is
 # checksum-verified by the repository script; no paid inference API is used.
-RUN ANALYTICS_MODEL_LICENSES_ACCEPTED=true npm run models:download --workspace @sentinel/analytics-engine -- yolov8n face-detector face-embedding anpr-detector anpr-recognizer
+RUN ANALYTICS_MODEL_LICENSES_ACCEPTED=true npm run models:download --workspace @sentinel/analytics-engine -- yolov8n face-detector face-embedding anpr-detector anpr-recognizer helmet-head-localizer helmet-head-evidence
 
 # Build TypeScript
 RUN npm run build --workspace @sentinel/analytics-engine

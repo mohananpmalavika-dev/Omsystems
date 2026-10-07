@@ -1371,7 +1371,7 @@ export async function buildApp(options?: {
     const cameras = await store.listCamerasByEdgeAgent(id);
     const analyticsEnabledByCamera = new Map(await Promise.all(cameras.map(async (camera) => [
       camera.id,
-      (await store.listAnalyticsRules(camera.id)).some((rule) => rule.enabled),
+      (await store.listAnalyticsRules(camera.id)).filter((rule) => rule.enabled),
     ] as const)));
     return {
       data: cameras.map((camera) => ({
@@ -1380,7 +1380,10 @@ export async function buildApp(options?: {
         name: camera.name,
         profiles: camera.profiles,
         connectionSecretRef: camera.connectionSecretRef,
-        analyticsEnabled: analyticsEnabledByCamera.get(camera.id) === true || Boolean(options?.analyticsEngineUrl),
+        analyticsEnabled: Boolean(analyticsEnabledByCamera.get(camera.id)?.length) || Boolean(options?.analyticsEngineUrl),
+        // Distant helmet heads need source detail before inference resizes/crops.
+        analyticsResolution: analyticsEnabledByCamera.get(camera.id)?.some(rule => rule.detectionType === "helmet-worn")
+          ? {width:1280, height:720} : {width:640, height:360},
         ...(camera.ipAddress ? { ipAddress: camera.ipAddress.replace(/\/\d+$/, "").trim() } : {}),
         ...(camera.vendor ? { vendor: camera.vendor } : {}),
         ...(camera.sourceType && camera.sourceType !== "ip-camera" ? { sourceType: camera.sourceType } : {}),
@@ -1402,6 +1405,7 @@ export async function buildApp(options?: {
       width: z.number().int().min(64).max(1280),
       height: z.number().int().min(36).max(720),
       imageBase64: z.string().min(1).max(4_000_000),
+      imageEncoding: z.enum(["rgb24","jpeg"]).default("rgb24"),
       metadata: z.record(z.unknown()).optional(),
     }).parse(request.body);
     const agent = await store.getEdgeAgent(id);
@@ -1414,7 +1418,8 @@ export async function buildApp(options?: {
     }
     await analyticsFrameRedis.set(
       `analytics:latest-frame:${input.cameraId}`,
-      JSON.stringify({ imageBase64: input.imageBase64, capturedAt: input.capturedAt }),
+      JSON.stringify({ imageBase64: input.imageBase64, capturedAt: input.capturedAt,
+        width:input.width, height:input.height, imageEncoding:input.imageEncoding }),
       { EX: 90 },
     );
     const branch = await store.getNode(camera.branchId);
@@ -1439,6 +1444,7 @@ export async function buildApp(options?: {
           width: input.width,
           height: input.height,
           imageBase64: input.imageBase64,
+          imageEncoding: input.imageEncoding,
           rules,
           metadata: { ...input.metadata, edgeAgentId: id, branchId: branch.id },
         }),

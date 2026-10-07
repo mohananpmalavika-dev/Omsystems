@@ -85,6 +85,35 @@ describe("edge analytics frame transport", () => {
     const body = JSON.parse(String(init?.body));
     expect(body).toMatchObject({ tenantId: "omsystems", cameraId: "cam-001" });
     expect(body.rules).toEqual([expect.objectContaining({ detectionType: "person", enabled: true })]);
+    expect(vi.mocked(redisModule.getClient)()!.set).toHaveBeenCalledWith("analytics:latest-frame:cam-001",
+      expect.stringContaining('"width":64,"height":36'),{EX:90});
+  });
+
+  it("requests HD detail only for cameras with enabled helmet rules", async () => {
+    const agent=(await store.getEdgeAgent(store.cameras.get("cam-001")!.edgeAgentId!))!;
+    const get=async()=>{
+      const response=await app.inject({method:"GET",url:`/v1/edge-agents/${agent.id}/cameras/monitoring`,
+        headers:{"x-edge-bridge-key":bridgeKey,"x-edge-agent-version":"0.1.48"}});
+      expect(response.statusCode,response.body).toBe(200);
+      return response;
+    };
+    expect((await get()).json().data[0].analyticsResolution).toEqual({width:640,height:360});
+    await store.createAnalyticsRule("omsystems","cam-001",undefined,{
+      name:"Helmet",detectionType:"helmet-worn",enabled:true,objectClasses:["person"],minConfidence:.7,
+      minDurationSeconds:0,direction:"any",severity:"P2",cooldownSeconds:60,recipients:[],
+      recordingPolicy:"event-recording",preRollSeconds:30,postRollSeconds:120,
+    });
+    expect((await get()).json().data[0].analyticsResolution).toEqual({width:1280,height:720});
+  });
+
+  it("preserves JPEG encoding and dimensions through the control plane", async () => {
+    const agent=(await store.getEdgeAgent(store.cameras.get("cam-001")!.edgeAgentId!))!;
+    const response=await app.inject({method:"POST",url:`/v1/edge-agents/${agent.id}/analytics/frames`,
+      headers:{"x-edge-bridge-key":bridgeKey},payload:{cameraId:"cam-001",capturedAt:new Date().toISOString(),
+        width:1280,height:720,imageBase64:"jpeg-data",imageEncoding:"jpeg"}});
+    expect(response.statusCode).toBe(202);
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0]![1]!.body))).toMatchObject({
+      imageEncoding:"jpeg",width:1280,height:720});
   });
 
   it("reports an event submission failure to the edge agent", async () => {

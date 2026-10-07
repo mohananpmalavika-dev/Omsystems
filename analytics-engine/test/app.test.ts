@@ -3,6 +3,7 @@ import { buildAnalyticsEngine } from "../src/app.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import sharp from "sharp";
 
 const sourceKey = "source-key-that-is-long-enough-for-tests";
 const controlPlaneKey = "control-plane-key-that-is-long-enough";
@@ -313,5 +314,31 @@ describe("analytics engine adapter", () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toMatchObject({ error: "invalid_rgb24_frame" });
+  });
+
+  it("decodes an explicitly encoded JPEG without inventing source dimensions", async () => {
+    const app=buildAnalyticsEngine({sourceSharedKey:sourceKey,
+      controlPlaneSharedKey:"control-plane-key-that-is-long-enough",submit:async()=>({accepted:true})});
+    apps.push(app);
+    const imageBase64=(await sharp(Buffer.alloc(64*36*3,127),{raw:{width:64,height:36,channels:3}})
+      .jpeg({quality:95}).toBuffer()).toString("base64");
+    const payload={tenantId:"tenant-1",cameraId:"jpeg-test",width:64,height:36,imageBase64,
+      imageEncoding:"jpeg",detections:[],rules:[]};
+    const send=(body:object)=>app.inject({method:"POST",url:"/internal/frames",
+      headers:{"x-analytics-source-key":sourceKey},payload:body});
+    expect((await send(payload)).statusCode).toBe(202);
+    expect((await send({...payload,width:128})).json()).toMatchObject({error:"invalid_jpeg_frame"});
+    expect((await send({...payload,imageBase64:"invalid"})).json()).toMatchObject({error:"invalid_jpeg_frame"});
+  });
+
+  it("accepts full-detail payloads beyond the default one-megabyte request limit", async()=>{
+    await useEmptyModelsDirectory();
+    const app=buildAnalyticsEngine({sourceSharedKey:sourceKey,controlPlaneSharedKey:controlPlaneKey,
+      submit:async()=>({accepted:true})});
+    apps.push(app);
+    const response=await app.inject({method:"POST",url:"/internal/frames",
+      headers:{"x-analytics-source-key":sourceKey},payload:{tenantId:"tenant-1",cameraId:"hd-transport",
+        width:1280,height:720,imageBase64:Buffer.alloc(1280*720*3).toString("base64"),detections:[],rules:[]}});
+    expect(response.statusCode,response.body).toBe(202);
   });
 });

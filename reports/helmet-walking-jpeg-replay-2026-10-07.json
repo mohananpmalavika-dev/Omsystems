@@ -2,30 +2,30 @@
   "results": [
     {
       "file": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007114035560.rgb",
-      "sha256": "b3e52758d0e66e5cb602e56a9528b39ae6c2cfb434830b81b029f6a7e6569e02",
+      "sha256": "1dce9855b950e138e7bd6ce44086cd174e424401b278aa5bbaa1a07f16deb5a3",
       "capturedAt": "2026-10-07T11:40:35.560Z",
       "group": "ch4-helmet-walking",
       "verified": [
         {
           "person": {
             "label": "person",
-            "confidence": 0.844112246823137,
+            "confidence": 0.8451025303050983,
             "boundingBox": {
-              "x": 0.7403041183949014,
-              "y": 0.18944148507528777,
-              "width": 0.15524809589742827,
-              "height": 0.8104015664230464
+              "x": 0.7414655558256443,
+              "y": 0.1898229738878478,
+              "width": 0.1541935551495771,
+              "height": 0.809590277450291
             }
           },
           "head": {
             "boundingBox": {
-              "x": 0.7745272278785705,
-              "y": 0.153551271226671,
-              "width": 0.12159297466278074,
-              "height": 0.19455329047309028
+              "x": 0.7742123246192932,
+              "y": 0.153447691599528,
+              "width": 0.12169349193572998,
+              "height": 0.19482038285997186
             },
-            "localizationConfidence": 0.8162920892459482,
-            "classificationConfidence": 0.9279561703557037,
+            "localizationConfidence": 0.8170834056093668,
+            "classificationConfidence": 0.9490500380584117,
             "headEvidence": true
           }
         }
@@ -35,27 +35,27 @@
           "detectionType": "helmet-worn",
           "status": "SUCCESS",
           "provenance": "LIVE_INFERENCE",
-          "confidence": 0.9279561703557037,
+          "confidence": 0.9490500380584117,
           "durationSeconds": 1,
           "objects": [
             {
               "label": "helmet",
-              "confidence": 0.9279561703557037,
+              "confidence": 0.9490500380584117,
               "boundingBox": {
-                "x": 0.7745272278785705,
-                "y": 0.153551271226671,
-                "width": 0.12159297466278074,
-                "height": 0.19455329047309028
+                "x": 0.7742123246192932,
+                "y": 0.153447691599528,
+                "width": 0.12169349193572998,
+                "height": 0.19482038285997186
               }
             },
             {
               "label": "person",
-              "confidence": 0.844112246823137,
+              "confidence": 0.8451025303050983,
               "boundingBox": {
-                "x": 0.7403041183949014,
-                "y": 0.18944148507528777,
-                "width": 0.15524809589742827,
-                "height": 0.8104015664230464
+                "x": 0.7414655558256443,
+                "y": 0.1898229738878478,
+                "width": 0.1541935551495771,
+                "height": 0.809590277450291
               }
             }
           ],
@@ -68,12 +68,12 @@
             "localizedHeads": [
               {
                 "boundingBox": {
-                  "x": 0.7745272278785705,
-                  "y": 0.153551271226671,
-                  "width": 0.12159297466278074,
-                  "height": 0.19455329047309028
+                  "x": 0.7742123246192932,
+                  "y": 0.153447691599528,
+                  "width": 0.12169349193572998,
+                  "height": 0.19482038285997186
                 },
-                "localizationConfidence": 0.8162920892459482
+                "localizationConfidence": 0.8170834056093668
               }
             ]
           },
@@ -83,7 +83,7 @@
             "modelId": "helmet-classifier",
             "modelVersion": "1.3.2",
             "simulated": false,
-            "timestamp": "2026-10-07T13:19:28.667Z"
+            "timestamp": "2026-10-07T13:39:32.876Z"
           },
           "requiresAlert": true
         }
@@ -92,7 +92,7 @@
     },
     {
       "file": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007114041708.rgb",
-      "sha256": "889f0093e7149ee9c25ff2a4dc280415920baa75cae6e37109c7abe99a609b97",
+      "sha256": "c934044069c56c2ab656103dc3b21cced89dcd5e6d94465e7a0fa3099dae63e6",
       "capturedAt": "2026-10-07T11:40:41.708Z",
       "group": "ch4-helmet-walking",
       "verified": [],
@@ -101,19 +101,19 @@
     },
     {
       "file": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007114048319.rgb",
-      "sha256": "6a2fabe54a19cce30cf0e9fcf28a22f8ddc30db39950ab3bbe6bbc0fe232e0c6",
+      "sha256": "f8401f846127da06aee808186d64797aaed47170927f20d7a0e53e19d2a3773b",
       "capturedAt": "2026-10-07T11:40:48.319Z",
       "group": "ch4-helmet-walking",
       "verified": [
         {
           "person": {
             "label": "person",
-            "confidence": 0.9061403008746254,
+            "confidence": 0.9064114753725079,
             "boundingBox": {
-              "x": 0.3766322357548191,
-              "y": 0.19477097970361035,
-              "width": 0.14466515565212146,
-              "height": 0.62273331661384
+              "x": 0.3765879949597549,
+              "y": 0.1949337555172145,
+              "width": 0.14493291425881616,
+              "height": 0.6220519099740804
             }
           },
           "head": null
@@ -124,53 +124,110 @@
     },
     {
       "file": "tmp/kollam-live-3da93c6e-6824-43dc-9bba-7332707d5856-20261007114053652.rgb",
-      "sha256": "5d182d0f18dcd4e1bdd793392b92cb52046c30d02fc01fb0365793146a722a7a",
+      "sha256": "83f56d8a38b8035d6a07564140b8a68d726774cd89d2dc6c089b6d8b0760f34f",
       "capturedAt": "2026-10-07T11:40:53.652Z",
       "group": "ch4-helmet-walking",
       "verified": [
         {
           "person": {
             "label": "person",
-            "confidence": 0.8820751948009686,
+            "confidence": 0.8817802795254011,
             "boundingBox": {
-              "x": 0.7207921638025722,
-              "y": 0.2154112360871351,
-              "width": 0.1711827956538864,
-              "height": 0.7845887639128649
+              "x": 0.7207662994368913,
+              "y": 0.21488720634882022,
+              "width": 0.17112676835743967,
+              "height": 0.7851127936511798
             }
           },
           "head": {
             "boundingBox": {
-              "x": 0.7302350878715516,
-              "y": 0.19548811382717557,
-              "width": 0.10927345752716056,
-              "height": 0.2121615727742513
+              "x": 0.7290417790412903,
+              "y": 0.19479088253445095,
+              "width": 0.1104608297348022,
+              "height": 0.2156682756212022
             },
-            "localizationConfidence": 0.6111732209389587,
-            "classificationConfidence": 0.8412581713386584,
+            "localizationConfidence": 0.6248103629372963,
+            "classificationConfidence": 0.9591273780941546,
             "headEvidence": true
           }
         },
         {
           "person": {
             "label": "person",
-            "confidence": 0.39730400309103686,
+            "confidence": 0.36225507035046434,
             "boundingBox": {
-              "x": 0.3822969651445106,
-              "y": 0.36579821390630907,
-              "width": 0.04244666480228504,
-              "height": 0.15092461464437545
+              "x": 0.38224984381267685,
+              "y": 0.3683328290490667,
+              "width": 0.04261420857035131,
+              "height": 0.1486780850875783
             }
           },
           "head": null
         }
       ],
-      "alerts": [],
+      "alerts": [
+        {
+          "detectionType": "helmet-worn",
+          "status": "SUCCESS",
+          "provenance": "LIVE_INFERENCE",
+          "confidence": 0.9591273780941546,
+          "durationSeconds": 1,
+          "objects": [
+            {
+              "label": "helmet",
+              "confidence": 0.9591273780941546,
+              "boundingBox": {
+                "x": 0.7290417790412903,
+                "y": 0.19479088253445095,
+                "width": 0.1104608297348022,
+                "height": 0.2156682756212022
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.8817802795254011,
+              "boundingBox": {
+                "x": 0.7207662994368913,
+                "y": 0.21488720634882022,
+                "width": 0.17112676835743967,
+                "height": 0.7851127936511798
+              }
+            }
+          ],
+          "metadata": {
+            "headEvidenceModel": "helmet-head-evidence",
+            "headEvidenceProbeSha256": "95946d4e327c75cf20b86f1947047c7e3fc64fe4948f0fd2d8a526a1698e9883",
+            "compliantCount": 1,
+            "threatType": "helmet_worn_inside_facility",
+            "evidenceSource": "localized-head-classification",
+            "localizedHeads": [
+              {
+                "boundingBox": {
+                  "x": 0.7290417790412903,
+                  "y": 0.19479088253445095,
+                  "width": 0.1104608297348022,
+                  "height": 0.2156682756212022
+                },
+                "localizationConfidence": 0.6248103629372963
+              }
+            ]
+          },
+          "executionMetadata": {
+            "status": "SUCCESS",
+            "provenance": "LIVE_INFERENCE",
+            "modelId": "helmet-classifier",
+            "modelVersion": "1.3.2",
+            "simulated": false,
+            "timestamp": "2026-10-07T13:39:39.503Z"
+          },
+          "requiresAlert": true
+        }
+      ],
       "eventsSubmitted": 0
     },
     {
       "file": "tmp/kollam-raw-pass-20261007/20261007112236917.rgb",
-      "sha256": "be2779979475b8003a449d403c0e70b82b24dc5e76afdfd15618e07d55a773af",
+      "sha256": "98c34a973f952f704ede28e9d83f2708ed2ad35d4b1bab0abeba5d7946a06ce8",
       "capturedAt": "2026-10-07T11:22:36.917Z",
       "group": "ch8-helmet-walking-user-confirmed",
       "verified": [],
@@ -179,19 +236,19 @@
     },
     {
       "file": "tmp/kollam-raw-pass-20261007/20261007112242886.rgb",
-      "sha256": "21be48a0880d54ef726845a89b310a29d24763bb6ecef40ab3fa746a7f47485f",
+      "sha256": "b81b7ac0acb4c8558f8fc53afc7a8d3db7d34325b11e3c81dbd6775bbd35a25b",
       "capturedAt": "2026-10-07T11:22:42.886Z",
       "group": "ch8-helmet-walking-user-confirmed",
       "verified": [
         {
           "person": {
             "label": "person",
-            "confidence": 0.9000373869094247,
+            "confidence": 0.8999942662889282,
             "boundingBox": {
-              "x": 0.46299169941992285,
-              "y": 0.008884243111919148,
-              "width": 0.2936634493252262,
-              "height": 0.9911157568880808
+              "x": 0.46304477612440087,
+              "y": 0.00923450464689208,
+              "width": 0.2937696810205229,
+              "height": 0.9907654953531079
             }
           },
           "head": null
@@ -202,30 +259,30 @@
     },
     {
       "file": "tmp/kollam-raw-pass-20261007/20261007112248119.rgb",
-      "sha256": "2f156301a7c3457ea0dc34cc96bfc300f16b7a63fff18e4d0a1a004ec7db77a5",
+      "sha256": "e937c0b46e4348b0ac2bb03509bc43214546a293b1284025c4962ea06f61355d",
       "capturedAt": "2026-10-07T11:22:48.119Z",
       "group": "ch8-helmet-walking-user-confirmed",
       "verified": [
         {
           "person": {
             "label": "person",
-            "confidence": 0.8935970779226778,
+            "confidence": 0.8916545270577814,
             "boundingBox": {
-              "x": 0.06277795659691317,
-              "y": 0.3043418921303856,
-              "width": 0.16146919917835195,
-              "height": 0.6851623298081977
+              "x": 0.06276432303355224,
+              "y": 0.3046716307639275,
+              "width": 0.16155085325094504,
+              "height": 0.684790796976168
             }
           },
           "head": {
             "boundingBox": {
-              "x": 0.07758934497833252,
-              "y": 0.2681652386983236,
-              "width": 0.10729160308837891,
-              "height": 0.1407798131306966
+              "x": 0.07731869220733642,
+              "y": 0.2680194060007731,
+              "width": 0.10743134021759035,
+              "height": 0.14058794445461698
             },
-            "localizationConfidence": 0.7952892737965058,
-            "classificationConfidence": 0.9825908530454787,
+            "localizationConfidence": 0.794678719260304,
+            "classificationConfidence": 0.9829779340294617,
             "headEvidence": true
           }
         }
@@ -235,27 +292,27 @@
           "detectionType": "helmet-worn",
           "status": "SUCCESS",
           "provenance": "LIVE_INFERENCE",
-          "confidence": 0.9825908530454787,
+          "confidence": 0.9829779340294617,
           "durationSeconds": 1,
           "objects": [
             {
               "label": "helmet",
-              "confidence": 0.9825908530454787,
+              "confidence": 0.9829779340294617,
               "boundingBox": {
-                "x": 0.07758934497833252,
-                "y": 0.2681652386983236,
-                "width": 0.10729160308837891,
-                "height": 0.1407798131306966
+                "x": 0.07731869220733642,
+                "y": 0.2680194060007731,
+                "width": 0.10743134021759035,
+                "height": 0.14058794445461698
               }
             },
             {
               "label": "person",
-              "confidence": 0.8935970779226778,
+              "confidence": 0.8916545270577814,
               "boundingBox": {
-                "x": 0.06277795659691317,
-                "y": 0.3043418921303856,
-                "width": 0.16146919917835195,
-                "height": 0.6851623298081977
+                "x": 0.06276432303355224,
+                "y": 0.3046716307639275,
+                "width": 0.16155085325094504,
+                "height": 0.684790796976168
               }
             }
           ],
@@ -268,12 +325,12 @@
             "localizedHeads": [
               {
                 "boundingBox": {
-                  "x": 0.07758934497833252,
-                  "y": 0.2681652386983236,
-                  "width": 0.10729160308837891,
-                  "height": 0.1407798131306966
+                  "x": 0.07731869220733642,
+                  "y": 0.2680194060007731,
+                  "width": 0.10743134021759035,
+                  "height": 0.14058794445461698
                 },
-                "localizationConfidence": 0.7952892737965058
+                "localizationConfidence": 0.794678719260304
               }
             ]
           },
@@ -283,7 +340,7 @@
             "modelId": "helmet-classifier",
             "modelVersion": "1.3.2",
             "simulated": false,
-            "timestamp": "2026-10-07T13:19:35.432Z"
+            "timestamp": "2026-10-07T13:39:44.561Z"
           },
           "requiresAlert": true
         }
@@ -292,30 +349,30 @@
     },
     {
       "file": "tmp/kollam-raw-pass-20261007/20261007112249087.rgb",
-      "sha256": "ef18a1f4e363b75fcc36265978f6c40b92ebf8651171dc049ab911c4680e9007",
+      "sha256": "3e50217e95edb8b857ab1b32c3ee179e5b5b477bcd5a65f8359d69c8a8c027ba",
       "capturedAt": "2026-10-07T11:22:49.087Z",
       "group": "ch8-helmet-walking-user-confirmed",
       "verified": [
         {
           "person": {
             "label": "person",
-            "confidence": 0.8608586697010878,
+            "confidence": 0.8577888664947544,
             "boundingBox": {
-              "x": 0.11444935517664881,
-              "y": 0.31380257999117706,
-              "width": 0.11385924598646516,
-              "height": 0.6832494991389064
+              "x": 0.11445388089514327,
+              "y": 0.3137737896942574,
+              "width": 0.11377441870607599,
+              "height": 0.6832696989599676
             }
           },
           "head": {
             "boundingBox": {
-              "x": 0.10644432306289672,
-              "y": 0.278142425749037,
-              "width": 0.10625567436218261,
-              "height": 0.13721490436130096
+              "x": 0.10643219351768493,
+              "y": 0.2776279502444797,
+              "width": 0.10623451471328735,
+              "height": 0.13660285737779404
             },
-            "localizationConfidence": 0.776667012059562,
-            "classificationConfidence": 0.9963148432228518,
+            "localizationConfidence": 0.7795842693243102,
+            "classificationConfidence": 0.9973123575425147,
             "headEvidence": true
           }
         }
@@ -325,27 +382,27 @@
           "detectionType": "helmet-worn",
           "status": "SUCCESS",
           "provenance": "LIVE_INFERENCE",
-          "confidence": 0.9963148432228518,
+          "confidence": 0.9973123575425147,
           "durationSeconds": 1,
           "objects": [
             {
               "label": "helmet",
-              "confidence": 0.9963148432228518,
+              "confidence": 0.9973123575425147,
               "boundingBox": {
-                "x": 0.10644432306289672,
-                "y": 0.278142425749037,
-                "width": 0.10625567436218261,
-                "height": 0.13721490436130096
+                "x": 0.10643219351768493,
+                "y": 0.2776279502444797,
+                "width": 0.10623451471328735,
+                "height": 0.13660285737779404
               }
             },
             {
               "label": "person",
-              "confidence": 0.8608586697010878,
+              "confidence": 0.8577888664947544,
               "boundingBox": {
-                "x": 0.11444935517664881,
-                "y": 0.31380257999117706,
-                "width": 0.11385924598646516,
-                "height": 0.6832494991389064
+                "x": 0.11445388089514327,
+                "y": 0.3137737896942574,
+                "width": 0.11377441870607599,
+                "height": 0.6832696989599676
               }
             }
           ],
@@ -358,12 +415,12 @@
             "localizedHeads": [
               {
                 "boundingBox": {
-                  "x": 0.10644432306289672,
-                  "y": 0.278142425749037,
-                  "width": 0.10625567436218261,
-                  "height": 0.13721490436130096
+                  "x": 0.10643219351768493,
+                  "y": 0.2776279502444797,
+                  "width": 0.10623451471328735,
+                  "height": 0.13660285737779404
                 },
-                "localizationConfidence": 0.776667012059562
+                "localizationConfidence": 0.7795842693243102
               }
             ]
           },
@@ -373,7 +430,7 @@
             "modelId": "helmet-classifier",
             "modelVersion": "1.3.2",
             "simulated": false,
-            "timestamp": "2026-10-07T13:19:36.836Z"
+            "timestamp": "2026-10-07T13:39:46.698Z"
           },
           "requiresAlert": true
         }
@@ -382,7 +439,7 @@
     },
     {
       "file": "tmp/kollam-raw-pass-20261007/20261007112257000.rgb",
-      "sha256": "ee51eaff240bc87964854bb84548476d466e7b9a8faf703c230a4d75a4b416d2",
+      "sha256": "5d7370edc30c27bbeba40fac68427feb57731300c04f8b887812c3dd54c4b589",
       "capturedAt": "2026-10-07T11:22:57.000Z",
       "group": "ch8-helmet-walking-user-confirmed",
       "verified": [],
@@ -391,19 +448,19 @@
     },
     {
       "file": "tmp/kollam-raw-pass-20261007/20261007112302889.rgb",
-      "sha256": "d0f762a3fc77e71733c9a4ecebe7afb5230c95c377121b784b81e5e307a07b25",
+      "sha256": "9823453f199fc6ab414f141b3859fa5b08a00838cb3e6fe4d82f874532e5a804",
       "capturedAt": "2026-10-07T11:23:02.889Z",
       "group": "ch8-helmet-walking-user-confirmed",
       "verified": [
         {
           "person": {
             "label": "person",
-            "confidence": 0.837902350840757,
+            "confidence": 0.8415433890115125,
             "boundingBox": {
-              "x": 0.17045157902409108,
-              "y": 0.4225525162460346,
-              "width": 0.15433414427347197,
-              "height": 0.5774474837539654
+              "x": 0.1695067845376066,
+              "y": 0.420417427349624,
+              "width": 0.15529981311020924,
+              "height": 0.579582572650376
             }
           },
           "head": null
@@ -414,7 +471,7 @@
     },
     {
       "file": "tmp/kollam-raw-pass-20261007/20261007112310985.rgb",
-      "sha256": "037c9482652859c0615d2e06cf271c7f8168157300867f61cf5f9c816b45194a",
+      "sha256": "430aa5a0abb066050efa6a5f7e645052b0a9a194411ae2dff3090467c7c26256",
       "capturedAt": "2026-10-07T11:23:10.985Z",
       "group": "ch8-helmet-walking-user-confirmed",
       "verified": [],
@@ -423,19 +480,19 @@
     },
     {
       "file": "tmp/kollam-raw-pass-20261007/20261007112318630.rgb",
-      "sha256": "4152edca2b788586618f8b7351c293fb843a17d3bf2699643d16c2f7725a6eae",
+      "sha256": "d703589897ddbf7844f6410d25d7313d283e685c6fa609c57af20efdbf86d99e",
       "capturedAt": "2026-10-07T11:23:18.630Z",
       "group": "ch8-helmet-walking-user-confirmed",
       "verified": [
         {
           "person": {
             "label": "person",
-            "confidence": 0.4708276027668461,
+            "confidence": 0.4382914984453201,
             "boundingBox": {
-              "x": 0.8433695766471023,
-              "y": 0.0017234574771655329,
-              "width": 0.15405024732002015,
-              "height": 0.9696804338558486
+              "x": 0.8434893654375089,
+              "y": 0.0018088318779396209,
+              "width": 0.15362495083603234,
+              "height": 0.9692753583085905
             }
           },
           "head": null
@@ -446,19 +503,19 @@
     },
     {
       "file": "tmp/kollam-raw-pass-20261007/20261007112323104.rgb",
-      "sha256": "7484efa318bf483983a7331ad6f330e38631cdb2b02513d2215d766b2609ad7a",
+      "sha256": "b974c737b94dfe136a275f6e2af61cb7d5ddc406a3da08a1961cd4528b8e92b5",
       "capturedAt": "2026-10-07T11:23:23.104Z",
       "group": "ch8-helmet-walking-user-confirmed",
       "verified": [
         {
           "person": {
             "label": "person",
-            "confidence": 0.806970350051543,
+            "confidence": 0.8052011386971145,
             "boundingBox": {
-              "x": 0.07769317317143305,
-              "y": 0.013425382199870987,
-              "width": 0.21306707378265505,
-              "height": 0.9681758647955121
+              "x": 0.07666914755693148,
+              "y": 0.014880636906577689,
+              "width": 0.2141811569078092,
+              "height": 0.9677230800592903
             }
           },
           "head": null
@@ -604,7 +661,7 @@
   "summary": {
     "ch4Frames": 4,
     "ch8Frames": 9,
-    "ch4AlertFrames": 1,
+    "ch4AlertFrames": 2,
     "ch8AlertFrames": 2,
     "negativeFrames": 19,
     "negativeAlertFrames": 0,

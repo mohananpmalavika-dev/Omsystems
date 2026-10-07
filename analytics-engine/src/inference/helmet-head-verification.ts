@@ -1,6 +1,7 @@
 import type { DetectionFrame, InferenceObject } from "../detectors/base-detector.js";
 import type { HelmetClassificationFrameInference, ObjectFrameInference, PoseInference } from "./configured-model-inference.js";
 import type { PoseDetection } from "./vision-specialty-inference.js";
+import { cropRgb24 } from "./vision-specialty-inference.js";
 
 type Box = InferenceObject["boundingBox"];
 export interface VerifiedHelmetHead {
@@ -20,6 +21,7 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
   private readonly frames = new WeakMap<DetectionFrame, Promise<InferenceObject[]>>();
   private readonly faceFrames = new WeakMap<DetectionFrame, Promise<InferenceObject[]>>();
   private readonly poseFrames = new WeakMap<DetectionFrame, Promise<PoseDetection[]>>();
+  private readonly personHeads = new WeakMap<DetectionFrame, Map<string, Promise<InferenceObject[]>>>();
 
   constructor(
     private readonly localizer: ObjectFrameInference,
@@ -87,12 +89,20 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
   async verify(frame: DetectionFrame, person: Box, threshold: number): Promise<VerifiedHelmetHead | null> {
     let pending = this.frames.get(frame);
     if (!pending) { pending = this.localizer.run(frame); this.frames.set(frame, pending); }
-    const objects = await pending;
+    let objects = await pending;
 
     // A motorcycle helmet can be localized as a generic head. The dedicated
     // full-head model establishes helmet evidence; the generic label does not.
     // Keep this opt-in camera adaptation separate from the legacy hair crops.
     if (this.usesHeadEvidence(frame)) {
+      // A full-frame resize can erase a distant head. Search its native-pixel
+      // upper-body region only when the full frame has no associated head.
+      // Never retry a classified negative through a different crop.
+      if (!objects.some(item => (item.label === "head" || item.label === "helmet") &&
+          (item.confidence ?? 0) >= 0.35 && validHead(frame, person, item.boundingBox)) &&
+          person.height < 0.35 && person.height * frame.height >= 72) {
+        objects = [...objects, ...await this.localizePersonHead(frame, person)];
+      }
       const candidates = objects.filter(item => (item.label === "head" || item.label === "helmet") &&
         (item.confidence ?? 0) >= 0.35 && validHead(frame, person, item.boundingBox) &&
         item.boundingBox.x > 0.005 && item.boundingBox.y > 0.005 &&
@@ -235,6 +245,35 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
       }
     }
     return null;
+  }
+
+  private localizePersonHead(frame: DetectionFrame, person: Box): Promise<InferenceObject[]> {
+    let cache = this.personHeads.get(frame);
+    if (!cache) { cache = new Map(); this.personHeads.set(frame, cache); }
+    const key = JSON.stringify(person);
+    let pending = cache.get(key);
+    if (!pending) {
+      const left = Math.max(0, Math.floor((person.x - person.width * 0.2) * frame.width));
+      const top = Math.max(0, Math.floor((person.y - person.height * 0.2) * frame.height));
+      const right = Math.min(frame.width, Math.ceil((person.x + person.width * 1.2) * frame.width));
+      const bottom = Math.min(frame.height, Math.ceil((person.y + person.height * 0.45) * frame.height));
+      if (right <= left || bottom <= top) return Promise.resolve([]);
+      const region = { x:left/frame.width, y:top/frame.height,
+        width:(right-left)/frame.width, height:(bottom-top)/frame.height };
+      const cropped = cropRgb24(frame, region);
+      pending = this.localizer.run(cropped).then(items => items.filter(item => {
+        const b = item.boundingBox;
+        // A head cut by the search window is incomplete evidence.
+        return b.x > 0.005 && b.y > 0.005 && b.x+b.width < 0.995 && b.y+b.height < 0.995;
+      }).map(item => ({...item, boundingBox:{
+        x:(left+item.boundingBox.x*cropped.width)/frame.width,
+        y:(top+item.boundingBox.y*cropped.height)/frame.height,
+        width:item.boundingBox.width*cropped.width/frame.width,
+        height:item.boundingBox.height*cropped.height/frame.height,
+      }})));
+      cache.set(key, pending);
+    }
+    return pending;
   }
 }
 

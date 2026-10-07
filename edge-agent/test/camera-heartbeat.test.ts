@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as rtspProbe from "../src/streaming/rtsp-probe.js";
 import * as packetLoss from "../src/monitoring/camera-packet-loss.js";
 import * as rgbStreams from "../src/streaming/rtsp-rgb-stream.js";
+import sharp from "sharp";
 import {
   assessLumaFrame,
   CameraHeartbeatService,
@@ -16,9 +17,9 @@ const streams = new Map<string, {
 beforeEach(() => {
   streams.clear();
   let sequence = 0;
-  vi.spyOn(rgbStreams, "createRtspRgbStream").mockImplementation(uri => {
+  vi.spyOn(rgbStreams, "createRtspRgbStream").mockImplementation((uri,_ffmpeg,width=640,height=360) => {
     const stream = { start: vi.fn(), stop: vi.fn(), latestFrame: vi.fn(() => ({
-      rgb: Buffer.alloc(640 * 360 * 3), capturedAt: new Date(++sequence * 1_000).toISOString(),
+      rgb: Buffer.alloc(width * height * 3), capturedAt: new Date(++sequence * 1_000).toISOString(),
     })) };
     streams.set(uri, stream);
     return stream;
@@ -27,6 +28,39 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("camera frame health", () => {
+  it("preserves requested helmet frame detail in the decoder and upload", async () => {
+    const send=vi.fn(async()=>undefined);
+    const service=new CameraHeartbeatService("http://control.example","branch","agent",undefined,
+      "ffprobe","ffmpeg",undefined,undefined,undefined,send);
+    service.replaceCameras([{id:"camera",name:"Camera",rtspUrl:"rtsp://camera/main",enabled:true,
+      analyticsEnabled:true,analyticsResolution:{width:1280,height:720}}]);
+    await (service as any).sendAllAnalyticsFrames();
+    expect(rgbStreams.createRtspRgbStream).toHaveBeenCalledWith("rtsp://camera/main","ffmpeg",1280,720,expect.any(Function));
+    const payload=(send.mock.calls as unknown as [[{width:number;height:number;imageBase64:string}]])[0][0];
+    expect(payload).toMatchObject({width:1280,height:720});
+    expect(payload).toMatchObject({imageEncoding:"jpeg"});
+    const decoded=await sharp(Buffer.from(payload.imageBase64,"base64")).raw().toBuffer({resolveWithObject:true});
+    expect(decoded.info).toMatchObject({width:1280,height:720,channels:3});
+    expect(decoded.data.length).toBe(1280*720*3);
+    expect(Buffer.from(payload.imageBase64,"base64").length).toBeLessThan(1280*720*3);
+    service.replaceCameras([{id:"camera",name:"Camera",rtspUrl:"rtsp://camera/main",enabled:true,analyticsEnabled:true}]);
+    await (service as any).sendAllAnalyticsFrames();
+    expect(rgbStreams.createRtspRgbStream).toHaveBeenCalledTimes(2);
+    service.stop();
+  });
+  it("keeps cloud captures fresh while local inference is busy", async () => {
+    let finish!:()=>void;
+    const send=vi.fn(async()=>undefined),local=vi.fn(()=>new Promise<void>(resolve=>{finish=resolve;}));
+    const service=new CameraHeartbeatService("http://control.example","branch","agent",undefined,
+      "ffprobe","ffmpeg",undefined,undefined,undefined,send,local);
+    service.replaceCameras([{id:"camera",name:"Camera",rtspUrl:"rtsp://camera/main",enabled:true,analyticsEnabled:true}]);
+    const first=(service as any).sendAllAnalyticsFrames();
+    await new Promise(resolve=>setImmediate(resolve));
+    await (service as any).sendAllAnalyticsFrames();
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(local).toHaveBeenCalledOnce();
+    finish();await first;service.stop();
+  });
   it("delivers later cameras immediately and keeps their next tick independent of a slow upload", async () => {
     let finish!: () => void;
     const send = vi.fn((payload: {cameraId: string}) => payload.cameraId === "slow"
@@ -129,7 +163,7 @@ describe("camera frame health", () => {
       // Health samples obey the same backoff instead of extending it repeatedly.
       await (service as any).deliverAnalyticsFrame("failed", Buffer.alloc(3), 1, 1, "edge-rtsp-health");
       expect(send).toHaveBeenCalledTimes(3);
-      now.mockReturnValue(61_000);
+      now.mockReturnValue(3_000);
       await (service as any).sendAllAnalyticsFrames();
       expect(send.mock.calls.map(([payload]) => payload.cameraId)).toEqual(["failed", "working", "working", "failed", "working"]);
     } finally { service.stop(); now.mockRestore(); }

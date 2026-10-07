@@ -18,6 +18,51 @@ const localizer = (label="helmet", boundingBox=box) => ({run:vi.fn(async()=>[{la
 beforeEach(() => vi.clearAllMocks());
 
 describe("independent helmet head verification", () => {
+  it("accepts a walking person below 35% frame height with enough native head pixels", async () => {
+    const distant = {x:.2,y:.2,width:.12,height:.25};
+    const head = {x:.24,y:.2,width:.035,height:.06};
+    const verifier = new LocalizedHelmetHeadVerifier(localizer("head",head),
+      {run:vi.fn(async()=>score(.01))},null,null,{run:vi.fn(async()=>score(.95))});
+    const detector = new HelmetDetector(null,.75,{run:vi.fn(async()=>score(.01))},true,verifier);
+    await detector.initialize();
+    const walking = {...frame(),width:1280,height:720,imageData:Buffer.alloc(1280*720*3),
+      metadata:{inferenceMode:"local-onnx",detections:[{label:"person",confidence:.95,boundingBox:distant}]}};
+    expect((await detector.detect(walking))[0]).toMatchObject({detectionType:"helmet-worn",requiresAlert:true});
+    await detector.cleanup();
+  });
+  it("finds a distant head in a native-pixel region and maps it back to the full frame", async () => {
+    const distant = {x:.2,y:.2,width:.12,height:.25};
+    const objects = {run:vi.fn(async(f:DetectionFrame)=> f.width===1280 ? [] :
+      [{label:"head",confidence:.8,boundingBox:{x:.3,y:.3,width:.25,height:.35}}])};
+    const evidence={run:vi.fn(async()=>score(.96))};
+    const verifier=new LocalizedHelmetHeadVerifier(objects,{run:vi.fn(async()=>score(.01))},null,null,evidence);
+    const hd={...frame(),width:1280,height:720,imageData:Buffer.alloc(1280*720*3)};
+    const result=await verifier.verify(hd,distant,.8);
+    expect(result).toMatchObject({headEvidence:true});
+    expect(result!.boundingBox.x).toBeCloseTo(.226,2);
+    expect(result!.boundingBox.width*hd.width).toBeGreaterThan(20);
+    expect(objects.run.mock.calls[1]![0].imageData.length).toBe(
+      objects.run.mock.calls[1]![0].width*objects.run.mock.calls[1]![0].height*3);
+    await verifier.verify(hd,distant,.8);
+    expect(objects.run).toHaveBeenCalledTimes(2);
+  });
+  it("does not turn upscaled tiny source heads into usable evidence", async () => {
+    const distant={x:.2,y:.2,width:.12,height:.25};
+    const objects={run:vi.fn(async(f:DetectionFrame)=>f.width===640 ? [] :
+      [{label:"head",confidence:.9,boundingBox:{x:.3,y:.3,width:.1,height:.1}}])};
+    const evidence={run:vi.fn(async()=>score(.99))};
+    expect(await new LocalizedHelmetHeadVerifier(objects,{run:vi.fn(async()=>score(.01))},null,null,evidence)
+      .verify(frame(),distant,.8)).toBeNull();
+    expect(evidence.run).not.toHaveBeenCalled();
+  });
+  it("does not retry contrary complete-head evidence in a distant region", async () => {
+    const distant={x:.2,y:.2,width:.12,height:.25};
+    const objects=localizer("head",{x:.23,y:.2,width:.05,height:.065});
+    const evidence={run:vi.fn(async()=>score(.01))};
+    expect(await new LocalizedHelmetHeadVerifier(objects,{run:vi.fn(async()=>score(.99))},null,null,evidence)
+      .verify(frame(),distant,.8)).toBeNull();
+    expect(objects.run).toHaveBeenCalledOnce();
+  });
   it("applies wildcard head evidence to existing and newly added cameras", async () => {
     const evidence={run:vi.fn(async()=>score(.96))};
     const verifier=new LocalizedHelmetHeadVerifier(localizer("head"),{run:vi.fn(async()=>score(.01))},null,null,evidence,new Set(["*"]));

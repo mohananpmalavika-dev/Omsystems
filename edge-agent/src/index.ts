@@ -21,6 +21,7 @@ import { EdgeResourceSampler } from "./monitoring/edge-resource-probe.js";
 import { looksLikeRecorder, probeCameraMemoryCard, probeRecorder, recorderPlaybackUri } from "./monitoring/recorder-probe.js";
 import { initializeCameraHeartbeat } from "./monitoring/camera-heartbeat.js";
 import { RecorderRegistry, recorderFromMonitoringCamera } from "./monitoring/recorder-registry.js";
+import { analyticsSourceUri } from "./streaming/analytics-source.js";
 import { hasArgument, prepareEdgeRuntime } from "./runtime.js";
 import { logger } from "./utils/logger.js";
 import {
@@ -93,7 +94,7 @@ if (installEnvironmentFile && (
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.48\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.49\n");
   process.exit(0);
 }
 
@@ -1645,7 +1646,7 @@ async function syncCameraHeartbeatConfig() {
         credentials,
         channel: camera.recorderChannel ?? 1,
         ports: [554],
-        preferredRole: "sub",
+        preferredRole: camera.analyticsResolution && camera.analyticsResolution.width > 640 ? "main" : "sub",
         probe: (uri) => probeRtsp(uri, config.FFPROBE_PATH, 6_000),
       });
       if (!recovered.candidate) return;
@@ -1663,18 +1664,8 @@ async function syncCameraHeartbeatConfig() {
     let rtspUrl = await control.resolveStreamSecret(agentId, camera.connectionSecretRef);
     const channelMatch = camera.name.match(/Channel\s*(\d+)/i);
     const targetChannel = camera.recorderChannel ?? (camera as { channel?: number }).channel ?? (channelMatch ? Number(channelMatch[1]) : undefined);
-    if (rtspUrl && typeof targetChannel === "number" && targetChannel > 0) {
-      if (/([\?&]channel=)\d+/i.test(rtspUrl)) {
-        rtspUrl = rtspUrl.replace(/([\?&]channel=)\d+/i, `$1${targetChannel}`);
-      } else if (/\/Streaming\/Channels\/\d+/i.test(rtspUrl)) {
-        rtspUrl = rtspUrl.replace(/\/Streaming\/Channels\/\d+/i, `/Streaming/Channels/${targetChannel}02`);
-      } else if (/\/ch\d+\//i.test(rtspUrl)) {
-        rtspUrl = rtspUrl.replace(/\/ch\d+\//i, `/ch${targetChannel}/`);
-      }
-      if (!rtspUrl.includes("subtype=1") && rtspUrl.includes("subtype=0")) {
-        rtspUrl = rtspUrl.replace("subtype=0", "subtype=1");
-      }
-    }
+    if (rtspUrl) rtspUrl = analyticsSourceUri(rtspUrl,targetChannel,
+      Boolean(camera.analyticsResolution && camera.analyticsResolution.width > 640));
     if (targetChannel !== undefined && camera.recorderChannel === undefined) {
       camera.recorderChannel = targetChannel;
     }
@@ -1685,6 +1676,7 @@ async function syncCameraHeartbeatConfig() {
       ...(rtspUrl ? { rtspUrl } : {}),
       enabled: true,
       analyticsEnabled: camera.analyticsEnabled ?? true,
+      ...(camera.analyticsResolution ? {analyticsResolution:camera.analyticsResolution} : {}),
     };
   }));
   cameraHeartbeat.replaceCameras(heartbeatCameras);

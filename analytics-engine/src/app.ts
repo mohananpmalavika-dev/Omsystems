@@ -1,6 +1,7 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import Fastify from "fastify";
 import { z } from "zod";
+import sharp from "sharp";
 import { shutterConfigSchema } from "../../packages/contracts/src/shutter.js";
 import { AnalyticsPipeline, snapshotCache } from "./analytics-pipeline.js";
 import type { AnalyticsRule } from "./analytics-pipeline.js";
@@ -47,6 +48,7 @@ const frameSchema = z.object({
   capturedAt: z.string().datetime().default(() => new Date().toISOString()),
   width: z.number().int().positive(), height: z.number().int().positive(),
   imageBase64: z.string().default(""),
+  imageEncoding: z.enum(["rgb24","jpeg"]).default("rgb24"),
   // Omit detections to execute the local ONNX path. Supplying [] explicitly
   // means an upstream inference worker observed no objects.
   detections: z.array(frameObjectSchema).max(2_000).optional(),
@@ -88,7 +90,8 @@ export interface AnalyticsEngineOptions {
 }
 
 export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
-  const app = Fastify({ logger: options.logger ?? false });
+  // A 720p frame may exceed Fastify's default 1MiB JSON limit, even as JPEG.
+  const app = Fastify({ logger: options.logger ?? false, bodyLimit:5*1024*1024 });
   registerMonitoringHooks(app);
   const state = {
     received: 0, accepted: 0, failed: 0,
@@ -401,7 +404,19 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
   app.post("/internal/frames", async (request, reply) => {
     const input = frameSchema.parse(request.body);
     await pipelineReady;
-    const imageData = input.imageBase64 ? Buffer.from(input.imageBase64, "base64") : Buffer.alloc(0);
+    let imageData = input.imageBase64 ? Buffer.from(input.imageBase64, "base64") : Buffer.alloc(0);
+    if (input.imageEncoding === "jpeg") {
+      try {
+        const image = sharp(imageData, {limitInputPixels:1280*720});
+        const metadata = await image.metadata();
+        if (metadata.format !== "jpeg" || metadata.width !== input.width || metadata.height !== input.height) {
+          return reply.code(400).send({error:"invalid_jpeg_frame"});
+        }
+        imageData = await image.removeAlpha().toColourspace("srgb").raw().toBuffer();
+      } catch {
+        return reply.code(400).send({error:"invalid_jpeg_frame"});
+      }
+    }
     if (input.detections === undefined && imageData.length !== input.width * input.height * 3) {
       return reply.code(400).send({
         error: "invalid_rgb24_frame",

@@ -101,6 +101,7 @@ export interface AnalyticsFramePayload {
   width: number;
   height: number;
   imageBase64: string;
+  imageEncoding?: "rgb24" | "jpeg";
   metadata?: Record<string, unknown>;
 }
 
@@ -123,6 +124,7 @@ export interface MonitoringCamera {
   ipAddress?: string;
   vendor?: string;
   analyticsEnabled?: boolean;
+  analyticsResolution?: { width: number; height: number };
   profiles: Array<{
     name: string;
     codec: "H264" | "H265" | "MJPEG" | "unknown";
