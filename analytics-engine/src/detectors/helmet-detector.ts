@@ -88,7 +88,7 @@ export class HelmetDetector extends BaseDetector {
         const shouldLoadAuxModels = process.env.HELMET_MULTI_MODEL === "true" || !process.env.VITEST;
         if (shouldLoadAuxModels) {
           try {
-            faceDetector = await loadObjectInference("face-detector", 0.08);
+            faceDetector = await loadObjectInference("face-detector", 0.6);
           } catch {}
           try {
             poseEstimator = await loadPoseInference("pose-estimator", 0.4);
@@ -435,11 +435,11 @@ export class HelmetDetector extends BaseDetector {
       if (presence) indoorHelmetDetections.push(presence);
     }
 
-    // Direct frame-wide fallback: If no indoor person was detected at all
-    // (e.g. seated/slouched person on stairs whose posture scored below person detector thresholds),
-    // or if none of the indoor persons yielded a confirmed helmet detection,
-    // check if the head verifier detected an unambiguous helmet on the frame.
-    if (indoorHelmetDetections.length === 0 && runLocal && this.headVerifier && frame.imageData && frame.imageData.length > 0) {
+    // Direct frame-wide fallback: Only when no indoor person was detected at all
+    // (e.g. seated/slouched rider whose posture scored below standard person detector thresholds).
+    // When indoor persons are detected, they are evaluated strictly via the person loop above.
+    // Never run direct fallback to scan background furniture when persons are already present.
+    if (indoorPersons.length === 0 && runLocal && this.headVerifier && frame.imageData && frame.imageData.length > 0) {
       if (typeof this.headVerifier.verifyDirect === "function") {
         const direct = await this.headVerifier.verifyDirect(
           frame,

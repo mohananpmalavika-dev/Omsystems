@@ -27,44 +27,19 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
   ) {}
 
   async verifyDirect(frame: DetectionFrame, threshold: number): Promise<{ candidate: VerifiedHelmetHead; synthPerson: Box } | null> {
-    const candidateProposals: Array<{ box: Box; source: string; confidence: number }> = [];
-
-    // 1. From localizer: helmet or head (threshold >= 0.10)
     let pending = this.frames.get(frame);
     if (!pending) { pending = this.localizer.run(frame); this.frames.set(frame, pending); }
     const objects = await pending;
-    for (const o of objects) {
-      if ((o.label === "helmet" || o.label === "head") && (o.confidence ?? 0) >= 0.10) {
-        candidateProposals.push({ box: o.boundingBox, source: `localizer-${o.label}`, confidence: o.confidence ?? 0.5 });
-      }
-    }
 
-    // 2. From face detector (YuNet face proposal >= 0.08)
-    if (this.faceDetector) {
-      let facePending = this.faceFrames.get(frame);
-      if (!facePending) {
-        facePending = this.faceDetector.run(frame);
-        this.faceFrames.set(frame, facePending);
-      }
-      const faces = await facePending;
-      for (const f of faces) {
-        if ((f.confidence ?? 0) >= 0.08) {
-          const headBox = {
-            x: Math.max(0, f.boundingBox.x - f.boundingBox.width * 0.4),
-            y: Math.max(0, f.boundingBox.y - f.boundingBox.height * 0.9),
-            width: Math.min(1 - f.boundingBox.x, f.boundingBox.width * 1.8),
-            height: Math.min(1 - f.boundingBox.y, f.boundingBox.height * 2.3),
-          };
-          candidateProposals.push({ box: headBox, source: "face-yunet", confidence: f.confidence ?? 0.5 });
-        }
-      }
-    }
+    // Direct frame fallback must ONLY consider explicit, localized helmets (never bare heads, never furniture).
+    const helmetCandidates = objects.filter(o => o.label === "helmet" && (o.confidence ?? 0) >= 0.35);
+    if (helmetCandidates.length === 0) return null;
 
-    for (const proposal of candidateProposals) {
-      const box = proposal.box;
+    for (const h of helmetCandidates) {
+      const box = h.boundingBox;
       if (![box.x, box.y, box.width, box.height].every(Number.isFinite) ||
           box.width <= 0 || box.height <= 0 ||
-          box.width * frame.width < 20 || box.height * frame.height < 20) {
+          box.width * frame.width < 24 || box.height * frame.height < 24) {
         continue;
       }
 
@@ -75,7 +50,9 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
         height: Math.min(1 - box.y, Math.max(0.25, box.height * 3.5)),
       };
 
-      // Keypoint anti-false-alarm check
+      // Empty chair / furniture anti-false-alarm gate:
+      // If a pose estimator is configured, require verified human presence (shoulders).
+      // In an empty room or on an empty chair, there is no living human body.
       if (this.poseEstimator) {
         let posePending = this.poseFrames.get(frame);
         if (!posePending) {
@@ -84,54 +61,14 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
         }
         const poses = await posePending;
         const matchedPose = findMatchingPose(poses, synthPerson);
-        if (matchedPose) {
-          const kp = matchedPose.keypoints;
-          const leftEar = (kp[3] && kp[3].confidence >= 0.5) ? kp[3] : undefined;
-          const rightEar = (kp[4] && kp[4].confidence >= 0.5) ? kp[4] : undefined;
-          const earsClearlyExposed = (leftEar && leftEar.confidence >= 0.70) || (rightEar && rightEar.confidence >= 0.70);
-          if (earsClearlyExposed) continue;
-        }
+        if (!matchedPose) continue; // No human pose matched -> reject empty chair/furniture
+        const kp = matchedPose.keypoints;
+        const hasShoulders = (kp[5] && kp[5].confidence >= 0.35) || (kp[6] && kp[6].confidence >= 0.35);
+        if (!hasShoulders) continue; // No human shoulders -> reject
       }
 
-      const head = await this.classifier.run(frame, box);
-      const context = await this.classifier.run(frame, expand(box, 0.15));
-      if (head.wearingHelmet && context.wearingHelmet &&
-          Math.min(head.wearingHelmetConfidence, context.wearingHelmetConfidence) >= threshold) {
-        const surrounding = await this.classifier.run(frame, expand(box, 0.75));
-        if (!surrounding.wearingHelmet || surrounding.wearingHelmetConfidence < threshold) continue;
-
-        return {
-          candidate: {
-            boundingBox: box,
-            classificationConfidence: Math.min(head.wearingHelmetConfidence, context.wearingHelmetConfidence, surrounding.wearingHelmetConfidence),
-            localizationConfidence: proposal.confidence,
-          },
-          synthPerson,
-        };
-      }
-
-      // Support crown helmet with exposed face
-      if (box.height * 0.65 * frame.height >= 20) {
-        const crown = { ...box, height: box.height * 0.65 };
-        const result = await this.classifier.run(frame, crown);
-        if (result?.wearingHelmet && result.wearingHelmetConfidence >= threshold) {
-          const x = Math.max(0, box.x - box.width * 0.3), y = Math.max(0, box.y - box.height * 0.15);
-          const shellContext = await this.classifier.run(frame, {
-            x, y, width: Math.min(1, box.x + box.width * 1.3) - x,
-            height: Math.min(1, crown.y + crown.height + box.height * 0.15) - y,
-          });
-          if (shellContext.wearingHelmet && shellContext.wearingHelmetConfidence >= threshold) {
-            return {
-              candidate: {
-                boundingBox: crown,
-                classificationConfidence: Math.min(result.wearingHelmetConfidence, shellContext.wearingHelmetConfidence),
-                localizationConfidence: proposal.confidence,
-              },
-              synthPerson,
-            };
-          }
-        }
-      }
+      const result = await this.verify(frame, synthPerson, threshold);
+      if (result) return { candidate: result, synthPerson };
     }
     return null;
   }
@@ -180,6 +117,16 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
             (candidateBox.y + candidateBox.height < nose.y) ||
             (candidateBox.y < nose.y - headHeightEst * 1.3 && (candidateBox.y + candidateBox.height / 2) < nose.y - headHeightEst * 0.7);
           const validCandidates = objects.filter(o => !isChairBackrest(o.boundingBox));
+          if (validCandidates.length === 0 && objects.length > 0) {
+            return null;
+          }
+        } else if (!nose && (leftShoulder || rightShoulder)) {
+          // Chair backrest check when seen from behind (nose occluded/facing away):
+          // A real head/helmet must sit close to the shoulders. A tall chair headrest extends far above.
+          const shoulderY = Math.min(leftShoulder?.y ?? 1, rightShoulder?.y ?? 1);
+          const isFloatingChairTop = (candidateBox: Box) =>
+            (candidateBox.y + candidateBox.height < shoulderY - person.height * 0.12);
+          const validCandidates = objects.filter(o => !isFloatingChairTop(o.boundingBox));
           if (validCandidates.length === 0 && objects.length > 0) {
             return null;
           }

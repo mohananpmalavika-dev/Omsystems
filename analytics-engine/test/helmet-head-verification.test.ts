@@ -213,4 +213,50 @@ describe("independent helmet head verification", () => {
     expect(result).not.toBeNull();
     expect(result?.boundingBox).toEqual(box);
   });
+
+  it("verifyDirect rejects an empty office chair when no human pose is present", async () => {
+    const classifier = { run: vi.fn(async () => score(0.99)) };
+    const chairTop = { x: 0.4, y: 0.3, width: 0.15, height: 0.15 };
+    const poseEstimator = { run: vi.fn(async () => []) }; // Empty chair: no human poses
+    const verifier = new LocalizedHelmetHeadVerifier(localizer("helmet", chairTop), classifier, null, poseEstimator);
+    const direct = await verifier.verifyDirect!(frame(), 0.9167);
+    expect(direct).toBeNull();
+    expect(classifier.run).not.toHaveBeenCalled();
+  });
+
+  it("verifyDirect rejects objects localized only as 'head' rather than 'helmet'", async () => {
+    const classifier = { run: vi.fn(async () => score(0.99)) };
+    const verifier = new LocalizedHelmetHeadVerifier(localizer("head", box), classifier);
+    const direct = await verifier.verifyDirect!(frame(), 0.9167);
+    expect(direct).toBeNull();
+    expect(classifier.run).not.toHaveBeenCalled();
+  });
+
+  it("verifyDirect rejects empty chair when pose estimator detects no shoulders", async () => {
+    const classifier = { run: vi.fn(async () => score(0.99)) };
+    const chairTop = { x: 0.4, y: 0.3, width: 0.15, height: 0.15 };
+    const keypoints = Array.from({ length: 17 }, () => ({ x: 0, y: 0, confidence: 0 }));
+    // Random artifact keypoints with NO shoulders
+    const poseEstimator = {
+      run: vi.fn(async () => [{ boundingBox: chairTop, confidence: 0.5, keypoints }])
+    };
+    const verifier = new LocalizedHelmetHeadVerifier(localizer("helmet", chairTop), classifier, null, poseEstimator);
+    const direct = await verifier.verifyDirect!(frame(), 0.9167);
+    expect(direct).toBeNull();
+  });
+
+  it("verify rejects floating chair headrest when person is seen from behind with nose occluded", async () => {
+    const classifier = { run: vi.fn(async () => score(0.99)) };
+    const chairHeadrest = { x: 0.3, y: 0.05, width: 0.15, height: 0.08 };
+    const keypoints = Array.from({ length: 17 }, () => ({ x: 0, y: 0, confidence: 0 }));
+    // Nose occluded (facing computer screen from behind)
+    keypoints[5] = { x: 0.25, y: 0.38, confidence: 0.9 }; // left_shoulder
+    keypoints[6] = { x: 0.45, y: 0.38, confidence: 0.9 }; // right_shoulder
+    const poseEstimator = {
+      run: vi.fn(async () => [{ boundingBox: person, confidence: 0.9, keypoints }])
+    };
+    const verifier = new LocalizedHelmetHeadVerifier(localizer("head", chairHeadrest), classifier, null, poseEstimator);
+    expect(await verifier.verify(frame(), person, 0.9167)).toBeNull();
+  });
 });
+
