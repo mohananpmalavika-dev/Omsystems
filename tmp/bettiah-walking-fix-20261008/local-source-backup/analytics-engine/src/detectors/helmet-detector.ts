@@ -77,7 +77,7 @@ export class HelmetDetector extends BaseDetector {
     fastAlert = process.env.HELMET_FAST_ALERT === "true",
     private headVerifier: HelmetHeadVerifier | null = null,
   ) {
-    super("helmet", "1.3.3");
+    super("helmet", "1.3.2");
     this.inference = inference;
     this.classifier = classifier;
     this.MIN_CONFIDENCE = confidenceThreshold;
@@ -253,7 +253,7 @@ export class HelmetDetector extends BaseDetector {
 
     for (const person of indoorPersons) {
       if (runLocal && this.headVerifier?.usesHeadEvidence?.(frame) &&
-          ((person.confidence ?? 0) < 0.8 || person.boundingBox.height * frame.height < 72)) {
+          ((person.confidence ?? 0) < this.PERSON_CONFIDENCE || person.boundingBox.height * frame.height < 48)) {
         this.clearPendingHead(frame.cameraId, person.boundingBox);
         continue;
       }
@@ -326,8 +326,8 @@ export class HelmetDetector extends BaseDetector {
         if (verified) {
           // Source pixels determine usable detail at different resolutions.
           // Keep strong independent person evidence and the verifier's 20px head gate.
-          if (verified.headEvidence && ((person.confidence ?? 0) < 0.8 ||
-              person.boundingBox.height * frame.height < 72)) {
+          if (verified.headEvidence && ((person.confidence ?? 0) < this.PERSON_CONFIDENCE ||
+              person.boundingBox.height * frame.height < 48)) {
             this.clearPendingHead(frame.cameraId, person.boundingBox);
             continue;
           }
@@ -345,8 +345,9 @@ export class HelmetDetector extends BaseDetector {
           // Strong, localized complete-head evidence can alert on one capture,
           // like an explicit helmet observation. Weaker scores retain temporal
           // confirmation rather than joining people across six-second gaps.
-          const confirmations = this.fastAlert && verified.headEvidence && verified.classificationConfidence >= 0.9
-            ? 1 : this.fastAlert
+          const confirmations = verified.headEvidence
+            ? (verified.classificationConfidence >= 0.88 ? 1 : 2)
+            : this.fastAlert
             ? 2
             : ((person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ? 2 : 3);
           if (this.confirmClassifiedHead(frame.cameraId, person.boundingBox, frame.timestamp.getTime(), confirmations)) {
@@ -502,7 +503,7 @@ export class HelmetDetector extends BaseDetector {
 
   private hasClassifiablePerson(person: { confidence?: number; boundingBox: HelmetDetection["personBoundingBox"] }, frame?: DetectionFrame) {
     if (frame && this.headVerifier?.usesHeadEvidence?.(frame)) {
-      return (person.confidence ?? 0) >= 0.8 && person.boundingBox.height * frame.height >= 72;
+      return (person.confidence ?? 0) >= this.PERSON_CONFIDENCE && person.boundingBox.height * frame.height >= 48;
     }
     const minConf = this.headVerifier ? 0.35 : this.FULL_PERSON_CONFIDENCE;
     const minHeight = this.headVerifier ? 0.20 : 0.75;
@@ -530,8 +531,10 @@ export class HelmetDetector extends BaseDetector {
   }
 
   private headEvidenceThreshold(frame: DetectionFrame): number {
-    return Math.max(this.MIN_CONFIDENCE,
-      this.headVerifier?.usesHeadEvidence?.(frame) ? 0.8 : this.HELMET_WORN_ALERT_CONFIDENCE);
+    if (this.headVerifier?.usesHeadEvidence?.(frame)) {
+      return Number(process.env.HELMET_HEAD_EVIDENCE_THRESHOLD || "0.8");
+    }
+    return Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE);
   }
 
   private hasRaisedHeadCandidate(person: { confidence?: number; boundingBox: HelmetDetection["personBoundingBox"] }) {

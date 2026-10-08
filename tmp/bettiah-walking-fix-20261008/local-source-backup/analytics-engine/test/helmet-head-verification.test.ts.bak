@@ -60,23 +60,6 @@ describe("independent helmet head verification", () => {
     await verifier.verify(hd,distant,.8);
     expect(objects.run).toHaveBeenCalledTimes(2);
   });
-  it("recovers a missing head for a nearby walking person in a native-pixel crop", async () => {
-    const objects={run:vi.fn(async(f:DetectionFrame)=>f.width===640 ? [] :
-      [{label:"head",confidence:.9,boundingBox:{x:.35,y:.35,width:.25,height:.3}}])};
-    const evidence={run:vi.fn(async()=>score(.96))};
-    const verifier=new LocalizedHelmetHeadVerifier(objects,{run:vi.fn(async()=>score(.01))},null,null,evidence);
-    const result=await verifier.verify(frame(),person,.8);
-    expect(result).toMatchObject({headEvidence:true,classificationConfidence:.96});
-    expect(result!.boundingBox.width*640).toBeGreaterThan(20);
-    expect(objects.run).toHaveBeenCalledTimes(2);
-  });
-  it("does not retry a nearby person's contrary complete-head evidence", async () => {
-    const objects=localizer("head");
-    const evidence={run:vi.fn(async()=>score(.01))};
-    expect(await new LocalizedHelmetHeadVerifier(objects,{run:vi.fn(async()=>score(.99))},null,null,evidence)
-      .verify(frame(),person,.8)).toBeNull();
-    expect(objects.run).toHaveBeenCalledOnce();
-  });
   it("does not turn upscaled tiny source heads into usable evidence", async () => {
     const distant={x:.2,y:.2,width:.12,height:.25};
     const objects={run:vi.fn(async(f:DetectionFrame)=>f.width===640 ? [] :
@@ -458,3 +441,4 @@ describe("independent helmet head verification", () => {
     expect(await verifier.verify(frame(), person, 0.9167)).toBeNull();
   });
 });
+

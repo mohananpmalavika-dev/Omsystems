@@ -1,0 +1,23 @@
+{
+  "completedAt": "2026-10-08T06:46:02.728Z",
+  "files": [
+    {
+      "file": "analytics-engine/src/detectors/helmet-detector.ts",
+      "sha256": "1af859cb7e761dcf62c8842d4fe4a32c3d5746b5d3a9dc4aa60c9b1ac8acc926"
+    },
+    {
+      "file": "analytics-engine/src/inference/helmet-head-verification.ts",
+      "sha256": "26437fc0f71a031aee56c720001666d246c167fbdbda4fff48f40a205fa61cf9"
+    },
+    {
+      "file": "analytics-engine/src/inference/helmet-head-probe.ts",
+      "sha256": "6e8a009d729cf640f55a900c842b103370d7da9b2785471ba330e9a3ff4cc982"
+    },
+    {
+      "file": "analytics-engine/test/helmet-head-verification.test.ts",
+      "sha256": "f84b39c998f61b2227596ee34c541c878f85e632cbbe187aa75981f68a9644cf"
+    }
+  ],
+  "fixture": "analytics-engine/test/fixtures/helmet-head-regression-20261008.json.gz",
+  "backup": "tmp/bettiah-walking-fix-20261008/local-source-backup"
+}

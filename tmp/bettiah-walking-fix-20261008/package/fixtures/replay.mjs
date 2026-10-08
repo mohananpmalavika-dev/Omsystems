@@ -1,4 +1,5 @@
-import sharp from '/app/node_modules/sharp/lib/index.js';
+import {createRequire} from 'node:module';
+const sharp=createRequire('/app/dist/analytics-engine/src/inference/helmet-head-classification.js')('sharp');
 import {getModelManager} from '/app/dist/analytics-engine/src/model-manager.js';
 import {loadObjectInference,loadHelmetClassificationInference} from '/app/dist/analytics-engine/src/inference/configured-model-inference.js';
 import {LocalizedHelmetHeadVerifier} from '/app/dist/analytics-engine/src/inference/helmet-head-verification.js';

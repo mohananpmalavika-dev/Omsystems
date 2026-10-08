@@ -1,0 +1,371 @@
+{
+  "checkedAt": "2026-10-08T06:46:48.591Z",
+  "summary": {
+    "activeCameras": 37,
+    "helmetRules": 37,
+    "freshFrames": 0
+  },
+  "cameras": [
+    {
+      "id": "699e8b00-cfac-4a22-b0f5-802c95f68431",
+      "channel": 1,
+      "status": "online",
+      "branch": "Bettaih",
+      "name": "CP PLUS DVR - Channel 1",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "4a2f17b5-08e9-401a-84f6-6489c41970f9",
+      "channel": 2,
+      "status": "online",
+      "branch": "Bettaih",
+      "name": "CP PLUS DVR - Channel 2",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "67eb3086-f599-4ca6-9a68-e72502dc15b6",
+      "channel": 3,
+      "status": "online",
+      "branch": "Bettaih",
+      "name": "CP PLUS DVR - Channel 3",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "a12468a0-5398-43ca-ac50-1ab02b0ef727",
+      "channel": 4,
+      "status": "online",
+      "branch": "Bettaih",
+      "name": "CP PLUS DVR - Channel 4",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "d02f79e9-0615-4df6-a604-d3e4b8bde9b2",
+      "channel": 5,
+      "status": "online",
+      "branch": "Bettaih",
+      "name": "CP PLUS DVR - Channel 5",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "1f64c344-2591-4d49-aff7-a8d28120459b",
+      "channel": 6,
+      "status": "online",
+      "branch": "Bettaih",
+      "name": "CP PLUS DVR - Channel 6",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "ea325f02-f5a8-4fdc-8114-417d18ca7222",
+      "channel": 7,
+      "status": "online",
+      "branch": "Bettaih",
+      "name": "CP PLUS DVR - Channel 7",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "64351fb7-faa3-48c8-80e0-81f2dd9d3f06",
+      "channel": 8,
+      "status": "online",
+      "branch": "Bettaih",
+      "name": "CP PLUS DVR - Channel 8",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "fa0a7e3d-6f72-4261-a688-d64dd05efc37",
+      "channel": 1,
+      "status": "online",
+      "branch": "Hajipur",
+      "name": "CP PLUS DVR - Channel 1",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "25175a3f-562e-4138-a827-91518096937e",
+      "channel": 2,
+      "status": "online",
+      "branch": "Hajipur",
+      "name": "CP PLUS DVR - Channel 2",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "5ffde9b3-924c-4622-aa74-b3c406567d7c",
+      "channel": 3,
+      "status": "online",
+      "branch": "Hajipur",
+      "name": "CP PLUS DVR - Channel 3",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "80ce1672-d553-4e85-b2e4-3758bd744eb4",
+      "channel": 4,
+      "status": "online",
+      "branch": "Hajipur",
+      "name": "CP PLUS DVR - Channel 4",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "84ae9288-43d5-4721-9587-8b2d41d44c54",
+      "channel": 5,
+      "status": "online",
+      "branch": "Hajipur",
+      "name": "CP PLUS DVR - Channel 5",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "88137ebc-8df1-4995-824a-99bfce6c2225",
+      "channel": 6,
+      "status": "online",
+      "branch": "Hajipur",
+      "name": "CP PLUS DVR - Channel 6",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "8a2fa6b2-78d5-45ce-8f18-f3495ec3ca94",
+      "channel": 7,
+      "status": "online",
+      "branch": "Hajipur",
+      "name": "CP PLUS DVR - Channel 7",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "aa6e8afc-07a6-4b05-b962-c4133f79e306",
+      "channel": 8,
+      "status": "online",
+      "branch": "Hajipur",
+      "name": "CP PLUS DVR - Channel 8",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "b7a24b40-013d-40c9-bd46-823cbcf6e326",
+      "channel": 1,
+      "status": "online",
+      "branch": "KOLLAM",
+      "name": "CP PLUS DVR - Channel 1",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "c7ef14ba-67eb-4d15-a173-9c56d51bbb53",
+      "channel": 2,
+      "status": "online",
+      "branch": "KOLLAM",
+      "name": "CP PLUS DVR - Channel 2",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "3da93c6e-6824-43dc-9bba-7332707d5856",
+      "channel": 4,
+      "status": "degraded",
+      "branch": "KOLLAM",
+      "name": "CP PLUS DVR - Channel 4",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "fb465a8f-5d79-4a3f-9cb8-b8cec471708d",
+      "channel": 8,
+      "status": "degraded",
+      "branch": "KOLLAM",
+      "name": "CP PLUS DVR - Channel 8",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "99455d3a-3411-43ad-b756-84a4ae17c026",
+      "channel": 8,
+      "status": "degraded",
+      "branch": "KOLLAM",
+      "name": "kollam",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "4d3caa3d-e03d-4689-81a6-a10e6f26329c",
+      "channel": 1,
+      "status": "online",
+      "branch": "PERAVARUNI",
+      "name": "CP PLUS DVR - Channel 1",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "a66bbc0b-1d47-4462-9cf7-94b5b35824df",
+      "channel": 2,
+      "status": "online",
+      "branch": "PERAVARUNI",
+      "name": "CP PLUS DVR - Channel 2",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "940fb6f4-7c41-4c92-b4f1-85a459ebb38d",
+      "channel": 3,
+      "status": "online",
+      "branch": "PERAVARUNI",
+      "name": "CP PLUS DVR - Channel 3",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "1fa8cd44-c782-40a3-81f2-a933fb2b1d76",
+      "channel": 4,
+      "status": "online",
+      "branch": "PERAVARUNI",
+      "name": "CP PLUS DVR - Channel 4",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "9cf710ef-1a0b-444b-9c30-abbac95948fe",
+      "channel": 5,
+      "status": "online",
+      "branch": "PERAVARUNI",
+      "name": "CP PLUS DVR - Channel 5",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "fc1a1f29-8b1c-4743-a093-40584e1a96a8",
+      "channel": 6,
+      "status": "online",
+      "branch": "PERAVARUNI",
+      "name": "CP PLUS DVR - Channel 6",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "3baa601f-67e0-4e0e-905d-0688df725bf1",
+      "channel": 7,
+      "status": "online",
+      "branch": "PERAVARUNI",
+      "name": "CP PLUS DVR - Channel 7",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "14d869da-4642-4d74-9de0-c4c6c2be4488",
+      "channel": 8,
+      "status": "online",
+      "branch": "PERAVARUNI",
+      "name": "CP PLUS DVR - Channel 8",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "0fc5c021-4246-4659-87a0-0ba4c6f36240",
+      "channel": 1,
+      "status": "online",
+      "branch": "Rajkot",
+      "name": "Rajkot - Channel 1",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "ee9e189d-5bda-4ac7-a6d6-284880d98e91",
+      "channel": 2,
+      "status": "online",
+      "branch": "Rajkot",
+      "name": "Rajkot - Channel 2",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "046a42fe-8799-447f-a250-66660cfdfeac",
+      "channel": 3,
+      "status": "online",
+      "branch": "Rajkot",
+      "name": "Rajkot - Channel 3",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "1fcc5ac0-da36-4941-b5dc-92f748a182b6",
+      "channel": 4,
+      "status": "online",
+      "branch": "Rajkot",
+      "name": "Rajkot - Channel 4",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "ce5584f9-cccd-4605-a0bb-ac9a28cecb33",
+      "channel": 5,
+      "status": "online",
+      "branch": "Rajkot",
+      "name": "Rajkot - Channel 5",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "6e5e3e6e-48b3-49ce-ac57-0b33bf3135b7",
+      "channel": 6,
+      "status": "online",
+      "branch": "Rajkot",
+      "name": "Rajkot - Channel 6",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "5937c091-eff5-4809-9bba-0aeb8b739d47",
+      "channel": 7,
+      "status": "online",
+      "branch": "Rajkot",
+      "name": "Rajkot - Channel 7",
+      "helmet_rule": true,
+      "frame": null
+    },
+    {
+      "id": "4d74d7ad-6922-4af0-9f36-420b84879425",
+      "channel": 8,
+      "status": "online",
+      "branch": "Rajkot",
+      "name": "Rajkot - Channel 8",
+      "helmet_rule": true,
+      "frame": null
+    }
+  ],
+  "notificationDelivery": [
+    {
+      "channel": "dashboard",
+      "status": "delivered",
+      "count": 47,
+      "latest": "2026-10-08T05:58:56.519Z"
+    }
+  ],
+  "bettiahAlerts": [
+    {
+      "id": "854846cf-8f65-4a6b-94ea-c35c4aa425a1",
+      "title": "Helmet worn detected",
+      "created_at": "2026-10-08T05:58:56.396Z",
+      "event_id": "5ac9a69a-4cb7-49ed-8d9f-767532d30f5a",
+      "rule_id": "6ac6c7bb-48e5-4313-b85c-979a10096ff6"
+    }
+  ],
+  "bettiahEvents": [
+    {
+      "id": "5ac9a69a-4cb7-49ed-8d9f-767532d30f5a",
+      "occurred_at": "2026-10-08T05:58:54.032Z",
+      "detection_type": "helmet-worn",
+      "rule_id": null,
+      "rule_id_snake": null,
+      "source": null,
+      "provenance": null
+    }
+  ]
+}
