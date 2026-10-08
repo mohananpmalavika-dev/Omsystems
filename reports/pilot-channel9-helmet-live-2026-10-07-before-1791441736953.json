@@ -1,0 +1,62 @@
+{
+  "config": {
+    "threshold": 0.75,
+    "fastAlert": true,
+    "face": true,
+    "pose": true
+  },
+  "samples": [
+    {
+      "cameraId": "e66e3498-1c13-4f59-91d7-5a3386d269d2",
+      "capturedAt": "2026-10-08T04:53:49.230Z",
+      "checkedAt": "2026-10-08T04:53:59.633Z",
+      "persons": [
+        {
+          "label": "person",
+          "confidence": 0.4485072029284858,
+          "boundingBox": {
+            "x": 0.877828141439102,
+            "y": 0.1443611711653632,
+            "width": 0.04240889579121154,
+            "height": 0.281900444166732
+          }
+        }
+      ],
+      "heads": [],
+      "faces": [],
+      "poses": [],
+      "classificationCalls": [],
+      "results": [],
+      "pending": [],
+      "eventsSubmitted": 0,
+      "rawFile": "tmp/pilot-channel9-live-e66e3498-1c13-4f59-91d7-5a3386d269d2-20261008045349230.rgb",
+      "snapshot": "tmp/pilot-channel9-live-e66e3498-1c13-4f59-91d7-5a3386d269d2-20261008045349230.jpg"
+    },
+    {
+      "cameraId": "e66e3498-1c13-4f59-91d7-5a3386d269d2",
+      "capturedAt": "2026-10-08T04:54:31.537Z",
+      "checkedAt": "2026-10-08T04:54:34.530Z",
+      "persons": [
+        {
+          "label": "person",
+          "confidence": 0.4398940958440889,
+          "boundingBox": {
+            "x": 0.8787639265533207,
+            "y": 0.14076712796342583,
+            "width": 0.04114217974303713,
+            "height": 0.2823767622817091
+          }
+        }
+      ],
+      "heads": [],
+      "faces": [],
+      "poses": [],
+      "classificationCalls": [],
+      "results": [],
+      "pending": [],
+      "eventsSubmitted": 0,
+      "rawFile": "tmp/pilot-channel9-live-e66e3498-1c13-4f59-91d7-5a3386d269d2-20261008045431537.rgb",
+      "snapshot": "tmp/pilot-channel9-live-e66e3498-1c13-4f59-91d7-5a3386d269d2-20261008045431537.jpg"
+    }
+  ]
+}

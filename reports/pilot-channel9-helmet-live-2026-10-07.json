@@ -7,44 +7,75 @@
   },
   "samples": [
     {
-      "cameraId": "e66e3498-1c13-4f59-91d7-5a3386d269d2",
-      "capturedAt": "2026-10-08T04:53:49.230Z",
-      "checkedAt": "2026-10-08T04:53:59.633Z",
+      "cameraId": "2d8053f1-af9f-40df-94d3-3e432e13bd85",
+      "capturedAt": "2026-10-08T06:41:58.876Z",
+      "checkedAt": "2026-10-08T06:42:16.065Z",
       "persons": [
         {
           "label": "person",
-          "confidence": 0.4485072029284858,
+          "confidence": 0.8082872448058822,
           "boundingBox": {
-            "x": 0.877828141439102,
-            "y": 0.1443611711653632,
-            "width": 0.04240889579121154,
-            "height": 0.281900444166732
+            "x": 0.07275421368175809,
+            "y": 0.43486419387420616,
+            "width": 0.057798201744032426,
+            "height": 0.26735181296856814
           }
         }
       ],
       "heads": [],
       "faces": [],
       "poses": [],
-      "classificationCalls": [],
+      "classificationCalls": [
+        {
+          "classifierKind": "head-evidence",
+          "crop": {
+            "x": 0.06764257320016621,
+            "y": 0.4138411181602213,
+            "width": 0.04412589436769486,
+            "height": 0.09060625392198562
+          },
+          "result": {
+            "wearingHelmet": false,
+            "confidence": 0.512938519630492,
+            "wearingHelmetConfidence": 0.487061480369508,
+            "unwearingHelmetConfidence": 0.512938519630492
+          }
+        }
+      ],
       "results": [],
       "pending": [],
       "eventsSubmitted": 0,
-      "rawFile": "tmp/pilot-channel9-live-e66e3498-1c13-4f59-91d7-5a3386d269d2-20261008045349230.rgb",
-      "snapshot": "tmp/pilot-channel9-live-e66e3498-1c13-4f59-91d7-5a3386d269d2-20261008045349230.jpg"
+      "rawFile": "tmp/pilot-channel9-live-2d8053f1-af9f-40df-94d3-3e432e13bd85-20261008064158876.rgb",
+      "snapshot": "tmp/pilot-channel9-live-2d8053f1-af9f-40df-94d3-3e432e13bd85-20261008064158876.jpg"
     },
     {
-      "cameraId": "e66e3498-1c13-4f59-91d7-5a3386d269d2",
-      "capturedAt": "2026-10-08T04:54:31.537Z",
-      "checkedAt": "2026-10-08T04:54:34.530Z",
+      "cameraId": "62245da0-302a-46b1-a068-98c8dc70892a",
+      "capturedAt": "2026-10-08T06:42:03.445Z",
+      "checkedAt": "2026-10-08T06:42:16.294Z",
+      "persons": [],
+      "heads": [],
+      "faces": [],
+      "poses": [],
+      "classificationCalls": [],
+      "results": [],
+      "pending": [],
+      "eventsSubmitted": 0,
+      "rawFile": "tmp/pilot-channel9-live-62245da0-302a-46b1-a068-98c8dc70892a-20261008064203445.rgb",
+      "snapshot": "tmp/pilot-channel9-live-62245da0-302a-46b1-a068-98c8dc70892a-20261008064203445.jpg"
+    },
+    {
+      "cameraId": "ed44346e-9473-4795-8ef3-ba4d6bfb91d9",
+      "capturedAt": "2026-10-08T06:42:08.483Z",
+      "checkedAt": "2026-10-08T06:42:16.477Z",
       "persons": [
         {
           "label": "person",
-          "confidence": 0.4398940958440889,
+          "confidence": 0.764154771098049,
           "boundingBox": {
-            "x": 0.8787639265533207,
-            "y": 0.14076712796342583,
-            "width": 0.04114217974303713,
-            "height": 0.2823767622817091
+            "x": 0.5356093501270959,
+            "y": 0.4260465373580541,
+            "width": 0.06642522845703913,
+            "height": 0.3132300686153052
           }
         }
       ],
@@ -55,8 +86,23 @@
       "results": [],
       "pending": [],
       "eventsSubmitted": 0,
-      "rawFile": "tmp/pilot-channel9-live-e66e3498-1c13-4f59-91d7-5a3386d269d2-20261008045431537.rgb",
-      "snapshot": "tmp/pilot-channel9-live-e66e3498-1c13-4f59-91d7-5a3386d269d2-20261008045431537.jpg"
+      "rawFile": "tmp/pilot-channel9-live-ed44346e-9473-4795-8ef3-ba4d6bfb91d9-20261008064208483.rgb",
+      "snapshot": "tmp/pilot-channel9-live-ed44346e-9473-4795-8ef3-ba4d6bfb91d9-20261008064208483.jpg"
+    },
+    {
+      "cameraId": "62245da0-302a-46b1-a068-98c8dc70892a",
+      "capturedAt": "2026-10-08T06:42:11.738Z",
+      "checkedAt": "2026-10-08T06:42:16.713Z",
+      "persons": [],
+      "heads": [],
+      "faces": [],
+      "poses": [],
+      "classificationCalls": [],
+      "results": [],
+      "pending": [],
+      "eventsSubmitted": 0,
+      "rawFile": "tmp/pilot-channel9-live-62245da0-302a-46b1-a068-98c8dc70892a-20261008064211738.rgb",
+      "snapshot": "tmp/pilot-channel9-live-62245da0-302a-46b1-a068-98c8dc70892a-20261008064211738.jpg"
     }
   ]
 }

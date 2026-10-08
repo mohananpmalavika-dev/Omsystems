@@ -3,6 +3,11 @@ import { execSync } from 'child_process';
 const script = `
 import { createRequire } from 'node:module';
 const { createClient } = createRequire('/app/package.json')('redis');
+import { getModelManager } from '/app/dist/analytics-engine/src/model-manager.js';
+import { loadObjectInference, loadHelmetClassificationInference } from '/app/dist/analytics-engine/src/inference/configured-model-inference.js';
+import { LocalizedHelmetHeadVerifier } from '/app/dist/analytics-engine/src/inference/helmet-head-verification.js';
+import { HelmetDetector } from '/app/dist/analytics-engine/src/detectors/helmet-detector.js';
+
 const r = createClient({ url: process.env.REDIS_URL || 'redis://sentinel-gcp-redis:6379' });
 await r.connect();
 

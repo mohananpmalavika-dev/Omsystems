@@ -2,14 +2,14 @@ import fs from 'node:fs';
 import {spawnSync} from 'node:child_process';
 import {gzipSync} from 'node:zlib';
 const channel4=false;
-const selectedCameras=['e66e3498-1c13-4f59-91d7-5a3386d269d2'];
+const selectedCameras=['2d8053f1-af9f-40df-94d3-3e432e13bd85', '62245da0-302a-46b1-a068-98c8dc70892a', 'ed44346e-9473-4795-8ef3-ba4d6bfb91d9'];
 const reader = `
 import {createRequire} from 'node:module';
 const {createClient}=createRequire('/app/package.json')('redis');
 import {loadConfig} from '/app/dist/src/config.js';
 const r=createClient({url:loadConfig().REDIS_URL});await r.connect();
 try {
- for(let i=0;i<18;i++) {
+ for(let i=0;i<2;i++) {
   for(const cameraId of ${JSON.stringify(selectedCameras)}) {
    const raw=await r.get('analytics:latest-frame:'+cameraId);
    if(raw)console.log(JSON.stringify({...JSON.parse(raw),cameraId}));
