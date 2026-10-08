@@ -266,6 +266,8 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/operations/storage",
     "/operations/cameras",
     "/operations/recording",
+    "/security-devices",
+    "/security-devices/integrations",
     "/communications/calls",
     "/communications/connect",
   ],
