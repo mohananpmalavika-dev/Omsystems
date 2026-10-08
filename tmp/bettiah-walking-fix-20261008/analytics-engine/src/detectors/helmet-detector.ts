@@ -77,7 +77,7 @@ export class HelmetDetector extends BaseDetector {
     fastAlert = process.env.HELMET_FAST_ALERT === "true",
     private headVerifier: HelmetHeadVerifier | null = null,
   ) {
-    super("helmet", "1.3.2");
+    super("helmet", "1.3.3");
     this.inference = inference;
     this.classifier = classifier;
     this.MIN_CONFIDENCE = confidenceThreshold;

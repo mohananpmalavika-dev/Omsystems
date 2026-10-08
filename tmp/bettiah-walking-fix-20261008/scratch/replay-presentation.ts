@@ -11,6 +11,7 @@ const negatives=JSON.parse(await readFile('reports/helmet-semantic-benchmark-inp
  .filter(item=>!item.expectedHelmet);
 negatives.push({file:'tmp/helmet-negative-paddle.png',group:'hat-control'});
 negatives.push({file:'scratch/bettiah-entry-20261008/ch2/frame-015.jpg',group:'carried-helmet-control'});
+for(let i=1;i<=33;i++)negatives.push({file:'scratch/bettiah-entry-20261008/ch5/frame-'+String(i).padStart(3,'0')+'.jpg',group:'bettiah-pre-entry-unhelmeted'});
 const manager=getModelManager({modelsDirectory:'analytics-engine/models',enableGPU:false,startCleanupTimer:false});
 await manager.initialize();
 const results=[];
@@ -39,14 +40,14 @@ try{
  }
  for(const [index,sample] of negatives.entries()) {
   const {data,info}=await sharp(sample.file).removeAlpha().raw().toBuffer({resolveWithObject:true});
-  const frame={cameraId:'negative-'+index,tenantId:'isolated',width:info.width,height:info.height,imageData:data,
-   timestamp:new Date(0),metadata:{inferenceMode:'local-onnx',detections:[] as any[]}};
+  const frame={cameraId:sample.group==='bettiah-pre-entry-unhelmeted'?'bettiah-pre-entry':'negative-'+index,tenantId:'isolated',width:info.width,height:info.height,imageData:data,
+   timestamp:new Date(index*2000),metadata:{inferenceMode:'local-onnx',detections:[] as any[]}};
   frame.metadata.detections=await objects.run(frame);
   const alerts=await detector.detect(frame);
   results.push({file:sample.file,sha256:createHash('sha256').update(data).digest('hex'),group:'confirmed-negative',alerts,eventsSubmitted:0});
   console.log(JSON.stringify({file:sample.file,group:'confirmed-negative',alerts:alerts.length}));
  }
- await writeFile('reports/presentation-native-retry-replay-2026-10-08.json',JSON.stringify({results,
+ await writeFile('reports/bettiah-walking-regression-replay-2026-10-08.json',JSON.stringify({results,
   summary:{ch4Frames:positive.length,ch8Frames:ch8.length,
    ch4AlertFrames:results.filter(r=>r.group==='ch4-helmet-walking'&&r.alerts.length).length,
    ch8AlertFrames:results.filter(r=>r.group==='ch8-helmet-walking-user-confirmed'&&r.alerts.length).length,

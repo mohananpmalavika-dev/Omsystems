@@ -18,6 +18,9 @@ let code=fs.readFileSync(detector,'utf8');if(!code.includes('super("helmet", "1.
 fs.writeFileSync(detector,code.replace('super("helmet", "1.3.2")','super("helmet", "1.3.3")'));
 let replay=fs.readFileSync(stage+'/scratch/replay-bettiah.ts','utf8');
 fs.writeFileSync(stage+'/scratch/replay-bettiah.ts',replay);
-replay=fs.readFileSync(stage+'/scratch/replay-presentation.ts','utf8').replace('presentation-native-retry-replay-2026-10-08.json','bettiah-walking-independent-replay-2026-10-08.json');
+replay=fs.readFileSync(stage+'/scratch/replay-presentation.ts','utf8').replace('presentation-native-retry-replay-2026-10-08.json','bettiah-walking-regression-replay-2026-10-08.json');
+replay=replay.replace("const manager=getModelManager", "for(let i=1;i<=33;i++)negatives.push({file:'scratch/bettiah-entry-20261008/ch5/frame-'+String(i).padStart(3,'0')+'.jpg',group:'bettiah-pre-entry-unhelmeted'});\nconst manager=getModelManager");
+replay=replay.replace("cameraId:'negative-'+index", "cameraId:sample.group==='bettiah-pre-entry-unhelmeted'?'bettiah-pre-entry':'negative-'+index");
+replay=replay.replace('timestamp:new Date(0),metadata:', 'timestamp:new Date(index*2000),metadata:');
 fs.writeFileSync(stage+'/scratch/replay-presentation.ts',replay);
 console.log(JSON.stringify({probeSha256:hash,version:'1.3.3',featureModelSha256:modelHash,summary:probe.summary},null,2));
