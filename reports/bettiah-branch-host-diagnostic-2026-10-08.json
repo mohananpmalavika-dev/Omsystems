@@ -1,6 +1,11 @@
 {
   "units": [],
-  "processes": [],
+  "processes": [
+    "1759473 1759415 node            node recording-engine/dist/recording-engine/src/index.js",
+    "2124402 2124377 node            node /app/media-gateway/dist/index.js",
+    "2899715 2899691 node            node dist/src/index.js",
+    "2938871 2938847 node            node dist/analytics-engine/src/index.js"
+  ],
   "runtime": [
     {
       "directory": "/opt/sentinel-grid/edge-runtime",

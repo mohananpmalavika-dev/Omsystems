@@ -8,7 +8,7 @@ import { loadObjectInference, loadHelmetClassificationInference } from '/app/dis
 import { LocalizedHelmetHeadVerifier } from '/app/dist/analytics-engine/src/inference/helmet-head-verification.js';
 import { HelmetDetector } from '/app/dist/analytics-engine/src/detectors/helmet-detector.js';
 
-const r = createClient({ url: process.env.REDIS_URL || 'redis://sentinel-gcp-redis:6379' });
+const r = createClient({ url: process.env.REDIS_URL || 'redis://:SentinelGridRedisMaster2026@sentinel-gcp-redis:6379' });
 await r.connect();
 
 const manager = getModelManager({ modelsDirectory: '/app/models', enableGPU: false, startCleanupTimer: false });
@@ -56,11 +56,12 @@ for (const cam of pilotCameras) {
   const heads = await localizer.run(frame);
   const helmetResults = await detector.detect(frame);
 
-  console.log(cam.name + ' (' + cam.id.slice(0, 8) + '): ' +
-    'persons=' + persons.length + ' ' + JSON.stringify(persons.map(p => ({ conf: p.confidence.toFixed(2), box: [Math.round(p.box.x), Math.round(p.box.y), Math.round(p.box.width), Math.round(p.box.height)] }))) +
-    ', heads=' + heads.length + ' ' + JSON.stringify(heads.map(h => ({ conf: h.confidence.toFixed(2), box: [Math.round(h.box.x), Math.round(h.box.y), Math.round(h.box.width), Math.round(h.box.height)] }))) +
-    ', helmetDetections=' + helmetResults.length + ' ' + JSON.stringify(helmetResults)
-  );
+    const getBox = b => b?.boundingBox || b?.box || { x: 0, y: 0, width: 0, height: 0 };
+    console.log(cam.name + ' (' + cam.id.slice(0, 8) + '): ' +
+      'persons=' + persons.length + ' ' + JSON.stringify(persons.map(p => { const b = getBox(p); return { conf: p.confidence.toFixed(2), box: [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)] }; })) +
+      ', heads=' + heads.length + ' ' + JSON.stringify(heads.map(h => { const b = getBox(h); return { conf: h.confidence.toFixed(2), box: [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)] }; })) +
+      ', helmetDetections=' + helmetResults.length + ' ' + JSON.stringify(helmetResults)
+    );
 }
 
 await detector.cleanup();
