@@ -1,0 +1,7 @@
+BEGIN READ ONLY;
+SELECT now() AT TIME ZONE 'Asia/Kolkata' AS current_ist;
+SELECT current_metrics->>'localDate' AS day,count(*) AS opening_records FROM nbfc_rule_state WHERE entity_key LIKE 'branch-opening-day:%' GROUP BY 1 ORDER BY 1 DESC LIMIT 8;
+SELECT n.name AS branch,s.first_condition_met_at AT TIME ZONE 'Asia/Kolkata' AS observed_ist,s.current_metrics->>'personCount' AS people,s.current_metrics->>'outcome' AS outcome FROM nbfc_rule_state s JOIN resource_nodes n ON n.id::text=s.current_metrics->>'branchId' WHERE entity_key LIKE 'branch-opening-day:%' AND current_metrics->>'localDate'='2026-10-08';
+SELECT name,enabled,state,branch_ids,schedule FROM nbfc_analytics_rules WHERE template_id='tmpl-27-opening-staff-count';
+SELECT n.name AS branch,e.detection_type,count(*) AS events,min(e.occurred_at) AT TIME ZONE 'Asia/Kolkata' AS first_ist,max(e.occurred_at) AT TIME ZONE 'Asia/Kolkata' AS last_ist,count(*) FILTER(WHERE (e.occurred_at AT TIME ZONE 'Asia/Kolkata')::time >= '08:00' AND (e.occurred_at AT TIME ZONE 'Asia/Kolkata')::time < '11:00') AS opening_window_events FROM analytics_events e JOIN cameras c ON c.id=e.camera_id JOIN resource_nodes n ON n.id=c.branch_node_id WHERE e.occurred_at>='2026-10-08 00:00:00+05:30' AND e.occurred_at<'2026-10-09 00:00:00+05:30' GROUP BY 1,2 ORDER BY 1,2;
+COMMIT;

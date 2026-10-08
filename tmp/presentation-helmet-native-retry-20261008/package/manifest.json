@@ -1,0 +1,21 @@
+{
+  "change": "Native head localization for nearby walking people; unchanged person and head evidence gates",
+  "files": [
+    {
+      "file": "source/analytics-engine/src/detectors/helmet-detector.ts",
+      "sha256": "e0f39d952e2a45e3e6d06357166f629a2d99ec7df69f4227b3a0db1a15d352ed"
+    },
+    {
+      "file": "runtime/dist/analytics-engine/src/detectors/helmet-detector.js",
+      "sha256": "e303a9bc20b0b77201f6cccfe85b76f5ec0a125a4f24d5c45bf77bf576576d92"
+    },
+    {
+      "file": "source/analytics-engine/src/inference/helmet-head-verification.ts",
+      "sha256": "26437fc0f71a031aee56c720001666d246c167fbdbda4fff48f40a205fa61cf9"
+    },
+    {
+      "file": "runtime/dist/analytics-engine/src/inference/helmet-head-verification.js",
+      "sha256": "e290a0f093cb62a35fcdea159416f42c568af0c13859f1881b94c85e1557783a"
+    }
+  ]
+}

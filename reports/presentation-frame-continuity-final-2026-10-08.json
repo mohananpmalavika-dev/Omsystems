@@ -1,0 +1,1241 @@
+{
+  "checkedAt": "2026-10-08T06:17:44.245Z",
+  "summary": {
+    "activeCameras": 37,
+    "helmetRules": 37,
+    "freshFrames": 37,
+    "advancingFrames": 36,
+    "analyticsOperational": 37
+  },
+  "cameras": [
+    {
+      "id": "699e8b00-cfac-4a22-b0f5-802c95f68431",
+      "channel": 1,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "CP PLUS DVR - Channel 1",
+      "branch": "Bettaih",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:15:56.661Z",
+        "ageSeconds": 40.291,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:16:55.268Z",
+        "ageSeconds": 16.977,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "4a2f17b5-08e9-401a-84f6-6489c41970f9",
+      "channel": 2,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "CP PLUS DVR - Channel 2",
+      "branch": "Bettaih",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:02.795Z",
+        "ageSeconds": 34.166,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:16:59.952Z",
+        "ageSeconds": 13.038,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "67eb3086-f599-4ca6-9a68-e72502dc15b6",
+      "channel": 3,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "CP PLUS DVR - Channel 3",
+      "branch": "Bettaih",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:05.269Z",
+        "ageSeconds": 31.701,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:05.466Z",
+        "ageSeconds": 8.393,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "a12468a0-5398-43ca-ac50-1ab02b0ef727",
+      "channel": 4,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "CP PLUS DVR - Channel 4",
+      "branch": "Bettaih",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:05.316Z",
+        "ageSeconds": 31.661,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:05.532Z",
+        "ageSeconds": 8.976,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "d02f79e9-0615-4df6-a604-d3e4b8bde9b2",
+      "channel": 5,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "CP PLUS DVR - Channel 5",
+      "branch": "Bettaih",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:17.530Z",
+        "ageSeconds": 19.454,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:08.330Z",
+        "ageSeconds": 6.9,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "1f64c344-2591-4d49-aff7-a8d28120459b",
+      "channel": 6,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "CP PLUS DVR - Channel 6",
+      "branch": "Bettaih",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:23.143Z",
+        "ageSeconds": 13.847,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:14.199Z",
+        "ageSeconds": 1.885,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "ea325f02-f5a8-4fdc-8114-417d18ca7222",
+      "channel": 7,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "CP PLUS DVR - Channel 7",
+      "branch": "Bettaih",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:29.043Z",
+        "ageSeconds": 7.955,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:14.004Z",
+        "ageSeconds": 2.982,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "64351fb7-faa3-48c8-80e0-81f2dd9d3f06",
+      "channel": 8,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "CP PLUS DVR - Channel 8",
+      "branch": "Bettaih",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:34.054Z",
+        "ageSeconds": 2.953,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:16:34.054Z",
+        "ageSeconds": 43.884,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": false,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "fa0a7e3d-6f72-4261-a688-d64dd05efc37",
+      "channel": 1,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "CP PLUS DVR - Channel 1",
+      "branch": "Hajipur",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:15:54.531Z",
+        "ageSeconds": 42.486,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:16:54.700Z",
+        "ageSeconds": 24.103,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "25175a3f-562e-4138-a827-91518096937e",
+      "channel": 2,
+      "status": "online",
+      "edge_agent_id": "839d2a88-2b36-4e34-bd99-6cb247e196a5",
+      "name": "CP PLUS DVR - Channel 2",
+      "branch": "Hajipur",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:34.299Z",
+        "ageSeconds": 2.725,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:10.863Z",
+        "ageSeconds": 8.81,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "5ffde9b3-924c-4622-aa74-b3c406567d7c",
+      "channel": 3,
+      "status": "online",
+      "edge_agent_id": "839d2a88-2b36-4e34-bd99-6cb247e196a5",
+      "name": "CP PLUS DVR - Channel 3",
+      "branch": "Hajipur",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:22.722Z",
+        "ageSeconds": 14.308,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:10.657Z",
+        "ageSeconds": 9.891,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "80ce1672-d553-4e85-b2e4-3758bd744eb4",
+      "channel": 4,
+      "status": "online",
+      "edge_agent_id": "839d2a88-2b36-4e34-bd99-6cb247e196a5",
+      "name": "CP PLUS DVR - Channel 4",
+      "branch": "Hajipur",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:25.153Z",
+        "ageSeconds": 11.883,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:14.054Z",
+        "ageSeconds": 7.531,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "84ae9288-43d5-4721-9587-8b2d41d44c54",
+      "channel": 5,
+      "status": "online",
+      "edge_agent_id": "839d2a88-2b36-4e34-bd99-6cb247e196a5",
+      "name": "CP PLUS DVR - Channel 5",
+      "branch": "Hajipur",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:25.078Z",
+        "ageSeconds": 11.966,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:13.829Z",
+        "ageSeconds": 8.713,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "88137ebc-8df1-4995-824a-99bfce6c2225",
+      "channel": 6,
+      "status": "online",
+      "edge_agent_id": "839d2a88-2b36-4e34-bd99-6cb247e196a5",
+      "name": "CP PLUS DVR - Channel 6",
+      "branch": "Hajipur",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:27.758Z",
+        "ageSeconds": 9.293,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:07.114Z",
+        "ageSeconds": 16.24,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "8a2fa6b2-78d5-45ce-8f18-f3495ec3ca94",
+      "channel": 7,
+      "status": "online",
+      "edge_agent_id": "839d2a88-2b36-4e34-bd99-6cb247e196a5",
+      "name": "CP PLUS DVR - Channel 7",
+      "branch": "Hajipur",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:27.702Z",
+        "ageSeconds": 9.358,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:13.899Z",
+        "ageSeconds": 10.16,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "aa6e8afc-07a6-4b05-b962-c4133f79e306",
+      "channel": 8,
+      "status": "online",
+      "edge_agent_id": "839d2a88-2b36-4e34-bd99-6cb247e196a5",
+      "name": "CP PLUS DVR - Channel 8",
+      "branch": "Hajipur",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:30.167Z",
+        "ageSeconds": 6.899,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:13.891Z",
+        "ageSeconds": 11.146,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "b7a24b40-013d-40c9-bd46-823cbcf6e326",
+      "channel": 1,
+      "status": "online",
+      "edge_agent_id": "2b4fe162-6c1a-413e-9596-1eac2e1bcf88",
+      "name": "CP PLUS DVR - Channel 1",
+      "branch": "KOLLAM",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:35.003Z",
+        "ageSeconds": 2.069,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:22.868Z",
+        "ageSeconds": 3.189,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "c7ef14ba-67eb-4d15-a173-9c56d51bbb53",
+      "channel": 2,
+      "status": "online",
+      "edge_agent_id": "2b4fe162-6c1a-413e-9596-1eac2e1bcf88",
+      "name": "CP PLUS DVR - Channel 2",
+      "branch": "KOLLAM",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:35.024Z",
+        "ageSeconds": 2.053,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:22.980Z",
+        "ageSeconds": 4.094,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "3da93c6e-6824-43dc-9bba-7332707d5856",
+      "channel": 4,
+      "status": "degraded",
+      "edge_agent_id": "2b4fe162-6c1a-413e-9596-1eac2e1bcf88",
+      "name": "CP PLUS DVR - Channel 4",
+      "branch": "KOLLAM",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:28.438Z",
+        "ageSeconds": 8.647,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:27.459Z",
+        "ageSeconds": 0.352,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "fb465a8f-5d79-4a3f-9cb8-b8cec471708d",
+      "channel": 8,
+      "status": "degraded",
+      "edge_agent_id": "2b4fe162-6c1a-413e-9596-1eac2e1bcf88",
+      "name": "CP PLUS DVR - Channel 8",
+      "branch": "KOLLAM",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:28.420Z",
+        "ageSeconds": 8.672,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:27.408Z",
+        "ageSeconds": 1.19,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "99455d3a-3411-43ad-b756-84a4ae17c026",
+      "channel": 8,
+      "status": "degraded",
+      "edge_agent_id": "2b4fe162-6c1a-413e-9596-1eac2e1bcf88",
+      "name": "kollam",
+      "branch": "KOLLAM",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:31.034Z",
+        "ageSeconds": 6.064,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:22.667Z",
+        "ageSeconds": 7.207,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "4d3caa3d-e03d-4689-81a6-a10e6f26329c",
+      "channel": 1,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "CP PLUS DVR - Channel 1",
+      "branch": "PERAVARUNI",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:15:59.067Z",
+        "ageSeconds": 38.041,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:16:57.004Z",
+        "ageSeconds": 33.872,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "a66bbc0b-1d47-4462-9cf7-94b5b35824df",
+      "channel": 2,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "CP PLUS DVR - Channel 2",
+      "branch": "PERAVARUNI",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:00.184Z",
+        "ageSeconds": 36.929,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:16:57.350Z",
+        "ageSeconds": 34.481,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "940fb6f4-7c41-4c92-b4f1-85a459ebb38d",
+      "channel": 3,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "CP PLUS DVR - Channel 3",
+      "branch": "PERAVARUNI",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:10.012Z",
+        "ageSeconds": 27.107,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:07.536Z",
+        "ageSeconds": 25.212,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "1fa8cd44-c782-40a3-81f2-a933fb2b1d76",
+      "channel": 4,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "CP PLUS DVR - Channel 4",
+      "branch": "PERAVARUNI",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:14.526Z",
+        "ageSeconds": 22.599,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:11.811Z",
+        "ageSeconds": 21.799,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "9cf710ef-1a0b-444b-9c30-abbac95948fe",
+      "channel": 5,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "CP PLUS DVR - Channel 5",
+      "branch": "PERAVARUNI",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:14.753Z",
+        "ageSeconds": 22.38,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:18.376Z",
+        "ageSeconds": 15.895,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "fc1a1f29-8b1c-4743-a093-40584e1a96a8",
+      "channel": 6,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "CP PLUS DVR - Channel 6",
+      "branch": "PERAVARUNI",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:20.296Z",
+        "ageSeconds": 16.844,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:18.398Z",
+        "ageSeconds": 16.552,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "3baa601f-67e0-4e0e-905d-0688df725bf1",
+      "channel": 7,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "CP PLUS DVR - Channel 7",
+      "branch": "PERAVARUNI",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:26.434Z",
+        "ageSeconds": 10.712,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:33.427Z",
+        "ageSeconds": 2.386,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "14d869da-4642-4d74-9de0-c4c6c2be4488",
+      "channel": 8,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "CP PLUS DVR - Channel 8",
+      "branch": "PERAVARUNI",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:31.208Z",
+        "ageSeconds": 5.947,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:28.597Z",
+        "ageSeconds": 7.941,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "0fc5c021-4246-4659-87a0-0ba4c6f36240",
+      "channel": 1,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "Rajkot - Channel 1",
+      "branch": "Rajkot",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:33.722Z",
+        "ageSeconds": 3.439,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:36.670Z",
+        "ageSeconds": 0.981,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "ee9e189d-5bda-4ac7-a6d6-284880d98e91",
+      "channel": 2,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "Rajkot - Channel 2",
+      "branch": "Rajkot",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:26.329Z",
+        "ageSeconds": 10.838,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:24.916Z",
+        "ageSeconds": 13.501,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "046a42fe-8799-447f-a250-66660cfdfeac",
+      "channel": 3,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "Rajkot - Channel 3",
+      "branch": "Rajkot",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:16:26.355Z",
+        "ageSeconds": 10.817,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:24.821Z",
+        "ageSeconds": 14.37,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "1fcc5ac0-da36-4941-b5dc-92f748a182b6",
+      "channel": 4,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "Rajkot - Channel 4",
+      "branch": "Rajkot",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:15:30.490Z",
+        "ageSeconds": 66.69,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:34.901Z",
+        "ageSeconds": 5.006,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "ce5584f9-cccd-4605-a0bb-ac9a28cecb33",
+      "channel": 5,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "Rajkot - Channel 5",
+      "branch": "Rajkot",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:15:30.497Z",
+        "ageSeconds": 66.691,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:35.011Z",
+        "ageSeconds": 5.844,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "6e5e3e6e-48b3-49ce-ac57-0b33bf3135b7",
+      "channel": 6,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "Rajkot - Channel 6",
+      "branch": "Rajkot",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:15:30.570Z",
+        "ageSeconds": 66.628,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:34.959Z",
+        "ageSeconds": 6.892,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "5937c091-eff5-4809-9bba-0aeb8b739d47",
+      "channel": 7,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "Rajkot - Channel 7",
+      "branch": "Rajkot",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:15:30.540Z",
+        "ageSeconds": 66.665,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:34.911Z",
+        "ageSeconds": 7.879,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "4d74d7ad-6922-4af0-9f36-420b84879425",
+      "channel": 8,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "Rajkot - Channel 8",
+      "branch": "Rajkot",
+      "helmet_rule": true,
+      "first": {
+        "capturedAt": "2026-10-08T06:15:30.553Z",
+        "ageSeconds": 66.658,
+        "width": 640,
+        "height": 360
+      },
+      "second": {
+        "capturedAt": "2026-10-08T06:17:34.706Z",
+        "ageSeconds": 8.812,
+        "width": 640,
+        "height": 360
+      },
+      "advancing": true,
+      "analytics": {
+        "engine": "AI_OPERATIONAL",
+        "stream": "unknown",
+        "inference": {
+          "fps": null,
+          "latencyMs": null,
+          "gpu": null
+        },
+        "lastDetectionAt": null
+      }
+    }
+  ],
+  "notifications": [
+    {
+      "channel": "dashboard",
+      "status": "delivered",
+      "count": 50,
+      "latest": "2026-10-08T05:58:56.519Z"
+    }
+  ],
+  "alerts": [
+    {
+      "camera_id": "d02f79e9-0615-4df6-a604-d3e4b8bde9b2",
+      "branch": "Bettaih",
+      "camera": "CP PLUS DVR - Channel 5",
+      "count": 1,
+      "latest": "2026-10-08T05:58:56.396Z"
+    },
+    {
+      "camera_id": "b7a24b40-013d-40c9-bd46-823cbcf6e326",
+      "branch": "KOLLAM",
+      "camera": "CP PLUS DVR - Channel 1",
+      "count": 1,
+      "latest": "2026-10-08T05:18:27.659Z"
+    },
+    {
+      "camera_id": "3da93c6e-6824-43dc-9bba-7332707d5856",
+      "branch": "KOLLAM",
+      "camera": "CP PLUS DVR - Channel 4",
+      "count": 10,
+      "latest": "2026-10-08T04:29:19.434Z"
+    },
+    {
+      "camera_id": "fb465a8f-5d79-4a3f-9cb8-b8cec471708d",
+      "branch": "KOLLAM",
+      "camera": "CP PLUS DVR - Channel 8",
+      "count": 37,
+      "latest": "2026-10-08T04:28:06.984Z"
+    },
+    {
+      "camera_id": "ce5584f9-cccd-4605-a0bb-ac9a28cecb33",
+      "branch": "Rajkot",
+      "camera": "Rajkot - Channel 5",
+      "count": 1,
+      "latest": "2026-10-07T10:08:16.088Z"
+    }
+  ]
+}

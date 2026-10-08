@@ -1,0 +1,44 @@
+[
+  {
+    "width": 640,
+    "height": 360,
+    "frames": 12,
+    "alertFrames": 5,
+    "alertFiles": [
+      "scratch/bettiah-entry-20261008/ch5/frame-040.jpg",
+      "scratch/bettiah-entry-20261008/ch5/frame-041.jpg",
+      "scratch/bettiah-entry-20261008/ch5/frame-042.jpg",
+      "scratch/bettiah-entry-20261008/ch5/frame-043.jpg",
+      "scratch/bettiah-entry-20261008/ch5/frame-044.jpg"
+    ],
+    "confidence": [
+      0.9570445086937512,
+      0.981442798104974,
+      0.9269840914594073,
+      0.9517956397341385,
+      0.925356700981158
+    ]
+  },
+  {
+    "width": 960,
+    "height": 540,
+    "frames": 12,
+    "alertFrames": 6,
+    "alertFiles": [
+      "scratch/bettiah-entry-20261008/ch5/frame-038.jpg",
+      "scratch/bettiah-entry-20261008/ch5/frame-040.jpg",
+      "scratch/bettiah-entry-20261008/ch5/frame-041.jpg",
+      "scratch/bettiah-entry-20261008/ch5/frame-042.jpg",
+      "scratch/bettiah-entry-20261008/ch5/frame-043.jpg",
+      "scratch/bettiah-entry-20261008/ch5/frame-044.jpg"
+    ],
+    "confidence": [
+      0.8820880562432869,
+      0.9706956043018744,
+      0.9767866304737469,
+      0.9070387027091871,
+      0.9484206220157617,
+      0.943827497034304
+    ]
+  }
+]

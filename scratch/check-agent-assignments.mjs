@@ -1,7 +1,7 @@
 import { execSync } from 'node:child_process';
 
 const sql = `
-SELECT * FROM edge_agent_branch_assignments;
+SELECT id, name, branch_node_id, status, last_seen_at FROM edge_agents WHERE id = '09181b97-0674-43ee-9d47-4b8c96f71a6b';
 `;
 
 const base64 = Buffer.from(sql).toString('base64');

@@ -100,7 +100,7 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
       // Never retry a classified negative through a different crop.
       if (!objects.some(item => (item.label === "head" || item.label === "helmet") &&
           (item.confidence ?? 0) >= 0.35 && validHead(frame, person, item.boundingBox)) &&
-          person.height < 0.35 && person.height * frame.height >= 72) {
+          person.height < 0.35 && person.height * frame.height >= 48) {
         objects = [...objects, ...await this.localizePersonHead(frame, person)];
       }
       const candidates = objects.filter(item => (item.label === "head" || item.label === "helmet") &&
@@ -115,6 +115,27 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
         if (!context.wearingHelmet || context.wearingHelmetConfidence < threshold) continue;
         return { boundingBox: candidate.boundingBox, localizationConfidence: candidate.confidence!,
           classificationConfidence: Math.min(head.wearingHelmetConfidence, context.wearingHelmetConfidence), headEvidence: true };
+      }
+      // If YOLOv5 localizer found no head candidate (e.g. on 360p substreams), evaluate anatomical head region
+      if (candidates.length === 0 && person.height * frame.height >= 48) {
+        const anatomicalBox: Box = {
+          x: Math.max(0, person.x + person.width * 0.1),
+          y: Math.max(0, person.y),
+          width: Math.min(1 - person.x, person.width * 0.8),
+          height: Math.min(1 - person.y, person.height * 0.35),
+        };
+        const head = await this.headClassifier!.run(frame, expand(anatomicalBox, 0.15));
+        if (head.wearingHelmet && head.wearingHelmetConfidence >= threshold) {
+          const context = await this.headClassifier!.run(frame, expand(anatomicalBox, 0.25));
+          if (context.wearingHelmet && context.wearingHelmetConfidence >= threshold) {
+            return {
+              boundingBox: anatomicalBox,
+              localizationConfidence: 0.75,
+              classificationConfidence: Math.min(head.wearingHelmetConfidence, context.wearingHelmetConfidence),
+              headEvidence: true,
+            };
+          }
+        }
       }
       // Do not override contrary complete-head evidence with legacy crown strips.
       return null;
@@ -306,7 +327,7 @@ function expand(box: Box, padding: number): Box {
 }
 function validHead(frame: DetectionFrame, person: Box, head: Box) {
   if (![head.x,head.y,head.width,head.height].every(Number.isFinite) || head.width <= 0 || head.height <= 0 ||
-      head.width * frame.width < 20 || head.height * frame.height < 20) return false;
+      head.width * frame.width < 14 || head.height * frame.height < 14) return false;
   const region = { x:person.x, y:Math.max(0,person.y-person.height*.2), width:person.width,
     bottom:Math.min(1,person.y+person.height*.35) };
   const intersection = Math.max(0,Math.min(region.x+region.width,head.x+head.width)-Math.max(region.x,head.x)) *

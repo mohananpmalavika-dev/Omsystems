@@ -1,0 +1,53 @@
+{
+  "checkedAt": "2026-10-08T05:43:48.814Z",
+  "aiState": "AI_OPERATIONAL",
+  "helmet": {
+    "status": "healthy",
+    "details": "Helmet classifier active; production crop alerts require independent head localization and classification agreement"
+  },
+  "received": 429,
+  "failed": 0,
+  "lastAcceptedAt": "2026-10-08T05:43:38.581Z",
+  "headEvidence": "*",
+  "confidence": "0.75",
+  "fastAlert": "true",
+  "hashes": {
+    "detectors/helmet-detector.js": "9b0405bbfd55c33bbb942dfe3b627a730c82a902428d89c3c42d183d19f495a5",
+    "inference/helmet-head-verification.js": "bcfde15f9bf41ec0f01c9bbbc972c3b4aec3b3c104cf4a2ae12b6ba4ac1e64cb",
+    "inference/helmet-head-probe.js": "f23a81f5a3d1d93edaea3396f6d36789c9ade24508d8a3982031704777a2c135",
+    "inference/helmet-head-classification.js": "859b6c88455583cfe07cfe888feeee560892e81fc267b0c1f5ce6aa206122cd6",
+    "model-manager.js": "870aaf8427162d6f76e9d9ed4aecabf8bca5c3c07a9cfe89cf8d4b21ac8f0c77"
+  },
+  "cameras": [
+    {
+      "id": "4a2f17b5-08e9-401a-84f6-6489c41970f9",
+      "status": 200,
+      "stream": "unknown",
+      "inference": {
+        "fps": null,
+        "latencyMs": null,
+        "gpu": null
+      },
+      "detection": {
+        "persons": 0,
+        "vehicles": 0,
+        "lastDetectionAt": null
+      }
+    },
+    {
+      "id": "d02f79e9-0615-4df6-a604-d3e4b8bde9b2",
+      "status": 200,
+      "stream": "unknown",
+      "inference": {
+        "fps": null,
+        "latencyMs": null,
+        "gpu": null
+      },
+      "detection": {
+        "persons": 0,
+        "vehicles": 0,
+        "lastDetectionAt": null
+      }
+    }
+  ]
+}

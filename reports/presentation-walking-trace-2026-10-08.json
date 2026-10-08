@@ -1,0 +1,185 @@
+{
+  "rows": [
+    {
+      "file": "scratch/bettiah-entry-20261008/ch5/frame-036.jpg",
+      "verified": [
+        {
+          "person": {
+            "label": "person",
+            "confidence": 0.8925373238901315,
+            "boundingBox": {
+              "x": 0.21593166744411424,
+              "y": 0.12177388442646044,
+              "width": 0.4012908299395584,
+              "height": 0.8084069570157606
+            }
+          },
+          "result": null
+        },
+        {
+          "person": {
+            "label": "person",
+            "confidence": 0.8715959287442416,
+            "boundingBox": {
+              "x": 0.24701706717390842,
+              "y": 0,
+              "width": 0.09976080755434386,
+              "height": 0.43884743838338625
+            }
+          },
+          "result": null
+        }
+      ],
+      "trace": [
+        {
+          "kind": "localizer",
+          "width": 640,
+          "height": 360,
+          "result": []
+        },
+        {
+          "kind": "localizer",
+          "width": 361,
+          "height": 175,
+          "result": [
+            {
+              "label": "head",
+              "confidence": 0.6385869325694813,
+              "boundingBox": {
+                "x": 0.6400449991226197,
+                "y": 0.2599214243207659,
+                "width": 0.16035685539245614,
+                "height": 0.4249815117972239
+              }
+            }
+          ]
+        },
+        {
+          "kind": "classifier",
+          "box": {
+            "x": 0.4818326890058816,
+            "y": 0.09536245714293587,
+            "width": 0.1175866753682494,
+            "height": 0.2685647053718567
+          },
+          "result": {
+            "wearingHelmet": true,
+            "confidence": 0.5718157299107967,
+            "wearingHelmetConfidence": 0.5718157299107967,
+            "unwearingHelmetConfidence": 0.42818427008920334
+          }
+        },
+        {
+          "kind": "localizer",
+          "width": 90,
+          "height": 72,
+          "result": []
+        }
+      ],
+      "eventsSubmitted": 0
+    },
+    {
+      "file": "scratch/bettiah-entry-20261008/ch5/frame-037.jpg",
+      "verified": [
+        {
+          "person": {
+            "label": "person",
+            "confidence": 0.8816877542795112,
+            "boundingBox": {
+              "x": 0.26939253145011743,
+              "y": 0.00015359734490704794,
+              "width": 0.09924530564793832,
+              "height": 0.4387591949972269
+            }
+          },
+          "result": null
+        },
+        {
+          "person": {
+            "label": "person",
+            "confidence": 0.816646492958597,
+            "boundingBox": {
+              "x": 0.47876273689047294,
+              "y": 0.001637673832784799,
+              "width": 0.07150580750690755,
+              "height": 0.2519570965107375
+            }
+          },
+          "result": null
+        },
+        {
+          "person": {
+            "label": "person",
+            "confidence": 0.7416960013617953,
+            "boundingBox": {
+              "x": 0.38922820423114013,
+              "y": 0.27800152551015045,
+              "width": 0.2294280274665046,
+              "height": 0.44306182648161885
+            }
+          },
+          "result": null
+        }
+      ],
+      "trace": [
+        {
+          "kind": "localizer",
+          "width": 640,
+          "height": 360,
+          "result": [
+            {
+              "label": "head",
+              "confidence": 0.8926625701924422,
+              "boundingBox": {
+                "x": 0.41403064131736755,
+                "y": 0.26205435858832465,
+                "width": 0.12621890306472783,
+                "height": 0.26990865071614595
+              }
+            },
+            {
+              "label": "head",
+              "confidence": 0.2692978994094375,
+              "boundingBox": {
+                "x": 0.29319935739040376,
+                "y": 0,
+                "width": 0.05496218800544739,
+                "height": 0.035455213652716755
+              }
+            }
+          ]
+        },
+        {
+          "kind": "localizer",
+          "width": 90,
+          "height": 72,
+          "result": []
+        },
+        {
+          "kind": "localizer",
+          "width": 65,
+          "height": 42,
+          "result": []
+        },
+        {
+          "kind": "localizer",
+          "width": 207,
+          "height": 104,
+          "result": [
+            {
+              "label": "head",
+              "confidence": 0.36484861143496516,
+              "boundingBox": {
+                "x": 0.23081424236297607,
+                "y": 0.2928120240569115,
+                "width": 0.36185078620910627,
+                "height": 0.7071879759430886
+              }
+            }
+          ]
+        }
+      ],
+      "eventsSubmitted": 0
+    }
+  ]
+}

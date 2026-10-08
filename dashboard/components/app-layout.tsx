@@ -198,6 +198,7 @@ export const navigation: NavGroup[] = [
       { label: "Camera & device uptime", href: "/operations/cameras", icon: Camera, badge: "cameras" },
       { label: "Branch operations & estate", href: "/operations/branches", icon: Building2 },
       { label: "Security & IoT devices", href: "/security-devices", icon: Shield },
+      { label: "Security Device Integration", href: "/security-devices/integrations", icon: Network },
       { label: "Recording continuity", href: "/operations/recording", icon: FileVideo2 },
       { label: "Storage & Disks", href: "/operations/storage", icon: HardDrive },
       { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },

@@ -41,7 +41,7 @@ export class HelmetDetector extends BaseDetector {
     fastAlert;
     verificationRequired = false;
     constructor(inference = null, confidenceThreshold = 0.88, classifier = null, fastAlert = process.env.HELMET_FAST_ALERT === "true", headVerifier = null) {
-        super("helmet", "1.3.1");
+        super("helmet", "1.3.2");
         this.headVerifier = headVerifier;
         this.inference = inference;
         this.classifier = classifier;
@@ -196,12 +196,17 @@ export class HelmetDetector extends BaseDetector {
         // not combine an old positive with a later reappearance or another object.
         const pending = this.pendingHeads.get(frame.cameraId);
         if (pending) {
-            this.pendingHeads.set(frame.cameraId, pending.filter((item) => indoorPersons.some((person) => (this.hasClassifiablePerson(person) || this.hasRaisedHeadCandidate(person)) &&
+            this.pendingHeads.set(frame.cameraId, pending.filter((item) => indoorPersons.some((person) => (this.hasClassifiablePerson(person, frame) || this.hasRaisedHeadCandidate(person)) &&
                 calculateIoU(item.personBox, person.boundingBox) >= this.PENDING_HEAD_IOU)));
         }
         for (const person of indoorPersons) {
+            if (runLocal && this.headVerifier?.usesHeadEvidence?.(frame) &&
+                ((person.confidence ?? 0) < 0.8 || person.boundingBox.height * frame.height < 72)) {
+                this.clearPendingHead(frame.cameraId, person.boundingBox);
+                continue;
+            }
             let presence = this.detectHelmetPresence(person, helmets);
-            if (!presence && !this.hasClassifiablePerson(person)) {
+            if (!presence && !this.hasClassifiablePerson(person, frame)) {
                 // A seated person's COCO box may begin at the visor/neck. For a large
                 // independently observed person, inspect above that box without
                 // relaxing the existing torso/compact classification gates. This
@@ -258,9 +263,10 @@ export class HelmetDetector extends BaseDetector {
             if (!presence && runLocal && this.headVerifier && frame.imageData && frame.imageData.length > 0) {
                 const verified = await this.headVerifier.verify(frame, person.boundingBox, this.headEvidenceThreshold(frame));
                 if (verified) {
-                    // Adapted head evidence needs a substantial independently detected
-                    // person. Never promote a spare helmet or background head to a wearer.
-                    if (verified.headEvidence && ((person.confidence ?? 0) < 0.8 || person.boundingBox.height < 0.35)) {
+                    // Source pixels determine usable detail at different resolutions.
+                    // Keep strong independent person evidence and the verifier's 20px head gate.
+                    if (verified.headEvidence && ((person.confidence ?? 0) < 0.8 ||
+                        person.boundingBox.height * frame.height < 72)) {
                         this.clearPendingHead(frame.cameraId, person.boundingBox);
                         continue;
                     }
@@ -424,9 +430,14 @@ export class HelmetDetector extends BaseDetector {
         }
         return [...riderDetections, ...indoorHelmetDetections];
     }
-    hasClassifiablePerson(person) {
-        const minConf = this.headVerifier ? 0.35 : this.FULL_PERSON_CONFIDENCE; // Lowered to 0.35 for walking persons
-        const minHeight = this.headVerifier ? 0.20 : 0.75; // Lowered to 0.20 for partially visible walking persons
+    hasClassifiablePerson(person, frame) {
+        if (frame && this.headVerifier?.usesHeadEvidence?.(frame)) {
+            return (person.confidence ?? 0) >= 0.8 && person.boundingBox.height * frame.height >= 72;
+        }
+        const minConf = this.headVerifier ? 0.35 : this.FULL_PERSON_CONFIDENCE;
+        const minHeight = this.headVerifier ? 0.20 : 0.75;
+        // Frame-relative width/aspect rules reject distant or side-on people.
+        // Independent head localization and source pixels establish usable evidence.
         return (person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ||
             ((person.confidence ?? 0) >= minConf && person.boundingBox.height >= minHeight);
     }
@@ -450,8 +461,8 @@ export class HelmetDetector extends BaseDetector {
         return Math.max(this.MIN_CONFIDENCE, this.headVerifier?.usesHeadEvidence?.(frame) ? 0.8 : this.HELMET_WORN_ALERT_CONFIDENCE);
     }
     hasRaisedHeadCandidate(person) {
-        const minConf = this.headVerifier ? 0.35 : 0.8; // Lowered to 0.35 for walking persons
-        const minHeight = this.headVerifier ? 0.20 : 0.7; // Lowered to 0.20 for partially visible walking persons
+        const minConf = this.headVerifier ? 0.35 : 0.8;
+        const minHeight = this.headVerifier ? 0.20 : 0.7;
         return (person.confidence ?? 0) >= minConf && person.boundingBox.height >= minHeight;
     }
     confirmClassifiedHead(cameraId, personBox, observedAt, requiredConfirmations = 2, cropMode = "standard") {

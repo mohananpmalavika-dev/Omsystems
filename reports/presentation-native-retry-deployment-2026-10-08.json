@@ -1,0 +1,16 @@
+{
+  "completedAt": "2026-10-08T06:14:59.956Z",
+  "stamp": "20261008061412292",
+  "archiveSha256": "d99c60aaef36d89fb9c606da7d2747171719ba8946088cb5d0b0fdde579e0f95",
+  "rollback": "/opt/sentinel-grid/presentation-releases/20261008061412292/rollback.sh",
+  "tests": 82,
+  "replay": {
+    "ch4Frames": 4,
+    "ch8Frames": 9,
+    "ch4AlertFrames": 2,
+    "ch8AlertFrames": 2,
+    "negativeFrames": 20,
+    "negativeAlertFrames": 0,
+    "labels": "CH8 wearer confirmed by user; absence/clipping is an abstention, not a bare-head negative"
+  }
+}

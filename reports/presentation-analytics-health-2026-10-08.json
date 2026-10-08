@@ -1,0 +1,491 @@
+{
+  "checkedAt": "2026-10-08T05:48:39.883Z",
+  "health": {
+    "status": "ok",
+    "aiState": "AI_OPERATIONAL",
+    "service": "sentinel-analytics-engine",
+    "received": 816,
+    "accepted": 816,
+    "failed": 0,
+    "lastAcceptedAt": "2026-10-08T05:48:29.859Z",
+    "pipeline": {
+      "initialized": true,
+      "detectors": {
+        "motion": {
+          "status": "healthy",
+          "details": "Motion detector operational"
+        },
+        "object": {
+          "status": "healthy",
+          "details": "Local open-source ONNX inference active"
+        },
+        "zone": {
+          "status": "healthy",
+          "details": "Tracking 0 objects"
+        },
+        "camera-health": {
+          "status": "healthy",
+          "details": "Monitoring 37 cameras"
+        },
+        "camera-tamper": {
+          "status": "healthy",
+          "details": "Monitoring optical tamper state for 2 cameras"
+        },
+        "shutter-state": {
+          "status": "healthy",
+          "details": "Requires camera-specific open/closed calibration; alerts only on confirmed transitions"
+        },
+        "person": {
+          "status": "healthy",
+          "details": "Local ONNX inference active; 5 active tracks"
+        },
+        "vehicle": {
+          "status": "healthy",
+          "details": "Local open-source ONNX inference active; 0 active vehicle tracks"
+        },
+        "helmet": {
+          "status": "healthy",
+          "details": "Helmet classifier active; production crop alerts require independent head localization and classification agreement"
+        },
+        "ppe": {
+          "status": "healthy",
+          "details": "Accepts edge PPE observations with local chromatic inspection fallback"
+        },
+        "fall": {
+          "status": "healthy",
+          "details": "Production pose & aspect ratio dynamics fall detector active; tracking 5 persons"
+        },
+        "fire-smoke": {
+          "status": "degraded",
+          "details": "Fire/smoke model unavailable; color-only alert fallback is disabled. Fire/smoke model failed responsiveness self-test: identical non-empty detections for black and white frames"
+        },
+        "crowd-density": {
+          "status": "healthy",
+          "details": "Monitoring 0 zones"
+        },
+        "tailgating": {
+          "status": "healthy",
+          "details": "Monitoring 0 zones, 0 recent entries"
+        },
+        "unattended-objects": {
+          "status": "healthy",
+          "details": "Unattended objects detector operational with dual-mode static tracking",
+          "metadata": {
+            "trackedObjects": 0,
+            "protectedObjects": 0,
+            "activeCamerasTracked": 0,
+            "protectedObjectsEnabled": false,
+            "unattendedThresholdSeconds": 45,
+            "abandonedThresholdSeconds": 120
+          }
+        },
+        "queue": {
+          "status": "healthy",
+          "details": "Monitoring 0 queues, 0 persons tracked"
+        },
+        "heatmap": {
+          "status": "healthy",
+          "details": "Grid: 32x18, Total intensity: 0.00, Movements: 0"
+        },
+        "face": {
+          "status": "healthy",
+          "details": "Local face ONNX inference active (recognition local)",
+          "metadata": {
+            "recognitionEnabled": true,
+            "localDetection": true,
+            "localEmbedding": true,
+            "watchlistsLoaded": 0
+          }
+        },
+        "anpr": {
+          "status": "healthy",
+          "details": "Local plate detection and OCR active (watchlist enabled)",
+          "metadata": {
+            "watchlistEnabled": true,
+            "watchlistsLoaded": 0,
+            "countryCode": "IN",
+            "localDetection": true,
+            "localRecognition": true
+          }
+        },
+        "analog-video-quality": {
+          "status": "healthy",
+          "details": "Monitoring 0 analog cameras for quality issues"
+        },
+        "camera-aging": {
+          "status": "healthy",
+          "details": "Monitoring 0 cameras, 0 at critical risk"
+        },
+        "camera-type-classifier": {
+          "status": "healthy",
+          "details": "Classified 0 cameras"
+        },
+        "dvr-channel-health": {
+          "status": "healthy",
+          "details": "Monitoring 0 DVR channels, 0 with errors"
+        },
+        "banking-analytics": {
+          "status": "healthy",
+          "details": "Banking analytics detector is available"
+        },
+        "vehicle-analytics": {
+          "status": "healthy",
+          "details": "Vehicle analytics detector is available"
+        },
+        "safety-analytics": {
+          "status": "healthy",
+          "details": "Safety analytics detector is available"
+        },
+        "face-analytics": {
+          "status": "healthy",
+          "details": "Face analytics detector is available"
+        },
+        "human-analytics": {
+          "status": "healthy",
+          "details": "Human analytics detector is available"
+        },
+        "retail-analytics": {
+          "status": "healthy",
+          "details": "Retail analytics detector is available"
+        },
+        "industrial-analytics": {
+          "status": "healthy",
+          "details": "Industrial analytics initialized"
+        },
+        "smart-city-analytics": {
+          "status": "healthy",
+          "details": "Smart city analytics detector is available"
+        },
+        "ai-search-engine": {
+          "status": "healthy",
+          "details": "AI Search Engine ready",
+          "indexedFrames": 0
+        },
+        "ai-investigation-tools": {
+          "status": "healthy",
+          "details": "AI Investigation Tools configured with 0 cameras",
+          "activeTracks": 0
+        },
+        "ai-prediction-engine": {
+          "status": "healthy",
+          "details": "AIPredictionEngine tracking 0 predictions",
+          "predictionCount": 0
+        },
+        "ai-reporting-engine": {
+          "status": "healthy",
+          "details": "AI Reporting Engine managing 0 report configs",
+          "reportHistoryCount": 0
+        },
+        "ai-assistant": {
+          "status": "healthy",
+          "details": "AIAssistant with 0 active sessions",
+          "activeSessions": 0
+        },
+        "banking": {
+          "status": "healthy",
+          "details": "Banking analytics detector is available"
+        },
+        "safety": {
+          "status": "healthy",
+          "details": "Safety analytics detector is available"
+        },
+        "investigation": {
+          "status": "healthy",
+          "details": "AI Investigation Tools configured with 0 cameras",
+          "activeTracks": 0
+        },
+        "prediction": {
+          "status": "healthy",
+          "details": "AIPredictionEngine tracking 0 predictions",
+          "predictionCount": 0
+        },
+        "reporting": {
+          "status": "healthy",
+          "details": "AI Reporting Engine managing 0 report configs",
+          "reportHistoryCount": 0
+        },
+        "assistant": {
+          "status": "healthy",
+          "details": "AIAssistant with 0 active sessions",
+          "activeSessions": 0
+        },
+        "retail": {
+          "status": "healthy",
+          "details": "Retail analytics detector is available"
+        },
+        "industrial": {
+          "status": "healthy",
+          "details": "Industrial analytics initialized"
+        },
+        "smart-city": {
+          "status": "healthy",
+          "details": "Smart city analytics detector is available"
+        }
+      },
+      "initializationErrors": {},
+      "models": {
+        "ready": true,
+        "configured": 20,
+        "required": 6,
+        "requiredReady": 6,
+        "loaded": 10,
+        "missingRequired": [],
+        "models": [
+          {
+            "id": "yolov8n",
+            "name": "YOLOX Tiny COCO object detector",
+            "task": "object-detection",
+            "required": true,
+            "status": "loaded",
+            "configuredPath": "detection/yolox_tiny.onnx",
+            "resolvedPath": "/app/models/detection/yolox_tiny.onnx",
+            "sizeBytes": 20219662,
+            "reason": null
+          },
+          {
+            "id": "fire-smoke",
+            "name": "Fire and smoke detector",
+            "task": "object-detection",
+            "required": false,
+            "status": "loaded",
+            "configuredPath": "safety/fire-smoke.onnx",
+            "resolvedPath": "/app/models/safety/fire-smoke.onnx",
+            "sizeBytes": 271142,
+            "reason": null
+          },
+          {
+            "id": "helmet",
+            "name": "Motorcycle helmet head classifier (EfficientNet-B0)",
+            "task": "helmet-classification",
+            "required": true,
+            "status": "loaded",
+            "configuredPath": "safety/helmet-motorcycle.onnx",
+            "resolvedPath": "/app/models/safety/helmet-motorcycle.onnx",
+            "sizeBytes": 16570770,
+            "reason": null
+          },
+          {
+            "id": "face-detector",
+            "name": "OpenCV Zoo YuNet face detector",
+            "task": "object-detection",
+            "required": true,
+            "status": "loaded",
+            "configuredPath": "face/face-detector.onnx",
+            "resolvedPath": "/app/models/face/face-detector.onnx",
+            "sizeBytes": 232589,
+            "reason": null
+          },
+          {
+            "id": "face-embedding",
+            "name": "OpenCV Zoo SFace embedding model (INT8)",
+            "task": "face-embedding",
+            "required": true,
+            "status": "loaded",
+            "configuredPath": "face/face-embedding.onnx",
+            "resolvedPath": "/app/models/face/face-embedding.onnx",
+            "sizeBytes": 9896933,
+            "reason": null
+          },
+          {
+            "id": "arcface-r100",
+            "name": "ArcFace ResNet100 (Production-Grade Face Recognition)",
+            "task": "face-embedding",
+            "required": false,
+            "status": "available",
+            "configuredPath": "/app/models/face/arcface_r100.onnx",
+            "resolvedPath": "/app/models/face/arcface_r100.onnx",
+            "sizeBytes": 261036388,
+            "reason": null
+          },
+          {
+            "id": "face-quality",
+            "name": "Face Quality Assessment Model (SER-FIQ)",
+            "task": "face-quality-assessment",
+            "required": false,
+            "status": "missing",
+            "configuredPath": "face/face-quality.onnx",
+            "resolvedPath": "/app/models/face/face-quality.onnx",
+            "sizeBytes": null,
+            "reason": "model file not found"
+          },
+          {
+            "id": "face-liveness",
+            "name": "Face Anti-Spoofing (Liveness Detection)",
+            "task": "face-liveness",
+            "required": false,
+            "status": "missing",
+            "configuredPath": "face/face-liveness.onnx",
+            "resolvedPath": "/app/models/face/face-liveness.onnx",
+            "sizeBytes": null,
+            "reason": "model file not found"
+          },
+          {
+            "id": "anpr-detector",
+            "name": "OpenCV Zoo LPD-YuNet plate detector",
+            "task": "object-detection",
+            "required": true,
+            "status": "loaded",
+            "configuredPath": "vehicle/license-plate-detector.onnx",
+            "resolvedPath": "/app/models/vehicle/license-plate-detector.onnx",
+            "sizeBytes": 4146213,
+            "reason": null
+          },
+          {
+            "id": "anpr-recognizer",
+            "name": "OpenCV Zoo CRNN English plate recognizer (INT8)",
+            "task": "ctc-text-recognition",
+            "required": true,
+            "status": "loaded",
+            "configuredPath": "vehicle/license-plate-recognizer.onnx",
+            "resolvedPath": "/app/models/vehicle/license-plate-recognizer.onnx",
+            "sizeBytes": 16378030,
+            "reason": null
+          },
+          {
+            "id": "pose-estimator",
+            "name": "Pose estimation model (YOLOv8-Pose)",
+            "task": "pose-estimation",
+            "required": false,
+            "status": "loaded",
+            "configuredPath": "pose/yolov8n-pose.onnx",
+            "resolvedPath": "/app/models/pose/yolov8n-pose.onnx",
+            "sizeBytes": 1883936,
+            "reason": null
+          },
+          {
+            "id": "attribute-estimator",
+            "name": "Person attribute estimator (age, gender, emotion)",
+            "task": "attribute-estimation",
+            "required": false,
+            "status": "missing",
+            "configuredPath": "attributes/age-gender-emotion.onnx",
+            "resolvedPath": "/app/models/attributes/age-gender-emotion.onnx",
+            "sizeBytes": null,
+            "reason": "model file not found"
+          },
+          {
+            "id": "vehicle-reid",
+            "name": "Vehicle re-identification model",
+            "task": "vehicle-reid",
+            "required": false,
+            "status": "missing",
+            "configuredPath": "vehicle/vehicle-reid.onnx",
+            "resolvedPath": "/app/models/vehicle/vehicle-reid.onnx",
+            "sizeBytes": null,
+            "reason": "model file not found"
+          },
+          {
+            "id": "person-reid",
+            "name": "Person re-identification model (OSNet)",
+            "task": "person-reid",
+            "required": false,
+            "status": "missing",
+            "configuredPath": "tracking/osnet-reid.onnx",
+            "resolvedPath": "/app/models/tracking/osnet-reid.onnx",
+            "sizeBytes": null,
+            "reason": "model file not found"
+          },
+          {
+            "id": "weapon-detector",
+            "name": "Weapon detector (handgun, rifle, knife, bat)",
+            "task": "object-detection",
+            "required": false,
+            "status": "available",
+            "configuredPath": "security/weapon-detector.onnx",
+            "resolvedPath": "/app/models/security/weapon-detector.onnx",
+            "sizeBytes": 271142,
+            "reason": null
+          },
+          {
+            "id": "atm-tamper-detector",
+            "name": "ATM physical tamper detector (skimmer, gas cutter, flame)",
+            "task": "object-detection",
+            "required": false,
+            "status": "available",
+            "configuredPath": "security/atm-tamper-detector.onnx",
+            "resolvedPath": "/app/models/security/atm-tamper-detector.onnx",
+            "sizeBytes": 271150,
+            "reason": null
+          },
+          {
+            "id": "acoustic-security",
+            "name": "Acoustic security classifier (glass break, gunshot, scream)",
+            "task": "audio-classification",
+            "required": false,
+            "status": "available",
+            "configuredPath": "audio/acoustic-security.onnx",
+            "resolvedPath": "/app/models/audio/acoustic-security.onnx",
+            "sizeBytes": 2366,
+            "reason": null
+          },
+          {
+            "id": "emotion-recognition",
+            "name": "MindSense Emotion Recognition (FER2013 CNN)",
+            "task": "emotion-recognition",
+            "required": false,
+            "status": "missing",
+            "configuredPath": "mindsense/emotion-recognition.onnx",
+            "resolvedPath": "/app/models/mindsense/emotion-recognition.onnx",
+            "sizeBytes": null,
+            "reason": "model file not found"
+          },
+          {
+            "id": "helmet-head-localizer",
+            "name": "Helmet/head localization verifier (YOLOv5)",
+            "task": "object-detection",
+            "required": false,
+            "status": "loaded",
+            "configuredPath": "safety/helmet-head-localizer.onnx",
+            "resolvedPath": "/app/models/safety/helmet-head-localizer.onnx",
+            "sizeBytes": 28207460,
+            "reason": null
+          },
+          {
+            "id": "helmet-head-evidence",
+            "name": "Motorcycle helmet head evidence (CLIP linear probe)",
+            "task": "helmet-classification",
+            "required": false,
+            "status": "loaded",
+            "configuredPath": "safety/helmet-head-embedding.onnx",
+            "resolvedPath": "/app/models/safety/helmet-head-embedding.onnx",
+            "sizeBytes": 89117001,
+            "reason": null
+          }
+        ]
+      },
+      "scheduler": {
+        "framesRecorded": 1455,
+        "framesProcessed": 750,
+        "framesSkipped": 705,
+        "processingRate": 51.546391752577314,
+        "gpuLoad": 4,
+        "peakGpuLoad": 20,
+        "activeCameras": 37,
+        "modelInvocations": {
+          "yolov8n": 720,
+          "helmet": 246,
+          "face-detector": 86,
+          "fire-smoke": 58
+        },
+        "averageModelsPerFrame": 1.48
+      }
+    },
+    "initializationError": null,
+    "notifications": {
+      "status": "operational",
+      "controlPlaneUrl": "http://control-plane:8080",
+      "mode": "authoritative-control-plane"
+    },
+    "streams": {
+      "active": 0,
+      "stats": []
+    }
+  },
+  "runtime": {
+    "detectorSha256": "9b0405bbfd55c33bbb942dfe3b627a730c82a902428d89c3c42d183d19f495a5",
+    "verifierSha256": "bcfde15f9bf41ec0f01c9bbbc972c3b4aec3b3c104cf4a2ae12b6ba4ac1e64cb",
+    "anatomicalFallback": true,
+    "strongPersonGate": false,
+    "minimum20PixelHead": false
+  }
+}

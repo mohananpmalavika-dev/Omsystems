@@ -1,0 +1,24 @@
+{
+  "from": "2026-10-08T04:35:00Z",
+  "to": "2026-10-08T04:41:00Z",
+  "containers": {
+    "sentinel-gcp-analytics-engine": {
+      "lineCount": 2589,
+      "disposedErrors": 0,
+      "failedRequests": 0,
+      "cameraLines": 0,
+      "disposedTimes": [],
+      "firstLineTime": "2026-10-08T04:35:00.052071304Z",
+      "lastLineTime": "2026-10-08T04:40:59.606973140Z"
+    },
+    "sentinel-gcp-control-plane": {
+      "lineCount": 40815,
+      "disposedErrors": 0,
+      "failedRequests": 0,
+      "cameraLines": 240,
+      "disposedTimes": [],
+      "firstLineTime": "2026-10-08T04:35:00.004693997Z",
+      "lastLineTime": "2026-10-08T04:40:59.933309788Z"
+    }
+  }
+}

@@ -60,11 +60,17 @@ services:
       ENABLE_GPU_ACCELERATION: "${ENABLE_GPU_ACCELERATION:-false}"
       
       # Detection Thresholds
-      PERSON_CONFIDENCE_THRESHOLD: "0.5"
+      PERSON_CONFIDENCE_THRESHOLD: "0.35"  # Lowered for walking persons
       VEHICLE_CONFIDENCE_THRESHOLD: "0.6"
-      HELMET_CONFIDENCE_THRESHOLD: "0.7"
+      HELMET_CONFIDENCE_THRESHOLD: "0.80"  # Balanced for accuracy + walking persons
       FIRE_CONFIDENCE_THRESHOLD: "0.8"
       FIRE_CONFIRMATION_FRAMES: "3"
+      
+      # Helmet Detection - Walking Person Support
+      HELMET_HEAD_EVIDENCE_CAMERAS: "*"  # Enable advanced head evidence for ALL cameras
+      HELMET_MULTI_MODEL: "true"  # Enable multi-model verification (pose + face + localizer)
+      # HELMET_FAST_ALERT: "false"  # Keep multi-frame confirmation (commented = default false)
+      # HELMET_HD_CAPTURE_CAMERAS: ""  # Optional: comma-separated camera IDs for 720p capture
       
       # Logging
       LOG_LEVEL: "${LOG_LEVEL:-info}"

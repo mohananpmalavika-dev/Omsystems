@@ -2,19 +2,31 @@ import { execSync } from 'child_process';
 
 const branchId = '00000000-0000-4000-8000-000000000104';
 const tenantId = '00000000-0000-4000-8000-000000000001';
-const edgeAgentId = 'e9b95595-1aa6-4a14-9f5d-bd0c958d3f34';
+const edgeAgentId = 'b950f232-557e-42cd-8bc8-8f4490d0b68b';
+const oldAgentId = 'e9b95595-1aa6-4a14-9f5d-bd0c958d3f34';
 const branchPath = 'company.operations.local_region.local_camera_pilot';
-const ipAddress = '192.168.29.171';
+const ipAddress = '192.168.29.170';
 
 const sql = `
 BEGIN;
 
--- 1. Clean any existing cameras under pilot branch for this IP
+-- 1. Copy any stream secrets from oldAgentId to active edgeAgentId if missing
+INSERT INTO central_stream_secrets (reference, edge_agent_id, encrypted_uri, updated_at)
+SELECT 
+  replace(reference, '${oldAgentId}', '${edgeAgentId}'),
+  '${edgeAgentId}'::uuid,
+  encrypted_uri,
+  now()
+FROM central_stream_secrets
+WHERE reference LIKE 'edge://${oldAgentId}/%'
+ON CONFLICT (reference) DO NOTHING;
+
+-- 2. Clean existing cameras under pilot branch for this IP
 DELETE FROM analytics_rules WHERE camera_id IN (SELECT id FROM cameras WHERE branch_node_id = '${branchId}' AND ip_address = '${ipAddress}');
 DELETE FROM live_sessions WHERE camera_id IN (SELECT id FROM cameras WHERE branch_node_id = '${branchId}' AND ip_address = '${ipAddress}');
 DELETE FROM cameras WHERE branch_node_id = '${branchId}' AND ip_address = '${ipAddress}';
 
--- 3. Provision all discovered channels for 192.168.29.171
+-- 3. Provision all discovered channels for 192.168.29.170
 DO $$
 DECLARE
   rec RECORD;
@@ -86,20 +98,19 @@ COMMIT;
 `;
 
 const b64 = Buffer.from(sql).toString('base64');
-const cmd = `gcloud compute ssh kryptovision-server --zone=asia-south1-b --project=project-7866fc3f-5dd5-4495-804 --quiet --command="echo ${b64} | base64 -d | sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid"`;
+const cmd = `gcloud compute ssh kryptovision-server --zone=asia-south1-b --project=project-7866fc3f-5dd5-4495-804 --quiet --command="echo '${b64}' | base64 -d | sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid"`;
 
 console.log('Applying pilot cameras provisioning to GCP Postgres...');
 console.log(execSync(cmd, { encoding: 'utf8' }));
 
-// Verify
 const verifySql = `
-SELECT c.id, c.model, c.channel, c.status, c.connection_secret_ref, ar.detection_type, ar.enabled as rule_enabled
+SELECT c.id, c.model, c.channel, c.status, c.connection_secret_ref, ar.detection_type, ar.enabled as rule_enabled, ar.min_confidence
 FROM cameras c
 LEFT JOIN analytics_rules ar ON ar.camera_id = c.id
 WHERE c.branch_node_id = '${branchId}'
 ORDER BY c.channel;
 `;
 const verifyB64 = Buffer.from(verifySql).toString('base64');
-const verifyCmd = `gcloud compute ssh kryptovision-server --zone=asia-south1-b --project=project-7866fc3f-5dd5-4495-804 --quiet --command="echo ${verifyB64} | base64 -d | sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid"`;
+const verifyCmd = `gcloud compute ssh kryptovision-server --zone=asia-south1-b --project=project-7866fc3f-5dd5-4495-804 --quiet --command="echo '${verifyB64}' | base64 -d | sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid"`;
 console.log('=== VERIFYING PILOT CAMERAS ===');
 console.log(execSync(verifyCmd, { encoding: 'utf8' }));

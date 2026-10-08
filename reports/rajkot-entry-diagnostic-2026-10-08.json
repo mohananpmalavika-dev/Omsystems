@@ -1,0 +1,212 @@
+{
+  "checkedAt": "2026-10-08T05:09:56.781Z",
+  "hdCapture": "e66e3498-1c13-4f59-91d7-5a3386d269d2",
+  "updateVersion": "0.1.49",
+  "updateTargets": "e9b95595-1aa6-4a14-9f5d-bd0c958d3f34",
+  "cams": [
+    {
+      "id": "0fc5c021-4246-4659-87a0-0ba4c6f36240",
+      "channel": 1,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "Rajkot - Channel 1",
+      "agent_version": "0.1.48",
+      "agent_last_seen": "2026-10-08T05:09:53.470Z",
+      "frame": {
+        "capturedAt": "2026-10-08T05:09:28.202Z",
+        "ageSeconds": 28.516,
+        "width": 640,
+        "height": 360,
+        "encoding": "rgb24"
+      }
+    },
+    {
+      "id": "ee9e189d-5bda-4ac7-a6d6-284880d98e91",
+      "channel": 2,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "Rajkot - Channel 2",
+      "agent_version": "0.1.48",
+      "agent_last_seen": "2026-10-08T05:09:53.470Z",
+      "frame": {
+        "capturedAt": "2026-10-08T05:09:33.449Z",
+        "ageSeconds": 23.276,
+        "width": 640,
+        "height": 360,
+        "encoding": "rgb24"
+      }
+    },
+    {
+      "id": "046a42fe-8799-447f-a250-66660cfdfeac",
+      "channel": 3,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "Rajkot - Channel 3",
+      "agent_version": "0.1.48",
+      "agent_last_seen": "2026-10-08T05:09:53.470Z",
+      "frame": {
+        "capturedAt": "2026-10-08T05:09:33.268Z",
+        "ageSeconds": 23.464,
+        "width": 640,
+        "height": 360,
+        "encoding": "rgb24"
+      }
+    },
+    {
+      "id": "1fcc5ac0-da36-4941-b5dc-92f748a182b6",
+      "channel": 4,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "Rajkot - Channel 4",
+      "agent_version": "0.1.48",
+      "agent_last_seen": "2026-10-08T05:09:53.470Z",
+      "frame": {
+        "capturedAt": "2026-10-08T05:09:35.981Z",
+        "ageSeconds": 20.761,
+        "width": 640,
+        "height": 360,
+        "encoding": "rgb24"
+      }
+    },
+    {
+      "id": "ce5584f9-cccd-4605-a0bb-ac9a28cecb33",
+      "channel": 5,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "Rajkot - Channel 5",
+      "agent_version": "0.1.48",
+      "agent_last_seen": "2026-10-08T05:09:53.470Z",
+      "frame": {
+        "capturedAt": "2026-10-08T05:09:35.912Z",
+        "ageSeconds": 20.835,
+        "width": 640,
+        "height": 360,
+        "encoding": "rgb24"
+      }
+    },
+    {
+      "id": "6e5e3e6e-48b3-49ce-ac57-0b33bf3135b7",
+      "channel": 6,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "Rajkot - Channel 6",
+      "agent_version": "0.1.48",
+      "agent_last_seen": "2026-10-08T05:09:53.470Z",
+      "frame": {
+        "capturedAt": "2026-10-08T05:09:38.691Z",
+        "ageSeconds": 18.062,
+        "width": 640,
+        "height": 360,
+        "encoding": "rgb24"
+      }
+    },
+    {
+      "id": "5937c091-eff5-4809-9bba-0aeb8b739d47",
+      "channel": 7,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "Rajkot - Channel 7",
+      "agent_version": "0.1.48",
+      "agent_last_seen": "2026-10-08T05:09:53.470Z",
+      "frame": {
+        "capturedAt": "2026-10-08T05:09:38.717Z",
+        "ageSeconds": 18.042,
+        "width": 640,
+        "height": 360,
+        "encoding": "rgb24"
+      }
+    },
+    {
+      "id": "4d74d7ad-6922-4af0-9f36-420b84879425",
+      "channel": 8,
+      "status": "online",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "Rajkot - Channel 8",
+      "agent_version": "0.1.48",
+      "agent_last_seen": "2026-10-08T05:09:53.470Z",
+      "frame": {
+        "capturedAt": "2026-10-08T05:09:41.368Z",
+        "ageSeconds": 15.398,
+        "width": 640,
+        "height": 360,
+        "encoding": "rgb24"
+      }
+    }
+  ],
+  "rules": [
+    {
+      "id": "521e4670-05a1-47e3-8c34-a29fcb2e12fa",
+      "camera_id": "1fcc5ac0-da36-4941-b5dc-92f748a182b6",
+      "detection_type": "helmet-worn",
+      "enabled": true,
+      "min_confidence": "0.7000",
+      "min_duration_seconds": "1.000",
+      "cooldown_seconds": 20
+    },
+    {
+      "id": "889eae12-6d12-48ca-9d7a-0b4fb67760c6",
+      "camera_id": "ce5584f9-cccd-4605-a0bb-ac9a28cecb33",
+      "detection_type": "helmet-worn",
+      "enabled": true,
+      "min_confidence": "0.7000",
+      "min_duration_seconds": "1.000",
+      "cooldown_seconds": 20
+    },
+    {
+      "id": "45765aad-1ac9-424f-92c5-26e44ed0978b",
+      "camera_id": "0fc5c021-4246-4659-87a0-0ba4c6f36240",
+      "detection_type": "helmet-worn",
+      "enabled": true,
+      "min_confidence": "0.7000",
+      "min_duration_seconds": "1.000",
+      "cooldown_seconds": 20
+    },
+    {
+      "id": "8ebb1d0a-74f5-4c96-ba20-aa62657e6913",
+      "camera_id": "5937c091-eff5-4809-9bba-0aeb8b739d47",
+      "detection_type": "helmet-worn",
+      "enabled": true,
+      "min_confidence": "0.7000",
+      "min_duration_seconds": "1.000",
+      "cooldown_seconds": 20
+    },
+    {
+      "id": "e7f59dc9-8e29-4115-9ba9-60a384a1be2a",
+      "camera_id": "4d74d7ad-6922-4af0-9f36-420b84879425",
+      "detection_type": "helmet-worn",
+      "enabled": true,
+      "min_confidence": "0.7000",
+      "min_duration_seconds": "1.000",
+      "cooldown_seconds": 20
+    },
+    {
+      "id": "f234ad3d-9f6c-4be6-8f4a-c35ed82de91f",
+      "camera_id": "ee9e189d-5bda-4ac7-a6d6-284880d98e91",
+      "detection_type": "helmet-worn",
+      "enabled": true,
+      "min_confidence": "0.7000",
+      "min_duration_seconds": "1.000",
+      "cooldown_seconds": 20
+    },
+    {
+      "id": "8768a42b-7914-4d3d-bdf4-2522984194ff",
+      "camera_id": "046a42fe-8799-447f-a250-66660cfdfeac",
+      "detection_type": "helmet-worn",
+      "enabled": true,
+      "min_confidence": "0.7000",
+      "min_duration_seconds": "1.000",
+      "cooldown_seconds": 20
+    },
+    {
+      "id": "a491d8b2-ac99-47e0-8bb0-f1bba7af479c",
+      "camera_id": "6e5e3e6e-48b3-49ce-ac57-0b33bf3135b7",
+      "detection_type": "helmet-worn",
+      "enabled": true,
+      "min_confidence": "0.7000",
+      "min_duration_seconds": "1.000",
+      "cooldown_seconds": 20
+    }
+  ],
+  "events": [],
+  "alerts": []
+}

@@ -1,9 +1,9 @@
 import { execSync } from 'child_process';
 
 const sql = `
-SELECT id, display_name, recorder_channel, ip_address, status
+SELECT id, display_name, recorder_channel, ip_address, status, branch_node_id
 FROM camera_discoveries
-WHERE branch_node_id = '00000000-0000-4000-8000-000000000104'
+WHERE ip_address = '192.168.29.170'
 ORDER BY recorder_channel;
 `;
 
