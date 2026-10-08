@@ -1,0 +1,68 @@
+{
+  "columns": [
+    "id",
+    "tenant_id",
+    "branch_node_id",
+    "name",
+    "version",
+    "status",
+    "last_seen_at",
+    "created_at",
+    "gateway_id",
+    "hostname",
+    "platform",
+    "architecture",
+    "agent_version",
+    "desired_agent_version",
+    "configuration_version",
+    "desired_configuration_version",
+    "media_mtx_version",
+    "first_seen_at",
+    "installed_at",
+    "started_at",
+    "last_restart_at",
+    "last_restart_reason",
+    "certificate_serial",
+    "certificate_expires_at",
+    "updated_at",
+    "public_media_url",
+    "device_uuid",
+    "credential_hash",
+    "credential_issued_at",
+    "credential_revoked_at",
+    "command_public_key",
+    "local_media_url"
+  ],
+  "agents": [
+    {
+      "id": "839d2a88-2b36-4e34-bd99-6cb247e196a5",
+      "name": "PERAVARUNI Scanner",
+      "hostname": "edge-gateway",
+      "platform": "windows",
+      "architecture": "x64",
+      "started_at": "2026-10-03T08:36:26.409Z",
+      "last_restart_at": null,
+      "last_restart_reason": "OS_BOOT"
+    },
+    {
+      "id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "Hajipur Gateway",
+      "hostname": "edge-gateway",
+      "platform": "windows",
+      "architecture": "x64",
+      "started_at": "2026-10-01T09:55:22.239Z",
+      "last_restart_at": null,
+      "last_restart_reason": "OS_BOOT"
+    },
+    {
+      "id": "2b4fe162-6c1a-413e-9596-1eac2e1bcf88",
+      "name": "KOLLAM Scanner",
+      "hostname": "edge-gateway",
+      "platform": "windows",
+      "architecture": "x64",
+      "started_at": "2026-10-06T13:01:56.581Z",
+      "last_restart_at": null,
+      "last_restart_reason": "OS_BOOT"
+    }
+  ]
+}

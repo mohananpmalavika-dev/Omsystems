@@ -13,8 +13,8 @@ console.log('2. Packaging compiled analytics-engine dist...');
 const tarPath = path.resolve('scratch/dist-deploy.tar.gz');
 if (fs.existsSync(tarPath)) fs.unlinkSync(tarPath);
 
-// Create tarball of analytics-engine/dist/analytics-engine
-execSync(`tar -czf "${tarPath}" -C analytics-engine/dist/analytics-engine .`, { stdio: 'inherit' });
+// Create tarball of analytics-engine/dist (covers analytics-engine, src, packages)
+execSync(`tar -czf "${tarPath}" -C analytics-engine/dist .`, { stdio: 'inherit' });
 const tarStats = fs.statSync(tarPath);
 console.log(`Created dist archive: ${(tarStats.size / 1024).toFixed(1)} KB`);
 
@@ -23,10 +23,10 @@ execSync(`gcloud compute scp "${tarPath}" ${instance}:/tmp/dist-deploy.tar.gz --
 
 console.log('4. Extracting compiled code into analytics-engine container & host directory...');
 const deployCmd = `
-sudo mkdir -p /opt/sentinel-grid/analytics-engine/dist/analytics-engine
-sudo tar -xzf /tmp/dist-deploy.tar.gz -C /opt/sentinel-grid/analytics-engine/dist/analytics-engine/
-sudo docker exec -i sentinel-gcp-analytics-engine mkdir -p /app/dist/analytics-engine
-sudo docker exec -i sentinel-gcp-analytics-engine tar -xzf - -C /app/dist/analytics-engine < /tmp/dist-deploy.tar.gz
+sudo mkdir -p /opt/sentinel-grid/analytics-engine/dist
+sudo tar -xzf /tmp/dist-deploy.tar.gz -C /opt/sentinel-grid/analytics-engine/dist/
+sudo docker exec -i sentinel-gcp-analytics-engine mkdir -p /app/dist
+sudo docker exec -i sentinel-gcp-analytics-engine tar -xzf - -C /app/dist < /tmp/dist-deploy.tar.gz
 rm -f /tmp/dist-deploy.tar.gz
 `;
 const deployBase64 = Buffer.from(deployCmd).toString('base64');
@@ -36,7 +36,7 @@ console.log('5. Restarting sentinel-gcp-analytics-engine container to load new c
 execSync(`gcloud compute ssh ${instance} --zone=${zone} --project=${project} --command="sudo docker restart sentinel-gcp-analytics-engine"`, { stdio: 'inherit' });
 
 console.log('6. Waiting 6s and verifying container health...');
-execSync(`gcloud compute ssh ${instance} --zone=${zone} --project=${project} --command="sleep 6 && sudo docker ps --filter name=sentinel-gcp-analytics-engine --format 'table {{.Names}}\\t{{.Status}}'"`, { stdio: 'inherit' });
+execSync(`gcloud compute ssh ${instance} --zone=${zone} --project=${project} --command="sleep 6 && sudo docker ps --filter name=sentinel-gcp-analytics-engine --format 'table {{.Names}}\\t{{.Status}}' && curl -s http://localhost:8092/health"`, { stdio: 'inherit' });
 
 if (fs.existsSync(tarPath)) fs.unlinkSync(tarPath);
 console.log('✅ Deployment complete and verified!');

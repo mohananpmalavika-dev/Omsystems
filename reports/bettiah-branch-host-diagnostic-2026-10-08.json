@@ -1,0 +1,24 @@
+{
+  "units": [],
+  "processes": [],
+  "runtime": [
+    {
+      "directory": "/opt/sentinel-grid/edge-runtime",
+      "directories": [
+        "data",
+        "runtime"
+      ],
+      "files": []
+    },
+    {
+      "directory": "/opt/sentinel-grid/edge-runtime/data",
+      "directories": [],
+      "files": []
+    },
+    {
+      "directory": "/opt/sentinel-grid/edge-runtime/runtime",
+      "directories": [],
+      "files": []
+    }
+  ]
+}
