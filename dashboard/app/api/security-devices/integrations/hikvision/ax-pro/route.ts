@@ -1,18 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  getConfiguredTenantId,
+  requireAxProTenant,
   getHikvisionAxProIntegrationService,
-  requireSessionToken,
+  axProApiError,
 } from '@/lib/backend/hikvision-axpro';
+import { readAxProBody, isRecord } from '../../../../../../../src/security-devices/integrations/hikvision/axpro/client';
+import { AxProError } from '../../../../../../../src/security-devices/integrations/hikvision/axpro/errors';
+import type { CreateAxProIntegrationInput } from '../../../../../../../src/security-devices/integrations/hikvision/axpro/integration.service';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
-    requireSessionToken(request);
-    const body = await request.json();
+    const tenantId = await requireAxProTenant(request);
+    const body = JSON.parse(await readAxProBody(request, AbortSignal.timeout(10_000)));
+    if (!isRecord(body) || (body.enabled !== undefined && typeof body.enabled !== 'boolean') || (body.allowInsecureHttp !== undefined && typeof body.allowInsecureHttp !== 'boolean')) throw new AxProError('AXPRO_CONFIG_INVALID', 'Request must contain an integration object with boolean enabled/allowInsecureHttp fields', 400);
     const service = getHikvisionAxProIntegrationService();
-    const data = await service.create(getConfiguredTenantId(), {
+    const data = await service.create(tenantId, {
       name: String(body.name || ''),
       branchId: String(body.branchId || ''),
       host: String(body.host || ''),
@@ -23,16 +27,13 @@ export async function POST(request: NextRequest) {
       enabled: body.enabled !== false,
       timeoutMs: body.timeoutMs === undefined ? undefined : Number(body.timeoutMs),
       allowInsecureHttp: body.allowInsecureHttp === true,
-      authMethod: body.authMethod,
-      endpointPaths: body.endpointPaths,
-      eventTypeMap: body.eventTypeMap,
+      // The shared service validates these optional fields before persistence.
+      authMethod: body.authMethod as CreateAxProIntegrationInput['authMethod'],
+      endpointPaths: body.endpointPaths as CreateAxProIntegrationInput['endpointPaths'],
+      eventTypeMap: body.eventTypeMap as CreateAxProIntegrationInput['eventTypeMap'],
     });
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message === 'unauthenticated') return NextResponse.json({ error: 'unauthenticated', message }, { status: 401 });
-    const status = /required|must be|disabled|between|format/.test(message) ? 400 : message.includes('not configured') ? 503 : 502;
-    return NextResponse.json({ error: 'integration_create_failed', message }, { status });
+    return axProApiError(error);
   }
 }
-

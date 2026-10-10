@@ -1,0 +1,322 @@
+{
+  "checkedAt": "2026-10-08T07:05:23.072Z",
+  "agents": [
+    {
+      "id": "b950f232-557e-42cd-8bc8-8f4490d0b68b",
+      "name": "Local Camera Pilot Scanner",
+      "status": "online",
+      "version": "0.1.48",
+      "last_seen_at": "2026-10-08T07:05:20.955Z",
+      "branch": "Local Camera Pilot"
+    },
+    {
+      "id": "839d2a88-2b36-4e34-bd99-6cb247e196a5",
+      "name": "PERAVARUNI Scanner",
+      "status": "online",
+      "version": "0.1.48",
+      "last_seen_at": "2026-10-08T06:30:09.229Z",
+      "branch": "PERAVARUNI"
+    },
+    {
+      "id": "2b4fe162-6c1a-413e-9596-1eac2e1bcf88",
+      "name": "KOLLAM Scanner",
+      "status": "online",
+      "version": "0.1.48",
+      "last_seen_at": "2026-10-08T06:30:06.447Z",
+      "branch": "KOLLAM"
+    },
+    {
+      "id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "name": "Hajipur Gateway",
+      "status": "online",
+      "version": "0.1.48",
+      "last_seen_at": "2026-10-08T06:30:06.280Z",
+      "branch": "Hajipur"
+    },
+    {
+      "id": "e9b95595-1aa6-4a14-9f5d-bd0c958d3f34",
+      "name": "Local Camera Pilot Scanner",
+      "status": "online",
+      "version": "0.1.48",
+      "last_seen_at": "2026-10-07T18:20:18.059Z",
+      "branch": "Local Camera Pilot"
+    },
+    {
+      "id": "36cbf33d-9fdd-4446-9df0-9cae1680a6f2",
+      "name": "Rajkot Gateway",
+      "status": "online",
+      "version": "1.0.0",
+      "last_seen_at": "2026-10-05T20:03:34.877Z",
+      "branch": "Rajkot"
+    },
+    {
+      "id": "28cbf33d-9fdd-4446-9df0-9cae1680a6f1",
+      "name": "Bettaih Gateway",
+      "status": "online",
+      "version": "1.0.0",
+      "last_seen_at": "2026-10-05T20:03:34.877Z",
+      "branch": "Bettaih"
+    },
+    {
+      "id": "aaeda07f-01ce-4361-afd3-a54e4ca114f3",
+      "name": "Local Camera Pilot Gateway",
+      "status": "online",
+      "version": "0.1.47",
+      "last_seen_at": "2026-10-04T12:58:53.889Z",
+      "branch": "Local Camera Pilot"
+    },
+    {
+      "id": "a9fb324e-e7c7-4984-9cd3-8a4b85687e9e",
+      "name": "Local Camera Pilot Scanner",
+      "status": "offline",
+      "version": "0.1.47",
+      "last_seen_at": "2026-10-03T19:05:49.244Z",
+      "branch": "Local Camera Pilot"
+    },
+    {
+      "id": "e9f439e5-e7f1-414f-9642-cb8c3eb3a3b3",
+      "name": "Local Camera Pilot Gateway",
+      "status": "offline",
+      "version": "0.1.46",
+      "last_seen_at": "2026-10-03T16:45:06.259Z",
+      "branch": "Local Camera Pilot"
+    },
+    {
+      "id": "0706c694-3c7c-4ac1-885c-fb6e34932b01",
+      "name": "Local Camera Pilot Scanner",
+      "status": "offline",
+      "version": "0.1.39",
+      "last_seen_at": "2026-10-01T18:54:04.355Z",
+      "branch": "Local Camera Pilot"
+    },
+    {
+      "id": "26cbf33d-9fdd-4446-9df0-9cae1680a6f9",
+      "name": "NORTH ZONE Gateway",
+      "status": "online",
+      "version": "0.1.38",
+      "last_seen_at": "2026-10-01T09:54:46.697Z",
+      "branch": "NORTH ZONE"
+    },
+    {
+      "id": "04d7e9ab-5ae7-421d-a754-7ed54d81ea5f",
+      "name": "SIKAR Gateway",
+      "status": "online",
+      "version": "0.1.38",
+      "last_seen_at": "2026-10-01T09:39:24.506Z",
+      "branch": "PERAVARUNI"
+    },
+    {
+      "id": "1248fd81-283e-4fca-88f4-adee7ad5b3e9",
+      "name": "NORTH ZONE Scanner",
+      "status": "online",
+      "version": "0.1.27",
+      "last_seen_at": "2026-09-28T13:01:24.113Z",
+      "branch": "NORTH ZONE"
+    },
+    {
+      "id": "69d488d7-1f0f-47bc-83b3-65de74162dac",
+      "name": "Local Camera Pilot Scanner",
+      "status": "offline",
+      "version": "0.1.28",
+      "last_seen_at": "2026-09-24T17:07:56.169Z",
+      "branch": "Local Camera Pilot"
+    },
+    {
+      "id": "6f8b7603-57a3-40c4-8084-a8722de04016",
+      "name": "Local Camera Pilot Scanner",
+      "status": "offline",
+      "version": "0.1.27",
+      "last_seen_at": "2026-09-23T23:49:14.400Z",
+      "branch": "Local Camera Pilot"
+    },
+    {
+      "id": "9e59c722-6188-4607-ada7-64d47f6bd681",
+      "name": "Local Camera Pilot Scanner",
+      "status": "offline",
+      "version": "0.1.27",
+      "last_seen_at": "2026-09-23T05:49:03.622Z",
+      "branch": "Local Camera Pilot"
+    },
+    {
+      "id": "e9df9044-ec9a-4197-97f6-ebdc23c9551f",
+      "name": "NORTH ZONE Scanner",
+      "status": "offline",
+      "version": "0.1.27",
+      "last_seen_at": "2026-09-22T11:10:56.915Z",
+      "branch": "NORTH ZONE"
+    },
+    {
+      "id": "a15124a4-31f9-40cf-a24f-0f3cfe36cf56",
+      "name": "NORTH ZONE Scanner",
+      "status": "offline",
+      "version": "0.1.26",
+      "last_seen_at": "2026-09-22T05:13:13.602Z",
+      "branch": "NORTH ZONE"
+    },
+    {
+      "id": "5460528a-9c47-4835-a84e-d62a52ff5c33",
+      "name": "Local Camera Pilot Gateway",
+      "status": "offline",
+      "version": "0.1.26",
+      "last_seen_at": "2026-09-21T21:10:06.481Z",
+      "branch": "Local Camera Pilot"
+    },
+    {
+      "id": "e92e7ff6-9773-42df-849b-165a9e2c7995",
+      "name": "NORTH ZONE Scanner",
+      "status": "offline",
+      "version": "0.1.25",
+      "last_seen_at": "2026-09-21T15:24:09.297Z",
+      "branch": "NORTH ZONE"
+    },
+    {
+      "id": "1dc1e258-8cae-479a-86db-ea5638a2e6a1",
+      "name": "Local Camera Pilot Scanner",
+      "status": "offline",
+      "version": "0.1.19",
+      "last_seen_at": "2026-09-20T07:46:55.307Z",
+      "branch": "Local Camera Pilot"
+    },
+    {
+      "id": "4aa4b7a3-2262-4581-9e2b-89d0ed673b1b",
+      "name": "Local Camera Pilot Scanner",
+      "status": "offline",
+      "version": "0.1.18",
+      "last_seen_at": "2026-09-15T00:25:57.820Z",
+      "branch": "Local Camera Pilot"
+    }
+  ],
+  "commands": [
+    {
+      "id": "8833fdaa-19ed-4680-b4b4-0037f540b5c9",
+      "edge_agent_id": "2b4fe162-6c1a-413e-9596-1eac2e1bcf88",
+      "command_type": "restart-agent",
+      "status": "succeeded",
+      "requested_at": "2026-10-08T06:30:05.536Z",
+      "completed_at": "2026-10-08T06:30:06.989Z"
+    },
+    {
+      "id": "c1208cae-0340-4a32-ac52-1c11469aceb4",
+      "edge_agent_id": "b950f232-557e-42cd-8bc8-8f4490d0b68b",
+      "command_type": "restart-agent",
+      "status": "succeeded",
+      "requested_at": "2026-10-08T06:30:05.533Z",
+      "completed_at": "2026-10-08T06:30:05.703Z"
+    },
+    {
+      "id": "39ee357b-514f-48f0-9710-8cf0d2f986f7",
+      "edge_agent_id": "9f108498-4dd5-4a21-b810-eec9e538953c",
+      "command_type": "restart-agent",
+      "status": "succeeded",
+      "requested_at": "2026-10-08T06:30:05.530Z",
+      "completed_at": "2026-10-08T06:30:16.030Z"
+    },
+    {
+      "id": "2d53eb3e-0a7f-4a97-942c-1fe0aee4c2d1",
+      "edge_agent_id": "839d2a88-2b36-4e34-bd99-6cb247e196a5",
+      "command_type": "restart-agent",
+      "status": "succeeded",
+      "requested_at": "2026-10-08T06:30:05.515Z",
+      "completed_at": "2026-10-08T06:30:09.598Z"
+    },
+    {
+      "id": "3048ac03-6067-4afe-b3c9-cc567f6b6a91",
+      "edge_agent_id": "b950f232-557e-42cd-8bc8-8f4490d0b68b",
+      "command_type": "restart-agent",
+      "status": "succeeded",
+      "requested_at": "2026-10-08T06:05:22.820Z",
+      "completed_at": "2026-10-08T06:05:24.064Z"
+    }
+  ],
+  "frames": [
+    {
+      "cameraId": "62245da0-302a-46b1-a068-98c8dc70892a",
+      "capturedAt": "2026-10-08T07:05:14.144Z",
+      "ageSeconds": 8.134,
+      "ttl": 83
+    },
+    {
+      "cameraId": "ed44346e-9473-4795-8ef3-ba4d6bfb91d9",
+      "capturedAt": "2026-10-08T07:05:19.020Z",
+      "ageSeconds": 3.266,
+      "ttl": 88
+    },
+    {
+      "cameraId": "8a50c8f9-b16e-4061-9665-cf6d56df3414",
+      "capturedAt": "2026-10-08T07:05:19.638Z",
+      "ageSeconds": 2.658,
+      "ttl": 88
+    },
+    {
+      "cameraId": "2d8053f1-af9f-40df-94d3-3e432e13bd85",
+      "capturedAt": "2026-10-08T07:05:18.877Z",
+      "ageSeconds": 3.425,
+      "ttl": 88
+    },
+    {
+      "cameraId": "b9a60efd-cc76-4d4f-9c99-afcff5563602",
+      "capturedAt": "2026-10-08T07:05:14.118Z",
+      "ageSeconds": 8.191,
+      "ttl": 83
+    },
+    {
+      "cameraId": "cf21c87a-0f42-4203-bc9c-740ef72987a1",
+      "capturedAt": "2026-10-08T07:05:19.281Z",
+      "ageSeconds": 3.034,
+      "ttl": 88
+    },
+    {
+      "cameraId": "2d5563a9-2c14-4ccd-b160-8897edf2eb13",
+      "capturedAt": "2026-10-08T07:05:16.636Z",
+      "ageSeconds": 5.688,
+      "ttl": 85
+    },
+    {
+      "cameraId": "c19f9147-bb01-4e9f-8f42-dd4b361a398e",
+      "capturedAt": "2026-10-08T07:05:14.131Z",
+      "ageSeconds": 8.201,
+      "ttl": 83
+    },
+    {
+      "cameraId": "45a1d045-e627-4037-a239-672d3b35d87b",
+      "capturedAt": "2026-10-08T07:05:19.362Z",
+      "ageSeconds": 2.98,
+      "ttl": 88
+    }
+  ],
+  "frameKeys": [
+    "analytics:latest-frame:62245da0-302a-46b1-a068-98c8dc70892a",
+    "analytics:latest-frame:ed44346e-9473-4795-8ef3-ba4d6bfb91d9",
+    "analytics:latest-frame:8a50c8f9-b16e-4061-9665-cf6d56df3414",
+    "analytics:latest-frame:2d8053f1-af9f-40df-94d3-3e432e13bd85",
+    "analytics:latest-frame:b9a60efd-cc76-4d4f-9c99-afcff5563602",
+    "analytics:latest-frame:cf21c87a-0f42-4203-bc9c-740ef72987a1",
+    "analytics:latest-frame:2d5563a9-2c14-4ccd-b160-8897edf2eb13",
+    "analytics:latest-frame:c19f9147-bb01-4e9f-8f42-dd4b361a398e",
+    "analytics:latest-frame:45a1d045-e627-4037-a239-672d3b35d87b"
+  ],
+  "redisUptimeSeconds": 184229,
+  "engine": {
+    "received": 0,
+    "accepted": 0,
+    "failed": 0,
+    "scheduler": {
+      "framesRecorded": 511,
+      "framesProcessed": 251,
+      "framesSkipped": 260,
+      "processingRate": 49.11937377690802,
+      "gpuLoad": 0,
+      "peakGpuLoad": 6,
+      "activeCameras": 9,
+      "modelInvocations": {
+        "yolov8n": 251,
+        "helmet": 55
+      },
+      "averageModelsPerFrame": 1.2191235059760956
+    },
+    "helmet": {
+      "status": "healthy",
+      "details": "Helmet classifier active; production crop alerts require independent head localization and classification agreement"
+    }
+  }
+}

@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   getConfiguredTenantId,
   getHikvisionAxProIntegrationService,
+  axProApiError,
 } from '@/lib/backend/hikvision-axpro';
+import { readAxProBody } from '../../../../../../../src/security-devices/integrations/hikvision/axpro/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,9 +18,9 @@ export async function POST(
 ) {
   try {
     const { integrationId } = await params;
-    const rawBody = await request.text();
+    const rawBody = await readAxProBody(request, AbortSignal.timeout(10_000));
     const result = await getHikvisionAxProIntegrationService().ingestReceiverEvent(
-      getConfiguredTenantId(),
+      request.headers.get('x-sentinel-tenant-id') || getConfiguredTenantId(),
       integrationId,
       rawBody,
       request.headers.get('content-type') || '',
@@ -27,9 +29,7 @@ export async function POST(
     );
     return NextResponse.json({ data: result }, { status: 202 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const status = message.includes('signature') || message.includes('timestamp') || message.includes('SECRET') ? 401 : message.includes('not found') || message.includes('approved') ? 404 : 502;
-    return NextResponse.json({ error: 'axpro_event_rejected', message }, { status });
+    return axProApiError(error);
   }
 }
 

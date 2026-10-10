@@ -1,43 +1,56 @@
-import { execSync } from 'child_process';
+import path from 'path';
+process.env.MODELS_DIR = path.resolve('analytics-engine/models');
+process.env.MODEL_MANIFEST_PATH = path.resolve('analytics-engine/models/manifest.json');
+process.env.USE_GPU = 'false';
 
-const testScript = `
-import path from 'node:path';
-import { loadRgbFrame } from './scripts/helmet-replay.mjs';
-import { getModelManager } from './dist/analytics-engine/src/model-manager.js';
-import { loadObjectInference } from './dist/analytics-engine/src/inference/configured-model-inference.js';
-import { HelmetDetector } from './dist/analytics-engine/src/detectors/helmet-detector.js';
+import sharp from 'sharp';
+import { getModelManager } from '../analytics-engine/dist/analytics-engine/src/model-manager.js';
+import { loadObjectInference, loadHelmetClassificationInference, loadPoseInference } from '../analytics-engine/dist/analytics-engine/src/inference/configured-model-inference.js';
+import { LocalizedHelmetHeadVerifier } from '../analytics-engine/dist/analytics-engine/src/inference/helmet-head-verification.js';
 
-const manager = getModelManager({ modelsDirectory: '/app/models', enableGPU: false, startCleanupTimer: false });
-await manager.initialize();
+async function main() {
+  await getModelManager({ enableGPU: false }).initialize();
 
-const objects = await loadObjectInference('yolov8n', 0.35);
-const detector = new HelmetDetector(null, 0.75, null, true);
-await detector.initialize();
+  const img = sharp('scratch/event-b335-snapshot.jpg');
+  const meta = await img.metadata();
+  const rawRgb = await img.removeAlpha().raw().toBuffer();
 
-const frame = await loadRgbFrame({
-  file: '/tmp/pilot_test_ch8.rgb',
-  width: 640,
-  height: 360,
-  capturedAt: '2026-10-08T04:56:28.652Z'
-}, 'd2e27fc9-8bd2-4184-8397-7581ac3ffeda');
+  const frame = {
+    cameraId: '9cf710ef-1a0b-444b-9c30-abbac95948fe',
+    timestamp: new Date(),
+    width: meta.width,
+    height: meta.height,
+    imageData: rawRgb,
+  };
 
-frame.metadata = { ...frame.metadata, detections: await objects.run(frame) };
-console.log('Detected persons:', frame.metadata.detections.filter(d => d.label === 'person'));
+  const yolo = await loadObjectInference('yolov8n', 0.25);
+  const persons = await yolo.run(frame);
+  console.log('Persons:', persons);
 
-// Let's directly call headVerifier on the person bounding box!
-const verifier = detector.headVerifier;
-for (const p of frame.metadata.detections.filter(d => d.label === 'person')) {
-  console.log('Testing person bbox:', p.boundingBox, 'conf:', p.confidence);
-  const result = await verifier.verify(frame, p.boundingBox, 0.75);
-  console.log('Verifier result:', result);
+  const localizer = await loadObjectInference('helmet-head-localizer', 0.25);
+  const classifier = await loadHelmetClassificationInference('helmet');
+  const headClassifier = await loadHelmetClassificationInference('helmet-head-evidence');
+  const faceDetector = await loadObjectInference('face-detector', 0.6);
+  const poseEstimator = await loadPoseInference('pose-estimator', 0.4);
+
+  // Case 1: with evidenceCameras = new Set(['*'])
+  const verifierWithEvidence = new LocalizedHelmetHeadVerifier(
+    localizer, classifier, faceDetector, poseEstimator, headClassifier, new Set(['*'])
+  );
+
+  // Case 2: without evidenceCameras (or not matching this camera)
+  const verifierStandard = new LocalizedHelmetHeadVerifier(
+    localizer, classifier, faceDetector, poseEstimator, headClassifier, new Set(['other-cam'])
+  );
+
+  for (const p of persons.filter(p => p.label === 'person')) {
+    console.log('\n--- Testing Person ---', p.boundingBox);
+    const resWithEvidence = await verifierWithEvidence.verify(frame, p.boundingBox, 0.75);
+    console.log('Result WITH HELMET_HEAD_EVIDENCE (*):', resWithEvidence);
+
+    const resStandard = await verifierStandard.verify(frame, p.boundingBox, 0.75);
+    console.log('Result STANDARD (without head evidence on this cam):', resStandard);
+  }
 }
 
-await detector.cleanup();
-await manager.shutdown();
-`;
-
-const b64 = Buffer.from(testScript).toString('base64');
-const cmd = `gcloud compute ssh kryptovision-server --zone=asia-south1-b --project=project-7866fc3f-5dd5-4495-804 --quiet --command="echo ${b64} | base64 -d | sudo docker exec -i sentinel-gcp-analytics-engine node --input-type=module"`;
-
-console.log(execSync(cmd, { encoding: 'utf8' }));
-
+main().catch(console.error);

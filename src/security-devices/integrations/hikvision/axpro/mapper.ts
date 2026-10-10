@@ -44,7 +44,7 @@ export function mapAxProHub(
     capabilities: READ_ONLY_CAPABILITIES,
     metadata: {
       source: 'hikvision-ax-pro',
-      axProDeviceId: info.deviceId,
+      axProDeviceId: info.deviceId || config.host,
       axProDeviceName: info.deviceName,
       axProConfig: sanitizeAxProConfig(config),
     },
@@ -155,7 +155,7 @@ export function mapAxProEvent(
 ): SecurityDeviceEvent {
   const sourceEventId = getSourceEventId(payload);
   const mapping = resolveEventType(payload, config.eventTypeMap);
-  const occurredAt = dateValue(findValue(payload, ['occurredAt', 'eventTime', 'timestamp', 'time'])) || new Date();
+  const occurredAt = dateValue(findValue(payload, ['occurredAt', 'eventTime', 'dateTime', 'timestamp', 'time'])) || new Date();
   const eventType = mapping.eventType;
   const severity = eventSeverity(eventType);
   const title = mapping.unmapped
@@ -190,7 +190,7 @@ export function mapAxProEvent(
       source: 'hikvision-ax-pro',
       sourceEventId,
       axProDeviceId,
-      idempotencyKey: `HIKVISION_AX_PRO:${axProDeviceId || context.deviceId}:${sourceEventId}`,
+      idempotencyKey: `HIKVISION_AX_PRO:${axProDeviceId || 'hub'}:${sourceEventId}`,
       rawEventType: stringValue(findValue(payload, ['eventType', 'type', 'alarmType', 'eventCode'])),
       zone: stringValue(findValue(payload, ['zone', 'zoneId', 'zoneName'])),
     },
@@ -231,8 +231,10 @@ export function resolveEventType(
 ): AxProEventMappingResult {
   const rawType = stringValue(findValue(payload, ['eventType', 'type', 'alarmType', 'eventCode', 'status'])) || 'unknown';
   const normalizedKey = normalize(rawType);
-  const explicit = eventTypeMap?.[rawType] || eventTypeMap?.[normalizedKey];
-  const eventType = explicit || semanticEventType(normalizedKey);
+  const explicit = eventTypeMap && Object.hasOwn(eventTypeMap, rawType) ? eventTypeMap[rawType]
+    : eventTypeMap && Object.hasOwn(eventTypeMap, normalizedKey) ? eventTypeMap[normalizedKey] : undefined;
+  const state = normalize(stringValue(findValue(payload, ['eventState', 'alarmState'])) || '');
+  const eventType = explicit || (state === 'inactive' ? 'ALARM_CLEARED' : semanticEventType(normalizedKey));
   const unmapped = !eventType;
   const resolved = eventType || 'AX_PRO_EVENT_UNMAPPED';
   const sourceEventId = getSourceEventId(payload);
@@ -245,12 +247,17 @@ export function resolveEventType(
 }
 
 function semanticEventType(value: string): SecurityDeviceEventType | undefined {
+  // Evaluate restorations before alarm substrings (e.g. tamperRestore), and
+  // disarmed before armed. Ambiguous vendor codes stay available for review.
+  if (value.includes('disarmed') || value === 'disarm') return 'ALARM_DISARMED';
+  if (value.includes('armed') || value === 'arm') return 'ALARM_ARMED';
+  if (value.includes('alarmclear') || value.includes('restore') || value.includes('cleared')) return 'ALARM_CLEARED';
   if (value.includes('panic') || value.includes('duress')) return 'PANIC_BUTTON_PRESSED';
   if (value.includes('tamper') || value.includes('lidopen')) return 'DEVICE_TAMPER';
   if (value.includes('lowbattery') || value.includes('battery')) return 'DEVICE_LOW_BATTERY';
   if (value.includes('powerloss') || value.includes('acloss')) return 'DEVICE_POWER_LOSS';
   if (value.includes('communicationfailure') || value.includes('offline')) return 'DEVICE_COMMUNICATION_FAILURE';
-  if (value.includes('online') || value.includes('restored')) return 'DEVICE_ONLINE';
+  if (value.includes('online')) return 'DEVICE_ONLINE';
   if (value.includes('motion') || value.includes('pir')) return 'MOTION_DETECTED';
   if (value.includes('glassbreak')) return 'GLASS_BREAK_DETECTED';
   if (value.includes('shock') || value.includes('vibration')) return 'VIBRATION_DETECTED';
@@ -262,11 +269,9 @@ function semanticEventType(value: string): SecurityDeviceEventType | undefined {
   if (value.includes('fire')) return 'FIRE_ALARM_TRIGGERED';
   if (value.includes('smoke')) return 'SMOKE_DETECTED';
   if (value.includes('water') || value.includes('flood')) return 'WATER_LEAK_DETECTED';
-  if (value.includes('dooropen') || value.includes('zonealarm')) return 'DOOR_OPENED';
+  if (value.includes('zonealarm') || value === 'alarm' || value === 'intrusion') return 'ALARM_TRIGGERED';
+  if (value.includes('dooropen')) return 'DOOR_OPENED';
   if (value.includes('doorclose')) return 'DOOR_CLOSED';
-  if (value.includes('alarmclear') || value.includes('restore')) return 'ALARM_CLEARED';
-  if (value.includes('armed')) return 'ALARM_ARMED';
-  if (value.includes('disarmed')) return 'ALARM_DISARMED';
   return undefined;
 }
 
@@ -279,7 +284,9 @@ function semanticEventType(value: string): SecurityDeviceEventType | undefined {
  * Alert only on real movement/shake events (shock, vibration, motion) from such sensors.
  */
 function isColorObjectDetection(value: string): boolean {
-  const colorKeywords = ['orange', 'red', 'yellow', 'colorobject', 'objectcolor', 'colordetect', 'colourdetect', 'colourobject'];
+  // "triggered" ends in "red"; plain substring matching suppressed real
+  // fireTriggered/smokeTriggered sensor alarms.
+  const colorKeywords = ['orange', 'redobject', 'objectred', 'yellowobject', 'objectyellow', 'colorobject', 'objectcolor', 'colordetect', 'colourdetect', 'colourobject'];
   return colorKeywords.some((kw) => value.includes(kw));
 }
 
@@ -364,9 +371,15 @@ function hasEventIdentity(value: AxProRawPayload): boolean {
 }
 
 function getSourceEventId(payload: AxProRawPayload): string {
-  const value = stringValue(findValue(payload, ['eventId', 'eventID', 'alarmId', 'serialNo', 'sequence', 'id']));
+  const value = stringValue(findValue(payload, ['eventId', 'eventID', 'alarmId', 'sequence']));
   if (value) return value;
-  return createHash('sha256').update(JSON.stringify(payload)).digest('hex').slice(0, 32);
+  return createHash('sha256').update(JSON.stringify(canonicalize(payload))).digest('hex').slice(0, 32);
+}
+
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalize(value[key])]));
 }
 
 function normalize(value: string): string {
@@ -380,6 +393,7 @@ function stringValue(value: unknown): string | undefined {
 }
 
 function numberValue(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
   const number = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(number) ? number : undefined;
 }
@@ -388,8 +402,8 @@ function booleanValue(value: unknown, fallback: boolean | undefined): boolean | 
   if (typeof value === 'boolean') return value;
   if (typeof value === 'number') return value !== 0;
   if (typeof value === 'string') {
-    if (['true', 'online', 'connected', 'normal', 'ac'].includes(value.toLowerCase())) return true;
-    if (['false', 'offline', 'disconnected', 'alarm', 'battery'].includes(value.toLowerCase())) return false;
+    if (['true', '1', 'online', 'connected', 'normal', 'ac'].includes(value.toLowerCase())) return true;
+    if (['false', '0', 'offline', 'disconnected', 'alarm', 'battery'].includes(value.toLowerCase())) return false;
   }
   return fallback;
 }

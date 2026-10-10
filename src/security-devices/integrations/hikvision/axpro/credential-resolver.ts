@@ -1,5 +1,6 @@
 import { AxProCredentialResolver } from './adapter.js';
 import { AxProCredentials } from './types.js';
+import { readAxProBody } from './client.js';
 
 let resolver: AxProCredentialResolver | undefined;
 
@@ -62,19 +63,30 @@ async function fetchVaultSecret(provider: string, path: string, key: string): Pr
     throw new Error(`Unsupported AX PRO secret provider: ${provider}`);
   }
 
-  const response = await fetch(url, { method: 'GET', headers });
-  if (response.status === 404) return null;
-  if (!response.ok) throw new Error(`AX PRO secret provider returned HTTP ${response.status}`);
-  const body = await response.json() as Record<string, any>;
-  const value = provider === 'HASHICORP_VAULT'
-    ? body.data?.data?.[key] ?? body.data?.[key] ?? body.data?.value
-    : body.value ?? body.secret ?? body.data?.value ?? body.data;
-  return typeof value === 'string' ? value : value === undefined ? null : JSON.stringify(value);
+  if (url.protocol !== 'https:' && process.env.NODE_ENV === 'production') throw new Error('AX PRO secret provider requires HTTPS in production');
+  if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error('AX PRO secret provider endpoint is invalid');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(url, { method: 'GET', headers, redirect: 'error', signal: controller.signal });
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`AX PRO secret provider returned HTTP ${response.status}`);
+    const body = JSON.parse(await readAxProBody(response, controller.signal)) as Record<string, any>;
+    const value = provider === 'HASHICORP_VAULT'
+      ? body.data?.data?.[key] ?? body.data?.[key] ?? body.data?.value
+      : body.value ?? body.secret ?? body.data?.value ?? body.data;
+    return typeof value === 'string' ? value : value === undefined ? null : JSON.stringify(value);
+  } catch {
+    throw new Error('AX PRO secret provider request failed');
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function parseSecretReference(value: string): { path: string; key: string } | null {
   if (!value.startsWith('secret://')) return null;
   const raw = value.slice('secret://'.length);
+  if (/[\s?\\]/.test(raw) || raw.split('/').includes('..')) return null;
   const hashIndex = raw.indexOf('#');
   if (hashIndex > 0 && hashIndex < raw.length - 1) {
     return { path: raw.slice(0, hashIndex), key: raw.slice(hashIndex + 1) };

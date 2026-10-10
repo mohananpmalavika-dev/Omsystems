@@ -25,14 +25,14 @@ export default function IntegrationsPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (clearMessage = true) => {
     setLoading(true);
     try {
       const response = await fetch('/api/security-devices/integrations', { cache: 'no-store' });
       const body = await response.json();
       if (!response.ok) throw new Error(body.message || 'Unable to load integrations');
       setIntegrations(body.data || []);
-      setMessage(null);
+      if (clearMessage) setMessage(null);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to load integrations');
     } finally {
@@ -53,10 +53,22 @@ export default function IntegrationsPage() {
         : action === 'poll'
           ? `Event poll completed. ${body.data?.eventsProcessed || 0} new events were stored.`
           : body.data?.success ? 'AX PRO connection succeeded.' : body.data?.errorMessage || 'AX PRO connection failed.');
-      await load();
+      await load(false);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : `${action} failed`);
     }
+  };
+
+  const toggleEnabled = async (integration: IntegrationSummary) => {
+    try {
+      const response = await fetch(`/api/security-devices/integrations/${integration.id}`, {
+        method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ enabled: !integration.enabled }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || 'Unable to change integration state');
+      setMessage(integration.enabled ? 'Integration paused.' : 'Integration enabled.');
+      await load(false);
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Unable to change integration state'); }
   };
 
   const activeCount = integrations.filter((integration) => integration.status === 'ACTIVE').length;
@@ -109,7 +121,12 @@ export default function IntegrationsPage() {
                       {integration.lastSyncAt && <p className="mt-1 text-xs text-slate-500">Last sync: {new Date(integration.lastSyncAt).toLocaleString()}</p>}
                       {integration.lastErrorMessage && <p className="mt-2 text-sm text-rose-300">{integration.lastErrorMessage}</p>}
                     </div>
-                    <div className="flex flex-wrap gap-2"><button onClick={() => void runAction(integration.id, 'test')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs hover:bg-slate-800">Test</button><button onClick={() => void runAction(integration.id, 'discover')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs hover:bg-slate-800">Discover & stage</button><button onClick={() => void runAction(integration.id, 'poll')} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold hover:bg-blue-500">Poll events</button></div>
+                    <div className="flex flex-wrap gap-2">
+                      <button onClick={() => void toggleEnabled(integration)} className="rounded-lg border border-slate-700 px-3 py-2 text-xs hover:bg-slate-800">{integration.enabled ? 'Pause' : 'Enable'}</button>
+                      <button onClick={() => void runAction(integration.id, 'test')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs hover:bg-slate-800">Test</button>
+                      <button disabled={!integration.enabled} onClick={() => void runAction(integration.id, 'discover')} className="rounded-lg border border-slate-700 px-3 py-2 text-xs hover:bg-slate-800 disabled:opacity-40">Discover & stage</button>
+                      <button disabled={!integration.enabled} onClick={() => void runAction(integration.id, 'poll')} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold hover:bg-blue-500 disabled:opacity-40">Poll events</button>
+                    </div>
                   </div>
                 </article>
               ))}

@@ -18,11 +18,11 @@ type DirectLiveStart = {
 
 export type LiveRoutePreference = "auto" | "public";
 
-export async function getCurrentUser(employeeSession: string): Promise<{ id: string; tenantId?: string }> {
-  const response = await controlFetch("/v1/auth/me", undefined, employeeSession);
-  const user = await response.json() as { id?: string; tenantId?: string } | null;
+export async function getCurrentUser(employeeSession: string): Promise<{ id: string; tenantId?: string; role?: string; mustChangePassword?: boolean }> {
+  const response = await controlFetch("/v1/auth/me", { signal: AbortSignal.timeout(10_000) }, employeeSession);
+  const user = await response.json() as { id?: string; tenantId?: string; role?: string; mustChangePassword?: boolean } | null;
   if (!user?.id) throw new Error("authenticated_user_unavailable");
-  return { id: user.id, ...(user.tenantId ? { tenantId: user.tenantId } : {}) };
+  return { id: user.id, ...(user.tenantId ? { tenantId: user.tenantId } : {}), role: user.role, mustChangePassword: user.mustChangePassword };
 }
 
 export async function listBranches(employeeSession?: string): Promise<Branch[]> {

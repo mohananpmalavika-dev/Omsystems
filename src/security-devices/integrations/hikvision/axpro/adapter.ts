@@ -80,6 +80,8 @@ export class HikvisionAxProAdapter extends BaseSecurityDeviceAdapter implements 
     try {
       const client = await this.createClient(config);
       const response = await client.getSystemInfo();
+      const systemInfo = mapAxProSystemInfo(response.data);
+      if (!systemInfo.deviceId && !systemInfo.model) throw new AxProError('AXPRO_DEVICE_INFO_INVALID', 'AX PRO system info did not contain a device identity');
       let capabilities: DeviceCapability[] = axProReadOnlyCapabilities();
       if (config.endpointPaths?.capabilities) {
         await client.getCapabilities();
@@ -87,7 +89,7 @@ export class HikvisionAxProAdapter extends BaseSecurityDeviceAdapter implements 
       return {
         success: true,
         responseTimeMs: Date.now() - startedAt || response.responseTimeMs,
-        systemInfo: mapAxProSystemInfo(response.data),
+        systemInfo,
         capabilities,
       };
     } catch (error) {
@@ -103,6 +105,8 @@ export class HikvisionAxProAdapter extends BaseSecurityDeviceAdapter implements 
   async discoverDevices(config: AxProConnectionConfig): Promise<DiscoveredDevice[]> {
     const client = await this.createClient(config);
     const systemInfo = await client.getSystemInfo();
+    const info = mapAxProSystemInfo(systemInfo.data);
+    if (!info.deviceId && !info.model) throw new AxProError('AXPRO_DEVICE_INFO_INVALID', 'AX PRO discovery did not receive a device identity');
     const discovered = [mapAxProHub(systemInfo.data, config)];
     if (config.endpointPaths?.devices) {
       const response = await client.getDeviceList();
@@ -119,8 +123,6 @@ export class HikvisionAxProAdapter extends BaseSecurityDeviceAdapter implements 
       if (!result.success || !result.systemInfo) {
         return { success: false, errorMessage: result.errorMessage };
       }
-      const client = await this.createClient(config);
-      this.connections.set(device.id, client);
       return {
         success: true,
         capabilities: result.capabilities,
@@ -140,7 +142,7 @@ export class HikvisionAxProAdapter extends BaseSecurityDeviceAdapter implements 
   }
 
   async getHealth(device: SecurityDevice): Promise<SecurityDeviceHealthSnapshot> {
-    const client = await this.getTypedConnection(device);
+    const client = await this.createClient(this.configFromDevice(device));
     const startedAt = Date.now();
     const response = device.metadata?.axProConfig?.endpointPaths?.deviceStatus
       ? await client.getDeviceStatus(device.metadata?.axProDeviceId)
@@ -160,7 +162,7 @@ export class HikvisionAxProAdapter extends BaseSecurityDeviceAdapter implements 
   }
 
   async getEvents(device: SecurityDevice, since?: Date, limit?: number): Promise<SecurityDeviceEvent[]> {
-    const client = await this.getTypedConnection(device);
+    const client = await this.createClient(this.configFromDevice(device));
     const config = this.configFromDevice(device);
     const response = await client.getEvents(since, limit);
     const context: AxProEventContext = {
@@ -183,12 +185,6 @@ export class HikvisionAxProAdapter extends BaseSecurityDeviceAdapter implements 
 
   async getCapabilities(_device: SecurityDevice): Promise<DeviceCapability[]> {
     return axProReadOnlyCapabilities();
-  }
-
-  private async getTypedConnection(device: SecurityDevice): Promise<AxProClient> {
-    const connection = await this.getConnection(device);
-    if (!(connection instanceof AxProClient)) throw new AxProError('AXPRO_CONNECTION_INVALID', 'AX PRO connection is invalid');
-    return connection;
   }
 
   private async createClient(config: AxProConnectionConfig): Promise<AxProClient> {

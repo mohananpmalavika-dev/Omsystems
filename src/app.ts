@@ -2828,6 +2828,14 @@ export async function buildApp(options?: {
   await registerAuthRoutes(app, (extendedStore ?? store) as any);
   await registerEnterpriseAuthRoutes(app, (extendedStore ?? store) as any);
   const dbPool = (store as any).pool ?? (store as any).db;
+  if (process.env.AXPRO_POLLING_ENABLED === 'true') {
+    if (!dbPool) throw new Error('AX PRO polling requires PostgreSQL');
+    const { HikvisionAxProIntegrationService } = await import('./security-devices/integrations/hikvision/axpro/integration.service.js');
+    const { AxProPollingWorker } = await import('./security-devices/integrations/hikvision/axpro/polling-worker.js');
+    const axProWorker = new AxProPollingWorker(dbPool, new HikvisionAxProIntegrationService(dbPool), app.log);
+    app.addHook('onReady', async () => axProWorker.start());
+    app.addHook('onClose', async () => axProWorker.stop());
+  }
   if (dbPool) {
     try {
       const { registerVoiceAuthenticationRoutes } = await import("./routes/voice-authentication.routes.js");
