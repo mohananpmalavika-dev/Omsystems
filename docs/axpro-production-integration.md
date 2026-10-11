@@ -43,7 +43,7 @@ For an ARC-only installation, keep ISAPI polling disabled. Create the integratio
 
 Run `npm run db:migrate` against the intended deployment database before starting this build. New `091_axpro_schema_prerequisites.sql` supplies tables before immutable migration 092; migration 146 remains compatible. `20261010_axpro_production_runtime.sql` adds runtime columns, P0–P4 severity compatibility and integration-scoped event identity. Existing migration files were not rewritten.
 
-Use [deploy/axpro.env.example](../deploy/axpro.env.example) for settings:
+Use `deploy/axpro.env.example` (see repository root) for settings:
 
 | Setting | Service | Purpose |
 | --- | --- | --- |

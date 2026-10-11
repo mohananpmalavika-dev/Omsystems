@@ -1,5 +1,6 @@
 node_modules/
 dist/
+/site/
 edge-agent/build/
 edge-agent/vendor/
 .env
