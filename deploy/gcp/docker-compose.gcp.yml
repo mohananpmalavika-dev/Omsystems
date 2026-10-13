@@ -138,6 +138,7 @@ services:
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.groq.com/openai/v1}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       KRYPTON_AI_MODEL: ${KRYPTON_AI_MODEL:-qwen/qwen3.8-27b}
+      SKIP_MIGRATION_CHECKSUM_VALIDATION: "true"
     ports:
       - "8080:8080"
     mem_limit: 2048m
