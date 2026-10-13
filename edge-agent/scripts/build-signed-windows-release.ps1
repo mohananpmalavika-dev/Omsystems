@@ -84,7 +84,7 @@ $publicCertificatePath = Join-Path $projectRoot 'release\OM-Systems-Sentinel-Gri
 Export-Certificate -Cert $signingCertificate -FilePath $publicCertificatePath -Force | Out-Null
 
 $artifacts = @($agentPath, $installer.FullName)
-$hashes = $artifacts | Get-FileHash -Algorithm SHA256 |
+$hashes = $artifacts | ForEach-Object { Get-FileHash -LiteralPath $_ -Algorithm SHA256 } |
   ForEach-Object { "{0} *{1}" -f $_.Hash, (Split-Path -Leaf $_.Path) }
 $checksumPath = Join-Path (Split-Path -Parent $installer.FullName) 'SHA256SUMS.txt'
 Set-Content -LiteralPath $checksumPath -Value $hashes -Encoding ascii
@@ -99,11 +99,11 @@ $releaseManifest = [ordered]@{
   signedAt = [DateTime]::UtcNow.ToString('o')
   signerThumbprint = $CertificateThumbprint
   installerSha256 = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-  installerSourceSha256 = [Convert]::ToHexString(
-    [Security.Cryptography.SHA256]::HashData(
+  installerSourceSha256 = ([BitConverter]::ToString(
+    [Security.Cryptography.SHA256]::Create().ComputeHash(
       [Text.Encoding]::UTF8.GetBytes((Get-Content -LiteralPath (Join-Path $projectRoot 'installer\windows\sentinel-grid.iss') -Raw).Replace("`r`n", "`n"))
     )
-  ).ToLowerInvariant()
+  ).Replace('-', '').ToLowerInvariant())
 }
 [System.IO.File]::WriteAllText(
   $releaseManifestPath,

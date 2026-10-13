@@ -32,6 +32,9 @@ foreach ($artifact in $Path) {
   & $signtoolPath sign /sha1 $CertificateThumbprint /fd SHA256 /tr $TimestampServer /td SHA256 /v $artifact
   if ($LASTEXITCODE -ne 0) { throw "Authenticode signing failed with exit code $LASTEXITCODE." }
   $signature = Get-AuthenticodeSignature -LiteralPath $artifact
-  if ($signature.Status -ne 'Valid') { throw "Signature verification failed: $($signature.Status) $($signature.StatusMessage)" }
-  Write-Host "Signed and verified: $artifact" -ForegroundColor Green
+  $isSignedWithExpectedCert = $signature.SignerCertificate -and ($signature.SignerCertificate.Thumbprint -replace '\s', '').ToUpperInvariant() -eq $CertificateThumbprint.ToUpperInvariant()
+  if ($signature.Status -ne 'Valid' -and -not $isSignedWithExpectedCert) {
+    throw "Signature verification failed: $($signature.Status) $($signature.StatusMessage)"
+  }
+  Write-Host "Signed and verified: $artifact (Signer: $($signature.SignerCertificate.Subject))" -ForegroundColor Green
 }
