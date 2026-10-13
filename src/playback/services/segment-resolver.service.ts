@@ -19,47 +19,38 @@ export class SegmentResolverService {
   constructor() {}
 
   registerSegments(cameraId: string, segments: ResolvedSegment[]): void {
-    this.cameraSegments.set(cameraId, segments);
+    const ids = new Set<string>();
+    const indexed = segments.map(segment => {
+      const start = segment.startTime.getTime(), end = segment.endTime.getTime();
+      if (segment.cameraId !== cameraId || ids.has(segment.segmentId) || !Number.isFinite(start) || !Number.isFinite(end) || start >= end || !segment.storagePath) {
+        throw new Error('invalid_recording_segment');
+      }
+      ids.add(segment.segmentId);
+      const keyframes = segment.keyframes.map(keyframe => {
+        if (!Number.isFinite(keyframe.timestampMs) || keyframe.timestampMs < start || keyframe.timestampMs >= end ||
+            !Number.isSafeInteger(keyframe.byteOffset) || keyframe.byteOffset < 0 || !Number.isSafeInteger(keyframe.frameNumber) || keyframe.frameNumber < 0) {
+          throw new Error('invalid_recording_keyframe');
+        }
+        return { ...keyframe };
+      }).sort((a, b) => a.timestampMs - b.timestampMs);
+      return { ...segment, startTime: new Date(start), endTime: new Date(end), keyframes };
+    }).sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+    this.cameraSegments.set(cameraId, indexed);
   }
+
+  segmentCount(cameraId: string): number { return this.cameraSegments.get(cameraId)?.length ?? 0; }
 
   /**
    * Resolves a target timestamp to containing segment, prior keyframe offset, and prefetch queue.
    */
   resolveSeek(cameraId: string, targetTimestamp: Date): SeekResult {
-    let segments = this.cameraSegments.get(cameraId);
-    if (!segments || segments.length === 0) {
-      const targetMs = targetTimestamp.getTime();
-      const hourMs = Math.floor(targetMs / 3600_000) * 3600_000;
-      const startTime = new Date(hourMs);
-      const endTime = new Date(hourMs + 3600_000);
-      const keyframes: KeyframePoint[] = [];
-      for (let t = hourMs; t <= hourMs + 3600_000; t += 2000) {
-        keyframes.push({
-          timestampMs: t,
-          byteOffset: Math.floor((t - hourMs) * 128),
-          frameNumber: Math.floor((t - hourMs) / 40),
-        });
-      }
-      const defaultSeg: ResolvedSegment = {
-        segmentId: `seg-${cameraId.toLowerCase().replace(/[^a-z0-9]/g, "")}-1`,
-        cameraId,
-        startTime,
-        endTime,
-        durationMs: 3600_000,
-        storagePath: `/storage/${cameraId.toLowerCase()}/seg-1.mp4`,
-        storageNode: 'node-default',
-        codec: 'h264',
-        keyframes,
-        discontinuityBefore: false,
-      };
-      segments = [defaultSeg];
-      this.cameraSegments.set(cameraId, segments);
-    }
+    const segments = this.cameraSegments.get(cameraId) ?? [];
 
     const targetMs = targetTimestamp.getTime();
+    if (!Number.isFinite(targetMs)) throw new Error('invalid_playback_timestamp');
 
     const segIndex = segments.findIndex(
-      (s) => targetMs >= s.startTime.getTime() && targetMs <= s.endTime.getTime()
+      (s) => targetMs >= s.startTime.getTime() && targetMs < s.endTime.getTime()
     );
 
     if (segIndex === -1) throw new Error(`recording_segment_not_found:${cameraId}:${targetTimestamp.toISOString()}`);
@@ -69,11 +60,8 @@ export class SegmentResolverService {
     // Find closest keyframe <= targetTimestamp
     const priorKeyframes = currentSegment.keyframes.filter((k) => k.timestampMs <= targetMs);
     const closestKeyframe =
-      priorKeyframes[priorKeyframes.length - 1] || currentSegment.keyframes[0] || {
-        timestampMs: currentSegment.startTime.getTime(),
-        byteOffset: 0,
-        frameNumber: 0,
-      };
+      priorKeyframes[priorKeyframes.length - 1];
+    if (!closestKeyframe) throw new Error('recording_keyframe_unavailable');
 
     const offsetFromKeyframeMs = targetMs - closestKeyframe.timestampMs;
 

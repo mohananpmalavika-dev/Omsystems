@@ -1,0 +1,20 @@
+{
+  "total": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 1,
+    "critical": 0,
+    "total": 1
+  },
+  "blocking": [
+    {
+      "name": "node-forge",
+      "severity": "high",
+      "fixAvailable": false,
+      "advisories": [
+        "https://github.com/advisories/GHSA-86w9-cpqp-85rv"
+      ]
+    }
+  ]
+}

@@ -57,6 +57,7 @@ export function MobileCommandCenter() {
   // ============ STATE ============
   const [homeData, setHomeData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<any | null>(null);
   const [customNote, setCustomNote] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -68,31 +69,18 @@ export function MobileCommandCenter() {
   const [bottomTab, setBottomTab] = useState<BottomNavTab>("home");
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
-  const [shiftCheckedIn, setShiftCheckedIn] = useState(false);
+  const shiftCheckedIn = false;
   
   // Guard Tour Checkpoints & Covert SOS State
-  const [checkpoints, setCheckpoints] = useState([
-    { id: "CP-01", name: "Strong Room Vault Outer Gate", type: "NFC / BLE", coords: "11.6054° N, 76.0829° E", time: "21:15", status: "completed" },
-    { id: "CP-02", name: "Cash Counter & Teller Enclosure", type: "BLE Beacon", coords: "11.6053° N, 76.0831° E", time: "21:28", status: "completed" },
-    { id: "CP-03", name: "ATM Lobby Rear Loading Bay", type: "QR Code", coords: "11.6056° N, 76.0827° E", time: null, status: "pending" },
-    { id: "CP-04", name: "UPS Lithium Battery & Server Room", type: "NFC Tag", coords: "11.6052° N, 76.0830° E", time: null, status: "pending" },
-    { id: "CP-05", name: "Rooftop Solar & DG Fuel Perimeter", type: "Geofence GPS", coords: "11.6058° N, 76.0832° E", time: null, status: "pending" },
-  ]);
+  const [checkpoints] = useState<Array<{ id: string; name: string; type: string; coords: string; time: string | null; status: string }>>([]);
   const [sosActive, setSosActive] = useState(false);
 
   const handleCheckInCheckpoint = (id: string) => {
-    setCheckpoints(prev => prev.map(cp => {
-      if (cp.id === id) {
-        return { ...cp, status: "completed", time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) };
-      }
-      return cp;
-    }));
-    setToastMsg(`📍 Checkpoint ${id} Verified via GPS Geofence`);
+    setToastMsg("Patrol check-in is unavailable until checkpoints are configured.");
   };
 
   const handleTriggerSOS = () => {
-    setSosActive(true);
-    setToastMsg("🚨 COVERT SOS TRIGGERED - LIVE GPS & AUDIO TRANSMITTING");
+    setToastMsg("SOS delivery is unavailable. Contact site security directly.");
   };
 
   const sseRef = useRef<EventSource | null>(null);
@@ -116,6 +104,14 @@ export function MobileCommandCenter() {
         status: "connected",
         lastUpdate: new Date(data.timestamp),
       });
+    });
+    for (const type of ["RECONCILE", "INCIDENT_UPDATED"]) {
+      eventSource.addEventListener(type, () => { void fetchHomeData(); });
+    }
+    eventSource.addEventListener("UNAVAILABLE", () => {
+      setHomeData(null);
+      setSelectedIncident(null);
+      setDataError("Mobile updates are unavailable. Refresh to check your access and current status.");
     });
 
     eventSource.addEventListener("ALERT_CREATED", (e) => {
@@ -196,19 +192,22 @@ export function MobileCommandCenter() {
     try {
       const res = await fetch("/api/mobile/v1/home");
       const data = await res.json();
-      if (data.success && data.data) {
+      if (res.ok && data.success && data.data) {
         setHomeData(data.data);
+        setDataError(null);
         
         // Update selected incident if viewing one
-        if (selectedIncident) {
-          const updated = data.data.incidents.find((i: any) => i.id === selectedIncident.id);
-          if (updated) {
-            setSelectedIncident(updated);
-          }
-        }
+        setSelectedIncident((previous: any) => previous ? data.data.incidents.find((i: any) => i.id === previous.id) ?? null : null);
+      } else {
+        setHomeData(null);
+        setSelectedIncident(null);
+        setDataError(data.message || "Mobile operations are unavailable.");
       }
     } catch (error) {
       console.error("[MobileCommand] Error fetching home data:", error);
+      setHomeData(null);
+      setSelectedIncident(null);
+      setDataError("Unable to load current operations. Check your connection and retry.");
     } finally {
       setLoading(false);
     }
@@ -233,7 +232,7 @@ export function MobileCommandCenter() {
       });
       const data = await res.json();
       if (data.success) {
-        setToastMsg("✅ Incident acknowledged! SLA timer stopped.");
+        setToastMsg("Incident acknowledgement saved.");
         await fetchHomeData();
       } else {
         setToastMsg(`❌ ${data.message || "Failed to acknowledge"}`);
@@ -253,8 +252,10 @@ export function MobileCommandCenter() {
       });
       const data = await res.json();
       if (data.success) {
-        setToastMsg(`📞 Calling ${data.managerName || "branch"}...`);
+        setToastMsg(`Opening the dialer for ${data.managerName || "branch"}.`);
         window.location.href = data.dialerUrl;
+      } else {
+        setToastMsg(data.message || "Branch contact unavailable.");
       }
     } catch (error) {
       setToastMsg("❌ Failed to initiate call");
@@ -275,8 +276,10 @@ export function MobileCommandCenter() {
       });
       const data = await res.json();
       if (data.success) {
-        setToastMsg("🚨 Incident escalated to supervisor");
+        setToastMsg("Incident escalation saved.");
         await fetchHomeData();
+      } else {
+        setToastMsg(data.message || "Escalation could not be confirmed.");
       }
     } catch (error) {
       setToastMsg("❌ Failed to escalate");
@@ -298,6 +301,8 @@ export function MobileCommandCenter() {
         setToastMsg(`📝 ${data.message}`);
         setCustomNote("");
         await fetchHomeData();
+      } else {
+        setToastMsg(data.message || "Note could not be saved.");
       }
     } catch (error) {
       setToastMsg("❌ Failed to add note");
@@ -360,9 +365,18 @@ export function MobileCommandCenter() {
 
   // ============ INCIDENT DETAIL VIEW ============
 
+  if (dataError) {
+    return <div className="min-h-screen bg-slate-950 text-slate-100 p-6 space-y-4" role="alert">
+      <h1 className="text-lg font-bold">Mobile operations unavailable</h1>
+      <p>{dataError}</p>
+      <button type="button" onClick={() => { void fetchHomeData(); }} className="rounded border border-slate-600 px-4 py-2">Retry</button>
+    </div>;
+  }
+
   if (selectedIncident) {
     const isAck = selectedIncident.acknowledged;
-    const slaExpired = selectedIncident.slaRemainingSeconds <= 0;
+    const hasSla = typeof selectedIncident.slaRemainingSeconds === "number";
+    const slaExpired = hasSla && selectedIncident.slaRemainingSeconds <= 0;
 
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col max-w-md mx-auto border-x border-slate-800 shadow-2xl">
@@ -406,7 +420,7 @@ export function MobileCommandCenter() {
             <div className="flex items-center justify-between text-xs font-mono">
               <span className="text-slate-400">SLA</span>
               <span className={slaExpired ? "text-red-400 font-bold" : "text-slate-300"}>
-                {slaExpired ? "BREACHED" : `${selectedIncident.slaRemainingSeconds}s remaining`}
+                {!hasSla ? "Unavailable" : slaExpired ? "BREACHED" : `${selectedIncident.slaRemainingSeconds}s remaining`}
               </span>
             </div>
           </div>
@@ -571,7 +585,7 @@ export function MobileCommandCenter() {
 
   // ============ HOME DASHBOARD ============
 
-  const p1Count = homeData?.incidents?.filter((i: any) => i.severity === "P1").length || 0;
+  const p1Count = homeData?.criticalIncidentCount ?? 0;
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const filteredIncidents = (homeData?.incidents || []).filter((incident: any) => {
     if (!normalizedSearch) return true;
@@ -589,7 +603,7 @@ export function MobileCommandCenter() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-lg font-bold text-white">Mobile Command</h1>
-            <p className="text-[10px] text-slate-400 font-mono">Field operations | {shiftCheckedIn ? "On shift" : "Ready to check in"}</p>
+            <p className="text-[10px] text-slate-400 font-mono">Field operations</p>
           </div>
           <ConnectionIndicator />
         </div>
@@ -639,6 +653,7 @@ export function MobileCommandCenter() {
 
       {/* Main Content - Scrollable */}
       <div className="flex-1 overflow-y-auto pb-20">
+        {homeData?.countsComplete === false && <p role="status" className="p-4 text-sm text-amber-300">Showing a limited incident window. Counts are lower bounds; open the full incident workspace to investigate older activity.</p>}
         {bottomTab === "home" && (
           <div className="p-4 space-y-4">
             {/* Operator Status */}
@@ -654,7 +669,8 @@ export function MobileCommandCenter() {
               </div>
               <button
                 type="button"
-                onClick={() => setShiftCheckedIn((checkedIn) => !checkedIn)}
+                disabled
+                title="Shift check-in is not configured."
                 className={`min-h-11 px-3 py-2 rounded-lg text-[10px] font-mono font-bold border flex items-center gap-1.5 transition-colors ${
                   shiftCheckedIn || homeData?.operator?.onCall
                     ? "bg-emerald-950 text-emerald-300 border-emerald-800"
@@ -663,7 +679,7 @@ export function MobileCommandCenter() {
                 aria-pressed={shiftCheckedIn || Boolean(homeData?.operator?.onCall)}
               >
                 <span className={`w-1.5 h-1.5 rounded-full ${shiftCheckedIn || homeData?.operator?.onCall ? "bg-emerald-400" : "bg-slate-500"}`} />
-                {shiftCheckedIn || homeData?.operator?.onCall ? "ON SHIFT" : "CHECK IN"}
+                {homeData?.operator?.onCall ? "ON SHIFT" : "CHECK-IN UNAVAILABLE"}
               </button>
             </div>
 
@@ -904,10 +920,12 @@ export function MobileCommandCenter() {
                 {!sosActive ? (
                   <button
                     onClick={handleTriggerSOS}
+                    disabled
+                    title="SOS delivery is not configured. Contact site security directly."
                     className="w-full py-3 px-4 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-red-600/30 transition-all active:scale-98"
                   >
                     <AlertOctagon className="w-4 h-4" />
-                    Covert Silent SOS (Instant Police & BM Alert)
+                    SOS delivery unavailable
                   </button>
                 ) : (
                   <div className="p-3 rounded-xl bg-red-950/80 border border-red-500 text-center animate-pulse space-y-1">
@@ -928,6 +946,7 @@ export function MobileCommandCenter() {
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">
                 Mandatory Physical Checkpoints
               </h3>
+              {checkpoints.length === 0 && <p className="text-sm text-slate-400">No verified patrol checkpoints are configured.</p>}
 
               {checkpoints.map((cp) => (
                 <div

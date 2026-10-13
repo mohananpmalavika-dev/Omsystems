@@ -907,11 +907,12 @@ export interface ControlPlaneStore {
     status: string,
     changedBy: string,
     notes?: string,
+    expectedStatus?: string,
   ): Promise<any | undefined>;
   
   assignIncident(id: string, userId: string, assignedBy: string): Promise<any | undefined>;
   
-  escalateIncident(id: string, escalatedBy: string, reason: string, recipients: string[]): Promise<any | undefined>;
+  escalateIncident(id: string, escalatedBy: string, reason: string, recipients: string[], expectedStatus?: string): Promise<any | undefined>;
   
   closeIncident(id: string, closedBy: string, notes?: string): Promise<any | undefined>;
   
@@ -1997,6 +1998,7 @@ export interface AuthenticationStore {
     refreshTokenHash: string,
     ipAddress?: string,
     userAgent?: string,
+    accessTtlSeconds?: number,
   ): Promise<any>;
   findSessionByAccessToken(tokenHash: string): Promise<any>;
   findSessionByRefreshToken(tokenHash: string): Promise<any>;

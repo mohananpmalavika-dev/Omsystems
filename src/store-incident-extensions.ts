@@ -108,9 +108,9 @@ export const IncidentManagementMethods = {
     return incident;
   },
 
-  async updateIncidentStatus(this: any, id: string, status: string, changedBy: string, notes?: string) {
+  async updateIncidentStatus(this: any, id: string, status: string, changedBy: string, notes?: string, expectedStatus?: string) {
     const incident = this.incidents.find((i: any) => i.id === id);
-    if (!incident) return undefined;
+    if (!incident || (expectedStatus !== undefined && incident.status !== expectedStatus)) return undefined;
     
     const oldStatus = incident.status;
     incident.status = status;
@@ -151,9 +151,9 @@ export const IncidentManagementMethods = {
     return incident;
   },
 
-  async escalateIncident(this: any, id: string, escalatedBy: string, reason: string, recipients: string[]) {
+  async escalateIncident(this: any, id: string, escalatedBy: string, reason: string, recipients: string[], expectedStatus?: string) {
     const incident = this.incidents.find((i: any) => i.id === id);
-    if (!incident) return undefined;
+    if (!incident || (expectedStatus !== undefined && incident.status !== expectedStatus)) return undefined;
     
     incident.status = 'escalated';
     incident.updatedAt = new Date().toISOString();

@@ -34,8 +34,10 @@ export class PlaybackCoordinatorService {
    * Create an authoritative playback session across 1 or more cameras.
    */
   createSession(input: CreatePlaybackSessionInput): PlaybackSession {
-    const sessionId = `pb-sess-${randomUUID().slice(0, 8)}`;
+    if (!input.cameraIds.length || !Number.isFinite(Date.parse(input.startTime))) throw new Error('invalid_playback_session');
+    const sessionId = `pb-sess-${randomUUID()}`;
     const now = new Date();
+    for (const [id, session] of this.sessions) if (Date.parse(session.expiresAt) <= now.getTime()) this.sessions.delete(id);
     const mode = input.mode || (input.cameraIds.length > 1 ? 'SYNCHRONIZED' : 'SINGLE');
 
     const cameras: PlaybackCameraTrack[] = input.cameraIds.map((cId, idx) => ({
@@ -43,16 +45,16 @@ export class PlaybackCoordinatorService {
       cameraName: `Camera ${cId}`,
       channel: idx + 1,
       requestedTime: input.startTime,
-      actualTime: input.startTime,
-      streamUrl: `/api/v1/playback/stream/${sessionId}/${cId}`,
+      actualTime: undefined,
+      streamUrl: this.segmentResolver.segmentCount(cId) > 0 ? `/api/v1/playback/stream/${sessionId}/${cId}` : undefined,
       driftMs: 0,
-      status: 'READY',
+      status: this.segmentResolver.segmentCount(cId) > 0 ? 'BUFFERING' : 'NO_RECORDING',
     }));
 
     const session: PlaybackSession = {
       id: sessionId,
-      tenantId: input.tenantId || 'BANK-001',
-      userId: input.userId || 'usr-operator-01',
+      tenantId: input.tenantId || '',
+      userId: input.userId || '',
       cameras,
       mode,
       currentTime: input.startTime,
@@ -60,7 +62,7 @@ export class PlaybackCoordinatorService {
       direction: 'FORWARD',
       state: 'PAUSED',
       masterCameraId: cameras[0]?.cameraId,
-      resolvedSegmentsCount: input.cameraIds.length * 50,
+      resolvedSegmentsCount: input.cameraIds.reduce((total, id) => total + this.segmentResolver.segmentCount(id), 0),
       createdAt: now.toISOString(),
       expiresAt: new Date(now.getTime() + 3600_000).toISOString(),
     };
@@ -70,7 +72,9 @@ export class PlaybackCoordinatorService {
   }
 
   getSession(sessionId: string): PlaybackSession | undefined {
-    return this.sessions.get(sessionId);
+    const session = this.sessions.get(sessionId);
+    if (session && Date.parse(session.expiresAt) <= Date.now()) { this.sessions.delete(sessionId); return undefined; }
+    return session;
   }
 
   /**
@@ -101,16 +105,21 @@ export class PlaybackCoordinatorService {
     if (!session) throw new Error(`Playback session ${sessionId} not found`);
 
     const targetDate = new Date(targetTimestamp);
+    if (!Number.isFinite(targetDate.getTime())) throw new Error('invalid_playback_timestamp');
+    const tracks = session.cameras.map(cam => {
+      try {
+        const seekRes = this.segmentResolver.resolveSeek(cam.cameraId, targetDate);
+        return { ...cam, requestedTime: targetDate.toISOString(), actualTime: new Date(seekRes.targetTimestampMs).toISOString(),
+          streamUrl: `/api/v1/playback/stream/${session.id}/${cam.cameraId}`, driftMs: 0, status: 'READY' as const };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '';
+        if (!message.startsWith('recording_segment_not_found:') && message !== 'recording_keyframe_unavailable') throw error;
+        return { ...cam, requestedTime: targetDate.toISOString(), actualTime: undefined, streamUrl: undefined,
+          status: message === 'recording_keyframe_unavailable' ? 'ERROR' as const : 'NO_RECORDING' as const };
+      }
+    });
     session.currentTime = targetDate.toISOString();
-    session.state = 'SEEKING';
-
-    for (const cam of session.cameras) {
-      const seekRes = this.segmentResolver.resolveSeek(cam.cameraId, targetDate);
-      cam.actualTime = new Date(seekRes.closestKeyframe.timestampMs + seekRes.offsetFromKeyframeMs).toISOString();
-      cam.driftMs = 0;
-      cam.status = 'READY';
-    }
-
+    session.cameras = tracks;
     session.state = 'PAUSED';
     return session;
   }
@@ -142,16 +151,8 @@ export class PlaybackCoordinatorService {
     const session = this.getSession(sessionId);
     if (!session) throw new Error(`Playback session ${sessionId} not found`);
 
-    session.state = 'PAUSED';
-    const curMs = new Date(session.currentTime).getTime();
-    const nextTime = new Date(curMs + 40).toISOString();
-    session.currentTime = nextTime;
-
-    for (const cam of session.cameras) {
-      cam.actualTime = nextTime;
-    }
-
-    return session;
+    const nextTime = new Date(Date.parse(session.currentTime) + 40).toISOString();
+    return this.seek(sessionId, nextTime);
   }
 
   /**
@@ -161,16 +162,8 @@ export class PlaybackCoordinatorService {
     const session = this.getSession(sessionId);
     if (!session) throw new Error(`Playback session ${sessionId} not found`);
 
-    session.state = 'PAUSED';
-    const curMs = new Date(session.currentTime).getTime();
-    const prevTime = new Date(Math.max(0, curMs - 40)).toISOString();
-    session.currentTime = prevTime;
-
-    for (const cam of session.cameras) {
-      cam.actualTime = prevTime;
-    }
-
-    return session;
+    const prevTime = new Date(Math.max(0, Date.parse(session.currentTime) - 40)).toISOString();
+    return this.seek(sessionId, prevTime);
   }
 
   /**

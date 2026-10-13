@@ -1358,7 +1358,9 @@ export class InfrastructureRepository {
     refreshTokenHash: string,
     ipAddress?: string,
     userAgent?: string,
+    accessTtlSeconds = 30 * 24 * 60 * 60,
   ) {
+    if (!Number.isFinite(accessTtlSeconds) || accessTtlSeconds <= 0 || accessTtlSeconds > 30 * 24 * 60 * 60) throw new Error("invalid_access_session_ttl");
     const identity = await this.pool.query(
       `SELECT u.id::text, u.tenant_id::text
        FROM users u JOIN tenants t ON t.id=u.tenant_id
@@ -1377,9 +1379,9 @@ export class InfrastructureRepository {
       `INSERT INTO user_sessions (
          user_id,tenant_id,access_token_hash,refresh_token_hash,ip_address,
          user_agent,access_expires_at,expires_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,now()+interval '30 days',now()+interval '30 days')
+      ) VALUES ($1,$2,$3,$4,$5,$6,now()+make_interval(secs => $7),now()+interval '30 days')
        RETURNING id::text,user_id::text,tenant_id::text,access_expires_at,expires_at`,
-      [resolvedUserId, resolvedTenantId, accessTokenHash, refreshTokenHash, ipAddress ?? null, userAgent ?? null],
+      [resolvedUserId, resolvedTenantId, accessTokenHash, refreshTokenHash, ipAddress ?? null, userAgent ?? null, accessTtlSeconds],
     );
     return camelRow(result.rows[0]!);
   }

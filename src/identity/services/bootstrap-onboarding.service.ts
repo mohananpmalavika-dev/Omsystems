@@ -176,7 +176,7 @@ export class BootstrapOnboardingService {
     const refreshToken = randomBytes(32).toString("hex");
     const hashToken = (token: string) => createHash("sha256").update(token).digest("base64");
     const session = await store.createUserSession(admin.id, admin.tenantId ?? tenantId,
-      hashToken(accessToken), hashToken(refreshToken));
+      hashToken(accessToken), hashToken(refreshToken), undefined, undefined, 3600);
     if (!session?.id) throw new Error("session_creation_failed");
     const expiry = new Date(session.accessExpiresAt).getTime();
     if (!Number.isFinite(expiry) || expiry <= Date.now()) throw new Error("invalid_session_expiry");

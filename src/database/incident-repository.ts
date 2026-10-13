@@ -225,14 +225,15 @@ export class IncidentRepository {
     return res.rows.map(mapIncident);
   }
 
-  async updateStatus(id: string, status: string, changedBy?: string, notes?: string) {
+  async updateStatus(id: string, status: string, changedBy?: string, notes?: string, expectedStatus?: string) {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
       const upd = await client.query(
-        `UPDATE incidents SET status=$2, updated_at=now() WHERE id=$1 RETURNING *`,
-        [id, status],
+        `UPDATE incidents SET status=$2, updated_at=now() WHERE id=$1 AND ($3::text IS NULL OR status::text=$3) RETURNING *`,
+        [id, status, expectedStatus ?? null],
       );
+      if (!upd.rows[0]) { await client.query("ROLLBACK"); return undefined; }
       await client.query(
         `INSERT INTO incident_status_history (id, incident_id, status, changed_by, notes, created_at) VALUES ($1,$2,$3,$4,$5,now())`,
         [randomUUID(), id, status, changedBy ?? null, notes ?? null],
@@ -303,8 +304,9 @@ export class IncidentRepository {
     return mapIncidentEvent(res.rows[0]);
   }
 
-  async escalateIncident(id: string, escalatedBy: string, reason: string, recipients: string[]) {
-    const incident = await this.updateStatus(id, 'escalated', escalatedBy, reason);
+  async escalateIncident(id: string, escalatedBy: string, reason: string, recipients: string[], expectedStatus?: string) {
+    const incident = await this.updateStatus(id, 'escalated', escalatedBy, reason, expectedStatus);
+    if (!incident) return undefined;
     await this.addEvent(id, 'escalated', { description: 'Incident escalated', reason, recipients }, escalatedBy);
     return incident;
   }

@@ -32,6 +32,9 @@ nav:
   - Product:
       - Requirements (SRS): srs.md
       - Features and status: features.md
+      - VMS improvement plan: vms-competitive-roadmap.md
+      - Competitive baseline: vms-competitive-baseline.md
+      - VMS engineering progress: vms-engineering-progress.md
   - Architecture:
       - Design (SDD): sdd.md
       - API and OpenAPI: api.md

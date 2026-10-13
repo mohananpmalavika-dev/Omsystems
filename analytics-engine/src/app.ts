@@ -8,6 +8,10 @@ import type { AnalyticsRule } from "./analytics-pipeline.js";
 import type { PersonCountObservation } from "../../packages/contracts/src/live-person-count.js";
 import { NotificationEngine } from "./notification-engine.js";
 import { StreamProcessor } from "./stream-processor.js";
+import { registerDetectionApiRoutes } from "./routes/detection-api.js";
+import { registerAdvancedAnalyticsRoutes } from "./routes/advanced-analytics-api.js";
+import { registerAnalogCameraApiRoutes } from "./routes/analog-camera-api.js";
+import { registerDigitalTwinRoutes } from "./digital-twin/api/index.js";
 import { createIncidentIntegration, type IncidentIntegrationHook } from './incident-integration.js';
 import {
   livenessCheckHandler,
@@ -167,9 +171,10 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
   });
 
   // Initialize statistics service (optional - requires DATABASE_URL)
-  void import("./statistics-integration.js").then(async (module) => {
+  let releaseStatistics: (() => Promise<void>) | undefined;
+  const statisticsReady = import("./statistics-integration.js").then(async (module) => {
     try {
-      await module.initializeStatisticsService();
+      releaseStatistics = await module.acquireStatisticsService();
     } catch (error) {
       app.log.warn({ err: error }, "Statistics service initialization failed - endpoint will be unavailable");
     }
@@ -177,30 +182,26 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     app.log.warn({ err }, "Failed to import statistics service module");
   });
 
-  // Register lazily loaded route modules through Fastify's plugin lifecycle so
-  // app.ready()/listen() cannot complete before their routes exist.
+  // Load core modules before starting model initialization and Fastify's plugin
+  // timers. Route registration itself remains inside the plugin lifecycle.
   app.register(async (instance) => {
-    const module = await import("./routes/detection-api.js");
-    await module.registerDetectionApiRoutes(instance, pipeline);
+    await registerDetectionApiRoutes(instance, pipeline);
   });
   app.register(async (instance) => {
-    const module = await import("./routes/advanced-analytics-api.js");
-    await module.registerAdvancedAnalyticsRoutes(instance, pipeline);
+    await registerAdvancedAnalyticsRoutes(instance, pipeline);
   });
   app.register(async (instance) => {
-    const module = await import("./routes/analog-camera-api.js");
-    await module.registerAnalogCameraApiRoutes(instance, pipeline);
+    await registerAnalogCameraApiRoutes(instance, pipeline);
   });
   app.register(async (instance) => {
-    const module = await import("./digital-twin/api/index.js");
-    await module.registerDigitalTwinRoutes(instance);
+    await registerDigitalTwinRoutes(instance);
   });
   app.register(async (instance) => {
-    const module = await import("./routes/face-recognition.routes.js");
     // Face recognition routes will be enabled when services are initialized
     // Services are initialized in the banking analytics activation
     if (process.env.ENABLE_FACE_RECOGNITION === 'true') {
       try {
+        const module = await import("./routes/face-recognition.routes.js");
         const { Pool } = await import('pg');
         const db = new Pool({ connectionString: process.env.DATABASE_URL });
         const { FaceRecognitionService } = await import("./face/face-recognition.service.js");
@@ -462,8 +463,11 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
 
   // Graceful shutdown
   app.addHook("onClose", async () => {
-    await streamProcessor.stopAllStreams();
-    await pipeline.cleanup();
+    await Promise.all([pipelineReady, statisticsReady]);
+    try {
+      await streamProcessor.stopAllStreams();
+      await pipeline.cleanup();
+    } finally { await releaseStatistics?.(); }
   });
 
   return app;

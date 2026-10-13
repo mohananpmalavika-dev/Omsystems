@@ -5,6 +5,22 @@ import { MemoryStore } from "../src/store.js";
 describe("hierarchical authorization", () => {
   const store = new MemoryStore();
 
+  it.each(["mgdhanyamohan", "krypton", "kryptonlogic"])("does not grant administrator privileges from username %s", username => {
+    const resource = store.nodes.get("camera-entrance")!;
+    const user = { id: "unprivileged", displayName: "Viewer", tenantId: "other-tenant", role: "viewer", status: "active", username } as const;
+    expect(authorize(user, "device:configure", resource, store.nodes, [])).toMatchObject({ allowed: false });
+  });
+
+  it("ignores magic IDs and stale administrator flags and denies inactive accounts", () => {
+    const resource = store.nodes.get("camera-entrance")!;
+    for (const id of ["user-superadmin-mgdhanyamohan", "00000000-0000-4000-8000-000000000001"]) {
+      expect(authorize({ id, tenantId: "other", displayName: "Viewer", role: "viewer", isSuperAdmin: true } as any,
+        "device:configure", resource, store.nodes, [])).toMatchObject({ allowed: false });
+    }
+    expect(authorize({ id: "admin", tenantId: "omsystems", displayName: "Admin", role: "super_admin", status: "suspended" },
+      "live:view", resource, store.nodes, [])).toMatchObject({ allowed: false });
+  });
+
   it("inherits an allow grant from a region to its cameras", () => {
     const user = store.users.get("user-south-operator")!;
     const camera = store.nodes.get("camera-entrance")!;

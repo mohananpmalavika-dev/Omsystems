@@ -12,6 +12,11 @@ development process. It is not a substitute for a production runbook.
   building the root control-plane image. The Dockerfile verifies this input and
   intentionally fails when it is missing or mismatched.
 - Deployment-specific secrets and a PostgreSQL connection string.
+- PostgreSQL must have pgvector installed for migration `014_enable_pgvector_faces.sql`.
+  The Compose definitions use matching PostgreSQL 16/17 images with pgvector.
+  The supported images are documented by [pgvector](https://github.com/pgvector/pgvector#docker).
+  These definitions support new installations. Validate backup/restore and
+  collation compatibility before changing the image of an existing database.
 
 ## Configure the Compose stack
 

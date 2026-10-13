@@ -2602,9 +2602,7 @@ export async function buildApp(options?: {
     if (!store.resolveStreamSecret) return reply.code(503).send({ error: "stream_vault_unavailable" });
     const { ref } = z.object({ ref: z.string().min(8).max(512) }).parse(request.query);
     if (!ref.startsWith(`edge://${id}/`)) {
-      const sourceUri = await store.resolveStreamSecret(ref, id);
-      if (!sourceUri) return reply.code(404).send({ error: "stream_secret_unavailable" });
-      return reply.header("cache-control", "no-store").send({ sourceUri });
+      return reply.code(404).send({ error: "stream_secret_unavailable" });
     }
     const sourceUri = await store.resolveStreamSecret(ref, id);
     if (!sourceUri) return reply.code(404).send({ error: "stream_secret_unavailable" });
@@ -3522,6 +3520,11 @@ export async function buildApp(options?: {
     };
     process.on('SIGTERM', shutdownHandler);
     process.on('SIGINT', shutdownHandler);
+    app.addHook('onClose', async () => {
+      nbfcJobs.stop();
+      process.removeListener('SIGTERM', shutdownHandler);
+      process.removeListener('SIGINT', shutdownHandler);
+    });
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to initialize NBFC background jobs');
   }

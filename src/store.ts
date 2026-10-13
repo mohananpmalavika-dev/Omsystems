@@ -1254,7 +1254,9 @@ export class MemoryStore {
     refreshTokenHash: string,
     ipAddress?: string,
     userAgent?: string,
+    accessTtlSeconds = 30 * 24 * 60 * 60,
   ) {
+    if (!Number.isFinite(accessTtlSeconds) || accessTtlSeconds <= 0 || accessTtlSeconds > 30 * 24 * 60 * 60) throw new Error("invalid_access_session_ttl");
     const id = randomUUID();
     const now = new Date();
     const session = {
@@ -1265,7 +1267,7 @@ export class MemoryStore {
       refreshTokenHash,
       ipAddress,
       userAgent,
-      accessExpiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+      accessExpiresAt: new Date(now.getTime() + accessTtlSeconds * 1000),
       expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
       lastActivityAt: now,
       createdAt: now,

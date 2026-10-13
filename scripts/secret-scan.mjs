@@ -3,8 +3,8 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const gitFiles = execFileSync('git', ['ls-files'], { encoding: 'utf8' })
-  .split(/\r?\n/)
+const gitFiles = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
+  .split('\0')
   .filter(Boolean);
 
 const allowedExtensions = ['.js', '.ts', '.mjs', '.tsx', '.jsx', '.json', '.yaml', '.yml', '.env', '.env.example'];
@@ -41,7 +41,7 @@ for (const filePath of gitFiles) {
     for (const pattern of secretPatterns) {
       if (pattern.test(line)) {
         // Exclude common benign placeholders
-        if (/change-me|change-in-production|example|localhost|00000000-0000-0000-0000-000000000000|your[-_ ]?secure[-_ ]?token|your[-_ ]?openai[-_ ]?api[-_ ]?key|default[-_ ]?secret|default[-_ ]?key|test[-_ ]?(?:api[-_ ]?key|jwt[-_ ]?secret|secret[-_ ]?key)|for-testing-only/i.test(line)) continue;
+        if (/change[-_]me|change[-_]in[-_]production|example|localhost|00000000-0000-0000-0000-000000000000|your[-_ ]?secure[-_ ]?token|your[-_ ]?openai[-_ ]?api[-_ ]?key|default[-_ ]?secret|default[-_ ]?key|test[-_ ]?(?:api[-_ ]?key|jwt[-_ ]?secret|secret[-_ ]?key)|for-testing-only/i.test(line)) continue;
 
         findings.push({ file: filePath, line: i + 1 });
         break;

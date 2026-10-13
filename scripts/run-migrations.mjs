@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -23,7 +21,8 @@ function migrationFiles() {
   for (const directory of [migrationsDirectory, legacyMigrationsDirectory]) {
     if (!existsSync(directory)) continue;
     for (const file of readdirSync(directory)) {
-      if (file.endsWith(".sql")) filenames.add(file);
+      // Guardian Network uses a separate service database, not the control plane.
+      if (file.endsWith(".sql") && file !== "guardian-network-schema.sql") filenames.add(file);
     }
   }
   return [...filenames].sort((left, right) =>
@@ -201,9 +200,9 @@ async function executedMigrations(client) {
 }
 
 function validateAppliedChecksums(executed, files) {
-  const skipChecksumValidation = process.env.SKIP_MIGRATION_CHECKSUM_VALIDATION !== "false";
+  const skipChecksumValidation = process.env.SKIP_MIGRATION_CHECKSUM_VALIDATION === "true";
   if (skipChecksumValidation) {
-    console.log("⚠️  Skipping migration checksum validation (set SKIP_MIGRATION_CHECKSUM_VALIDATION=false to enable)");
+    console.log("Skipping migration checksum validation by explicit configuration.");
     return;
   }
   for (const filename of files) {
@@ -218,7 +217,7 @@ function validateAppliedChecksums(executed, files) {
   }
 }
 
-async function executeMigration(client, filename) {
+export async function executeMigration(client, filename) {
   const sql = migrationContents(filename);
   const startedAt = Date.now();
   await client.query("BEGIN");
@@ -234,21 +233,6 @@ async function executeMigration(client, filename) {
     console.log(`Applied ${filename} (${executionTime} ms)`);
   } catch (error) {
     await client.query("ROLLBACK");
-    const isAlreadyExists =
-      /already exists|duplicate/i.test(error.message) ||
-      ["42710", "42P07", "42701", "42P06", "42P04"].includes(error.code);
-    if (isAlreadyExists) {
-      console.warn(
-        `⚠️  Migration ${filename} schema objects already exist (${error.message}). Marking as applied.`,
-      );
-      await client.query(
-        `INSERT INTO schema_migrations (filename, checksum, execution_time_ms)
-         VALUES ($1, $2, 0)
-         ON CONFLICT (filename) DO NOTHING`,
-        [filename, checksum(sql)],
-      );
-      return;
-    }
     throw new Error(`Migration ${filename} failed: ${error.message}`, { cause: error });
   }
 }

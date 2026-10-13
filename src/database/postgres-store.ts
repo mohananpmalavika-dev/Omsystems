@@ -919,9 +919,9 @@ export class PostgresStore
   async getIncident(id: string) { return this.incidents.getIncident(id); }
   async listIncidents(tenantId: string, filters?: any) { return this.incidents.listIncidents(tenantId, filters); }
   async updateIncident(id: string, updates: any) { return this.incidents.updateIncident(id, updates); }
-  async updateIncidentStatus(id: string, status: any, changedBy: string, notes?: string) { return this.incidents.updateStatus(id, status, changedBy, notes); }
+  async updateIncidentStatus(id: string, status: any, changedBy: string, notes?: string, expectedStatus?: string) { return this.incidents.updateStatus(id, status, changedBy, notes, expectedStatus); }
   async assignIncident(id: string, userId: string, assignedBy: string) { return this.incidents.assignIncident(id, userId); }
-  async escalateIncident(id: string, escalatedBy: string, reason: string, recipients?: string[]) { return this.incidents.escalateIncident(id, escalatedBy, reason, recipients ?? []); }
+  async escalateIncident(id: string, escalatedBy: string, reason: string, recipients?: string[], expectedStatus?: string) { return this.incidents.escalateIncident(id, escalatedBy, reason, recipients ?? [], expectedStatus); }
   async closeIncident(id: string, closedBy: string, notes?: string) { return this.incidents.closeIncident(id, closedBy, notes); }
   async reopenIncident(id: string, reopenedBy: string, reason: string) { return this.incidents.reopenIncident(id, reopenedBy, reason); }
   

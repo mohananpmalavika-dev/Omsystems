@@ -1,429 +1,91 @@
-import Fastify, { type FastifyInstance } from "fastify";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { Pool } from "pg";
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { registerDeviceHealthCorrelationRoutes } from '../src/routes/device-health-correlation.routes.js';
+import { operationalSqlApp } from './fixtures/operational-sql-app.js';
+import { fixtureUuid } from './fixtures/sql-identity.js';
 
-describe("Device Health Correlation API", () => {
-  let app: FastifyInstance;
-  let pool: Pool;
-  const tenantId = "test-tenant-001";
-  const userId = "test-user-001";
-  const branchId = "test-branch-001";
+describe('Device health PostgreSQL contract', () => {
+  let ctx: Awaited<ReturnType<typeof operationalSqlApp>>;
+  beforeEach(async () => { ctx = await operationalSqlApp('health', registerDeviceHealthCorrelationRoutes); });
+  afterEach(async () => { await ctx?.close(); });
+  const snapshot = (branchId: string) => ({ branchId,
+    cameras: { total: 10, online: 10, recording: 10, healthy: 10, warning: 0, critical: 0, offline: 0 },
+    recorders: { total: 2, online: 2, healthy: 2, degraded: 0, full: 0, offline: 0 },
+    network: { latencyMs: 25, packetLoss: 0.1, bandwidthMbps: 950 },
+    power: { upsOnline: true, batteryPercent: 95, powerOutages24h: 0 } });
+  const capture = (payload = snapshot(ctx.branchId)) => ctx.app.inject({ method: 'POST', url: '/v1/security/device-health/snapshot', payload });
 
-  beforeEach(async () => {
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/sentinel_test",
-    });
-
-    app = Fastify();
-    app.decorateRequest("currentUser");
-    app.addHook("preHandler", async (request) => {
-      request.currentUser = {
-        userId,
-        tenantId,
-        role: "security_officer",
-      };
-    });
-
-    const { registerDeviceHealthCorrelationRoutes } = await import("../src/routes/device-health-correlation.routes.js");
-    await registerDeviceHealthCorrelationRoutes(app, { pool });
-
-    // Clean test data
-    await pool.query("DELETE FROM device_health_snapshots WHERE tenant_id = $1", [tenantId]);
-    await pool.query("DELETE FROM device_critical_issues WHERE tenant_id = $1", [tenantId]);
-    await pool.query("DELETE FROM device_correlated_events WHERE tenant_id = $1", [tenantId]);
+  it('persists branch identity, metrics and a readable healthy snapshot', async () => {
+    const response = await capture();
+    expect(response.statusCode, response.body).toBe(201);
+    expect(response.json().data).toMatchObject({ branchId: ctx.branchId, deviceType: 'branch', overallHealth: 'healthy' });
+    const saved = await ctx.pool.query('SELECT metrics, device_id FROM device_health_snapshots WHERE id=$1', [response.json().data.id]);
+    expect(saved.rows[0].metrics).toEqual(snapshot(ctx.branchId));
+    expect(saved.rows[0].device_id).toBe(`branch:${ctx.branchId}`);
+    const list = await ctx.app.inject({ method: 'GET', url: '/v1/security/device-health' });
+    expect(list.statusCode, list.body).toBe(200);
+    expect(list.json().summary).toMatchObject({ totalBranches: 1, healthyBranches: 1 });
+    expect(list.json().data[0].cameras.healthScore).toBe(100);
   });
-
-  afterEach(async () => {
-    await app.close();
-    await pool.end();
+  it('rejects incomplete and foreign-branch submissions without writing', async () => {
+    expect((await capture({ branchId: ctx.branchId } as any)).statusCode).toBe(400);
+    expect((await capture(snapshot(fixtureUuid('unknown-branch')))).statusCode).toBe(404);
+    expect((await ctx.pool.query('SELECT count(*)::int AS count FROM device_health_snapshots WHERE tenant_id=$1', [ctx.tenantId])).rows[0].count).toBe(0);
   });
-
-  describe("POST /v1/security/device-health/snapshot", () => {
-    it("captures health snapshot successfully", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v1/security/device-health/snapshot",
-        payload: {
-          branchId,
-          cameras: {
-            total: 10,
-            online: 9,
-            recording: 9,
-            healthy: 8,
-            warning: 1,
-            critical: 0,
-            offline: 1,
-          },
-          recorders: {
-            total: 2,
-            online: 2,
-            healthy: 2,
-            degraded: 0,
-            full: 0,
-            offline: 0,
-          },
-          network: {
-            status: "healthy",
-            latencyMs: 25,
-            packetLoss: 0.1,
-            bandwidth: 950,
-            issues: [],
-          },
-          power: {
-            status: "healthy",
-            upsOnline: true,
-            batteryPercent: 95,
-            powerOutages24h: 0,
-            issues: [],
-          },
-        },
-      });
-
-      expect(response.statusCode).toBe(201);
-      const data = response.json();
-      expect(data.success).toBe(true);
-      expect(data.data).toMatchObject({
-        branchId,
-        overallHealth: "healthy",
-      });
-      expect(data.data.id).toBeDefined();
-    });
-
-    it("detects critical health status", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v1/security/device-health/snapshot",
-        payload: {
-          branchId,
-          cameras: {
-            total: 10,
-            online: 5,
-            recording: 5,
-            healthy: 4,
-            warning: 1,
-            critical: 5,
-            offline: 5,
-          },
-          recorders: {
-            total: 2,
-            online: 1,
-            healthy: 1,
-            degraded: 0,
-            full: 0,
-            offline: 1,
-          },
-          network: {
-            status: "critical",
-            latencyMs: 500,
-            packetLoss: 15.5,
-            bandwidth: 100,
-            issues: ["High latency", "Packet loss"],
-          },
-          power: {
-            status: "critical",
-            upsOnline: true,
-            batteryPercent: 20,
-            powerOutages24h: 2,
-            issues: ["Low battery", "Multiple outages"],
-          },
-        },
-      });
-
-      expect(response.statusCode).toBe(201);
-      const data = response.json();
-      expect(data.data.overallHealth).toBe("critical");
-    });
-
-    it("validates required fields", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v1/security/device-health/snapshot",
-        payload: {
-          branchId,
-          // Missing cameras, recorders, network, power
-        },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
+  it('denies read-only and suspended writes and foreign-branch issues', async () => {
+    const issue = await ctx.app.inject({ method: 'POST', url: '/v1/security/device-health/issues', payload: {
+      branchId: fixtureUuid('foreign-branch'), deviceType: 'camera', message: 'Offline' } });
+    expect(issue.statusCode).toBe(404);
+    ctx.setRole('auditor'); expect((await capture()).statusCode).toBe(403);
+    ctx.setRole('operator'); ctx.setStatus('suspended'); expect((await capture()).statusCode).toBe(401);
   });
-
-  describe("GET /v1/security/device-health", () => {
-    beforeEach(async () => {
-      // Create test snapshots
-      await pool.query(
-        `INSERT INTO device_health_snapshots 
-        (tenant_id, branch_id, cameras_total, cameras_online, cameras_healthy, 
-         recorders_total, recorders_online, recorders_healthy,
-         network_status, network_latency_ms, network_packet_loss,
-         power_status, power_battery_percent, power_outages_24h,
-         overall_health, created_by)
-        VALUES 
-        ($1, $2, 10, 9, 8, 2, 2, 2, 'healthy', 25, 0.1, 'healthy', 95, 0, 'healthy', $3),
-        ($1, 'branch-002', 12, 6, 5, 2, 1, 1, 'critical', 500, 15.0, 'critical', 20, 2, 'critical', $3)`,
-        [tenantId, branchId, userId]
-      );
-    });
-
-    it("lists all health snapshots", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/v1/security/device-health",
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.success).toBe(true);
-      expect(data.data.length).toBeGreaterThanOrEqual(2);
-      expect(data.summary).toMatchObject({
-        totalBranches: 2,
-        healthyBranches: 1,
-        criticalBranches: 1,
-      });
-    });
-
-    it("filters by branch", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: `/v1/security/device-health?branchId=${branchId}`,
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json().data;
-      expect(data).toHaveLength(1);
-      expect(data[0].branchId).toBe(branchId);
-    });
-
-    it("returns latest snapshot per branch", async () => {
-      // Add older snapshot
-      await pool.query(
-        `INSERT INTO device_health_snapshots 
-        (tenant_id, branch_id, cameras_total, cameras_online, cameras_healthy,
-         recorders_total, recorders_online, recorders_healthy,
-         network_status, network_latency_ms, network_packet_loss,
-         power_status, power_battery_percent, power_outages_24h,
-         overall_health, created_by, created_at)
-        VALUES ($1, $2, 10, 10, 10, 2, 2, 2, 'healthy', 20, 0.0, 'healthy', 100, 0, 'healthy', $3, NOW() - INTERVAL '1 hour')`,
-        [tenantId, branchId, userId]
-      );
-
-      const response = await app.inject({
-        method: "GET",
-        url: `/v1/security/device-health?branchId=${branchId}`,
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json().data;
-      expect(data).toHaveLength(1); // Should only return latest
-    });
+  it('treats an offline UPS and offline cameras as critical', async () => {
+    const payload = snapshot(ctx.branchId);
+    payload.power.upsOnline = false;
+    payload.cameras.online = 9; payload.cameras.offline = 1; payload.cameras.healthy = 9; payload.cameras.recording = 9;
+    const response = await capture(payload);
+    expect(response.statusCode, response.body).toBe(201);
+    expect(response.json().data.overallHealth).toBe('critical');
   });
-
-  describe("POST /v1/security/device-health/issues", () => {
-    it("reports critical issue successfully", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v1/security/device-health/issues",
-        payload: {
-          branchId,
-          issueType: "camera",
-          severity: "critical",
-          deviceId: "cam-005",
-          message: "Camera offline for 2 hours",
-          affectedDevices: ["cam-005"],
-        },
-      });
-
-      expect(response.statusCode).toBe(201);
-      const data = response.json();
-      expect(data.success).toBe(true);
-      expect(data.data).toMatchObject({
-        issueType: "camera",
-        severity: "critical",
-        status: "open",
-      });
-      expect(data.data.id).toBeDefined();
-    });
-
-    it("validates severity levels", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v1/security/device-health/issues",
-        payload: {
-          branchId,
-          issueType: "camera",
-          severity: "invalid_severity",
-          message: "Test issue",
-        },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    it("detects power-camera correlation", async () => {
-      // Report power issue
-      const powerIssue = await app.inject({
-        method: "POST",
-        url: "/v1/security/device-health/issues",
-        payload: {
-          branchId,
-          issueType: "power",
-          severity: "high",
-          message: "Power fluctuation detected",
-        },
-      });
-      expect(powerIssue.statusCode).toBe(201);
-
-      // Report camera offline shortly after
-      const cameraIssue = await app.inject({
-        method: "POST",
-        url: "/v1/security/device-health/issues",
-        payload: {
-          branchId,
-          issueType: "camera",
-          severity: "critical",
-          deviceId: "cam-001",
-          message: "Camera went offline",
-        },
-      });
-      expect(cameraIssue.statusCode).toBe(201);
-
-      // Check if correlation was created (in a real scenario)
-      // This would require checking the device_correlated_events table
-    });
+  it.each(['power_camera_correlation', 'network_recorder_correlation', 'storage_recording_correlation'])('persists %s from actual snapshot metrics', async kind => {
+    const payload = snapshot(ctx.branchId);
+    if (kind === 'power_camera_correlation') { payload.power.upsOnline = false; payload.cameras.offline = 1; payload.cameras.online = 9; payload.cameras.recording = 9; payload.cameras.healthy = 9; }
+    if (kind === 'network_recorder_correlation') { payload.network.latencyMs = 250; payload.recorders.degraded = 1; payload.recorders.healthy = 1; }
+    if (kind === 'storage_recording_correlation') { payload.recorders.full = 1; payload.recorders.healthy = 1; payload.cameras.recording = 8; }
+    const response = await capture(payload);
+    expect(response.statusCode, response.body).toBe(201);
+    const saved = await ctx.pool.query('SELECT event_type FROM device_correlated_events WHERE tenant_id=$1', [ctx.tenantId]);
+    expect(saved.rows.map(row => row.event_type)).toContain(kind);
+    const list = await ctx.app.inject({ method: 'GET', url: '/v1/security/device-health' });
+    expect(list.statusCode, list.body).toBe(200);
+    expect(list.json().data[0].correlatedEvents[0].type).toBe(kind);
   });
-
-  describe("PATCH /v1/security/device-health/issues/:id/resolve", () => {
-    let issueId: string;
-
-    beforeEach(async () => {
-      const result = await pool.query(
-        `INSERT INTO device_critical_issues 
-        (tenant_id, branch_id, issue_type, severity, message, status, created_by)
-        VALUES ($1, $2, 'camera', 'critical', 'Test issue', 'open', $3)
-        RETURNING id`,
-        [tenantId, branchId, userId]
-      );
-      issueId = result.rows[0].id;
-    });
-
-    it("resolves issue successfully", async () => {
-      const response = await app.inject({
-        method: "PATCH",
-        url: `/v1/security/device-health/issues/${issueId}/resolve`,
-        payload: {
-          resolution: "Camera power cycled and back online",
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.success).toBe(true);
-      expect(data.data.status).toBe("resolved");
-      expect(data.data.resolution).toBe("Camera power cycled and back online");
-      expect(data.data.resolvedAt).toBeDefined();
-    });
-
-    it("returns 404 for non-existent issue", async () => {
-      const response = await app.inject({
-        method: "PATCH",
-        url: "/v1/security/device-health/issues/00000000-0000-0000-0000-000000000000/resolve",
-        payload: {
-          resolution: "Fixed",
-        },
-      });
-
-      expect(response.statusCode).toBe(404);
-    });
-
-    it("prevents resolving already resolved issue", async () => {
-      // Resolve once
-      await app.inject({
-        method: "PATCH",
-        url: `/v1/security/device-health/issues/${issueId}/resolve`,
-        payload: {
-          resolution: "Fixed",
-        },
-      });
-
-      // Try to resolve again
-      const response = await app.inject({
-        method: "PATCH",
-        url: `/v1/security/device-health/issues/${issueId}/resolve`,
-        payload: {
-          resolution: "Fixed again",
-        },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
+  it('uses the newest snapshot and honours branch filters', async () => {
+    const older = await capture(); await capture(snapshot(ctx.otherBranchId));
+    await ctx.pool.query("UPDATE device_health_snapshots SET snapshot_time=now()-interval '1 hour' WHERE id=$1", [older.json().data.id]);
+    const current = snapshot(ctx.branchId); current.network.latencyMs = 200;
+    await capture(current);
+    const list = await ctx.app.inject({ method: 'GET', url: `/v1/security/device-health?branchId=${ctx.branchId}` });
+    expect(list.statusCode, list.body).toBe(200);
+    expect(list.json().data).toHaveLength(1);
+    expect(list.json().data[0].network.latencyMs).toBe(200);
   });
-
-  describe("Correlation Detection", () => {
-    it("detects network-recorder correlation", async () => {
-      // Create network issue
-      await app.inject({
-        method: "POST",
-        url: "/v1/security/device-health/issues",
-        payload: {
-          branchId,
-          issueType: "network",
-          severity: "high",
-          message: "High network latency detected",
-        },
-      });
-
-      // Create recorder issue
-      await app.inject({
-        method: "POST",
-        url: "/v1/security/device-health/issues",
-        payload: {
-          branchId,
-          issueType: "recorder",
-          severity: "high",
-          deviceId: "nvr-001",
-          message: "Recording frame drops",
-        },
-      });
-
-      // In production, a background job would create the correlation
-      // For testing, we can verify the issues exist
-      const healthResponse = await app.inject({
-        method: "GET",
-        url: `/v1/security/device-health?branchId=${branchId}`,
-      });
-
-      expect(healthResponse.statusCode).toBe(200);
-    });
-
-    it("detects storage-recording correlation", async () => {
-      await app.inject({
-        method: "POST",
-        url: "/v1/security/device-health/issues",
-        payload: {
-          branchId,
-          issueType: "storage",
-          severity: "critical",
-          message: "Storage 95% full",
-        },
-      });
-
-      await app.inject({
-        method: "POST",
-        url: "/v1/security/device-health/issues",
-        payload: {
-          branchId,
-          issueType: "recording",
-          severity: "high",
-          message: "Recording stopped due to space",
-        },
-      });
-
-      const healthResponse = await app.inject({
-        method: "GET",
-        url: `/v1/security/device-health?branchId=${branchId}`,
-      });
-
-      expect(healthResponse.statusCode).toBe(200);
-    });
+  it('persists and resolves issues with the real actor', async () => {
+    await capture();
+    const issue = await ctx.app.inject({ method: 'POST', url: '/v1/security/device-health/issues', payload: {
+      branchId: ctx.branchId, deviceType: 'camera', deviceId: 'qa-camera', severity: 'critical', message: 'Camera disconnected' } });
+    expect(issue.statusCode, issue.body).toBe(201);
+    expect((await ctx.app.inject({ method: 'GET', url: '/v1/security/device-health' })).json().data[0].criticalIssues).toHaveLength(1);
+    const resolved = await ctx.app.inject({ method: 'PATCH', url: `/v1/security/device-health/issues/${issue.json().data.id}/resolve` });
+    expect(resolved.statusCode, resolved.body).toBe(200);
+    expect(resolved.json().data).toMatchObject({ resolved: true, resolvedBy: ctx.userId });
+    expect((await ctx.app.inject({ method: 'GET', url: '/v1/security/device-health' })).json().data[0].criticalIssues).toHaveLength(0);
+  });
+  it('cannot read or resolve another tenant data', async () => {
+    await capture();
+    const issue = await ctx.app.inject({ method: 'POST', url: '/v1/security/device-health/issues', payload: { branchId: ctx.branchId, deviceType: 'camera', message: 'Offline' } });
+    ctx.switchTenant();
+    const list = await ctx.app.inject({ method: 'GET', url: '/v1/security/device-health' });
+    expect(list.statusCode, list.body).toBe(200); expect(list.json().data).toEqual([]);
+    expect((await ctx.app.inject({ method: 'PATCH', url: `/v1/security/device-health/issues/${issue.json().data.id}/resolve` })).statusCode).toBe(404);
   });
 });

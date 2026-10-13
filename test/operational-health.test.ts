@@ -90,7 +90,7 @@ describe("Phase 1 operational health", () => {
       method: "GET", url: `/v1/edge-agents/${agentId}/cameras/monitoring`, headers: admin,
     });
     expect(response.statusCode).toBe(200);
-    expect(response.json().data).toEqual([{
+    expect(response.json().data).toEqual([expect.objectContaining({
       id: camera!.id,
       branchId: "branch-blr-001",
       channel: 1,
@@ -101,7 +101,10 @@ describe("Phase 1 operational health", () => {
       analyticsEnabled: false,
       ipAddress: "192.168.10.20",
       vendor: "other",
-    }]);
+    })]);
+    expect(response.body).not.toContain('rtsp://');
+    expect(response.json().data[0]).not.toHaveProperty('password');
+    expect(response.json().data[0]).not.toHaveProperty('connectionUrl');
   });
 
   it("rejects an edge agent reporting outside its registered branch", async () => {

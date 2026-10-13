@@ -15,7 +15,7 @@ describe('AccessControlConnector (PACS) Production Grade', () => {
       branchMappingTag: 'MUMBAI-MAIN',
     },
     credentials: {
-      apiKey: 'secret-pacs-api-key-99',
+      apiKey: 'for-testing-only-pacs-api-key',
       webhookSecret: 'pacs-hmac-webhook-secret-42',
     },
     status: 'connected',

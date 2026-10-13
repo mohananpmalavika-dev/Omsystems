@@ -1,6 +1,9 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Pool } from "pg";
+import { operationalRow } from "./operational-row.js";
+import { operationalUser as getUser } from "./operational-user.js";
+import { activeResourceNode } from "../database/active-resource.js";
 
 export interface AnprLogisticsRouteOptions {
   pool: Pool;
@@ -37,12 +40,6 @@ export async function registerAnprLogisticsRoutes(
   options: AnprLogisticsRouteOptions
 ) {
   const { pool } = options;
-
-  function getUser(request: FastifyRequest) {
-    const user = request.currentUser;
-    if (!user?.tenantId || !user.id) throw new Error("authenticated_user_required");
-    return { tenantId: user.tenantId, userId: user.id, role: user.role };
-  }
 
   // ============================================================================
   // Sessions API
@@ -204,6 +201,11 @@ export async function registerAnprLogisticsRoutes(
     const { tenantId, userId } = getUser(request);
     const body = sessionSchema.parse(request.body);
 
+    const branch = await pool.query(`SELECT node.id FROM resource_nodes node
+      WHERE node.id=$1 AND node.tenant_id=$2 AND node.node_type='branch'
+        AND ${activeResourceNode('node')}`, [body.branchId, tenantId]);
+    if (!branch.rows.length) return reply.code(404).send({ error: 'branch_not_found' });
+
     const result = await pool.query(
       `INSERT INTO anpr_logistics_sessions (
         tenant_id, branch_id, vehicle_plate, vehicle_type, 
@@ -223,7 +225,7 @@ export async function registerAnprLogisticsRoutes(
 
     return reply.code(201).send({
       success: true,
-      data: result.rows[0],
+      data: operationalRow(result.rows[0]),
     });
   });
 
@@ -290,7 +292,7 @@ export async function registerAnprLogisticsRoutes(
 
     return reply.send({
       success: true,
-      data: result.rows[0],
+      data: operationalRow(result.rows[0]),
     });
   });
 
@@ -315,8 +317,8 @@ export async function registerAnprLogisticsRoutes(
 
     const result = await pool.query(
       `INSERT INTO anpr_detection_points (
-        session_id, camera_id, camera_name, location, confidence, snapshot_path
-      ) VALUES ($1, $2, $3, $4, $5, $6)
+        session_id, camera_id, camera_name, location, confidence, snapshot_path, detected_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
       RETURNING *`,
       [
         body.sessionId,
@@ -338,7 +340,7 @@ export async function registerAnprLogisticsRoutes(
 
     return reply.code(201).send({
       success: true,
-      data: result.rows[0],
+      data: operationalRow(result.rows[0]),
     });
   });
 
@@ -363,8 +365,8 @@ export async function registerAnprLogisticsRoutes(
 
     const result = await pool.query(
       `INSERT INTO anpr_logistics_violations (
-        session_id, violation_code, violation_name, severity, message
-      ) VALUES ($1, $2, $3, $4, $5)
+        session_id, violation_code, violation_name, severity, message, detected_at
+      ) VALUES ($1, $2, $3, $4, $5, NOW())
       RETURNING *`,
       [
         body.sessionId,
@@ -394,7 +396,7 @@ export async function registerAnprLogisticsRoutes(
 
     return reply.code(201).send({
       success: true,
-      data: result.rows[0],
+      data: operationalRow(result.rows[0]),
     });
   });
 

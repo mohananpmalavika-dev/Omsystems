@@ -1,6 +1,9 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Pool } from "pg";
+import { operationalRow } from "./operational-row.js";
+import { operationalUser as getUser } from "./operational-user.js";
+import { activeResourceNode } from "../database/active-resource.js";
 
 export interface NbfcWatchlistRouteOptions {
   pool: Pool;
@@ -38,12 +41,6 @@ export async function registerNbfcWatchlistRoutes(
 ) {
   const { pool } = options;
 
-  function getUser(request: FastifyRequest) {
-    const user = request.currentUser;
-    if (!user?.tenantId || !user.id) throw new Error("authenticated_user_required");
-    return { tenantId: user.tenantId, userId: user.id, role: user.role };
-  }
-
   // ============================================================================
   // Watchlist Entries API
   // ============================================================================
@@ -66,14 +63,14 @@ export async function registerNbfcWatchlistRoutes(
         COUNT(DISTINCT CASE WHEN d.detected_at > NOW() - INTERVAL '24 hours' THEN d.id END) as detections_24h,
         MAX(d.detected_at) as last_detected_at,
         (SELECT json_build_object(
-          'timestamp', MAX(d2.detected_at),
-          'cameraName', MAX(d2.camera_name),
-          'branchName', MAX(d2.branch_name),
-          'confidence', MAX(d2.confidence)
+          'timestamp', d2.detected_at,
+          'cameraName', d2.camera_name,
+          'branchName', d2.branch_name,
+          'confidence', d2.confidence
         )
         FROM nbfc_watchlist_detections d2
         WHERE d2.watchlist_entry_id = w.id
-        GROUP BY d2.watchlist_entry_id
+        ORDER BY d2.detected_at DESC LIMIT 1
         ) as last_detection
       FROM nbfc_watchlist_entries w
       LEFT JOIN nbfc_watchlist_detections d ON w.id = d.watchlist_entry_id
@@ -208,6 +205,15 @@ export async function registerNbfcWatchlistRoutes(
     const { tenantId, userId } = getUser(request);
     const body = watchlistEntrySchema.parse(request.body);
 
+    if (body.branchIds.length) {
+      const branches = await pool.query(`SELECT node.id FROM resource_nodes node
+        WHERE node.id=ANY($1::uuid[]) AND node.tenant_id=$2 AND node.node_type='branch'
+          AND ${activeResourceNode('node')}`, [body.branchIds, tenantId]);
+      if (branches.rows.length !== new Set(body.branchIds.map(id => id.toLowerCase())).size) {
+        return reply.code(404).send({ error: 'branch_not_found' });
+      }
+    }
+
     // Validate face enrollment requirement
     if (body.watchlistType === "blacklist" && !body.faceEnrolled) {
       return reply.code(400).send({
@@ -244,7 +250,7 @@ export async function registerNbfcWatchlistRoutes(
 
     return reply.code(201).send({
       success: true,
-      data: result.rows[0],
+      data: operationalRow(result.rows[0]),
     });
   });
 
@@ -309,7 +315,7 @@ export async function registerNbfcWatchlistRoutes(
 
     return reply.send({
       success: true,
-      data: result.rows[0],
+      data: operationalRow(result.rows[0]),
     });
   });
 
@@ -402,8 +408,8 @@ export async function registerNbfcWatchlistRoutes(
     const result = await pool.query(
       `INSERT INTO nbfc_watchlist_detections (
         tenant_id, watchlist_entry_id, camera_id, camera_name,
-        branch_id, branch_name, confidence, snapshot_path
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        branch_id, branch_name, confidence, snapshot_path, detected_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
       RETURNING *`,
       [
         tenantId,
@@ -429,8 +435,10 @@ export async function registerNbfcWatchlistRoutes(
 
     return reply.code(201).send({
       success: true,
-      data: result.rows[0],
-      alert: entry.watchlist_type === "blacklist",
+      data: operationalRow(result.rows[0]),
+      alert: false,
+      alertRequired: entry.watchlist_type === "blacklist" && entry.status === "active",
+      alertStatus: entry.watchlist_type === "blacklist" && entry.status === "active" ? "unconfigured" : "not_required",
     });
   });
 

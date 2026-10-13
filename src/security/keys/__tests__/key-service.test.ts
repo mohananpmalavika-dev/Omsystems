@@ -5,7 +5,7 @@
  * Tests can run with SoftwareDevelopmentProvider without external dependencies
  */
 
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   KeyService,
   SoftwareDevelopmentProvider,

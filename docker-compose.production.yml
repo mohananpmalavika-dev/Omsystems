@@ -1,7 +1,7 @@
 services:
   # 1. PostgreSQL Database
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:0.8.7-pg16
     container_name: sentinel-postgres
     environment:
       POSTGRES_DB: sentinel_grid

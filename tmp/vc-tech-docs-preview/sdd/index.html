@@ -1,0 +1,1454 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Repository-verified product, engineering, and operations documentation">
+      
+      
+      
+        <link rel="canonical" href="https://mohananpmalavika-dev.github.io/Omsystems/sdd/">
+      
+      
+        <link rel="prev" href="../vms-engineering-progress/">
+      
+      
+        <link rel="next" href="../api/">
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.14">
+    
+    
+      
+        <title>Design (SDD) - Sentinel Grid Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.342714a4.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#software-design-document-sdd" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Sentinel Grid Documentation" class="md-header__button md-logo" aria-label="Sentinel Grid Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sentinel Grid Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Design (SDD)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="blue"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Sentinel Grid Documentation" class="md-nav__button md-logo" aria-label="Sentinel Grid Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sentinel Grid Documentation
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Overview
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Product
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Product
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../srs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Requirements (SRS)
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Features and status
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vms-competitive-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    VMS improvement plan
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vms-competitive-baseline/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Competitive baseline
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vms-engineering-progress/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    VMS engineering progress
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Architecture
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Design (SDD)
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Design (SDD)
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-design-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Design summary
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-components-and-responsibilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Components and responsibilities
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-architecture-diagram" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Architecture diagram
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-runtime-startup-and-readiness" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Runtime startup and readiness
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-request-authorization-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Request authorization flow
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-live-media-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Live media flow
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-data-and-event-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. Data and event flow
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-persistence-and-consistency" class="md-nav__link">
+    <span class="md-ellipsis">
+      8. Persistence and consistency
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-deployment-topology" class="md-nav__link">
+    <span class="md-ellipsis">
+      9. Deployment topology
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-design-constraints-and-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      10. Design constraints and limitations
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    API and OpenAPI
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../database/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Database and migrations
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Manuals
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Manuals
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Installation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../administrator-manual/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Administrator
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer-manual/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Developer
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../end-user-manual/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    End user
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Operations
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Operations
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Security and configuration
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Operations, backup, and recovery
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing-deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Testing, deployment, and troubleshooting
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    Reference
+    
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../axpro-production-integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    AX PRO integration
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-operations-rollout/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Security operations
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../shared-edge-agent-branches/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Edge agent branches
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../HELMET_ALERT_FIX_DIAGRAM/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Helmet alert fix
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-design-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Design summary
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-components-and-responsibilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Components and responsibilities
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-architecture-diagram" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Architecture diagram
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-runtime-startup-and-readiness" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Runtime startup and readiness
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-request-authorization-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Request authorization flow
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-live-media-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Live media flow
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-data-and-event-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. Data and event flow
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-persistence-and-consistency" class="md-nav__link">
+    <span class="md-ellipsis">
+      8. Persistence and consistency
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-deployment-topology" class="md-nav__link">
+    <span class="md-ellipsis">
+      9. Deployment topology
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-design-constraints-and-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      10. Design constraints and limitations
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="software-design-document-sdd">Software Design Document (SDD)<a class="headerlink" href="#software-design-document-sdd" title="Permanent link">&para;</a></h1>
+<h2 id="1-design-summary">1. Design summary<a class="headerlink" href="#1-design-summary" title="Permanent link">&para;</a></h2>
+<p>The system is a multi-process TypeScript application. A Fastify control plane
+owns HTTP APIs and coordinates identity, authorization, persistence, and
+operations. A Next.js dashboard provides the web UI. Separate services handle
+media routing, recording/storage, and analytics. Branch-local edge agents
+perform local discovery/monitoring and communicate with central services.
+PostgreSQL is the durable schema store; Redis is present in the supplied
+container definitions for shared runtime services.</p>
+<p>The diagrams show repository-declared service boundaries and intended
+interactions. They are logical views, not proof that every integration is
+enabled in a given deployment.</p>
+<h2 id="2-components-and-responsibilities">2. Components and responsibilities<a class="headerlink" href="#2-components-and-responsibilities" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Entry point / source</th>
+<th>Design responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Control plane</td>
+<td><code>src/index.ts</code>, <code>src/app.ts</code></td>
+<td>Starts telemetry/config, database/store and runtime dependencies; builds Fastify app; registers API areas; starts HTTP/WebSocket service and graceful shutdown.</td>
+</tr>
+<tr>
+<td>Dashboard</td>
+<td><code>dashboard/</code></td>
+<td>Next.js React application for operator and administrative pages; communicates with control-plane and service proxies.</td>
+</tr>
+<tr>
+<td>Media gateway</td>
+<td><code>media-gateway/src/index.ts</code>, <code>media-gateway/src/app.ts</code></td>
+<td>Fastify media boundary with control-plane integration, access/session handling, and MediaMTX-facing HLS/WebRTC routes.</td>
+</tr>
+<tr>
+<td>Recording engine</td>
+<td><code>recording-engine/src/index.ts</code></td>
+<td>Recording, storage adapters, retention, evidence capture, integrity, and recovery-oriented workflows.</td>
+</tr>
+<tr>
+<td>Analytics engine</td>
+<td><code>analytics-engine/src/index.ts</code>, <code>analytics-engine/src/app.ts</code></td>
+<td>Detection/analytics pipeline, model usage, metrics, and incident/alert forwarding.</td>
+</tr>
+<tr>
+<td>Edge agent</td>
+<td><code>edge-agent/src/index.ts</code></td>
+<td>Branch-side discovery, device health, media/runtime setup, telemetry/presence, and supported signed-update/configuration paths.</td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td><code>database/migrations/</code>, <code>src/database/</code></td>
+<td>Relational system of record, migration history, and repository-backed access.</td>
+</tr>
+<tr>
+<td>Redis</td>
+<td>Compose service and runtime integrations</td>
+<td>Shared runtime state/event integration where enabled.</td>
+</tr>
+<tr>
+<td>MediaMTX</td>
+<td>Compose service/config</td>
+<td>Media streaming backend configured for HLS/WebRTC transport.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="3-architecture-diagram">3. Architecture diagram<a class="headerlink" href="#3-architecture-diagram" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>flowchart LR
+    User[Dashboard user] --&gt; Web[Next.js dashboard :3000]
+    Web --&gt;|HTTP / BFF| API[Fastify control plane :8080]
+    API --&gt; PG[(PostgreSQL)]
+    API --&gt; Redis[(Redis)]
+    API --&gt;|service key / HTTP| Media[Media gateway :8090]
+    Media --&gt; MTX[MediaMTX]
+    MTX --&gt; Cameras[Camera / recorder streams]
+    API --&gt;|service key / HTTP| Record[Recording engine :8091]
+    Record --&gt; Storage[(Recording storage volume / configured storage)]
+    API --&gt;|service key / HTTP| Analytics[Analytics engine :8092]
+    Analytics --&gt;|events / results| API
+    Edge[Branch edge agent] --&gt;|authenticated control / telemetry| API
+    Edge --&gt;|local device and camera protocols| Cameras
+    Record --&gt;|health / recording metadata| API</code></pre>
+<p>Ports shown are the defaults in the root Compose file; production deployments
+may override ports, addresses, and topology.</p>
+<h2 id="4-runtime-startup-and-readiness">4. Runtime startup and readiness<a class="headerlink" href="#4-runtime-startup-and-readiness" title="Permanent link">&para;</a></h2>
+<p>The root control-plane process initializes telemetry and configuration,
+establishes PostgreSQL and store behavior, initializes Redis-related services,
+bootstraps modules, creates the Fastify application, binds its listener,
+initializes WebSocket handling, and registers graceful shutdown. The container
+entrypoint runs migrations before starting the compiled control plane.</p>
+<p>The API has health/readiness routes and the supplied containers define health
+checks for several services. A health endpoint only reports the component's
+implemented check; it does not guarantee all integrations are healthy.</p>
+<h2 id="5-request-authorization-flow">5. Request authorization flow<a class="headerlink" href="#5-request-authorization-flow" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>sequenceDiagram
+    actor User
+    participant UI as Dashboard
+    participant API as Control plane
+    participant Auth as Auth/session middleware
+    participant Store as PostgreSQL/store
+    User-&gt;&gt;UI: Submit request
+    UI-&gt;&gt;API: HTTP request with supported credential
+    API-&gt;&gt;Auth: Global pre-handler / CSRF checks
+    Auth-&gt;&gt;Store: Resolve active user and validate session
+    Store--&gt;&gt;Auth: User/session state
+    Auth-&gt;&gt;Store: Evaluate tenant, role, grant, and resource scope
+    Store--&gt;&gt;Auth: Authorization result
+    alt Authorized
+        Auth--&gt;&gt;API: Attach sanitized current user
+        API--&gt;&gt;UI: Route response
+    else Rejected
+        Auth--&gt;&gt;UI: Authentication/authorization error
+    end</code></pre>
+<p>The middleware accepts bearer/session credentials and cookies; a development
+header identity path also exists in source. Do not enable development-only
+identity behavior in a production exposure.</p>
+<h2 id="6-live-media-flow">6. Live media flow<a class="headerlink" href="#6-live-media-flow" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>sequenceDiagram
+    actor Operator
+    participant UI as Dashboard
+    participant API as Control plane
+    participant GW as Media gateway
+    participant MTX as MediaMTX
+    participant Cam as Camera / recorder
+    Operator-&gt;&gt;UI: Request live view
+    UI-&gt;&gt;API: Create live session for camera
+    API-&gt;&gt;API: Check user, tenant, branch, and camera access
+    API--&gt;&gt;UI: Short-lived authorized session response
+    UI-&gt;&gt;GW: Request authorized media playlist/session
+    GW-&gt;&gt;MTX: Resolve configured stream and transport
+    MTX-&gt;&gt;Cam: Open supported camera stream
+    Cam--&gt;&gt;MTX: Media packets
+    MTX--&gt;&gt;UI: Configured HLS/WebRTC media</code></pre>
+<p>The exact endpoint/token exchange and client transport are implemented across
+service routes and can vary by configuration. This diagram is conceptual; use
+the service contract and integration tests for exact wire-level details.</p>
+<h2 id="7-data-and-event-flow">7. Data and event flow<a class="headerlink" href="#7-data-and-event-flow" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>flowchart TD
+    Device[Camera / recorder / branch device] --&gt; Edge[Edge discovery and telemetry]
+    Edge --&gt; CP[Control plane]
+    CP --&gt;|persist inventory, access, audit| DB[(PostgreSQL)]
+    Device --&gt; Media[Media gateway / MediaMTX]
+    Media --&gt; Operator[Authorized dashboard viewer]
+    Device --&gt; Rec[Recording engine]
+    Rec --&gt;|segments, health, evidence metadata| CP
+    Rec --&gt; Archive[(Configured recording storage)]
+    Device --&gt; AI[Analytics engine and configured models]
+    AI --&gt;|detections / alerts / telemetry| CP
+    CP --&gt;|incident, alert and evidence workflows| DB
+    CP --&gt; UI[Dashboard]</code></pre>
+<h2 id="8-persistence-and-consistency">8. Persistence and consistency<a class="headerlink" href="#8-persistence-and-consistency" title="Permanent link">&para;</a></h2>
+<p>PostgreSQL SQL migrations define durable entities and schema evolution. The
+migration runner records filename, checksum, execution duration, and timestamp
+in <code>schema_migrations</code>; it serializes concurrent migration runs using an
+advisory lock. Some state is handled by service-local or Redis-backed
+components; the exact durability depends on the configured service and volume.
+See <a href="../database/">Database</a>.</p>
+<h2 id="9-deployment-topology">9. Deployment topology<a class="headerlink" href="#9-deployment-topology" title="Permanent link">&para;</a></h2>
+<p>The repository contains <code>compose.yaml</code>, a separate
+<code>docker-compose.production.yml</code>, individual service Dockerfiles, Kubernetes
+manifests, and platform deployment files. These are alternate deployment
+artifacts, not a single unified installer. Validate the selected topology,
+environment, image artifacts, ingress, storage, and operational procedures
+before deployment.</p>
+<h2 id="10-design-constraints-and-limitations">10. Design constraints and limitations<a class="headerlink" href="#10-design-constraints-and-limitations" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Runtime behavior is split across multiple services and requires compatible
+  service URLs/shared keys.</li>
+<li>The control-plane Docker build requires a separately supplied Windows edge
+  release.</li>
+<li>Live streaming and analytics depend on device, model, and external service
+  prerequisites.</li>
+<li>The route modules and OpenAPI contract have different coverage; see <a href="../api/">API</a>.</li>
+<li>No repository evidence was found to establish production SLO/SLA values,
+  formal threat-model approval, or recovery objectives.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Product and third-party marks remain the property of their respective owners.
+
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "..", "features": ["navigation.sections", "navigation.top", "navigation.tracking", "content.code.copy", "content.table.scrollable"], "search": "../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.13a4f30d.min.js"></script>
+      
+        <script src="https://unpkg.com/mermaid@11/dist/mermaid.min.js"></script>
+      
+        <script src="../javascripts/mermaid.js"></script>
+      
+    
+  </body>
+</html>

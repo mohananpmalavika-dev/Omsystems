@@ -5,7 +5,7 @@
  * Validates complete end-to-end functionality of the AI analytics dashboard.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Fastify, { FastifyInstance } from 'fastify';
 import { registerAiAnalyticsDashboardRoutes } from '../src/routes/ai-analytics-dashboard.routes.js';
 import { aiMetricsCollectorService } from '../src/services/ai-metrics-collector.service.js';

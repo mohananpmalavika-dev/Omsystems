@@ -61,9 +61,12 @@ and adapter operation before making a support commitment.
 
 ## Planned features
 
-No authoritative roadmap or full planned-feature register was found in the
-reviewed repository. TODOs, disabled rules, dormant routes, feature flags, and
-future-looking migration names are not labeled as planned here.
+A [proposed VMS competitive improvement plan](vms-competitive-roadmap.md) now
+records priorities and acceptance targets. It is not an approved delivery
+commitment. No authoritative approved roadmap or full planned-feature register
+was found in the reviewed repository. TODOs, disabled rules, dormant routes,
+feature flags, and future-looking migration names are not labeled as planned
+here.
 
 ## Release acceptance
 

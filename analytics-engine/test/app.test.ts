@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildAnalyticsEngine } from "../src/app.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
@@ -16,6 +16,9 @@ async function useEmptyModelsDirectory(): Promise<void> {
 }
 
 describe("analytics engine adapter", () => {
+  // Adapter contract tests use explicit detections or unavailable-model paths.
+  // Installed hardware/model artifacts belong to inference acceptance tests.
+  beforeEach(async () => { await useEmptyModelsDirectory(); });
   const apps: Array<ReturnType<typeof buildAnalyticsEngine>> = [];
   it("reports present and empty scenes without creating counting alerts or requiring camera rules", async () => {
     const submit = vi.fn(async () => ({}));
@@ -43,8 +46,8 @@ describe("analytics engine adapter", () => {
     expect(response.json().personCount).toMatchObject({count:null,status:"unavailable"});
   });
   afterEach(async () => {
-    vi.unstubAllEnvs();
     await Promise.all(apps.splice(0).map((app) => app.close()));
+    vi.unstubAllEnvs();
     await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
   });
 

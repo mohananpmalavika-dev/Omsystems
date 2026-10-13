@@ -6,6 +6,22 @@ import {
 } from "../src/operational-health/disk-health.js";
 
 describe("recorder disk-health normalization", () => {
+  it('preserves zero free space instead of manufacturing circular-recording headroom', () => {
+    const [disk] = normalizeRecorderHddStatus([{ state: 'normal', capacityBytes: 1000, usedBytes: 1000,
+      freeBytes: 0, smartStatus: 'healthy', writeVerified: true }]);
+    expect(disk).toMatchObject({ availableBytes: 0, usedBytes: 1000, usagePercent: 100, operationalStatus: 'critical' });
+    expect(disk?.reasonCodes).toContain('disk_capacity_critical');
+  });
+  it('distinguishes near-full critical capacity from warning capacity', () => {
+    const disks = normalizeRecorderHddStatus([
+      { state: 'normal', capacityBytes: 1000, freeBytes: 10, smartStatus: 'healthy', writeVerified: true },
+      { state: 'normal', capacityBytes: 1000, freeBytes: 100, smartStatus: 'healthy', writeVerified: true },
+    ]);
+    expect(disks[0]).toMatchObject({ usagePercent: 99, operationalStatus: 'critical' });
+    expect(disks[0]?.reasonCodes).toContain('disk_capacity_critical');
+    expect(disks[1]).toMatchObject({ usagePercent: 90, operationalStatus: 'warning' });
+    expect(disks[1]?.reasonCodes).toContain('disk_capacity_high');
+  });
   it('does not report an unavailable recorder placeholder as a detected disk', () => {
     expect(normalizeRecorderHddStatus([{id: 'storage-telemetry', state: 'unknown', telemetryCapability: 'unavailable'}])[0])
       .toMatchObject({detected: false, slotStatus: 'unknown', capacityBytes: 0});

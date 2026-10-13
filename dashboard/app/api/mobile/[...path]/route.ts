@@ -9,6 +9,9 @@ type RouteContext = {
 
 async function proxyMobileRequest(request: NextRequest, context: RouteContext) {
   const { path } = await context.params;
+  if (path[0] !== "v1" || path.some(segment => !/^[a-zA-Z0-9_-]+$/.test(segment))) {
+    return NextResponse.json({ success: false, error: "invalid_mobile_path" }, { status: 400 });
+  }
   const pathString = path.join("/");
 
   const upstreamBase =
@@ -20,10 +23,12 @@ async function proxyMobileRequest(request: NextRequest, context: RouteContext) {
   const upstreamUrl = new URL(`/api/mobile/${pathString}`, upstreamBase);
   upstreamUrl.search = request.nextUrl.search;
 
-  const headers = new Headers(request.headers);
-  headers.delete("host");
-  headers.delete("cookie");
-  headers.delete("content-length");
+  // Forward only public request metadata; browser-supplied identities and service keys are untrusted.
+  const headers = new Headers();
+  for (const name of ["accept", "content-type", "last-event-id"]) {
+    const value = request.headers.get(name);
+    if (value) headers.set(name, value);
+  }
 
   const incomingAuthorization = request.headers.get("authorization");
   const bearerSession = incomingAuthorization?.toLowerCase().startsWith("bearer ")
@@ -34,11 +39,20 @@ async function proxyMobileRequest(request: NextRequest, context: RouteContext) {
     request.headers.get("x-sentinel-session") ??
     bearerSession;
 
-  if (employeeSession) {
-    headers.set("authorization", `Bearer ${employeeSession}`);
+  if (!employeeSession) {
+    return NextResponse.json({ success: false, error: "unauthenticated", message: "Sign in to continue." },
+      { status: 401, headers: { "cache-control": "no-store" } });
   }
+  headers.set("authorization", `Bearer ${employeeSession}`);
 
   const methodHasPotentialBody = request.method !== "GET" && request.method !== "HEAD";
+  // A cookie translated into bearer credentials remains an ambient browser credential.
+  if (methodHasPotentialBody && request.cookies.get("sentinel_access")?.value) {
+    const origin = request.headers.get("origin");
+    if (origin ? origin !== request.nextUrl.origin : request.headers.get("sec-fetch-site") !== "same-origin") {
+      return NextResponse.json({ success: false, error: "cross_origin_mobile_request" }, { status: 403 });
+    }
+  }
   const requestBody = methodHasPotentialBody ? await request.text() : undefined;
   const willSendBody = typeof requestBody === "string" && requestBody.length > 0;
 
@@ -52,9 +66,12 @@ async function proxyMobileRequest(request: NextRequest, context: RouteContext) {
       headers,
       body: willSendBody ? requestBody : undefined,
       cache: "no-store",
+      signal: request.signal,
+      redirect: "manual",
     });
 
     const responseHeaders = new Headers();
+    responseHeaders.set("cache-control", "no-store");
     const contentType = upstreamRes.headers.get("content-type");
     if (contentType) responseHeaders.set("content-type", contentType);
 
@@ -76,20 +93,8 @@ async function proxyMobileRequest(request: NextRequest, context: RouteContext) {
     });
   } catch (error) {
     console.error("[MobileProxy] Upstream connection failed:", error);
-    // Return friendly offline/fallback payload for home requests
-    if (pathString === "v1/home") {
-      return NextResponse.json({
-        success: true,
-        data: {
-          activeIncidents: [],
-          criticalAlertsCount: 0,
-          branchHealthOverview: { total: 1, online: 1, degraded: 0, offline: 0 },
-          generatedAt: new Date().toISOString(),
-        },
-      });
-    }
     return NextResponse.json(
-      { error: "mobile_upstream_unavailable", message: "Mobile operations service currently unreachable" },
+      { success: false, error: "mobile_upstream_unavailable", message: "Mobile operations service currently unreachable" },
       { status: 502, headers: { "cache-control": "no-store" } }
     );
   }

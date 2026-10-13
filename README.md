@@ -31,6 +31,9 @@ Git). The main guides are:
 - [Software Requirements Specification](docs/srs.md)
 - [Software Design Document](docs/sdd.md)
 - [Feature inventory and implementation status](docs/features.md)
+- [VMS competitive improvement plan](docs/vms-competitive-roadmap.md)
+- [Competitive baseline and test evidence](docs/vms-competitive-baseline.md)
+- [VMS engineering progress and release blockers](docs/vms-engineering-progress.md)
 - [API and OpenAPI coverage](docs/api.md)
 - [Database and migrations](docs/database.md)
 - [Administrator Manual](docs/administrator-manual.md)
@@ -58,7 +61,7 @@ Git). The main guides are:
 ## Prerequisites
 
 - Node.js version 22 or later and npm.
-- PostgreSQL compatible with the included PostgreSQL 16/17 Compose images.
+- PostgreSQL 16/17 with the pgvector extension required by the included migrations.
 - Docker Compose for the containerized local stack.
 - A separately supplied Windows edge-agent release for the root Docker build.
 - Credentials and service configuration appropriate to the deployment.

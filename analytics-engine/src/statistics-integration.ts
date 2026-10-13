@@ -9,6 +9,30 @@ import { AnalyticsStatisticsService } from "./services/analytics-statistics.serv
 
 let statisticsService: AnalyticsStatisticsService | null = null;
 let statisticsPool: Pool | null = null;
+let initialization: Promise<void> | null = null;
+let closing: Promise<void> | null = null;
+let owners = 0;
+
+/** Share initialization and release the pool after the last engine closes. */
+export async function acquireStatisticsService(): Promise<() => Promise<void>> {
+  if (closing) await closing;
+  owners += 1;
+  initialization ??= initializeStatisticsService().catch(error => {
+    initialization = null;
+    throw error;
+  });
+  try { await initialization; } catch (error) { owners -= 1; throw error; }
+  let released = false;
+  return async () => {
+    if (released) return;
+    released = true;
+    owners -= 1;
+    if (owners === 0) {
+      closing = shutdownStatisticsService();
+      try { await closing; } finally { closing = null; initialization = null; }
+    }
+  };
+}
 
 /**
  * Initialize statistics service with control plane database connection
@@ -46,8 +70,8 @@ export async function initializeStatisticsService(databaseUrl?: string): Promise
 
     // Verify connection
     const client = await statisticsPool.connect();
-    const result = await client.query("SELECT COUNT(*) FROM analytics_events LIMIT 1");
-    client.release();
+    try { await client.query("SELECT COUNT(*) FROM analytics_events LIMIT 1"); }
+    finally { client.release(); }
 
     // Initialize repository and service
     const repository = new AnalyticsStatisticsRepository(statisticsPool);

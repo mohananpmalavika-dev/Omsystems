@@ -1,0 +1,78 @@
+site_name: Sentinel Grid Documentation
+site_description: Repository-verified product, engineering, and operations documentation
+site_url: https://mohananpmalavika-dev.github.io/Omsystems/
+docs_dir: .
+site_dir: ../site
+strict: true
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - content.code.copy
+    - content.table.scrollable
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+nav:
+  - Overview: index.md
+  - Product:
+      - Requirements (SRS): srs.md
+      - Features and status: features.md
+      - VMS improvement plan: vms-competitive-roadmap.md
+      - Competitive baseline: vms-competitive-baseline.md
+      - VMS engineering progress: vms-engineering-progress.md
+  - Architecture:
+      - Design (SDD): sdd.md
+      - API and OpenAPI: api.md
+      - Database and migrations: database.md
+  - Manuals:
+      - Installation: getting-started.md
+      - Administrator: administrator-manual.md
+      - Developer: developer-manual.md
+      - End user: end-user-manual.md
+  - Operations:
+      - Security and configuration: security.md
+      - Operations, backup, and recovery: operations.md
+      - Testing, deployment, and troubleshooting: testing-deployment.md
+  - Reference:
+      - AX PRO integration: axpro-production-integration.md
+      - Security operations: security-operations-rollout.md
+      - Edge agent branches: shared-edge-agent-branches.md
+      - Helmet alert fix: HELMET_ALERT_FIX_DIAGRAM.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - footnotes
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+extra_javascript:
+  - https://unpkg.com/mermaid@11/dist/mermaid.min.js
+  - javascripts/mermaid.js
+
+copyright: >
+  Product and third-party marks remain the property of their respective owners.

@@ -11,7 +11,7 @@ const { Client } = pg;
 const scriptPath = fileURLToPath(import.meta.url);
 const expectedMigrationCount = readdirSync(
   join(dirname(scriptPath), "..", "database", "migrations"),
-).filter((filename) => filename.endsWith(".sql")).length;
+).filter((filename) => filename.endsWith(".sql") && filename !== "guardian-network-schema.sql").length;
 const containerName = `sentinel-migration-test-${process.pid}`;
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error('DATABASE_URL is required');

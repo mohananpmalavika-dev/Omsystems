@@ -42,19 +42,12 @@ export function authorize(
   nodesById: ReadonlyMap<string, ResourceNode>,
   grants: readonly AccessGrant[],
 ): AuthorizationDecision {
-  if (!user) {
+  if (!user || (user.status !== undefined && user.status !== "active")) {
     return { allowed: false, reason: "no_matching_grant" };
   }
-  const username = user.username?.toLowerCase();
   const isSuperAdmin =
     (user.role as string) === "super_admin" ||
-    (user.role as string) === "superadmin" ||
-    (user as any).isSuperAdmin === true ||
-    username === "mgdhanyamohan" ||
-    username === "krypton" ||
-    username === "kryptonlogic" ||
-    user.id === "user-superadmin-mgdhanyamohan" ||
-    user.id === "00000000-0000-4000-8000-000000000001";
+    (user.role as string) === "superadmin";
 
   if (isSuperAdmin) {
     return { allowed: true, reason: "allowed_by_grant" };

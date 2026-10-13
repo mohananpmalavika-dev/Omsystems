@@ -11,6 +11,8 @@ import type { RecorderContext } from "../core/recorder-driver.types.js";
 type AxiosInstance = ReturnType<typeof axios.create>;
 type AxiosError = InstanceType<typeof axios.AxiosError>;
 
+// Only the response modes used by this transport are accepted; an arbitrary
+// string is incompatible with Axios' ResponseType contract.
 interface AxiosRequestConfig {
   method?: string;
   url?: string;
@@ -19,9 +21,10 @@ interface AxiosRequestConfig {
   validateStatus?: (status: number) => boolean;
   maxRedirects?: number;
   data?: any;
-  responseType?: string;
+  responseType?: "arraybuffer" | "text";
   [key: string]: any;
 }
+
 import {
   RecorderDriverError,
   RecorderConnectionError,

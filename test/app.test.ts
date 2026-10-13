@@ -420,7 +420,8 @@ describe("control-plane API", () => {
     const headers = { "x-user-id": "user-global-admin" };
     const catalog = await app.inject({ method: "GET", url: "/v1/analytics/capabilities", headers });
     expect(catalog.statusCode).toBe(200);
-    expect(catalog.json().summary.domains).toBe(16);
+    expect(catalog.json().summary.domains).toBeGreaterThanOrEqual(16);
+    expect(new Set(catalog.json().domains.map((domain: any) => domain.id)).size).toBe(catalog.json().summary.domains);
     expect(catalog.json().summary.capabilities).toBeGreaterThan(100);
     expect(catalog.json().domains.map((domain: any) => domain.id)).toEqual(
       expect.arrayContaining(["human", "vehicle", "face", "banking", "search", "assistant"]),

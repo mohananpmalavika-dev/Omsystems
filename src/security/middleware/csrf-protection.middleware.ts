@@ -137,7 +137,6 @@ function isExemptRoute(url: string, method: string): boolean {
     cleanUrl.startsWith("/api/credentials/") ||
     cleanUrl.startsWith("/api/bulk/") ||
     cleanUrl.startsWith("/api/ai/") ||
-    cleanUrl.startsWith("/api/mobile/") ||
     cleanUrl.startsWith("/api/edge-product/") ||
     cleanUrl.startsWith("/api/vms/")
   ) {

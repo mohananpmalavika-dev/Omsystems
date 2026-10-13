@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = '356c732f9f08e79b8e56315a4f65734f469dd2d350e5c072ca6634de0d0e2b57';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error("JWT_SECRET must be supplied through the environment.");
 const CONTROL_PLANE_URL = 'https://34-14-220-41.sslip.io';
 const BRANCH_ID = '6ddee070-9050-4f55-aaa1-1190654bbc6b';
 

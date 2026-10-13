@@ -1,7 +1,9 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Pool } from "pg";
 import { activeResourceNode } from "../database/active-resource.js";
+import { operationalRow } from "./operational-row.js";
+import { operationalUser as getUser } from "./operational-user.js";
 
 export interface DeviceHealthCorrelationOptions {
   pool: Pool;
@@ -12,12 +14,6 @@ export async function registerDeviceHealthCorrelationRoutes(
   options: DeviceHealthCorrelationOptions
 ) {
   const { pool } = options;
-
-  function getUser(request: FastifyRequest) {
-    const user = request.currentUser;
-    if (!user?.tenantId || !user.id) throw new Error("authenticated_user_required");
-    return { tenantId: user.tenantId, userId: user.id, role: user.role };
-  }
 
   // ============================================================================
   // Device Health Snapshot API
@@ -35,7 +31,7 @@ export async function registerDeviceHealthCorrelationRoutes(
         SELECT DISTINCT ON (branch_id)
           dhs.*
         FROM device_health_snapshots dhs
-        WHERE dhs.tenant_id = $1
+        WHERE dhs.tenant_id = $1 AND dhs.device_type = 'branch'
         ORDER BY branch_id, snapshot_time DESC
       ),
       branch_info AS (
@@ -59,12 +55,11 @@ export async function registerDeviceHealthCorrelationRoutes(
           'message', di.message,
           'deviceId', di.device_id,
           'timestamp', di.detected_at
-        ))
+        ) ORDER BY di.detected_at DESC)
         FROM device_critical_issues di
         WHERE di.branch_id = ls.branch_id 
           AND di.tenant_id = $1
           AND di.resolved = false
-        ORDER BY di.detected_at DESC
         ) as critical_issues,
         (SELECT json_agg(json_build_object(
           'id', ce.id,
@@ -73,12 +68,11 @@ export async function registerDeviceHealthCorrelationRoutes(
           'affectedDevices', ce.affected_devices,
           'timestamp', ce.detected_at,
           'resolved', ce.resolved
-        ))
+        ) ORDER BY ce.detected_at DESC)
         FROM device_correlated_events ce
         WHERE ce.branch_id = ls.branch_id
           AND ce.tenant_id = $1
           AND ce.detected_at > NOW() - INTERVAL '7 days'
-        ORDER BY ce.detected_at DESC
         ) as correlated_events
       FROM latest_snapshots ls
       JOIN branch_info bi ON ls.branch_id = bi.branch_id
@@ -191,6 +185,11 @@ export async function registerDeviceHealthCorrelationRoutes(
       }),
     }).parse(request.body);
 
+    const branch = await pool.query(`SELECT node.id FROM resource_nodes node
+      WHERE node.id = $1 AND node.tenant_id = $2 AND node.node_type = 'branch'
+        AND ${activeResourceNode('node')}`, [body.branchId, tenantId]);
+    if (!branch.rows.length) return reply.code(404).send({ error: 'branch_not_found' });
+
     // Calculate overall health status
     const cameraHealthScore = body.cameras.total > 0 
       ? (body.cameras.healthy / body.cameras.total * 100) 
@@ -199,6 +198,8 @@ export async function registerDeviceHealthCorrelationRoutes(
     let overallHealth = "healthy";
     if (
       body.cameras.critical > 0 ||
+      body.cameras.offline > 0 ||
+      !body.power.upsOnline ||
       body.power.batteryPercent < 30 ||
       body.recorders.offline > 0 ||
       body.network.packetLoss > 5
@@ -229,13 +230,15 @@ export async function registerDeviceHealthCorrelationRoutes(
         recorders_total, recorders_online, recorders_healthy, recorders_degraded,
         recorders_full, recorders_offline,
         network_status, network_latency_ms, network_packet_loss, network_bandwidth_mbps,
-        power_status, ups_online, ups_battery_percent, power_outages_24h
+        power_status, ups_online, ups_battery_percent, power_outages_24h,
+        device_id, device_type, branch_node_id, health_score, metrics
       ) VALUES (
         $1, $2, $3,
         $4, $5, $6, $7, $8, $9, $10, $11,
         $12, $13, $14, $15, $16, $17,
         $18, $19, $20, $21,
-        $22, $23, $24, $25
+        $22, $23, $24, $25,
+        $26, 'branch', $2, $27, $28::jsonb
       )
       RETURNING *`,
       [
@@ -246,6 +249,7 @@ export async function registerDeviceHealthCorrelationRoutes(
         body.recorders.full, body.recorders.offline,
         networkStatus, body.network.latencyMs, body.network.packetLoss, body.network.bandwidthMbps,
         powerStatus, body.power.upsOnline, body.power.batteryPercent, body.power.powerOutages24h,
+        `branch:${body.branchId}`, Math.round(cameraHealthScore), JSON.stringify(body),
       ]
     );
 
@@ -254,7 +258,7 @@ export async function registerDeviceHealthCorrelationRoutes(
 
     return reply.code(201).send({
       success: true,
-      data: result.rows[0],
+      data: operationalRow(result.rows[0]),
     });
   });
 
@@ -273,6 +277,11 @@ export async function registerDeviceHealthCorrelationRoutes(
       message: z.string(),
     }).parse(request.body);
 
+    const branch = await pool.query(`SELECT node.id FROM resource_nodes node
+      WHERE node.id=$1 AND node.tenant_id=$2 AND node.node_type='branch'
+        AND ${activeResourceNode('node')}`, [body.branchId, tenantId]);
+    if (!branch.rows.length) return reply.code(404).send({ error: 'branch_not_found' });
+
     const result = await pool.query(
       `INSERT INTO device_critical_issues (
         tenant_id, branch_id, device_type, device_id, severity, message
@@ -283,7 +292,7 @@ export async function registerDeviceHealthCorrelationRoutes(
 
     return reply.code(201).send({
       success: true,
-      data: result.rows[0],
+      data: operationalRow(result.rows[0]),
     });
   });
 
@@ -306,7 +315,7 @@ export async function registerDeviceHealthCorrelationRoutes(
 
     return reply.send({
       success: true,
-      data: result.rows[0],
+      data: operationalRow(result.rows[0]),
     });
   });
 
@@ -321,7 +330,7 @@ async function detectCorrelations(pool: Pool, tenantId: string, branchId: string
   // Get latest snapshot
   const snapshot = await pool.query(
     `SELECT * FROM device_health_snapshots 
-     WHERE tenant_id = $1 AND branch_id = $2 
+     WHERE tenant_id = $1 AND branch_id = $2 AND device_type = 'branch'
      ORDER BY snapshot_time DESC LIMIT 1`,
     [tenantId, branchId]
   );

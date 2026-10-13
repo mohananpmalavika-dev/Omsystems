@@ -1,531 +1,89 @@
-import Fastify, { type FastifyInstance } from "fastify";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { Pool } from "pg";
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { registerNbfcWatchlistRoutes } from '../src/routes/nbfc-watchlist.routes.js';
+import { operationalSqlApp } from './fixtures/operational-sql-app.js';
+import { fixtureUuid } from './fixtures/sql-identity.js';
 
-describe("NBFC Watchlist API", () => {
-  let app: FastifyInstance;
-  let pool: Pool;
-  const tenantId = "test-tenant-001";
-  const userId = "test-user-001";
-  const branchId = "test-branch-001";
-
-  beforeEach(async () => {
-    pool = new Pool({
-      connectionString: process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/sentinel_test",
-    });
-
-    app = Fastify();
-    app.decorateRequest("currentUser");
-    app.addHook("preHandler", async (request) => {
-      request.currentUser = {
-        userId,
-        tenantId,
-        role: "security_officer",
-      };
-    });
-
-    const { registerNbfcWatchlistRoutes } = await import("../src/routes/nbfc-watchlist.routes.js");
-    await registerNbfcWatchlistRoutes(app, { pool });
-
-    // Clean test data
-    await pool.query("DELETE FROM nbfc_watchlist_entries WHERE tenant_id = $1", [tenantId]);
-    await pool.query("DELETE FROM nbfc_watchlist_detections WHERE tenant_id = $1", [tenantId]);
+describe('Watchlist PostgreSQL contract', () => {
+  let ctx: Awaited<ReturnType<typeof operationalSqlApp>>;
+  beforeEach(async () => { ctx = await operationalSqlApp('watchlist', registerNbfcWatchlistRoutes); });
+  afterEach(async () => { await ctx?.close(); });
+  const create = (extra = {}) => ctx.app.inject({ method: 'POST', url: '/v1/watchlist/nbfc', payload: {
+    fullName: 'QA Operator', watchlistType: 'authorized', branchIds: [ctx.branchId], areaAccess: ['vault'],
+    validFrom: new Date().toISOString(), reason: 'Isolated QA authorization', ...extra } });
+  const detect = (watchlistEntryId: string, extra = {}) => ctx.app.inject({ method: 'POST', url: '/v1/watchlist/nbfc/detections', payload: {
+    watchlistEntryId, cameraId: fixtureUuid('watchlist-camera'), cameraName: 'QA gate', branchId: ctx.branchId, confidence: 0.95, ...extra } });
+  it.each(['authorized', 'visitor', 'vip'])('persists and retrieves %s entries', async watchlistType => {
+    const response = await create({ watchlistType }); expect(response.statusCode, response.body).toBe(201);
+    expect(response.json().data).toMatchObject({ fullName: 'QA Operator', watchlistType, addedBy: ctx.userId });
+    const saved = await ctx.pool.query('SELECT branch_ids, area_access FROM nbfc_watchlist_entries WHERE id=$1', [response.json().data.id]);
+    expect(saved.rows[0]).toEqual({ branch_ids: [ctx.branchId], area_access: ['vault'] });
+    const detail = await ctx.app.inject({ method: 'GET', url: `/v1/watchlist/nbfc/${response.json().data.id}` });
+    expect(detail.statusCode, detail.body).toBe(200); expect(detail.json().data.watchlistType).toBe(watchlistType);
   });
-
-  afterEach(async () => {
-    await app.close();
-    await pool.end();
+  it('requires face enrollment for blacklist entries and validates area access', async () => {
+    const blacklist = await create({ watchlistType: 'blacklist' });
+    expect(blacklist.statusCode).toBe(400); expect(blacklist.json().error).toBe('face_enrollment_required');
+    expect((await create({ areaAccess: ['invalid-zone'] })).statusCode).toBe(400);
+    expect((await create({ watchlistType: 'blacklist', faceEnrolled: true })).statusCode).toBe(201);
   });
-
-  describe("POST /v1/watchlist/nbfc", () => {
-    it("creates authorized person entry successfully", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v1/watchlist/nbfc",
-        payload: {
-          fullName: "Rajesh Kumar",
-          employeeCode: "EMP001",
-          designation: "Branch Manager",
-          watchlistType: "authorized",
-          branchIds: [branchId],
-          areaAccess: ["vault", "cash_counter", "locker"],
-          validFrom: new Date().toISOString(),
-          validUntil: new Date(Date.now() + 365 * 86400000).toISOString(),
-          reason: "Branch management authorization",
-        },
-      });
-
-      expect(response.statusCode).toBe(201);
-      const data = response.json();
-      expect(data.success).toBe(true);
-      expect(data.data).toMatchObject({
-        fullName: "Rajesh Kumar",
-        employeeCode: "EMP001",
-        watchlistType: "authorized",
-        status: "active",
-      });
-      expect(data.data.id).toBeDefined();
-    });
-
-    it("creates blacklist entry successfully", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v1/watchlist/nbfc",
-        payload: {
-          fullName: "Unknown Individual",
-          watchlistType: "blacklist",
-          branchIds: [branchId],
-          areaAccess: [],
-          validFrom: new Date().toISOString(),
-          reason: "Security incident - unauthorized access attempt",
-          notes: "Alert all branches immediately if detected",
-        },
-      });
-
-      expect(response.statusCode).toBe(201);
-      const data = response.json();
-      expect(data.data.watchlistType).toBe("blacklist");
-    });
-
-    it("creates VIP visitor entry", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v1/watchlist/nbfc",
-        payload: {
-          fullName: "Dr. Amit Sharma",
-          designation: "Board Member",
-          watchlistType: "vip",
-          branchIds: [branchId],
-          areaAccess: ["executive_lounge", "board_room"],
-          validFrom: new Date().toISOString(),
-          validUntil: new Date(Date.now() + 30 * 86400000).toISOString(),
-          reason: "Board meeting attendance",
-        },
-      });
-
-      expect(response.statusCode).toBe(201);
-      expect(response.json().data.watchlistType).toBe("vip");
-    });
-
-    it("validates watchlist type", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v1/watchlist/nbfc",
-        payload: {
-          fullName: "Test Person",
-          watchlistType: "invalid_type",
-          branchIds: [branchId],
-          validFrom: new Date().toISOString(),
-        },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    it("enforces tenant isolation", async () => {
-      const createResponse = await app.inject({
-        method: "POST",
-        url: "/v1/watchlist/nbfc",
-        payload: {
-          fullName: "Test Person",
-          watchlistType: "authorized",
-          branchIds: [branchId],
-          validFrom: new Date().toISOString(),
-        },
-      });
-      expect(createResponse.statusCode).toBe(201);
-
-      // Change tenant
-      app.addHook("preHandler", async (request) => {
-        request.currentUser = {
-          userId: "other-user",
-          tenantId: "other-tenant",
-          role: "security_officer",
-        };
-      });
-
-      const listResponse = await app.inject({
-        method: "GET",
-        url: "/v1/watchlist/nbfc",
-      });
-
-      expect(listResponse.statusCode).toBe(200);
-      expect(listResponse.json().data).toHaveLength(0);
-    });
+  it('denies read-only and suspended writes and foreign-branch entries', async () => {
+    expect((await create({ branchIds: [fixtureUuid('foreign-branch')] })).statusCode).toBe(404);
+    ctx.setRole('viewer'); expect((await create()).statusCode).toBe(403);
+    ctx.setRole('operator'); ctx.setStatus('suspended'); expect((await create()).statusCode).toBe(401);
   });
-
-  describe("GET /v1/watchlist/nbfc", () => {
-    beforeEach(async () => {
-      // Create test entries
-      await pool.query(
-        `INSERT INTO nbfc_watchlist_entries 
-        (tenant_id, full_name, employee_code, watchlist_type, status, branch_ids, area_access, 
-         valid_from, valid_until, reason, face_enrolled, created_by)
-        VALUES 
-        ($1, 'Rajesh Kumar', 'EMP001', 'authorized', 'active', ARRAY[$2], ARRAY['vault', 'cash_counter'], 
-         NOW(), NOW() + INTERVAL '1 year', 'Branch authorization', true, $3),
-        ($1, 'Unknown Person', NULL, 'blacklist', 'active', ARRAY[$2], ARRAY[]::text[], 
-         NOW(), NULL, 'Security alert', true, $3),
-        ($1, 'Dr. Amit Sharma', NULL, 'vip', 'active', ARRAY[$2], ARRAY['executive_lounge'], 
-         NOW(), NOW() + INTERVAL '30 days', 'VIP visitor', false, $3),
-        ($1, 'Expired Person', 'EMP999', 'visitor', 'expired', ARRAY[$2], ARRAY[]::text[], 
-         NOW() - INTERVAL '60 days', NOW() - INTERVAL '30 days', 'Temporary visitor', false, $3)`,
-        [tenantId, branchId, userId]
-      );
-    });
-
-    it("lists all watchlist entries", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/v1/watchlist/nbfc",
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.success).toBe(true);
-      expect(data.data.length).toBeGreaterThanOrEqual(4);
-      expect(data.summary).toMatchObject({
-        totalEntries: 4,
-        authorizedPersons: 1,
-        blacklistedPersons: 1,
-        vipPersons: 1,
-        visitors: 1,
-        activeEntries: 3,
-        expiredEntries: 1,
-      });
-    });
-
-    it("filters by watchlist type", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/v1/watchlist/nbfc?type=authorized",
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json().data;
-      expect(data).toHaveLength(1);
-      expect(data[0].watchlistType).toBe("authorized");
-    });
-
-    it("filters by branch", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: `/v1/watchlist/nbfc?branchId=${branchId}`,
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json().data.length).toBeGreaterThanOrEqual(4);
-    });
-
-    it("filters by status", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/v1/watchlist/nbfc?status=active",
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json().data;
-      expect(data).toHaveLength(3);
-      expect(data.every((entry: any) => entry.status === "active")).toBe(true);
-    });
+  it('keeps the last detection fields from the same newest row', async () => {
+    const entry = await create(); const id = entry.json().data.id;
+    const older = await detect(id, { cameraName: 'Z Old camera', confidence: 0.99 });
+    await ctx.pool.query("UPDATE nbfc_watchlist_detections SET detected_at=now()-interval '1 hour' WHERE id=$1", [older.json().data.id]);
+    await detect(id, { cameraName: 'A New camera', confidence: 0.75 });
+    const list = await ctx.app.inject({ method: 'GET', url: '/v1/watchlist/nbfc' });
+    expect(list.statusCode, list.body).toBe(200);
+    expect(list.json().data[0].lastDetected).toMatchObject({ cameraName: 'A New camera', confidence: 0.75 });
   });
-
-  describe("GET /v1/watchlist/nbfc/:id", () => {
-    let entryId: string;
-
-    beforeEach(async () => {
-      const result = await pool.query(
-        `INSERT INTO nbfc_watchlist_entries 
-        (tenant_id, full_name, watchlist_type, status, branch_ids, valid_from, reason, created_by)
-        VALUES ($1, 'Test Person', 'authorized', 'active', ARRAY[$2], NOW(), 'Test', $3)
-        RETURNING id`,
-        [tenantId, branchId, userId]
-      );
-      entryId = result.rows[0].id;
-    });
-
-    it("retrieves single entry successfully", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: `/v1/watchlist/nbfc/${entryId}`,
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.success).toBe(true);
-      expect(data.data).toMatchObject({
-        id: entryId,
-        fullName: "Test Person",
-      });
-    });
-
-    it("returns 404 for non-existent entry", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/v1/watchlist/nbfc/00000000-0000-0000-0000-000000000000",
-      });
-
-      expect(response.statusCode).toBe(404);
-    });
+  it('filters type, status, search and branch against stored values', async () => {
+    await create(); await create({ fullName: 'Other Visitor', watchlistType: 'visitor', branchIds: [ctx.otherBranchId] });
+    const response = await ctx.app.inject({ method: 'GET', url: `/v1/watchlist/nbfc?type=authorized&status=active&search=Operator&branchId=${ctx.branchId}` });
+    expect(response.statusCode, response.body).toBe(200); expect(response.json().data).toHaveLength(1);
+    expect(response.json().summary).toMatchObject({ authorizedPersons: 1, activeEntries: 1 });
   });
-
-  describe("PATCH /v1/watchlist/nbfc/:id", () => {
-    let entryId: string;
-
-    beforeEach(async () => {
-      const result = await pool.query(
-        `INSERT INTO nbfc_watchlist_entries 
-        (tenant_id, full_name, employee_code, watchlist_type, status, branch_ids, valid_from, reason, created_by)
-        VALUES ($1, 'Original Name', 'EMP001', 'authorized', 'active', ARRAY[$2], NOW(), 'Test', $3)
-        RETURNING id`,
-        [tenantId, branchId, userId]
-      );
-      entryId = result.rows[0].id;
-    });
-
-    it("updates entry successfully", async () => {
-      const response = await app.inject({
-        method: "PATCH",
-        url: `/v1/watchlist/nbfc/${entryId}`,
-        payload: {
-          fullName: "Updated Name",
-          designation: "Senior Manager",
-          areaAccess: ["vault", "cash_counter", "locker", "strong_room"],
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.success).toBe(true);
-      expect(data.data).toMatchObject({
-        fullName: "Updated Name",
-        designation: "Senior Manager",
-      });
-    });
-
-    it("updates status to expired", async () => {
-      const response = await app.inject({
-        method: "PATCH",
-        url: `/v1/watchlist/nbfc/${entryId}`,
-        payload: {
-          status: "expired",
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json().data.status).toBe("expired");
-    });
-
-    it("returns 404 for non-existent entry", async () => {
-      const response = await app.inject({
-        method: "PATCH",
-        url: "/v1/watchlist/nbfc/00000000-0000-0000-0000-000000000000",
-        payload: {
-          fullName: "New Name",
-        },
-      });
-
-      expect(response.statusCode).toBe(404);
-    });
+  it('updates persisted access and rejects empty updates', async () => {
+    const entry = await create(); const url = `/v1/watchlist/nbfc/${entry.json().data.id}`;
+    expect((await ctx.app.inject({ method: 'PATCH', url, payload: {} })).statusCode).toBe(400);
+    const response = await ctx.app.inject({ method: 'PATCH', url, payload: { status: 'suspended', areaAccess: ['atm'], notes: 'QA suspension' } });
+    expect(response.statusCode, response.body).toBe(200); expect(response.json().data).toMatchObject({ status: 'suspended', areaAccess: ['atm'] });
+    expect((await ctx.app.inject({ method: 'GET', url })).json().data.notes).toBe('QA suspension');
   });
-
-  describe("DELETE /v1/watchlist/nbfc/:id", () => {
-    let entryId: string;
-
-    beforeEach(async () => {
-      const result = await pool.query(
-        `INSERT INTO nbfc_watchlist_entries 
-        (tenant_id, full_name, watchlist_type, status, branch_ids, valid_from, reason, created_by)
-        VALUES ($1, 'To Delete', 'visitor', 'active', ARRAY[$2], NOW(), 'Test', $3)
-        RETURNING id`,
-        [tenantId, branchId, userId]
-      );
-      entryId = result.rows[0].id;
-    });
-
-    it("deletes entry successfully", async () => {
-      const response = await app.inject({
-        method: "DELETE",
-        url: `/v1/watchlist/nbfc/${entryId}`,
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json().success).toBe(true);
-
-      // Verify deletion
-      const getResponse = await app.inject({
-        method: "GET",
-        url: `/v1/watchlist/nbfc/${entryId}`,
-      });
-      expect(getResponse.statusCode).toBe(404);
-    });
-
-    it("returns 404 for non-existent entry", async () => {
-      const response = await app.inject({
-        method: "DELETE",
-        url: "/v1/watchlist/nbfc/00000000-0000-0000-0000-000000000000",
-      });
-
-      expect(response.statusCode).toBe(404);
-    });
+  it('persists timestamped detections and exposes actual detection counts', async () => {
+    const entry = await create(); const id = entry.json().data.id;
+    const response = await detect(id); expect(response.statusCode, response.body).toBe(201); expect(response.json().data.detectedAt).toBeDefined();
+    const detections = await ctx.app.inject({ method: 'GET', url: `/v1/watchlist/nbfc/${id}/detections` });
+    expect(detections.statusCode, detections.body).toBe(200); expect(detections.json().data).toHaveLength(1);
+    expect((await ctx.app.inject({ method: 'GET', url: '/v1/watchlist/nbfc' })).json().data[0].detectionCount24h).toBe(1);
   });
-
-  describe("POST /v1/watchlist/nbfc/detections", () => {
-    let entryId: string;
-
-    beforeEach(async () => {
-      const result = await pool.query(
-        `INSERT INTO nbfc_watchlist_entries 
-        (tenant_id, person_id, full_name, watchlist_type, status, branch_ids, valid_from, reason, face_enrolled, created_by)
-        VALUES ($1, 'person-001', 'Test Person', 'authorized', 'active', ARRAY[$2], NOW(), 'Test', true, $3)
-        RETURNING id`,
-        [tenantId, branchId, userId]
-      );
-      entryId = result.rows[0].id;
-    });
-
-    it("records detection successfully", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v1/watchlist/nbfc/detections",
-        payload: {
-          entryId,
-          personId: "person-001",
-          branchId,
-          cameraId: "cam-001",
-          confidence: 0.96,
-          timestamp: new Date().toISOString(),
-        },
-      });
-
-      expect(response.statusCode).toBe(201);
-      const data = response.json();
-      expect(data.success).toBe(true);
-      expect(data.data).toMatchObject({
-        entryId,
-        confidence: 0.96,
-      });
-    });
-
-    it("rejects low confidence detections", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v1/watchlist/nbfc/detections",
-        payload: {
-          entryId,
-          personId: "person-001",
-          branchId,
-          cameraId: "cam-001",
-          confidence: 0.5, // Too low
-          timestamp: new Date().toISOString(),
-        },
-      });
-
-      expect(response.statusCode).toBe(400);
-    });
-
-    it("alerts on blacklist detection", async () => {
-      // Create blacklist entry
-      const blacklistResult = await pool.query(
-        `INSERT INTO nbfc_watchlist_entries 
-        (tenant_id, person_id, full_name, watchlist_type, status, branch_ids, valid_from, reason, face_enrolled, created_by)
-        VALUES ($1, 'person-blacklist', 'Blacklisted Person', 'blacklist', 'active', ARRAY[$2], NOW(), 'Security alert', true, $3)
-        RETURNING id`,
-        [tenantId, branchId, userId]
-      );
-      const blacklistId = blacklistResult.rows[0].id;
-
-      const response = await app.inject({
-        method: "POST",
-        url: "/v1/watchlist/nbfc/detections",
-        payload: {
-          entryId: blacklistId,
-          personId: "person-blacklist",
-          branchId,
-          cameraId: "cam-001",
-          confidence: 0.98,
-          timestamp: new Date().toISOString(),
-        },
-      });
-
-      expect(response.statusCode).toBe(201);
-      const data = response.json();
-      expect(data.data.alertGenerated).toBe(true); // Should generate alert for blacklist
-    });
+  it('does not claim an alert was created by an unconfigured integration', async () => {
+    const entry = await create({ watchlistType: 'blacklist', faceEnrolled: true });
+    const response = await detect(entry.json().data.id); expect(response.statusCode, response.body).toBe(201);
+    expect(response.json()).toMatchObject({ alert: false, alertRequired: true, alertStatus: 'unconfigured' });
   });
-
-  describe("GET /v1/watchlist/nbfc/:id/detections", () => {
-    let entryId: string;
-
-    beforeEach(async () => {
-      const entryResult = await pool.query(
-        `INSERT INTO nbfc_watchlist_entries 
-        (tenant_id, person_id, full_name, watchlist_type, status, branch_ids, valid_from, reason, created_by)
-        VALUES ($1, 'person-001', 'Test Person', 'authorized', 'active', ARRAY[$2], NOW(), 'Test', $3)
-        RETURNING id`,
-        [tenantId, branchId, userId]
-      );
-      entryId = entryResult.rows[0].id;
-
-      // Create detections
-      await pool.query(
-        `INSERT INTO nbfc_watchlist_detections 
-        (tenant_id, entry_id, person_id, branch_id, camera_id, confidence, detected_at, created_by)
-        VALUES 
-        ($1, $2, 'person-001', $3, 'cam-001', 0.96, NOW() - INTERVAL '1 hour', $4),
-        ($1, $2, 'person-001', $3, 'cam-002', 0.94, NOW(), $4)`,
-        [tenantId, entryId, branchId, userId]
-      );
-    });
-
-    it("retrieves detection history", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: `/v1/watchlist/nbfc/${entryId}/detections`,
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.success).toBe(true);
-      expect(data.data).toHaveLength(2);
-      expect(data.data[0].confidence).toBeGreaterThanOrEqual(0.9);
-    });
-
-    it("filters detections by date range", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: `/v1/watchlist/nbfc/${entryId}/detections?startDate=${new Date(Date.now() - 3600000).toISOString()}&endDate=${new Date().toISOString()}`,
-      });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json().data.length).toBeGreaterThanOrEqual(1);
-    });
+  it('expires old entries once', async () => {
+    await create({ validFrom: new Date(Date.now() - 7200000).toISOString(), validUntil: new Date(Date.now() - 3600000).toISOString() });
+    const first = await ctx.app.inject({ method: 'POST', url: '/v1/watchlist/nbfc/check-expired' });
+    expect(first.statusCode, first.body).toBe(200); expect(first.json().expiredCount).toBe(1);
+    expect((await ctx.app.inject({ method: 'POST', url: '/v1/watchlist/nbfc/check-expired' })).json().expiredCount).toBe(0);
+    expect((await ctx.app.inject({ method: 'GET', url: '/v1/watchlist/nbfc?status=expired' })).json().data[0].status).toBe('expired');
   });
-
-  describe("POST /v1/watchlist/check-expired", () => {
-    beforeEach(async () => {
-      // Create expired entries
-      await pool.query(
-        `INSERT INTO nbfc_watchlist_entries 
-        (tenant_id, full_name, watchlist_type, status, branch_ids, valid_from, valid_until, reason, created_by)
-        VALUES 
-        ($1, 'Expired Visitor 1', 'visitor', 'active', ARRAY[$2], NOW() - INTERVAL '60 days', NOW() - INTERVAL '1 day', 'Test', $3),
-        ($1, 'Expired Visitor 2', 'vip', 'active', ARRAY[$2], NOW() - INTERVAL '90 days', NOW() - INTERVAL '5 days', 'Test', $3)`,
-        [tenantId, branchId, userId]
-      );
-    });
-
-    it("identifies and updates expired entries", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v1/watchlist/check-expired",
-      });
-
-      expect(response.statusCode).toBe(200);
-      const data = response.json();
-      expect(data.success).toBe(true);
-      expect(data.data.expiredCount).toBeGreaterThanOrEqual(2);
-      expect(data.data.updatedCount).toBeGreaterThanOrEqual(2);
-    });
+  it('deletes entries and their detections', async () => {
+    const entry = await create(); const id = entry.json().data.id; await detect(id);
+    expect((await ctx.app.inject({ method: 'DELETE', url: `/v1/watchlist/nbfc/${id}` })).statusCode).toBe(200);
+    expect((await ctx.pool.query('SELECT count(*)::int AS count FROM nbfc_watchlist_detections WHERE watchlist_entry_id=$1', [id])).rows[0].count).toBe(0);
+    expect((await ctx.app.inject({ method: 'GET', url: `/v1/watchlist/nbfc/${id}` })).statusCode).toBe(404);
+  });
+  it('hides another tenant records and denies all mutations by ID', async () => {
+    const entry = await create(); const id = entry.json().data.id; ctx.switchTenant();
+    const list = await ctx.app.inject({ method: 'GET', url: '/v1/watchlist/nbfc' }); expect(list.statusCode, list.body).toBe(200); expect(list.json().data).toEqual([]);
+    expect((await detect(id)).statusCode).toBe(404);
+    expect((await ctx.app.inject({ method: 'GET', url: `/v1/watchlist/nbfc/${id}/detections` })).statusCode).toBe(404);
+    expect((await ctx.app.inject({ method: 'PATCH', url: `/v1/watchlist/nbfc/${id}`, payload: { status: 'suspended' } })).statusCode).toBe(404);
+    expect((await ctx.app.inject({ method: 'DELETE', url: `/v1/watchlist/nbfc/${id}` })).statusCode).toBe(404);
   });
 });

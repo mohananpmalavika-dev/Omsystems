@@ -83,7 +83,9 @@ export interface ProvisioningRunView {
 }
 
 export async function buildProvisioningRunView(
-  store: ControlPlaneStore,
+  store: Pick<ControlPlaneStore, "getNode" | "listAccessibleNodes" | "listEdgeAgentsByBranch" |
+    "listDiscoveredCameras" | "listLatestOperationalTelemetry" | "listRecordingStorageNodes" |
+    "listCamerasByBranch" | "listRecordingJobs" | "listAnalyticsRulesByCameraIds" | "listRecordingSegments">,
   branchId: string,
   user: User,
   job?: EdgeScanJob,

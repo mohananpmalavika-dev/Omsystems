@@ -1,5 +1,11 @@
 # Database entities and migrations
 
+The control-plane migration runner excludes `guardian-network-schema.sql`, a
+standalone schema for a separate Guardian Network service. It stops on failed
+or duplicate-object migrations and rolls back without recording them as applied.
+Installations upgraded from the older runner must inspect any formerly skipped
+migration and reconcile actual schema objects before release.
+
 ## Database technology
 
 The control plane uses PostgreSQL through the `pg` package and a shared pool.
@@ -8,8 +14,8 @@ hierarchical resource paths. Docker definitions supply PostgreSQL 16 or 17
 depending on the selected Compose file. Redis is separately configured for
 runtime state/event use; it is not a replacement for the PostgreSQL schema.
 
-The repository includes 204 SQL files in `database/migrations/` at the time of
-review. The migration runner also checks a legacy `backend/database/migrations/`
+The migration inventory is maintained in `database/migrations/` rather than a
+fixed count in this document. The runner also checks a legacy `backend/database/migrations/`
 directory when present; no files were present there in this checkout.
 
 ## Core entities and relationships
@@ -70,14 +76,14 @@ relations; consult the specific migration SQL for exact constraints.
 6. Reports applied, pending, and database-recorded migrations with no matching
    file using `npm run migrate:status`.
 
-Checksum validation is **skipped by default**. Set
-`SKIP_MIGRATION_CHECKSUM_VALIDATION=false` to enable the check. Once a migration
-has shipped, add a new migration rather than editing the old SQL; enable
-checksum validation in controlled deployment workflows.
+Checksum validation is enabled by default. An intentional legacy reconciliation
+may use `SKIP_MIGRATION_CHECKSUM_VALIDATION=true`; review actual schema and retain
+the reconciliation record before doing so. Once a migration has shipped, add a
+new migration rather than editing the old SQL.
 
-The runner also treats certain “already exists” errors as an applied migration
-after rollback and logs a warning. Review migration output; this compatibility
-behavior is not proof that every intended statement took effect.
+Any SQL failure, including an “already exists” error, rolls back and stops the
+runner. Failed work is never recorded as an applied migration. Guardian Network's
+standalone schema is excluded from control-plane migrations.
 
 The Docker entrypoint runs the migration runner before starting the compiled
 control plane. In Compose, PostgreSQL's `/docker-entrypoint-initdb.d` mount is
