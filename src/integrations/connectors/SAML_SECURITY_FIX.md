@@ -244,7 +244,6 @@ The `testConnection()` method now verifies:
 
 ## Audit Trail
 
-- **Fixed by:** Kiro AI Assistant
 - **Date:** 2026-08-08
 - **Severity:** CRITICAL
 - **CVE:** N/A (internal finding)

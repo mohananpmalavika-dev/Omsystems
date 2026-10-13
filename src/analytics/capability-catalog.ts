@@ -418,7 +418,6 @@ export const AI_CAPABILITY_DOMAINS: AiCapabilityDomain[] = [
    * - Multi-device event fusion to single high-confidence incidents
    * - Time-windowed event buffering with configurable thresholds
    * - Automatic camera attachment for visual evidence
-   * - AI-generated incident summaries and recommended actions
    * - Event suppression to prevent alert fatigue
    * 
    * Emergency Response:

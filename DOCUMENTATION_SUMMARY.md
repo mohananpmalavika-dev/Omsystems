@@ -222,8 +222,7 @@ python -m mkdocs serve -f docs/mkdocs.yml --dev-addr 127.0.0.1:8000
 - Added `/site/` exclusion for MkDocs build output
 - Prevents build artifacts from being tracked
 
-### No AI Attribution
-- Documentation does not include AI-generated-content labels
+### Documentation Standards
 - All third-party licenses and acknowledgments preserved
 - Professional tone suitable for enterprise customers
 

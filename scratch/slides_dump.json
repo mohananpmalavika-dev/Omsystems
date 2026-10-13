@@ -1,0 +1,319 @@
+[
+  {
+    "slide": 1,
+    "texts": [
+      "KRYPTONLOGIC TECHNOLOGIES",
+      "KRYPTONVISION",
+      "Next-Generation Enterprise AI Vision & Unified Video Management System",
+      "Autonomous Real-Time Threat Detection, Low-Latency Streaming, Visual Automation Rules, and Regulatory Compliance for Banking, NBFCs, Retail & Critical Infrastructure.",
+      "Sub-Second Streaming",
+      "Ultra-low-latency HLS/WebRTC with synced multi-camera playback.",
+      "Visual Rule Automation",
+      "No-code geometric zone designer with 36+ pre-seeded banking rules.",
+      "Anti-Storm AI Engine",
+      "Zero alarm fatigue with Redis fencing tokens & state cooldowns."
+    ]
+  },
+  {
+    "slide": 2,
+    "texts": [
+      "MARKET CHALLENGES & OPERATIONAL PAIN POINTS",
+      "The Critical Security Dilemma: Why Traditional CCTV Fails",
+      "KryptonLogic  |  KryptonVision AI Video Platform  |  Confidential Client Demo",
+      "95% Footage Unmonitored",
+      "HUMAN ATTENTION FAILURE",
+      "After just 20 minutes of continuous monitoring, security guards miss over 95% of active scene anomalies due to severe visual fatigue.",
+      "Alarm Storms & Noise",
+      "HIGH FALSE POSITIVE RATES",
+      "Legacy motion sensors trigger dozens of false alerts for shadows, insects, or light shifts, forcing SOC operators to disable notifications entirely.",
+      "Hours Lost in Forensics",
+      "DELAYED INCIDENT RESOLUTION",
+      "Scrubbing through hours of unsynchronized video across isolated cameras delays incident response, evidence gathering, and police reporting.",
+      "Regulatory Non-Compliance",
+      "ZERO AUDIT TRAIL ENFORCEMENT",
+      "High-security facilities (Gold Loans, Banks, Vaults) struggle to prove dual-custody access, perimeter integrity, and continuous retention.",
+      "THE KRYPTONVISION SOLUTION: Transform passive, forensic-only cameras into an active, intelligent, deterministic defense and compliance ecosystem."
+    ]
+  },
+  {
+    "slide": 3,
+    "texts": [
+      "END-TO-END DISTRIBUTED DESIGN",
+      "KryptonVision High-Assurance System Architecture",
+      "KryptonLogic  |  KryptonVision AI Video Platform  |  Confidential Client Demo",
+      "1. Edge Reverse Proxy (Caddy / TLS)",
+      "Enterprise ingress with automatic SSL/TLS termination, rate limiting, and HTTP/2 multiplexing for smooth video transport.",
+      "2. High-Performance Media Gateway",
+      "Microservices handling ONVIF/RTSP discovery, sub-second HLS transmuxing, and WebRTC streaming across 100+ concurrent cameras.",
+      "3. Autonomous AI Analytics Engine",
+      "GPU/NPU-accelerated neural networks (YOLOv8, background subtraction) running real-time point-in-polygon & tripwire crossing.",
+      "4. Distributed Redis 7 & PostgreSQL 16",
+      "Zero process-local state: Stream leases, viewer allocations, and camera ownership coordinated with epoch-based distributed locks.",
+      "5. Dual-Tier Storage Architecture",
+      "POSIX/NVMe edge recording vault for ultra-fast scrubbing + automated tiered retention to S3/NFS/SMB archives.",
+      "DATA & EVALUATION PIPELINE",
+      "[RTSP / ONVIF IP Streams]",
+      "└─ Multi-brand camera feeds ingested securely at edge",
+      "|",
+      "v  [AI Detectors: YOLOv8 / Edge NPU]",
+      "└─ Detects Persons, Vehicles, Bags, PPE, and Scene Tampering",
+      "|",
+      "v  [Persistent Multi-Object Tracker]",
+      "└─ Assigns persistent Track IDs across frames for temporal continuity",
+      "|",
+      "v  [Geometric Zone Engine (Ray-Casting)]",
+      "└─ Calculates Point-in-Polygon (PIP) & directional line crossings",
+      "|",
+      "v  [Compound Rule & Schedule Evaluator]",
+      "└─ Evaluates Boolean conditions (AND/OR/NOT) against IST operating windows",
+      "|",
+      "v  [Anti-Storm Deduplication & Cooldown]",
+      "└─ Redis fencing tokens suppress spam; updates evidence clips continuously",
+      "|",
+      "v  [Multi-Action Dispatcher]",
+      "└─ Dispatches SOC alerts, relays sirens, pushes webhooks & initiates calls"
+    ]
+  },
+  {
+    "slide": 4,
+    "texts": [
+      "CORE USER EXPERIENCE — REAL-TIME MONITORING",
+      "Unified Command Center & Live Video Wall",
+      "KryptonLogic  |  KryptonVision AI Video Platform  |  Confidential Client Demo",
+      "• Sub-Second Streaming Latency (<400ms)",
+      "Live feeds are served with sub-second response times using WebRTC and low-latency HLS transmuxing.",
+      "• Dynamic Matrix & Video Wall Grids",
+      "Seamless switching between 1x1, 2x2, 3x3, 4x4, and custom camera wall matrices across multiple monitor outputs.",
+      "• Real-Time AI Bounding Overlays",
+      "Live visual indicators, bounding boxes, confidence metrics, and active zone overlays directly on the canvas.",
+      "• Instant PTZ & Camera Controls",
+      "Pan, Tilt, and Zoom with presets, instant optical zoom, and one-click forensic snapshot captures.",
+      "• Edge Fault Auto-Recovery",
+      "Built-in stream heartbeat detection with zero-flicker automatic reconnection if network bandwidth dips.",
+      "KryptonVision Live Multi-Stream Video Wall (/surveillance/live)"
+    ]
+  },
+  {
+    "slide": 5,
+    "texts": [
+      "FORENSIC INVESTIGATION & EVIDENCE REVIEW",
+      "Multi-Camera Synchronized Playback & Time-Travel",
+      "KryptonLogic  |  KryptonVision AI Video Platform  |  Confidential Client Demo",
+      "• Synchronized Multi-Angle Scrubbing",
+      "Scrub up to 16 camera angles simultaneously in perfect millisecond synchronization to follow suspect movement across doors and corridors.",
+      "• Multi-Color Activity Heatmap Timeline",
+      "Visual timeline bar instantly differentiates continuous recordings, motion triggers, and high-severity AI compliance alerts.",
+      "• Sub-Second Forensic Seek",
+      "Jump directly to the exact timestamp of an incident with zero buffer lag, eliminating hours of manual footage scanning.",
+      "• Variable Speed & Jog-Shuttle Control",
+      "Fluid playback speeds from 0.25x slow-motion review up to 32x high-speed scanning with single-frame jog-stepping.",
+      "• Instant Evidence Clipping",
+      "Select in/out timeline points directly from the playback view to export digitally signed MP4/MKV evidence clips.",
+      "Synchronized Multi-Camera Playback & Visual Heatmap (/surveillance/playback)"
+    ]
+  },
+  {
+    "slide": 6,
+    "texts": [
+      "NO-CODE CONFIGURATION & AUTOMATION WORKSPACE",
+      "Visual Zone Designer & Compound Rule Engine",
+      "KryptonLogic  |  KryptonVision AI Video Platform  |  Confidential Client Demo",
+      "• No-Code Geometric Drawing Canvas",
+      "Administrators can draw Polygons (vaults, counters, restricted zones) and Tripwires (entry lines, barriers) directly over live video.",
+      "• Resolution-Independent Normalized Coordinates",
+      "Zones use normalized coordinates (0.0 to 1.0), ensuring detection accuracy even if camera resolution or aspect ratio shifts.",
+      "• Compound Boolean Logic (AND / OR / NOT)",
+      "Eliminates false triggers by chaining multi-sensor conditions (e.g., PERSON_COUNT > 2 AND CASH_DRAWER == OPEN).",
+      "• Timezone-Aware Operational Schedules",
+      "Schedules adhere to IST (Asia/Kolkata) with business-hours, after-hours, 24x7, and branch opening/closing dual custody windows.",
+      "• Shadow Mode & Rule Simulation",
+      "Test rules against historical video archives in a safe simulation lab before promoting them to live enforcement.",
+      "Visual Zone Designer & Rule Configuration Workspace (/analytics/rules)"
+    ]
+  },
+  {
+    "slide": 7,
+    "texts": [
+      "ELIMINATING ALARM FATIGUE IN THE SOC",
+      "Anti-Storm Deduplication & Intelligent Alert Dispatch",
+      "KryptonLogic  |  KryptonVision AI Video Platform  |  Confidential Client Demo",
+      "• The Alert Storm Problem Solved",
+      "Traditional AI systems generate 1,500 redundant alerts/min if a person lingers in a zone. KryptonVision eliminates this completely.",
+      "• Distributed Redis Fencing Tokens",
+      "Guarantees that multiple cluster nodes never evaluate the same frame track concurrently, preventing race condition duplicates.",
+      "• Configurable Cooldown State Machine",
+      "Rules enter an intelligent cooldown (60s–300s) after firing. Ongoing tracking clips are updated silently without spamming sirens.",
+      "• Persistence Duration Filter (durationMs)",
+      "Conditions must hold true continuously for a defined duration (e.g., 3s) before firing, eliminating flickers and false alarms.",
+      "• Multi-Channel Instant Escalation",
+      "Configurable dispatch matrix: SOC dashboard alerts, local relay sirens, webhooks, Telegram/WhatsApp alerts, and automated phone calls.",
+      "SOC Alert Operations & Triage Management (/operations/alerts)"
+    ]
+  },
+  {
+    "slide": 8,
+    "texts": [
+      "36+ READY-TO-USE REGULATORY RULE TEMPLATES",
+      "Pre-Seeded Enterprise & Banking Compliance Engine",
+      "KryptonLogic  |  KryptonVision AI Video Platform  |  Confidential Client Demo",
+      "Vault & Strongroom Security  [NBFC-R01 to R07]",
+      "• Dual-Control Solitary Access Alarm (Person count == 1 inside vault)",
+      "• Vault Over-Occupancy Alarm (>2 persons in strongroom)",
+      "• Strongroom Door Open Too Long (>180s without closure)",
+      "• After-Hours Vault Motion Intrusion (Critical severity alert)",
+      "• Unattended Open Vault (Door unlocked with 0 personnel present)",
+      "Pledge Counters & Cash Halls  [NBFC-R08 to R14]",
+      "• Customer Crossing Teller Acrylic Barrier line",
+      "• Cash Counter Crowd Surge (>5 persons in counter area)",
+      "• Unattended Cash Counter (Drawer unlocked with teller away >120s)",
+      "• Teller Hall Loitering (>15 mins dwell time without transaction)",
+      "• Queue SLA Breach Alert (Queue length >8 persons for >3 mins)",
+      "Logistics & Cash Van Security  [NBFC-R15 to R19]",
+      "• Cash Van Arrival Unmonitored (Armed guard missing from bay)",
+      "• Cash Transfer Line Crossing (Corridor unauthorized intrusion)",
+      "• Cash Box Left Unattended in Bay (>30s stationary package)",
+      "• Cash Van Extended Dwell Time (>30 mins in transfer bay)",
+      "• Emergency Corridor & Exit Route Obstruction",
+      "Perimeter & Anti-Tamper Integrity  [NBFC-R25 to R36]",
+      "• Camera Spray / Blinding / Rapid Occlusion (<5s alert)",
+      "• Camera Lens Displacement / Defocusing attempt",
+      "• Continuous Recording Gap Exceeds SLA (>30s gap detected)",
+      "• Branch Shutter / Roof / Skylight Tampering attempt",
+      "• Edge Gateway Offline Heartbeat Interruption"
+    ]
+  },
+  {
+    "slide": 9,
+    "texts": [
+      "VERIFIABLE CHAIN OF CUSTODY & REGULATORY AUDIT",
+      "Incident Response & Tamper-Proof Evidence Vault",
+      "KryptonLogic  |  KryptonVision AI Video Platform  |  Confidential Client Demo",
+      "• End-to-End Incident Lifecycle",
+      "Seamless progression from live Alert -> Operator Acknowledgment -> Evidence Annotation -> Police / Legal Escalation.",
+      "• Cryptographic Evidence Packaging",
+      "One-click export of court-admissible evidence bundles sealed with SHA-256 hashes and digital watermarks to prevent tampering.",
+      "• Immutable Audit Ledger",
+      "Every operator interaction, stream view, PTZ motion, configuration change, and video export is written to an immutable log.",
+      "• Operator Feedback Loop (Precision Tuning)",
+      "Operators mark detections as True Positive or False Alarm, providing ground-truth data for continuous AI model retraining.",
+      "• External Regulatory Reporting",
+      "Generates compliant compliance PDF/CSV reports ready for RBI / Internal Audit inspection within seconds.",
+      "Incident Response & Evidence Packaging (/operations/incidents)"
+    ]
+  },
+  {
+    "slide": 10,
+    "texts": [
+      "INFRASTRUCTURE VISIBILITY & PROACTIVE MAINTENANCE",
+      "Central Device Health, Diagnostics & Storage Lifecycle",
+      "KryptonLogic  |  KryptonVision AI Video Platform  |  Confidential Client Demo",
+      "• Live Stream Quality Telemetry",
+      "Continuous real-time monitoring of camera FPS, bitrate, jitter, dropped frames, and packet loss across every branch.",
+      "• Automated Camera Clock Drift Alerts",
+      "Alerts if a camera's hardware clock diverges from the server NTP by >1000ms, safeguarding legal timestamp validity.",
+      "• Automated Maintenance Workorders",
+      "Automatically flags offline cameras, degraded streams, or lens obstructions, generating tickets for field service teams.",
+      "• Storage Retention & Capacity Guard",
+      "Monitors storage disk volumes. Automatically triggers retention alerts when volume space drops below 15%.",
+      "• Multi-Tier Storage Architecture",
+      "Optimizes cost by writing high-speed recordings to local SSDs while automatically transferring cold archives to cloud S3/NAS.",
+      "Central Camera Health & Diagnostic Diagnostics (/maintenance/cameras)"
+    ]
+  },
+  {
+    "slide": 11,
+    "texts": [
+      "SCALABLE ORGANIZATIONAL MANAGEMENT & ACCESS CONTROL",
+      "Multi-Tenant Hierarchy & Enterprise Governance",
+      "KryptonLogic  |  KryptonVision AI Video Platform  |  Confidential Client Demo",
+      "• Hierarchical Organizational Tree",
+      "Native multi-tier hierarchy: Tenant (Org) -> Region (North/South) -> Branch (Indiranagar) -> Zone (Vault/Counter) -> Camera.",
+      "• Strict Scoped Access (RBAC & ABAC)",
+      "Predefined banking roles: Super Admin, Tenant Admin, SOC Operator, Branch Manager, Auditor, and Maintenance Engineer.",
+      "• Branch Onboarding Wizard",
+      "Zero-friction branch provisioning with automated ONVIF network discovery and bulk camera channel assignment in minutes.",
+      "• Device-Agnostic Interoperability",
+      "No proprietary camera lock-in. Connects seamlessly with any ONVIF Profile S/G/T or standard RTSP camera (Hikvision, Dahua, Axis, Hanwha, CP Plus).",
+      "• Immutable Security Auditing",
+      "Every login, token grant, permission change, and camera configuration update is recorded forever in an append-only ledger.",
+      "Organization & Multi-Branch Hierarchy Administration (/admin/organization)"
+    ]
+  },
+  {
+    "slide": 12,
+    "texts": [
+      "THE QUANTIFIABLE VALUE DELIVERED BY KRYPTONVISION",
+      "Measurable Business ROI & Operational Impact",
+      "KryptonLogic  |  KryptonVision AI Video Platform  |  Confidential Client Demo",
+      ">92% Reduction",
+      "IN FALSE ALARMS",
+      "Compound boolean rules and intelligent cooldown state machines filter out environmental noise, letting SOC operators focus on genuine security breaches.",
+      "80% Faster",
+      "INCIDENT INVESTIGATION",
+      "Multi-camera synchronized playback and visual event heatmaps slash video forensic review times from hours to just minutes.",
+      "100% Compliance",
+      "AUDIT ADHERENCE",
+      "Automated dual-custody verification, strongroom duration controls, and tamper logging ensure effortless regulatory compliance.",
+      "4x Operator Scale",
+      "COST OPTIMIZATION",
+      "A single SOC operator can effectively monitor over 150+ cameras with intelligent automated triage, versus only 20-30 on traditional VMS.",
+      "TOTAL COST OF OWNERSHIP (TCO) ADVANTAGE:",
+      "KryptonVision works with your existing IP camera infrastructure without requiring expensive proprietary hardware replacements, slashing initial capital expenditures (CAPEX) while drastically reducing ongoing security staffing OPEX."
+    ]
+  },
+  {
+    "slide": 13,
+    "texts": [
+      "STRUCTURED AGENDA FOR TODAY'S PRODUCT PRESENTATION",
+      "Live Demonstration Walkthrough Flow",
+      "KryptonLogic  |  KryptonVision AI Video Platform  |  Confidential Client Demo",
+      "Step 1: Central Command & Live Video Wall",
+      "Experience sub-second multi-camera video streaming, dynamic grid arrangement, and instant PTZ response.",
+      "Step 2: Visual Zone Designer & Rule Creation",
+      "Watch how simple it is to draw a polygon zone over a live stream and activate a compound security rule in under 60 seconds.",
+      "Step 3: Real-Time Threat Trigger & Anti-Storm Alert",
+      "Observe live event detection in action with intelligent deduplication, cooldown suppression, and automated dispatch.",
+      "Step 4: Synchronized Playback & Forensic Investigation",
+      "Seamlessly scrub through multi-angle historical video, inspect heatmap markers, and jump precisely to breach moments.",
+      "Step 5: Evidence Packaging & Audit Integrity",
+      "Generate a digitally signed, tamper-proof evidence bundle with cryptographic SHA-256 hash sealing."
+    ]
+  },
+  {
+    "slide": 14,
+    "texts": [
+      "ARCHITECTED TO FIT YOUR INFRASTRUCTURE",
+      "Deployment Flexibility & System Compatibility",
+      "KryptonLogic  |  KryptonVision AI Video Platform  |  Confidential Client Demo",
+      "On-Premises Edge Appliance",
+      "HIGHEST SECURITY & PRIVACY",
+      "• Deploys directly on local branch hardware or edge AI microservers.",
+      "• Zero continuous cloud bandwidth requirement.",
+      "• Local video storage with POSIX NVMe indexing.",
+      "• Ideal for high-security banking branches and air-gapped vaults.",
+      "Hybrid Enterprise Architecture",
+      "BEST OF BOTH WORLDS",
+      "• Edge inference & local recording at branch level.",
+      "• Central cloud management for SOC command center & compliance.",
+      "• Low WAN bandwidth consumption with metadata-only synchronization.",
+      "• Clustered multi-branch aggregation across regional offices.",
+      "Fully Cloud-Managed VMS",
+      "MAXIMUM SCALABILITY & AGILITY",
+      "• Direct secure gateway streaming to cloud infrastructure (AWS/GCP/Azure).",
+      "• Unlimited tiered storage retention with automatic S3 archival.",
+      "• Global accessibility from any authenticated device or SOC terminal.",
+      "• Instant zero-maintenance updates and elastic scaling."
+    ]
+  },
+  {
+    "slide": 15,
+    "texts": [
+      "KRYPTONLOGIC TECHNOLOGIES",
+      "Ready to Transform Your Surveillance?",
+      "KryptonVision upgrades existing video surveillance networks into an intelligent, proactive, and compliant security command ecosystem.",
+      "RECOMMENDED NEXT STEPS: 48-HOUR PILOT / PROOF-OF-CONCEPT",
+      "Deploy KryptonVision on 5-10 existing cameras in your live environment with zero disruption. Experience real-time alerts, visual rules, and synchronized playback within 48 hours.",
+      "Thank You! Let's Proceed to the Live Product Demo & Q/A"
+    ]
+  }
+]

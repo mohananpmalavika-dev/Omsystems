@@ -103,7 +103,6 @@ CREATE INDEX idx_predictive_alerts_type ON predictive_alerts(prediction_type);
 
 COMMENT ON TABLE predictive_alerts IS 'Predictive alerts based on historical incident patterns';
 COMMENT ON COLUMN predictive_alerts.probability IS 'Probability of incident occurrence (0-1)';
-COMMENT ON COLUMN predictive_alerts.reasoning IS 'AI-generated explanation of why this prediction was made';
 COMMENT ON COLUMN predictive_alerts.based_on_patterns IS 'Historical patterns that led to this prediction';
 COMMENT ON COLUMN predictive_alerts.status IS 'Lifecycle: active → triggered/dismissed/expired';
 

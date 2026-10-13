@@ -270,7 +270,6 @@ export interface Investigation {
   /** Recommended actions */
   recommendedActions: RecommendedAction[];
 
-  /** AI-generated summary */
   summary?: string;
 
   /** Root cause analysis */

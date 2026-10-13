@@ -576,7 +576,6 @@ export class AIInvestigationReportService {
     incident: any,
     timeline: InvestigationTimelineEvent[]
   ): Promise<InvestigationReport["executiveSummary"]> {
-    // AI-generated summary based on incident data
     const overview = `${incident.incidentType} incident detected at ${new Date(incident.occurredAt).toLocaleString()}. ${incident.description || "No additional details provided."}`;
 
     const keyFindings: string[] = [];

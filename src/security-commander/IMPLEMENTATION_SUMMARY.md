@@ -389,7 +389,7 @@ src/components/security-commander/
     title={investigation.title}
     status={investigation.status}
     priority={investigation.priority}
-    summary={investigation.summary} // AI-generated
+    summary={investigation.summary}
   />
   
   <IncidentList incidents={investigation.incidents}>

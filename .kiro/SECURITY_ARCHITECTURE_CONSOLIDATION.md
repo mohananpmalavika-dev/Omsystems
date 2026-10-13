@@ -187,6 +187,5 @@
 ---
 
 **Status**: 🟡 IN PROGRESS
-**Owner**: Kiro AI
 **Started**: 2026-08-10
 **Target Completion**: 2026-08-13
