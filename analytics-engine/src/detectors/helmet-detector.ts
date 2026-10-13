@@ -342,11 +342,8 @@ export class HelmetDetector extends BaseDetector {
             personConfidence: person.confidence ?? 0,
             riskLevel: "violation",
           };
-          // Strong, localized complete-head evidence can alert on one capture,
-          // like an explicit helmet observation. Weaker scores retain temporal
-          // confirmation rather than joining people across six-second gaps.
-          const confirmations = this.fastAlert && verified.headEvidence && verified.classificationConfidence >= 0.9
-            ? 1 : this.fastAlert
+          // Require at least 2 distinct timestamp confirmations to eliminate single-frame false alarms
+          const confirmations = this.fastAlert
             ? 2
             : ((person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ? 2 : 3);
           if (this.confirmClassifiedHead(frame.cameraId, person.boundingBox, frame.timestamp.getTime(), confirmations)) {
@@ -457,7 +454,7 @@ export class HelmetDetector extends BaseDetector {
           });
           if (!candidate) continue;
           const confirmations = this.fastAlert
-            ? 1
+            ? 2
             : ((person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ? 2 : 3);
           if (!this.confirmClassifiedHead(frame.cameraId, person.boundingBox, frame.timestamp.getTime(), confirmations)) continue;
           presence = candidate;

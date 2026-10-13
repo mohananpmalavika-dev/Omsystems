@@ -91,37 +91,8 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
     if (!pending) { pending = this.localizer.run(frame); this.frames.set(frame, pending); }
     let objects = await pending;
 
-    // A motorcycle helmet can be localized as a generic head. The dedicated
-    // full-head model establishes helmet evidence; the generic label does not.
-    // Keep this opt-in camera adaptation separate from the legacy hair crops.
-    if (this.usesHeadEvidence(frame)) {
-      // A full-frame resize can miss a head. Search its native-pixel
-      // upper-body region only when the full frame has no associated head.
-      // Never retry a classified negative through a different crop.
-      if (!objects.some(item => (item.label === "head" || item.label === "helmet") &&
-          (item.confidence ?? 0) >= 0.35 && validHead(frame, person, item.boundingBox)) &&
-          person.height * frame.height >= 72) {
-        objects = [...objects, ...await this.localizePersonHead(frame, person)];
-      }
-      const candidates = objects.filter(item => (item.label === "head" || item.label === "helmet") &&
-        (item.confidence ?? 0) >= 0.35 && validHead(frame, person, item.boundingBox) &&
-        item.boundingBox.x > 0.005 && item.boundingBox.y > 0.005 &&
-        item.boundingBox.x + item.boundingBox.width < 0.995 &&
-        item.boundingBox.y + item.boundingBox.height < 0.995);
-      for (const candidate of candidates.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))) {
-        const head = await this.headClassifier!.run(frame, expand(candidate.boundingBox, 0.15));
-        if (!head.wearingHelmet || head.wearingHelmetConfidence < threshold) continue;
-        const context = await this.headClassifier!.run(frame, expand(candidate.boundingBox, 0.25));
-        if (!context.wearingHelmet || context.wearingHelmetConfidence < threshold) continue;
-        return { boundingBox: candidate.boundingBox, localizationConfidence: candidate.confidence!,
-          classificationConfidence: Math.min(head.wearingHelmetConfidence, context.wearingHelmetConfidence), headEvidence: true };
-      }
-      // Do not override contrary complete-head evidence with legacy crown strips.
-      return null;
-    }
-
     // 1. POSE ESTIMATION (Keypoint Verification)
-    // Filters out office chair backrests / tall furniture behind the person
+    // Filters out office chair backrests / tall furniture and bare heads where ears are exposed.
     if (this.poseEstimator) {
       let posePending = this.poseFrames.get(frame);
       if (!posePending) {
@@ -140,7 +111,7 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
 
         // If ears are clearly visible with high confidence and unoccluded,
         // a full motorcycle helmet cannot be present.
-        const earsClearlyExposed = (leftEar && leftEar.confidence >= 0.70) || (rightEar && rightEar.confidence >= 0.70);
+        const earsClearlyExposed = (leftEar && leftEar.confidence >= 0.65) || (rightEar && rightEar.confidence >= 0.65);
         const hasExplicitHelmetBox = objects.some(o => o.label === "helmet" && (o.confidence ?? 0) >= 0.25 &&
           validHead(frame, person, o.boundingBox));
 
@@ -187,7 +158,7 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
         this.faceFrames.set(frame, facePending);
       }
       const faces = await facePending;
-      const visibleFace = faces.find(f => (f.confidence ?? 0) >= 0.65 && isInsidePersonHead(person, f.boundingBox));
+      const visibleFace = faces.find(f => (f.confidence ?? 0) >= 0.60 && isInsidePersonHead(person, f.boundingBox));
       if (visibleFace) {
         // If an open face is detected, but there is NO localized helmet shell on the crown,
         // it is a bare-headed visitor/staff member.
@@ -199,6 +170,36 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
           return null;
         }
       }
+    }
+
+    // A motorcycle helmet can be localized as a generic head. The dedicated
+    // full-head model establishes helmet evidence; the generic label does not.
+    // Keep this opt-in camera adaptation separate from the legacy hair crops.
+    if (this.usesHeadEvidence(frame)) {
+      // A full-frame resize can miss a head. Search its native-pixel
+      // upper-body region only when the full frame has no associated head.
+      // Never retry a classified negative through a different crop.
+      if (!objects.some(item => (item.label === "head" || item.label === "helmet") &&
+          (item.confidence ?? 0) >= 0.35 && validHead(frame, person, item.boundingBox)) &&
+          person.height * frame.height >= 72) {
+        objects = [...objects, ...await this.localizePersonHead(frame, person)];
+      }
+      const candidates = objects.filter(item => (item.label === "head" || item.label === "helmet") &&
+        (item.confidence ?? 0) >= 0.35 && validHead(frame, person, item.boundingBox) &&
+        item.boundingBox.x > 0.005 && item.boundingBox.y > 0.005 &&
+        item.boundingBox.x + item.boundingBox.width < 0.995 &&
+        item.boundingBox.y + item.boundingBox.height < 0.995);
+      const effectiveThreshold = Math.max(threshold, 0.85);
+      for (const candidate of candidates.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))) {
+        const head = await this.headClassifier!.run(frame, expand(candidate.boundingBox, 0.15));
+        if (!head.wearingHelmet || head.wearingHelmetConfidence < effectiveThreshold) continue;
+        const context = await this.headClassifier!.run(frame, expand(candidate.boundingBox, 0.25));
+        if (!context.wearingHelmet || context.wearingHelmetConfidence < effectiveThreshold) continue;
+        return { boundingBox: candidate.boundingBox, localizationConfidence: candidate.confidence!,
+          classificationConfidence: Math.min(head.wearingHelmetConfidence, context.wearingHelmetConfidence), headEvidence: true };
+      }
+      // Do not override contrary complete-head evidence with legacy crown strips.
+      return null;
     }
 
     // 3. HELMET LOCALIZER (YOLOv5)
