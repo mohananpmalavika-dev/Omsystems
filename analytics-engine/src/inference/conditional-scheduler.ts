@@ -368,7 +368,11 @@ export class ConditionalScheduler {
         case 'after-hours-person':
         case 'employee-only-zone':
         case 'restricted-multiple-person':
+        case 'dual-control-verification':
+        case 'dual-control':
+        case 'vault-violation':
           required.add('yolov8n'); // Base person detection
+          required.add('face-detector');
           break;
 
         case 'helmet':

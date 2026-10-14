@@ -37,7 +37,7 @@ export interface CreatedSession {
   sessionId: string;
 
   /**
-   * Short-lived access token (JWT)
+   * Access token (JWT)
    */
   accessToken: string;
 
@@ -176,7 +176,7 @@ export interface SessionServiceConfig {
 
   /**
    * Access token lifetime (seconds)
-  * Default: 1800 (30 minutes)
+   * Default: 2592000 (30 days)
    */
   accessTokenLifetime?: number;
 
@@ -238,7 +238,7 @@ export class SessionService {
     // Set defaults
     this.config = {
       jwtSecret: config.jwtSecret,
-      accessTokenLifetime: config.accessTokenLifetime || 1800, // 30 minutes
+      accessTokenLifetime: config.accessTokenLifetime || 2592000, // 30 days
       refreshTokenLifetime: config.refreshTokenLifetime || 2592000, // 30 days
       issuer: config.issuer || process.env.JWT_ISSUER || 'sentinel-grid',
       audience: config.audience || process.env.JWT_AUDIENCE || 'sentinel-grid-api',

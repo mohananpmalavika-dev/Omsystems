@@ -35,7 +35,7 @@ export async function registerEnterpriseAuthRoutes(
   // Initialize services
   const enterpriseLoginService = new EnterpriseLoginService(pool, {
     jwtSecret: process.env.JWT_SECRET!,
-    accessTokenLifetime: parseInt(process.env.ACCESS_TOKEN_LIFETIME || '900'),
+    accessTokenLifetime: parseInt(process.env.ACCESS_TOKEN_LIFETIME || '2592000'),
     refreshTokenLifetime: parseInt(process.env.REFRESH_TOKEN_LIFETIME || '2592000'),
   });
 

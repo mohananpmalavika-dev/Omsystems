@@ -95,7 +95,7 @@ export class IdentityService {
       // 5. Create Application Session & Issue Signed Tokens
       const sessionId = randomUUID();
       const now = new Date();
-      const expiresIn = 900; // 15 minutes access token lifetime
+      const expiresIn = 30 * 24 * 60 * 60; // 30 days access token lifetime
       const expiresAt = new Date(now.getTime() + expiresIn * 1000);
 
       const principal: SecurityPrincipal = {
@@ -198,7 +198,7 @@ export class IdentityService {
     });
 
     const now = new Date();
-    const expiresIn = 900;
+    const expiresIn = 30 * 24 * 60 * 60;
     const expiresAt = new Date(now.getTime() + expiresIn * 1000);
     principal.expiresAt = expiresAt;
 

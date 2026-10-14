@@ -1,0 +1,7 @@
+SELECT detector_type, enabled, state, count(*) FROM nbfc_analytics_rules GROUP BY detector_type, enabled, state ORDER BY detector_type;
+SELECT tenant_id, branch_id, camera_id, detection_type, suppressed FROM alert_suppression_config ORDER BY tenant_id,branch_id,camera_id,detection_type;
+SELECT table_name,column_name,data_type FROM information_schema.columns WHERE table_schema='public' AND (table_name IN ('audit_events','nbfc_branch_opening_policies','nbfc_branch_policies') OR (table_name LIKE '%alert%' AND column_name IN ('status','enabled','detection_type','rule_id'))) ORDER BY table_name,ordinal_position;
+SELECT count(*) AS cameras, count(*) FILTER (WHERE EXISTS (SELECT 1 FROM analytics_rules r WHERE r.camera_id=c.id AND r.detection_type='helmet-worn' AND r.enabled AND r.archived_at IS NULL)) AS cameras_with_helmet FROM cameras c;
+SELECT detection_type,status,count(*) FROM operational_alerts WHERE occurred_at > now()-interval '24 hours' GROUP BY detection_type,status;
+SELECT r.detection_type,a.status,count(*) FROM analytics_alerts a LEFT JOIN analytics_rules r ON r.id=a.rule_id WHERE a.created_at>now()-interval '24 hours' GROUP BY r.detection_type,a.status;
+SELECT table_name,column_name,data_type FROM information_schema.columns WHERE table_schema='public' AND (column_name IN ('enabled','alerts_enabled','alert_enabled','notification_enabled') OR table_name IN ('alert_notifications','alert_notification_policies','nbfc_branch_opening_alerts')) ORDER BY table_name,ordinal_position;

@@ -373,7 +373,7 @@ export async function registerVoiceAuthenticationRoutes(
 
         const accessExpiresAt = session.accessExpiresAt
           ? new Date(session.accessExpiresAt).getTime()
-          : Date.now() + 3600_000;
+          : Date.now() + 30 * 24 * 60 * 60 * 1000;
 
         const expiresIn = Math.max(1, Math.floor((accessExpiresAt - Date.now()) / 1000));
 
