@@ -28,6 +28,8 @@ import {
   createDefaultGridAssignments,
   getDecoderCapacityOptions,
   retainCameraPageOnGridChange,
+  uniqueWallCameras,
+  assignWallCamera,
 } from "./enhanced-camera-grid-model";
 import { useDecoderBudgetManager } from "./decoderBudgetManager";
 import { useMediaOrchestrator } from "@/hooks/use-media-orchestrator";
@@ -497,15 +499,16 @@ export function EnhancedCameraGrid({
   }, [cameras]);
 
   const displayedCameras = useMemo(() => {
+    const wallCameras = uniqueWallCameras(cameras);
     if (copilotFilterActive && copilotMatchedCameraIds.length > 0) {
       const idSet = new Set(copilotMatchedCameraIds);
-      const filtered = cameras.filter((c) => idSet.has(c.id));
+      const filtered = wallCameras.filter((c) => idSet.has(c.id));
       if (filtered.length > 0) return filtered;
     }
-    if (activeViewFilter === "all") return cameras;
+    if (activeViewFilter === "all") return wallCameras;
     if (activeViewFilter.startsWith("flag:")) {
       const flagType = activeViewFilter.replace("flag:", "");
-      return cameras.filter((c) =>
+      return wallCameras.filter((c) =>
         allFlags[c.id]?.some((f) => f.type === flagType)
       );
     }
@@ -513,9 +516,9 @@ export function EnhancedCameraGrid({
     if (preset) {
       if (preset.cameraIds.length === 0) return [];
       const idSet = new Set(preset.cameraIds);
-      return cameras.filter((c) => idSet.has(c.id));
+      return wallCameras.filter((c) => idSet.has(c.id));
     }
-    return cameras;
+    return wallCameras;
   }, [cameras, copilotFilterActive, copilotMatchedCameraIds, activeViewFilter, presets, allFlags]);
 
   const handleSelectPreset = (presetId: string) => {
@@ -836,8 +839,10 @@ export function EnhancedCameraGrid({
     };
   }, [selectedSlot]);
   const initialLayoutApplied = useRef(false);
+  const assignmentSignatureRef = useRef("");
+  const pendingLayoutRef = useRef<GridLayout | null>(null);
   const activeStreamTypesRef = useRef(new Map<string, "main" | "sub">());
-  const pendingLiveStartsRef = useRef(new Map<string, "main" | "sub">());
+  const pendingLiveStartsRef = useRef(new Map<string, { stream: "main" | "sub"; forceRefresh: boolean }>());
   const liveStartControllersRef = useRef(new Map<string, AbortController>());
   const activeLiveStartsRef = useRef(0);
   const liveStartRetryRef = useRef(new Map<string, { failures: number; retryAt: number }>());
@@ -918,6 +923,8 @@ export function EnhancedCameraGrid({
     }
     return cameraIds;
   }, [schedulerGridPositions, visibleRange]);
+  const visibleGridCameraIdsRef = useRef(visibleGridCameraIds);
+  visibleGridCameraIdsRef.current = visibleGridCameraIds;
   const schedulerTileGeometry = useMemo(() => {
     const columns = gridSize === "1+5" ? 3 : (gridSize === "1+7" || gridSize === "2+8") ? 4 : Number(gridSize.split("x")[0]);
     const viewportWidth = containerRef.current?.clientWidth ??
@@ -1040,6 +1047,8 @@ export function EnhancedCameraGrid({
   }, [reportPlaybackFailure]);
 
   const releaseSession = useCallback((cameraId: string) => {
+    liveStartControllersRef.current.get(cameraId)?.abort();
+    pendingLiveStartsRef.current.delete(cameraId);
     const session = sessionsRef.current.get(cameraId);
     sessionsRef.current.delete(cameraId);
     liveStartRetryRef.current.delete(cameraId);
@@ -1059,13 +1068,14 @@ export function EnhancedCameraGrid({
   }, [closeSession]);
 
   const handleStartLive = useCallback(async (cameraId: string, stream: "main" | "sub" = "sub", forceRefresh = false) => {
+    if (!visibleGridCameraIdsRef.current.has(cameraId)) return;
     if (
       (!forceRefresh && sessionsRef.current.has(cameraId)) ||
       loadingRef.current.has(cameraId)
     ) return;
 
     if (activeLiveStartsRef.current >= MAX_PARALLEL_LIVE_STARTS) {
-      pendingLiveStartsRef.current.set(cameraId, stream);
+      pendingLiveStartsRef.current.set(cameraId, { stream, forceRefresh });
       return;
     }
 
@@ -1089,6 +1099,14 @@ export function EnhancedCameraGrid({
     try {
       updateStreamState(cameraId, "CONNECTING");
       const session = await startLiveFromBrowser(cameraId, stream, controller.signal);
+      if (controller.signal.aborted || liveStartControllersRef.current.get(cameraId) !== controller || !visibleGridCameraIdsRef.current.has(cameraId)) {
+        void releaseLiveSession(session);
+        return;
+      }
+      if (session.cameraId !== cameraId) {
+        void releaseLiveSession(session);
+        throw new Error("live_session_camera_mismatch");
+      }
       liveStartRetryRef.current.delete(cameraId);
       const previousSession = sessionsRef.current.get(cameraId);
       sessionsRef.current.set(cameraId, session);
@@ -1103,10 +1121,12 @@ export function EnhancedCameraGrid({
       // Replacing a refreshed session without closing the old one exhausts
       // MediaMTX viewer slots over time. The current video remains visible
       // until React swaps to the freshly authorized source.
-      if (previousSession && previousSession !== session) void releaseLiveSession(previousSession);
+      if (previousSession?.sessionId && previousSession.sessionId !== session.sessionId) void releaseLiveSession(previousSession);
     } catch (error) {
+      // Leaving a page cancels its requests; it must not change the next view.
+      if (controller.signal.aborted && controller.signal.reason?.name !== "TimeoutError") return;
       const reason = error instanceof Error ? error.message : "Unknown error";
-      if (!controller.signal.aborted) {
+      {
         const failures = (liveStartRetryRef.current.get(cameraId)?.failures ?? 0) + 1;
         const delay = Math.min(LIVE_START_RETRY_MAX_MS, LIVE_START_RETRY_BASE_MS * 2 ** Math.min(failures - 1, 3));
         liveStartRetryRef.current.set(cameraId, { failures, retryAt: Date.now() + delay });
@@ -1121,17 +1141,17 @@ export function EnhancedCameraGrid({
       reportPlaybackFailure(cameraId, reason);
     } finally {
       clearTimeout(timeoutTimer);
-      liveStartControllersRef.current.delete(cameraId);
+      if (liveStartControllersRef.current.get(cameraId) === controller) liveStartControllersRef.current.delete(cameraId);
       loadingRef.current.delete(cameraId);
       activeLiveStartsRef.current = Math.max(0, activeLiveStartsRef.current - 1);
       setLoading(new Set(loadingRef.current));
 
       const next = pendingLiveStartsRef.current.entries().next().value as
-        | [string, "main" | "sub"]
+        | [string, { stream: "main" | "sub"; forceRefresh: boolean }]
         | undefined;
       if (next) {
         pendingLiveStartsRef.current.delete(next[0]);
-        void handleStartLive(next[0], next[1]);
+        void handleStartLiveRef.current?.(next[0], next[1].stream, next[1].forceRefresh);
       }
     }
   }, [
@@ -1273,13 +1293,42 @@ export function EnhancedCameraGrid({
   // Initialize and slice cameras based on current page and grid size
   useEffect(() => {
     if (displayedCameras.length === 0) {
+      assignmentSignatureRef.current = "";
       setGridPositions(new Map());
       return;
     }
 
-    const startIdx = currentPage * totalPositions;
-    const pageSlice = displayedCameras.slice(startIdx, startIdx + totalPositions);
+    const uniqueCameras = uniqueWallCameras(displayedCameras);
+    const safePage = Math.min(currentPage, Math.max(0, Math.ceil(uniqueCameras.length / totalPositions) - 1));
+    const startIdx = safePage * totalPositions;
+    const pageSlice = uniqueCameras.slice(startIdx, startIdx + totalPositions);
+    const signature = `${gridSize}:${totalPositions}:${safePage}:${uniqueCameras.map(camera => camera.id).join("|")}`;
+    if (assignmentSignatureRef.current === signature && !pendingLayoutRef.current) {
+      const byId = new Map(uniqueCameras.map(camera => [camera.id, camera]));
+      setGridPositions(current => {
+        let changed = false;
+        const next = new Map(current);
+        for (const [position, entry] of current) {
+          const camera = byId.get(entry.camera.id);
+          if (camera && camera !== entry.camera) { next.set(position, { ...entry, camera }); changed = true; }
+        }
+        return changed ? next : current;
+      });
+      return;
+    }
+    assignmentSignatureRef.current = signature;
     const posMap = new Map<number, { camera: Camera; stream: "main" | "sub"; priority: number }>();
+    const saved = pendingLayoutRef.current ?? (!initialLayoutApplied.current ? initialLayout : undefined);
+    pendingLayoutRef.current = null;
+    initialLayoutApplied.current = true;
+    const assignedIds = new Set<string>();
+    for (const position of saved?.positions ?? []) {
+      const camera = uniqueCameras.find(camera => camera.id === position.cameraId);
+      if (!camera || assignedIds.has(camera.id) || !Number.isInteger(position.position) || position.position < 0 || position.position >= totalPositions || posMap.has(position.position)) continue;
+      assignedIds.add(camera.id);
+      posMap.set(position.position, { camera, stream: position.stream, priority: 0 });
+    }
+    if (posMap.size) { setGridPositions(posMap); return; }
     pageSlice.forEach((camera, index) => {
       // Adaptive Dual-Stream rule:
       // - Solo 1x1: Main-stream (1080p/4K)
@@ -1367,13 +1416,7 @@ export function EnhancedCameraGrid({
   };
 
   const handleCameraAssign = (position: number, camera: Camera | null) => {
-    const newPositions = new Map(gridPositions);
-    if (camera) {
-      newPositions.set(position, { camera, stream: "main", priority: 0 });
-    } else {
-      newPositions.delete(position);
-    }
-    setGridPositions(newPositions);
+    setGridPositions(current => assignWallCamera(current, position, camera ? { camera, stream: "main", priority: 0 } : null));
   };
 
   const handleStreamToggle = (position: number) => {
@@ -1431,6 +1474,13 @@ export function EnhancedCameraGrid({
           scheduled.mode === "MAIN_STREAM" ? "main" as const : "sub" as const,
         ]),
     );
+
+    for (const [cameraId, controller] of liveStartControllersRef.current) {
+      if (!desiredLive.has(cameraId)) controller.abort();
+    }
+    for (const cameraId of pendingLiveStartsRef.current.keys()) {
+      if (!desiredLive.has(cameraId)) pendingLiveStartsRef.current.delete(cameraId);
+    }
 
     // The scheduler supplies default profiles for legacy camera records too.
     // Starting deferred tiles here would bypass its adaptive resource budget.
@@ -1525,13 +1575,15 @@ export function EnhancedCameraGrid({
   }, [layoutName, gridSize, gridPositions, onLayoutChange, savedLayouts]);
 
   const handleLoadLayout = (layout: GridLayout) => {
+    pendingLayoutRef.current = layout;
     setGridSize(layout.gridSize);
     setLayoutName(layout.name);
 
-    const posMap = new Map();
+    const posMap = new Map<number, { camera: Camera; stream: "main" | "sub"; priority: number }>();
     layout.positions.forEach((pos) => {
       const camera = cameras.find((c) => c.id === pos.cameraId);
-      if (camera) {
+      if (camera && Number.isInteger(pos.position) && pos.position >= 0 && pos.position < gridSizeMap[layout.gridSize]
+        && !posMap.has(pos.position) && ![...posMap.values()].some(entry => entry.camera.id === camera.id)) {
         posMap.set(pos.position, { camera, stream: pos.stream, priority: 0 });
       }
     });
@@ -1995,7 +2047,7 @@ export function EnhancedCameraGrid({
 
           return (
             <VisibilityTracker
-              key={i}
+              key={camera.id}
               cameraId={camera.id}
               onVisibilityChange={setTileVisibility}
             >

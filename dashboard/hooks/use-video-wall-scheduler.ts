@@ -110,6 +110,11 @@ export function useVideoWallScheduler(
     onScheduleChange,
     onCapacityChange,
   } = options;
+  const gridSignature = [...gridPositions].map(([position, entry]) => `${position}:${entry.cameraId}:${entry.stream}`).join("|");
+  const cameraSignature = cameras.map(camera => `${camera.id}:${camera.status}`).join("|");
+  const inputKey = `${gridSignature}/${cameraSignature}`;
+  const inputKeyRef = useRef(inputKey);
+  inputKeyRef.current = inputKey;
 
   const capacityManagerRef = useRef<ViewerCapacityManager | null>(null);
   const schedulerRef = useRef<StreamScheduler | null>(null);
@@ -127,6 +132,8 @@ export function useVideoWallScheduler(
   const playbackFailuresRef = useRef(new Map<string, { until: number; reason?: string }>());
   const scheduleRef = useRef(new Map<string, ScheduledCamera>());
   const schedulerRunRef = useRef<Promise<void> | null>(null);
+  const schedulerRerunRef = useRef(false);
+  const mountedRef = useRef(true);
 
   const [isInitialized, setIsInitialized] = useState(false);
   const [schedule, setSchedule] = useState<Map<string, ScheduledCamera>>(new Map());
@@ -262,9 +269,13 @@ export function useVideoWallScheduler(
   }, []);
 
   const runScheduler = useCallback(() => {
-    if (schedulerRunRef.current) return schedulerRunRef.current;
+    if (schedulerRunRef.current) {
+      schedulerRerunRef.current = true;
+      return schedulerRunRef.current;
+    }
 
     const run = (async () => {
+      const startingKey = inputKey;
       const decoderPool = decoderPoolRef.current!;
       if (document.hidden) decoderPool.resetPerformanceMetrics();
       // Adapt before scheduling so an overload reduction takes effect in
@@ -273,13 +284,18 @@ export function useVideoWallScheduler(
         document.hidden ? new Map() : decoderPool.getAllMetrics(),
         maxDecoderLimit,
       );
+      if (!mountedRef.current) return;
+      if (startingKey !== inputKeyRef.current) { schedulerRerunRef.current = true; return; }
       const nextSchedule = await schedulerRef.current!.schedule(
         buildCameraContexts(),
         tileGeometry,
         undefined,
         { maxDecoderLimit, rotationEnabled },
       );
+      if (!mountedRef.current) return;
+      if (startingKey !== inputKeyRef.current) { schedulerRerunRef.current = true; return; }
       await reconcileDecoders(nextSchedule);
+      if (!mountedRef.current) return;
       if (enableSnapshots) reconcileSnapshots(nextSchedule);
 
       scheduleRef.current = nextSchedule;
@@ -299,13 +315,18 @@ export function useVideoWallScheduler(
     })();
 
     schedulerRunRef.current = run;
-    run.then(
-      () => { if (schedulerRunRef.current === run) schedulerRunRef.current = null; },
-      () => { if (schedulerRunRef.current === run) schedulerRunRef.current = null; },
-    );
+    const finish = () => {
+      if (schedulerRunRef.current === run) schedulerRunRef.current = null;
+      if (schedulerRerunRef.current && mountedRef.current) {
+        schedulerRerunRef.current = false;
+        void runSchedulerRef.current().catch(error => console.error("[VideoWallScheduler] Scheduling error:", error));
+      }
+    };
+    run.then(finish, finish);
     return run;
   }, [
     buildCameraContexts,
+    inputKey,
     enableSnapshots,
     maxDecoderLimit,
     onCapacityChange,
@@ -364,8 +385,8 @@ export function useVideoWallScheduler(
 
   useEffect(() => {
     // Run every eight seconds and immediately when the operator selects a
-    // camera or changes the limit. Other prop changes use the latest ref
-    // without restarting the interval on every render.
+    // camera, changes page or changes the limit. Metadata polling keeps the
+    // existing streams; new page assignments do not wait eight seconds.
     if (!isInitialized) return;
     let cancelled = false;
     const run = async () => {
@@ -381,11 +402,16 @@ export function useVideoWallScheduler(
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [isInitialized, maxDecoderLimit, operatorSelectedCameraId]);
+  }, [isInitialized, maxDecoderLimit, operatorSelectedCameraId, gridSignature, cameraSignature]);
 
-  useEffect(() => () => {
-    snapshotServiceRef.current?.stopAll();
-    void decoderPoolRef.current?.releaseAll();
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      schedulerRerunRef.current = false;
+      snapshotServiceRef.current?.stopAll();
+      void decoderPoolRef.current?.releaseAll();
+    };
   }, []);
 
   const refresh = useCallback(async () => {

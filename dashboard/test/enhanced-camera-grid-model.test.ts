@@ -4,9 +4,24 @@ import {
   createDefaultGridAssignments,
   getDecoderCapacityOptions,
   retainCameraPageOnGridChange,
+  uniqueWallCameras,
+  assignWallCamera,
 } from "../components/enhanced-camera-grid-model.js";
 
 describe("camera wall decoder limits", () => {
+  it("deduplicates a camera list before allocating wall positions", () => {
+    expect(createDefaultGridAssignments(["a", "a", "b"], 2, "sub").map(entry => entry.cameraId)).toEqual(["a", "b"]);
+    expect(uniqueWallCameras([{ id: "a" }, { id: "b" }, { id: "a" }]).map(camera => camera.id)).toEqual(["a", "b"]);
+  });
+
+  it("swaps an already assigned camera rather than duplicating its view", () => {
+    const a = { camera: { id: "a" }, stream: "main" };
+    const b = { camera: { id: "b" }, stream: "sub" };
+    const original = new Map([[0, a], [1, b]]);
+    expect([...assignWallCamera(original, 0, b)]).toEqual([[1, a], [0, b]]);
+    expect([...assignWallCamera(original, 2, a)]).toEqual([[1, b], [2, a]]);
+    expect(original.get(0)).toBe(a);
+  });
   it("does not allow a saved workstation preference to exceed a page cap", () => {
     expect(clampDecoderLimit(64, 16)).toBe(16);
     expect(clampDecoderLimit(36, 16)).toBe(16);

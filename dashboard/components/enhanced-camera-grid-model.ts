@@ -8,6 +8,29 @@ export interface DefaultGridAssignment {
   stream: GridStreamType;
 }
 
+export function uniqueWallCameras<T extends { id: string }>(cameras: readonly T[]): T[] {
+  return [...new Map(cameras.map(camera => [camera.id, camera])).values()];
+}
+
+// Selecting a camera already on the wall moves it, rather than cloning it.
+export function assignWallCamera<T extends { camera: { id: string } }>(
+  positions: ReadonlyMap<number, T>, position: number, entry: T | null,
+): Map<number, T> {
+  const next = new Map(positions);
+  const displaced = next.get(position);
+  next.delete(position);
+  if (!entry) return next;
+  let moved = false;
+  for (const [otherPosition, other] of next) {
+    if (other.camera.id !== entry.camera.id) continue;
+    next.delete(otherPosition);
+    if (!moved && displaced && displaced.camera.id !== entry.camera.id) next.set(otherPosition, displaced);
+    moved = true;
+  }
+  next.set(position, entry);
+  return next;
+}
+
 /**
  * A saved workstation preference can lower a stream limit, but must never
  * raise the limit imposed by the page embedding the camera wall.
@@ -34,7 +57,7 @@ export function createDefaultGridAssignments(
 ): DefaultGridAssignment[] {
   const positionCount = Math.max(0, Math.floor(maxPositions));
 
-  return cameraIds.slice(0, positionCount).map((cameraId, position) => ({
+  return [...new Set(cameraIds)].slice(0, positionCount).map((cameraId, position) => ({
     position,
     cameraId,
     stream,

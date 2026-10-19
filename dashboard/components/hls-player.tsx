@@ -51,6 +51,7 @@ export function HlsPlayer({
   const [retryNonce, setRetryNonce] = useState(0);
   const [autoplayMuted, setAutoplayMuted] = useState(false);
   const [hasLastFrame, setHasLastFrame] = useState(false);
+  const frameCameraRef = useRef(cameraId ?? cameraName);
 
   // Stream transport and display settings.
   const [streamProtocol, setStreamProtocol] = useState<"webrtc" | "ll-hls">(whepUrl ? "webrtc" : "ll-hls");
@@ -88,11 +89,19 @@ export function HlsPlayer({
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    onVideoElementChangeRef.current?.(video);
-    return () => onVideoElementChangeRef.current?.(null);
-  }, []);
+    const notify = onVideoElementChangeRef.current;
+    notify?.(video);
+    return () => notify?.(null);
+  }, [cameraId]);
 
   useEffect(() => {
+    const cameraIdentity = cameraId ?? cameraName;
+    if (frameCameraRef.current !== cameraIdentity) {
+      frameCameraRef.current = cameraIdentity;
+      setHasLastFrame(false);
+      const canvas = lastFrameRef.current;
+      canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    }
     let hls: Hls | null = null;
     let peerConnection: RTCPeerConnection | null = null;
     let whepAbortController: AbortController | null = null;
@@ -701,7 +710,7 @@ export function HlsPlayer({
       video.removeAttribute("src");
       video.load();
     };
-  }, [bearerToken, retryNonce, url, whepUrl]);
+  }, [bearerToken, retryNonce, url, whepUrl, cameraId]);
 
   const retry = () => {
     setError(null);

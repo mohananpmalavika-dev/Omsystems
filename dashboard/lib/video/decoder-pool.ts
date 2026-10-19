@@ -50,8 +50,10 @@ export class DecoderPool {
         return existing;
       }
       
-      // Different profile - upgrade/downgrade
-      await this.release(cameraId);
+      // The React player owns transport cleanup. Changing a reservation must
+      // not pause that player or stop its WebRTC tracks behind its back.
+      existing.streamProfile = profile;
+      return existing;
     }
 
     // Create new handle

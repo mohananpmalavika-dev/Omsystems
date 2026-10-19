@@ -12,7 +12,8 @@ beforeAll(async () => {
     stdin: {
       contents: `import React from 'react'; import {createRoot} from 'react-dom/client';
         import {HlsPlayer} from './dashboard/components/hls-player';
-        window.mount = (props) => createRoot(document.getElementById('root')).render(<HlsPlayer {...props}
+        const root = createRoot(document.getElementById('root'));
+        window.mount = (props) => root.render(<HlsPlayer {...props}
           cameraName="Test camera" bearerToken="test-token"
           onPlaybackError={reason => window.errors.push(reason)}
           onPlaybackStateChange={playing => window.states.push(playing)}
@@ -58,7 +59,7 @@ async function mount(mode: string, props: Record<string, unknown>) {
     HTMLMediaElement.prototype.play = function() {
       w.playCalls++;
       if (mode === "autoplay" && !this.muted) return Promise.reject(new DOMException("Blocked", "NotAllowedError"));
-      if (mode === "autoplay" || mode === "healthy" || mode === "slow-webrtc" || mode === "streamless") {
+      if (!w.silentNext && (mode === "autoplay" || mode === "healthy" || mode === "slow-webrtc" || mode === "streamless")) {
         (this as any)._playing = true; (this as any)._ready = 2;
         queueMicrotask(() => this.dispatchEvent(new Event("playing")));
       }
@@ -85,6 +86,22 @@ async function mount(mode: string, props: Record<string, unknown>) {
 }
 
 describe("live player in Chromium", () => {
+  it("clears the previous camera's frozen frame when the next camera is slow", async () => {
+    await mount("healthy", { url: "https://relay.example/hls/index.m3u8", cameraId: "camera-a" });
+    await page.waitForFunction(() => (window as any).states.includes(true));
+    await page.evaluate(() => {
+      (window as any).silentNext = true;
+      CanvasRenderingContext2D.prototype.drawImage = function () {};
+      (document.querySelector('video') as HTMLVideoElement).pause();
+    });
+    await page.clock.fastForward(9_100);
+    await page.waitForFunction(() => document.querySelector('canvas')?.classList.contains('opacity-100'));
+    const starts = await page.evaluate(() => (window as any).hlsStarts);
+    await page.evaluate(() => (window as any).mount({ url: "https://relay.example/hls/index.m3u8", cameraId: "camera-b" }));
+    await page.waitForFunction(previous => (window as any).hlsStarts > previous, starts);
+    expect(await page.locator('canvas').evaluate(canvas => canvas.classList.contains('opacity-100'))).toBe(false);
+    expect(await page.getByText('HLS LIVE', { exact: true }).count()).toBe(0);
+  });
   it("starts relayed HLS as video and falls back to muted autoplay", async () => {
     await mount("autoplay", {url: "https://relay.example/hls/index.m3u8", muted: false});
     await page.waitForFunction(() => (window as any).states.includes(true));
