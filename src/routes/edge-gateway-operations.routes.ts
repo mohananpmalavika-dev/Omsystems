@@ -54,7 +54,7 @@ export async function registerEdgeGatewayOperationsRoutes(
 ) {
   const updateForAgent = async (edgeAgentId: string, currentVersion: string, allowPackagedFallback = true) => {
     const targets=new Set((options.packagedUpdateTargetAgents??"").split(",").map(id=>id.trim()).filter(Boolean));
-    const stagedTargetAllowed=!options.packagedUpdateVersion || targets.has(edgeAgentId);
+    const stagedTargetAllowed=!options.packagedUpdateVersion || targets.size === 0 || targets.has("*") || targets.has(edgeAgentId);
     const assigned = await store.getEdgeUpdateReleaseForAgent(edgeAgentId, currentVersion);
     if (assigned && compareVersions(assigned.version, currentVersion) > 0) {
       // A persisted release of this same staged version must obey its canary

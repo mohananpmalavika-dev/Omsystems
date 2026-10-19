@@ -58,7 +58,7 @@ export async function registerEdgeDiscoveryBootstrapRoutes(
       ? await store.listCentralDeviceCredentials(branchId)
       : [];
     await store.writeAudit({
-      tenantId: (await store.getNode(branchId))!.tenantId,
+      tenantId: (await store.getNode(branchId))?.tenantId ?? agent.tenantId,
       actorUserId: null,
       action: "edge_agent.discovery_bootstrap_requested",
       resourceNodeId: branchId,

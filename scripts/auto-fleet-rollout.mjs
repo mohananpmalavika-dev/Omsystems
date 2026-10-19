@@ -7,9 +7,10 @@
  * 2. An active 100% rollout release is published in the `edge_update_releases` database table.
  * 3. All branch edge agents with older versions have an `apply-update` command queued.
  */
+import { createHash, createPrivateKey, sign } from "node:crypto";
 import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
@@ -43,10 +44,12 @@ async function main() {
 
   // 2. Ensure signing key is available
   let signingKey = process.env.EDGE_UPDATE_SIGNING_PRIVATE_KEY?.trim();
-  if (!signingKey) {
+  if (signingKey) {
+    signingKey = signingKey.replace(/^["']|["']$/g, "").replaceAll("\\n", "\n").trim();
+  } else {
     const keyFile = join(repoRoot, "config", "keys", "evidence-signing.pem");
     if (existsSync(keyFile)) {
-      signingKey = await readFile(keyFile, "utf8");
+      signingKey = (await readFile(keyFile, "utf8")).trim();
     }
   }
 
@@ -56,7 +59,41 @@ async function main() {
   const manifestFile = join(updateDir, "manifest.json");
   let manifest = existsSync(manifestFile) ? JSON.parse(await readFile(manifestFile, "utf8").catch(() => "{}")) : null;
 
-  if (!existsSync(bundleFile) || !manifest || !manifest.signature) {
+  if (existsSync(bundleFile)) {
+    const bundleData = await readFile(bundleFile);
+    const hash = createHash("sha256").update(bundleData).digest("hex");
+    const publicUrl = process.env.CONTROL_PLANE_PUBLIC_URL?.replace(/\/+$/, "") || "https://35-200-130-81.sslip.io";
+    const artifactUrl = manifest?.artifactUrl || `${publicUrl}/v1/edge-updates/artifacts/${encodeURIComponent(targetVersion)}/edge-agent.bundle`;
+    const notes = manifest?.notes || `Sentinel Grid Edge Agent Delta Update v${targetVersion}`;
+
+    if (signingKey && (!manifest || !manifest.signature)) {
+      console.log(`[FleetRollout] Signing existing delta bundle for v${targetVersion}...`);
+      const key = createPrivateKey(signingKey.replaceAll("\\n", "\n"));
+      const canonical = Buffer.from(
+        JSON.stringify({
+          artifactUrl,
+          notes,
+          sha256: hash.toLowerCase(),
+          version: targetVersion,
+        }),
+        "utf8"
+      );
+      const signature = sign(null, canonical, key).toString("base64url");
+      manifest = {
+        version: targetVersion,
+        artifactName: "edge-agent.bundle",
+        artifactUrl,
+        sha256: hash,
+        sizeBytes: bundleData.length,
+        type: "delta_bundle",
+        releasedAt: manifest?.releasedAt || new Date().toISOString(),
+        notes,
+        signature,
+      };
+      await writeFile(manifestFile, JSON.stringify(manifest, null, 2), "utf8");
+      console.log(`[FleetRollout] Bundle cryptographically signed (Ed25519).`);
+    }
+  } else {
     console.log(`[FleetRollout] Building and signing delta bundle for v${targetVersion}...`);
     const buildScript = join(repoRoot, "edge-agent", "scripts", "build-delta-bundle.mjs");
     execSync(`node "${buildScript}"`, {
@@ -74,7 +111,7 @@ async function main() {
     throw new Error(`Failed to locate manifest at ${manifestFile}`);
   }
 
-  const manifest = JSON.parse(await readFile(manifestFile, "utf8"));
+  manifest = JSON.parse(await readFile(manifestFile, "utf8"));
   console.log(`[FleetRollout] Bundle SHA-256: ${manifest.sha256}`);
   console.log(`[FleetRollout] Signed: ${Boolean(manifest.signature)}`);
 
