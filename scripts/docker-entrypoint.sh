@@ -23,14 +23,17 @@ if [ ! -f "$ARCFACE_MODEL_PATH" ]; then
   echo "   Dest   : $ARCFACE_MODEL_PATH"
 
   # Try gsutil first (available inside GCP VMs via Workload Identity)
-  if command -v gsutil >/dev/null 2>&1; then
-    gsutil -q cp "$ARCFACE_GCS_URI" "$ARCFACE_MODEL_PATH"
+  if command -v gsutil >/dev/null 2>&1 && gsutil -q cp "$ARCFACE_GCS_URI" "$ARCFACE_MODEL_PATH" 2>/dev/null; then
     echo "✅ ArcFace model downloaded via gsutil."
   else
-    echo "⚠️  gsutil not found — trying wget as fallback..."
+    echo "⚠️  gsutil download failed or unavailable — trying fallback..."
     FALLBACK_URL="${ARCFACE_MODEL_FALLBACK_URL:-https://huggingface.co/onnxmodelzoo/arcfaceresnet100-8/resolve/main/arcfaceresnet100-8.onnx}"
-    wget -q --show-progress -O "$ARCFACE_MODEL_PATH" "$FALLBACK_URL"
-    echo "✅ ArcFace model downloaded via wget (fallback)."
+    wget -q --show-progress -O "$ARCFACE_MODEL_PATH" "$FALLBACK_URL" 2>/dev/null || true
+    if [ -f "$ARCFACE_MODEL_PATH" ]; then
+      echo "✅ ArcFace model downloaded via wget (fallback)."
+    else
+      echo "⚠️  ArcFace model download skipped — face recognition will be inactive."
+    fi
   fi
 
   # Optional SHA-256 verification
