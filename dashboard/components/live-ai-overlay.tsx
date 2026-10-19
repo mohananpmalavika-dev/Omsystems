@@ -32,7 +32,7 @@ export function LiveAiOverlay({
   rules = [],
   alerts = [],
   cameraName = "",
-  showHeatmap = true,
+  showHeatmap = false,
   showVectors = true,
   showBoundingBoxes = true,
   showZones = true,

@@ -6,8 +6,19 @@ import type { ControlPlaneStore } from "../control-plane-store.js";
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 40_000;
 const MAX_PENDING_PER_AGENT = 128;
-const ALLOWED_HEADERS = ["authorization", "content-type", "range", "accept"] as const;
-const RESPONSE_HEADERS = ["content-type", "cache-control", "accept-ranges", "content-range", "access-control-allow-origin", "access-control-allow-headers", "access-control-allow-methods", "vary"] as const;
+const ALLOWED_HEADERS = ["authorization", "content-type", "range", "accept", "if-match"] as const;
+const RESPONSE_HEADERS = [
+  "content-type",
+  "cache-control",
+  "accept-ranges",
+  "content-range",
+  "access-control-allow-origin",
+  "access-control-allow-headers",
+  "access-control-allow-methods",
+  "access-control-expose-headers",
+  "location",
+  "vary",
+] as const;
 
 type RelayRequest = { id: string; method: string; path: string; headers: Record<string, string>; body?: string };
 type RelayResponse = { id: string; status: number; headers?: Record<string, string>; body?: string };
@@ -100,6 +111,15 @@ export function registerEdgeMediaRelay(app: FastifyInstance, store: ControlPlane
       || /^\/v1\/talk\/[a-zA-Z0-9_-]+(?:\/audio)?$/.test(path) && ["POST", "DELETE"].includes(method)
       || /^\/hls\/[a-zA-Z0-9_-]+\/.+$/.test(path) && ["GET", "HEAD", "OPTIONS"].includes(method)
       || /^\/webrtc\/[a-zA-Z0-9_-]+(?:\/.+)?$/.test(path) && ["GET", "POST", "PATCH", "DELETE", "OPTIONS"].includes(method);
+    if (method === "OPTIONS") {
+      return reply
+        .header("access-control-allow-origin", "*")
+        .header("access-control-allow-methods", "GET, POST, PATCH, DELETE, OPTIONS, HEAD")
+        .header("access-control-allow-headers", "authorization, content-type, range, if-match, id, accept")
+        .header("access-control-expose-headers", "location, content-type, cache-control, accept-ranges")
+        .code(204)
+        .send();
+    }
     if (!allowed || !/^[0-9a-f-]{36}$/.test(agentId)) return reply.code(404).send({ error: "not_found" });
     const connection = connections.get(agentId);
     if (!connection || connection.socket.readyState !== WebSocket.OPEN) return reply.code(503).send({ error: "edge_media_offline" });
@@ -129,9 +149,16 @@ export function registerEdgeMediaRelay(app: FastifyInstance, store: ControlPlane
         });
       });
       for (const name of RESPONSE_HEADERS) {
-        const value = response.headers?.[name];
-        if (typeof value === "string") reply.header(name, value);
+        let value = response.headers?.[name] ?? response.headers?.[name.toLowerCase()];
+        if (typeof value === "string") {
+          if (name === "location" && value.startsWith("/webrtc/")) {
+            value = `/v1/edge-media/${agentId}${value}`;
+          }
+          reply.header(name, value);
+        }
       }
+      reply.header("access-control-allow-origin", "*");
+      reply.header("access-control-expose-headers", "location, content-type, cache-control, accept-ranges");
       reply.header("cache-control", "no-store");
       if (response.body && (path.endsWith(".m3u8") || (response.headers?.["content-type"] && response.headers["content-type"].includes("mpegurl")))) {
         const raw = Buffer.from(response.body, "base64").toString("utf8");
@@ -157,6 +184,28 @@ export function registerEdgeMediaRelay(app: FastifyInstance, store: ControlPlane
       app.log.warn({ err: error, agentId }, "Edge media relay request failed");
       return reply.code(503).send({ error: "edge_media_unavailable" });
     }
+  });
+
+  app.options("/v1/live/:sessionId", { config: { noAuth: true } }, async (_request, reply) => {
+    return reply
+      .header("access-control-allow-origin", "*")
+      .header("access-control-allow-methods", "DELETE, OPTIONS")
+      .header("access-control-allow-headers", "*")
+      .code(204)
+      .send();
+  });
+
+  app.delete("/v1/live/:sessionId", { config: { noAuth: true } }, async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+    try {
+      if (sessionId && typeof (store as any).deleteLiveSession === "function") {
+        await (store as any).deleteLiveSession(sessionId);
+      }
+    } catch {}
+    return reply
+      .header("access-control-allow-origin", "*")
+      .code(204)
+      .send();
   });
 
   app.addHook("onClose", async () => {

@@ -875,13 +875,10 @@ function CameraTileComponent({
   }, []);
 
   const hasCriticalAlert = Boolean(latestAiAlert && (latestAiAlert.severity === "P1" || latestAiAlert.severity === "P2"));
-  const hasWarningAlert = Boolean(latestAiAlert && latestAiAlert.severity === "P3");
   const hasAudioPanic = Boolean(loudNoiseAlert?.active);
-  const alertRingClass = (hasCriticalAlert || hasAudioPanic)
-    ? "ring-2 ring-red-500 shadow-[0_0_24px_rgba(239,68,68,0.7)] animate-pulse"
-    : hasWarningAlert
-      ? "ring-2 ring-amber-500 shadow-[0_0_16px_rgba(245,158,11,0.4)]"
-      : "";
+  const alertRingClass = hasAudioPanic
+    ? "ring-2 ring-red-500 shadow-[0_0_24px_rgba(239,68,68,0.7)]"
+    : "";
 
   return (
     <article
@@ -1163,9 +1160,9 @@ function CameraTileComponent({
               {controlsVisible && showAiOverlay && hasLiveFrame && (
                 <LiveAiOverlay
                   rules={aiOverlay?.rules}
-                  alerts={aiOverlay?.alerts}
+                  alerts={activeAiAlerts}
                   cameraName={camera.name}
-                  showHeatmap={true}
+                  showHeatmap={false}
                   showVectors={showVectors}
                   handoverInfo={handoverTarget ? { direction: handoverTarget.direction, targetCameraName: handoverTarget.cameraName } : undefined}
                 />
@@ -1182,9 +1179,9 @@ function CameraTileComponent({
               {controlsVisible && showAiOverlay && hasLiveFrame && (
                 <LiveAiOverlay
                   rules={aiOverlay?.rules}
-                  alerts={aiOverlay?.alerts}
+                  alerts={activeAiAlerts}
                   cameraName={camera.name}
-                  showHeatmap={true}
+                  showHeatmap={false}
                   showVectors={showVectors}
                   handoverInfo={handoverTarget ? { direction: handoverTarget.direction, targetCameraName: handoverTarget.cameraName } : undefined}
                 />

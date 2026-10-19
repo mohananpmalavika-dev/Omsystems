@@ -37,6 +37,7 @@ import type { AnalyticsAlert, AnalyticsRule, Camera, LiveSessionResponse } from 
 import type { TileStreamState, PresentationMode } from "@/lib/media-types";
 import type { CameraPlaybackMode, DegradationReason } from "@/lib/video/types";
 import { releaseLiveSession, startLiveFromBrowser } from "@/lib/live-client";
+import { useLiveWallAlertFocus } from "@/hooks/use-live-wall-alert-focus";
 import { useVideoWallScheduler } from "@/hooks/use-video-wall-scheduler";
 import {
   useCameraPresets,
@@ -266,7 +267,6 @@ export function EnhancedCameraGrid({
   const [soloAudioCameraId, setSoloAudioCameraId] = useState<string | null>(null);
   const [autoFocusAlerts, setAutoFocusAlerts] = useState(true);
   const [showVectors, setShowVectors] = useState(true);
-  const prevGridSizeRef = useRef<GridSize | null>(null);
   const [operatorSelectedCameraId, setOperatorSelectedCameraId] = useState<string | null>(null);
   const [draggedCamera, setDraggedCamera] = useState<{ camera: Camera; fromPosition: number } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -1351,121 +1351,9 @@ export function EnhancedCameraGrid({
     if (sessionsChanged) setSessions(new Map(sessionsRef.current));
   }, [cameras, releaseSession]);
 
-  // Smart Alarm Spotlight & Dynamic Focus:
-  // Auto-elevate layout to Hero (1+5 / 1+7) on critical alert, place alerting camera in Slot 0,
-  // align context cameras and handover camera adjacent, and restore previous layout when alert clears.
-  useEffect(() => {
-    if (compactStage || !autoFocusAlerts) return;
-
-    // Find any camera with active critical P1/P2 alert or detected intrusion/safety violation
-    let alertingCameraId: string | null = null;
-    if (aiByCamera) {
-      for (const [camId, data] of aiByCamera.entries()) {
-        const hasCritical = data.alerts.some(
-          (a) =>
-            a.severity === "P1" ||
-            a.severity === "P2" ||
-            /intrusion|weapon|fire|smoke|ppe|helmet|danger|violation/i.test(a.title)
-        );
-        if (hasCritical) {
-          alertingCameraId = camId;
-          break;
-        }
-      }
-    }
-    if (!alertingCameraId && priorityCameraIds.length > 0) {
-      alertingCameraId = priorityCameraIds[0];
-    }
-
-    // When all alerts clear, automatically restore the previous layout (e.g., 3x3, 4x4)
-    if (!alertingCameraId) {
-      if (prevGridSizeRef.current !== null) {
-        const restoreSize = prevGridSizeRef.current;
-        prevGridSizeRef.current = null;
-        setGridSize(restoreSize);
-      }
-      return;
-    }
-
-    const targetCamera = cameras.find((c) => c.id === alertingCameraId);
-    if (!targetCamera) return;
-
-    // If currently on an equal grid, preserve it and auto-elevate to Hero Tile layout (1+5 or 1+7)
-    const isHeroLayout = gridSize === "1+5" || gridSize === "1+7" || gridSize === "2+8" || gridSize === "1x1";
-    if (!isHeroLayout && prevGridSizeRef.current === null) {
-      prevGridSizeRef.current = gridSize;
-      const elevatedSize: GridSize = displayedCameras.length >= 8 ? "1+7" : "1+5";
-      setGridSize(elevatedSize);
-    }
-
-    // Context Cameras: Group cameras from the same branch or physical zone
-    const contextCameras = displayedCameras.filter(
-      (c) => c.id !== targetCamera.id && (c.branchId === targetCamera.branchId || (Boolean(c.branchName) && c.branchName === targetCamera.branchName))
-    );
-    const otherCameras = displayedCameras.filter(
-      (c) => c.id !== targetCamera.id && !contextCameras.some((ctx) => ctx.id === c.id)
-    );
-
-    // If there is an active handover target camera, ensure it sits immediately in Slot 1
-    const targetHandover = handoverData.targets.get(targetCamera.id);
-    const handoverCam = targetHandover ? cameras.find((c) => c.id === targetHandover.cameraId) : null;
-
-    const companionList: Camera[] = [];
-    if (handoverCam && handoverCam.id !== targetCamera.id) {
-      companionList.push(handoverCam);
-    }
-    for (const ctx of contextCameras) {
-      if (ctx.id !== targetCamera.id && (!handoverCam || ctx.id !== handoverCam.id)) {
-        companionList.push(ctx);
-      }
-    }
-    for (const oth of otherCameras) {
-      if (oth.id !== targetCamera.id && (!handoverCam || oth.id !== handoverCam.id)) {
-        companionList.push(oth);
-      }
-    }
-
-    const slot0Entry = gridPositions.get(0);
-    const slot1Entry = gridPositions.get(1);
-    const isAlreadySpotlighted =
-      slot0Entry?.camera.id === targetCamera.id &&
-      (!handoverCam || slot1Entry?.camera.id === handoverCam.id);
-
-    if (isAlreadySpotlighted) return;
-
-    setGridPositions((currentPositions) => {
-      const nextPositions = new Map(currentPositions);
-
-      // Slot 0: Primary Hero Slot (Main-stream HD/4K)
-      nextPositions.set(0, { camera: targetCamera, stream: "main", priority: 3 });
-
-      // Slots 1..N: Context and Handover Companion Cameras (Sub-stream SD)
-      companionList.forEach((cam, idx) => {
-        const slotIdx = idx + 1;
-        nextPositions.set(slotIdx, {
-          camera: cam,
-          stream: "sub",
-          priority: slotIdx === 1 && handoverCam ? 2 : 0,
-        });
-      });
-
-      return nextPositions;
-    });
-
-    const heroTile = wallRef.current?.querySelector<HTMLElement>(`[data-camera-id="${CSS.escape(alertingCameraId)}"]`);
-    heroTile?.animate(
-      [
-        { boxShadow: "0 0 0 0 rgba(239, 68, 68, 0)" },
-        { boxShadow: "0 0 0 8px rgba(239, 68, 68, 0.9)" },
-        { boxShadow: "0 0 0 0 rgba(239, 68, 68, 0)" },
-      ],
-      { duration: 1600, easing: "ease-out" }
-    );
-  }, [aiByCamera, priorityCameraIds, autoFocusAlerts, compactStage, cameras, displayedCameras, gridSize, handoverData, gridPositions]);
+  useLiveWallAlertFocus(wallRef, aiByCamera, autoFocusAlerts);
 
   const handleGridSizeChange = (newSize: GridSize) => {
-    // If operator manually chooses a layout, clear auto-spotlight restore memory
-    prevGridSizeRef.current = null;
     // Keep the first camera from the current page in view while changing
     // density. This avoids jumping an operator back to the beginning of a
     // large wall when changing from, for example, 12×12 to 4×4.
@@ -1846,7 +1734,7 @@ export function EnhancedCameraGrid({
             type="button"
             className={`btn-secondary ${autoFocusAlerts ? "active-control" : ""}`}
             onClick={() => setAutoFocusAlerts((prev) => !prev)}
-            title={autoFocusAlerts ? "Smart Alarm Spotlight: Auto-focus alerting camera into primary Hero Slot" : "Smart Alarm Spotlight: OFF"}
+            title={autoFocusAlerts ? "Briefly highlight new alerts without changing the wall layout" : "Smart Alarm Spotlight: OFF"}
             aria-pressed={autoFocusAlerts}
           >
             <ShieldAlert size={15} className={autoFocusAlerts ? "text-amber-400" : ""} />
