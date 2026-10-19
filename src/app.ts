@@ -688,10 +688,16 @@ export async function buildApp(options?: {
   const isAllowedCorsOrigin = (origin: string): boolean => {
     try {
       const parsed = new URL(origin);
-      if (parsed.protocol !== "https:") return false;
+      if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
       if (configuredCorsOrigins.includes(origin)) return true;
-      if (!allowCloudflareManagedOrigins) return false;
       const hostname = parsed.hostname.toLowerCase();
+      // Allow local development
+      if (hostname === "localhost" || hostname === "127.0.0.1") return true;
+      // Allow KryptonLogic production and demo domains
+      if (hostname === "kryptonlogic.com" || hostname.endsWith(".kryptonlogic.com")) return true;
+      // Allow sslip.io and nip.io gateway hostnames
+      if (hostname.endsWith(".sslip.io") || hostname.endsWith(".nip.io")) return true;
+      if (!allowCloudflareManagedOrigins) return false;
       return hostname.endsWith(".pages.dev")
         || hostname.endsWith(".workers.dev")
         || hostname.endsWith(".trycloudflare.com");
@@ -702,6 +708,18 @@ export async function buildApp(options?: {
 
   await app.register(cors, {
     credentials: true,
+    methods: ["GET", "HEAD", "PUT", "POST", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: [
+      "Origin",
+      "X-Requested-With",
+      "Content-Type",
+      "Accept",
+      "Authorization",
+      "x-sentinel-session",
+      "x-edge-agent-token",
+      "x-edge-bridge-key",
+      "x-user-id",
+    ],
     origin: (origin, callback) => {
       // Non-browser requests do not send Origin and remain valid API clients.
       if (!origin) return callback(null, true);

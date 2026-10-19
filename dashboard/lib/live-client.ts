@@ -54,7 +54,19 @@ export async function releaseLiveSession(session: LiveSessionResponse | undefine
     if (!mediaUrl || !bearerToken) return;
     const source = new URL(mediaUrl);
     const relayPrefix = source.pathname.match(/^\/v1\/edge-media\/[0-9a-f-]{36}/)?.[0] ?? "";
-    const releaseUrl = `${source.origin}${relayPrefix}/v1/live/${encodeURIComponent(session.sessionId)}`;
+    let originToUse = source.origin;
+    if (typeof window !== "undefined" && window.location?.origin) {
+      const currentHost = window.location.hostname.toLowerCase();
+      const sourceHost = source.hostname.toLowerCase();
+      if (
+        currentHost === sourceHost ||
+        ((currentHost.endsWith("kryptonlogic.com") || currentHost.endsWith("sslip.io")) &&
+         (sourceHost.endsWith("kryptonlogic.com") || sourceHost.endsWith("sslip.io")))
+      ) {
+        originToUse = window.location.origin;
+      }
+    }
+    const releaseUrl = `${originToUse}${relayPrefix}/v1/live/${encodeURIComponent(session.sessionId)}`;
     await fetch(releaseUrl, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${bearerToken}` },

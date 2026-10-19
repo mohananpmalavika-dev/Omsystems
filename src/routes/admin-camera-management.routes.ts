@@ -53,35 +53,6 @@ async function listCameraReferences(client: any): Promise<CameraReference[]> {
   return result.rows as CameraReference[];
 }
 
-async function deleteCameraDependencies(
-  client: any,
-  cameraId: string,
-): Promise<Record<string, number>> {
-  const references = await listCameraReferences(client);
-  const deleteCounts: Record<string, number> = {};
-
-  for (const reference of references) {
-    // Preserve device_identities because it represents the underlying physical hardware
-    // and is referenced with ON DELETE RESTRICT by discoveries.
-    if (reference.table_name === "device_identities") {
-      const result = await client.query(
-        `UPDATE "public"."device_identities" SET camera_id = NULL, updated_at = now() WHERE camera_id = $1::uuid`,
-        [cameraId],
-      ).catch(() => ({ rowCount: 0 }));
-      deleteCounts["public.device_identities"] = result.rowCount ?? 0;
-      continue;
-    }
-
-    const table = `${quoteIdentifier(reference.table_schema)}.${quoteIdentifier(reference.table_name)}`;
-    const column = quoteIdentifier(reference.column_name);
-    const result = await client.query(`DELETE FROM ${table} WHERE ${column} = $1`, [cameraId]);
-    const key = `${reference.table_schema}.${reference.table_name}`;
-    deleteCounts[key] = (deleteCounts[key] ?? 0) + (result.rowCount ?? 0);
-  }
-
-  return deleteCounts;
-}
-
 async function runBestEffort(
   client: any,
   savepoint: string,
@@ -97,6 +68,40 @@ async function runBestEffort(
     await client.query(`RELEASE SAVEPOINT ${savepoint}`);
     return { error };
   }
+}
+
+async function deleteCameraDependencies(
+  client: any,
+  cameraId: string,
+): Promise<Record<string, number>> {
+  const references = await listCameraReferences(client);
+  const deleteCounts: Record<string, number> = {};
+
+  for (const reference of references) {
+    // Preserve device_identities because it represents the underlying physical hardware
+    // and is referenced with ON DELETE RESTRICT by discoveries.
+    if (reference.table_name === "device_identities") {
+      const res = await runBestEffort(client, "unlink_dev_id", () =>
+        client.query(
+          `UPDATE "public"."device_identities" SET camera_id = NULL, updated_at = now() WHERE camera_id = $1::uuid`,
+          [cameraId],
+        )
+      );
+      deleteCounts["public.device_identities"] = res.result?.rowCount ?? 0;
+      continue;
+    }
+
+    const table = `${quoteIdentifier(reference.table_schema)}.${quoteIdentifier(reference.table_name)}`;
+    const column = quoteIdentifier(reference.column_name);
+    const savepoint = `del_dep_${reference.table_name.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 20)}`;
+    const res = await runBestEffort(client, savepoint, () =>
+      client.query(`DELETE FROM ${table} WHERE ${column} = $1`, [cameraId])
+    );
+    const key = `${reference.table_schema}.${reference.table_name}`;
+    deleteCounts[key] = (deleteCounts[key] ?? 0) + (res.result?.rowCount ?? 0);
+  }
+
+  return deleteCounts;
 }
 
 async function cleanupResourceNodes(
@@ -162,30 +167,30 @@ async function deleteCamera(client: any, id: string, app: FastifyInstance) {
   const storageDiscoveryId = /^edge:\/\/[^/]+\/([^/]+)$/.exec(String(row?.connection_secret_ref ?? ""))?.[1];
 
   // 1. Unlink device_identities so this hardware identity is freed for re-addition
-  await client.query(
-    `UPDATE device_identities
-     SET camera_id = NULL, updated_at = now()
-     WHERE camera_id = $1::uuid OR (id = $2::uuid AND camera_id = $1::uuid)`,
-    [id, deviceIdentityId ?? null],
-  ).catch((err: any) => {
-    app.log.warn({ err, cameraId: id }, "Failed to unlink device_identities on camera deletion");
-  });
+  await runBestEffort(client, "unlink_device_identities", () =>
+    client.query(
+      `UPDATE device_identities
+       SET camera_id = NULL, updated_at = now()
+       WHERE camera_id = $1::uuid OR (id = $2::uuid AND camera_id = $1::uuid)`,
+      [id, deviceIdentityId ?? null],
+    )
+  );
 
   // 2. Reset or delete camera_discoveries so the camera can be re-discovered and re-approved without duplicate blocks
-  await client.query(
-    `UPDATE camera_discoveries
-     SET status = 'pending',
-         duplicate_status = NULL,
-         existing_device_association = NULL,
-         status_reason = 'camera_removed_ready_for_reboarding'
-     WHERE existing_device_association = $1::text
-        OR device_identity_id = $2::uuid
-        OR (branch_node_id = $3::uuid AND ip_address IS NOT NULL AND ip_address = $4::inet)
-        OR (branch_node_id = $3::uuid AND serial_number IS NOT NULL AND serial_number = $5)`,
-    [id, deviceIdentityId ?? null, branchNodeId ?? null, ipAddress ?? null, serialNumber ?? null],
-  ).catch((err: any) => {
-    app.log.warn({ err, cameraId: id }, "Failed to reset camera_discoveries on camera deletion");
-  });
+  await runBestEffort(client, "reset_camera_discoveries", () =>
+    client.query(
+      `UPDATE camera_discoveries
+       SET status = 'pending',
+           duplicate_status = NULL,
+           existing_device_association = NULL,
+           status_reason = 'camera_removed_ready_for_reboarding'
+       WHERE existing_device_association = $1::text
+          OR (device_identity_id IS NOT NULL AND device_identity_id = $2::uuid)
+          OR (branch_node_id = $3::uuid AND ip_address IS NOT NULL AND ip_address = $4::inet)
+          OR (branch_node_id = $3::uuid AND serial_number IS NOT NULL AND serial_number = $5)`,
+      [id, deviceIdentityId ?? null, branchNodeId ?? null, ipAddress ?? null, serialNumber ?? null],
+    )
+  );
 
   // 3. Delete dependent rows referencing cameras.id
   const relatedDataDeleted = await deleteCameraDependencies(client, id);
@@ -203,55 +208,44 @@ async function deleteCamera(client: any, id: string, app: FastifyInstance) {
     : 0;
 
   // 6. Clean up storage nodes and disk telemetry associated with this removed camera/device
-  try {
-    // Match only this camera's legacy synthetic SD row or its direct probe.
-    // Broad '%sdcard%' patterns removed unrelated cameras' live telemetry.
+  await runBestEffort(client, "cleanup_storage_nodes", async () => {
     await client.query(
       `DELETE FROM operational_health_telemetry 
        WHERE device_type = 'disk' 
          AND (device_id = $1 OR device_id LIKE $2 OR ($3::text IS NOT NULL AND device_id LIKE $3))`,
       [`${id}:sdcard`, `camera:${id}:sdcard:%`, storageDiscoveryId ? `camera:${storageDiscoveryId}:sdcard:%` : null]
-    ).catch(() => null);
+    );
 
     await client.query(
       `DELETE FROM operational_health_latest 
        WHERE device_type = 'disk' 
          AND (device_id = $1 OR device_id LIKE $2 OR ($3::text IS NOT NULL AND device_id LIKE $3))`,
       [`${id}:sdcard`, `camera:${id}:sdcard:%`, storageDiscoveryId ? `camera:${storageDiscoveryId}:sdcard:%` : null]
-    ).catch(() => null);
+    );
 
     // Remove camera-specific recording storage node
     await client.query(
       `DELETE FROM recording_storage_nodes 
        WHERE external_id = $1`,
       [`cam-sdcard-${id}`]
-    ).catch(() => null);
-
-    // NOTE: Do NOT delete branch-level or system-wide disk telemetry here.
-    // NVR/DVR storage devices are registered independently of cameras and their
-    // telemetry must survive camera deletions. Only the camera's own onboard
-    // storage (sdcard/cam-labelled entries) is removed above.
-  } catch (storageErr) {
-    app.log.warn({ err: storageErr, cameraId: id }, "Failed to clean up associated storage nodes on camera deletion");
-  }
+    );
+  });
 
   // 7. Purge camera-type operational telemetry so the removed camera does NOT
   //    re-surface in the Command Center as an "Unenrolled camera" ghost entry.
-  try {
+  await runBestEffort(client, "purge_camera_telemetry", async () => {
     await client.query(
       `DELETE FROM operational_health_telemetry
        WHERE device_type = 'camera' AND device_id = $1`,
       [id],
-    ).catch(() => null);
+    );
 
     await client.query(
       `DELETE FROM operational_health_latest
        WHERE device_type = 'camera' AND device_id = $1`,
       [id],
-    ).catch(() => null);
-  } catch (telemetryErr) {
-    app.log.warn({ err: telemetryErr, cameraId: id }, "Failed to purge camera operational telemetry on deletion");
-  }
+    );
+  });
 
   return { found: true, deletedNodes, relatedDataDeleted };
 }
