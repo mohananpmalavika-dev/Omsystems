@@ -94,7 +94,7 @@ if (installEnvironmentFile && (
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.50\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.51\n");
   process.exit(0);
 }
 
