@@ -54,8 +54,9 @@ async function main() {
   const updateDir = join(repoRoot, "edge-agent", "release", "updates", targetVersion);
   const bundleFile = join(updateDir, "edge-agent.bundle");
   const manifestFile = join(updateDir, "manifest.json");
+  let manifest = existsSync(manifestFile) ? JSON.parse(await readFile(manifestFile, "utf8").catch(() => "{}")) : null;
 
-  if (!existsSync(bundleFile) || !existsSync(manifestFile)) {
+  if (!existsSync(bundleFile) || !manifest || !manifest.signature) {
     console.log(`[FleetRollout] Building and signing delta bundle for v${targetVersion}...`);
     const buildScript = join(repoRoot, "edge-agent", "scripts", "build-delta-bundle.mjs");
     execSync(`node "${buildScript}"`, {
