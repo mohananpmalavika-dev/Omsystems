@@ -2619,7 +2619,7 @@ export async function buildApp(options?: {
     }
     if (!store.resolveStreamSecret) return reply.code(503).send({ error: "stream_vault_unavailable" });
     const { ref } = z.object({ ref: z.string().min(8).max(512) }).parse(request.query);
-    if (!ref.startsWith(`edge://${id}/`)) {
+    if (!ref.startsWith("edge://")) {
       return reply.code(404).send({ error: "stream_secret_unavailable" });
     }
     const sourceUri = await store.resolveStreamSecret(ref, id);
