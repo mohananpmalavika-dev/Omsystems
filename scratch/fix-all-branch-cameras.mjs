@@ -188,10 +188,10 @@ WHERE c.branch_node_id = '${b.branchId}' AND (c.recorder_channel = ${ch} OR c.ch
   console.log(`Saved SQL to ${tempSqlFile} (${fullSql.length} chars).`);
 
   console.log('Transferring SQL to kryptovision-server via scp...');
-  execSync(`scp -i C:\\Users\\Dhanya\\.ssh\\google_compute_engine -o StrictHostKeyChecking=no ${tempSqlFile} Dhanya@34.14.220.41:/tmp/fix-cameras-online.sql`, { stdio: 'inherit' });
+  execSync(`scp -i C:\\Users\\Dhanya\\.ssh\\google_compute_engine -o StrictHostKeyChecking=no ${tempSqlFile} Dhanya@35.200.130.81:/tmp/fix-cameras-online.sql`, { stdio: 'inherit' });
 
   console.log('Executing SQL transaction on sentinel-gcp-postgres...');
-  const res = execSync(`ssh -i C:\\Users\\Dhanya\\.ssh\\google_compute_engine -o StrictHostKeyChecking=no Dhanya@34.14.220.41 "sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid < /tmp/fix-cameras-online.sql"`, { encoding: 'utf8' });
+  const res = execSync(`ssh -i C:\\Users\\Dhanya\\.ssh\\google_compute_engine -o StrictHostKeyChecking=no Dhanya@35.200.130.81 "sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid < /tmp/fix-cameras-online.sql"`, { encoding: 'utf8' });
   console.log(res);
 
   console.log('Database repair completed successfully.');

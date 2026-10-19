@@ -1,4 +1,4 @@
-const CONTROL_PLANE_URL = 'https://34-14-220-41.sslip.io';
+const CONTROL_PLANE_URL = 'https://35-200-130-81.sslip.io';
 
 async function checkDetails() {
   const loginRes = await fetch(`${CONTROL_PLANE_URL}/v1/auth/login`, {

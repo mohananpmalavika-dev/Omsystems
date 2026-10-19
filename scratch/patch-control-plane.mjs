@@ -19,7 +19,7 @@ if (!c.includes('input.metrics.streamActive') && c.includes(target)) {
 
 fs.writeFileSync('scratch/remote-patch.cjs', patchScript, 'utf8');
 
-execSync(`scp -i C:\\Users\\Dhanya\\.ssh\\google_compute_engine -o StrictHostKeyChecking=no scratch/remote-patch.cjs Dhanya@34.14.220.41:/tmp/remote-patch.cjs`, { stdio: 'inherit' });
+execSync(`scp -i C:\\Users\\Dhanya\\.ssh\\google_compute_engine -o StrictHostKeyChecking=no scratch/remote-patch.cjs Dhanya@35.200.130.81:/tmp/remote-patch.cjs`, { stdio: 'inherit' });
 
-const res = execSync(`ssh -i C:\\Users\\Dhanya\\.ssh\\google_compute_engine -o StrictHostKeyChecking=no Dhanya@34.14.220.41 "sudo docker cp /tmp/remote-patch.cjs sentinel-gcp-control-plane:/app/remote-patch.cjs && sudo docker exec -i sentinel-gcp-control-plane node /app/remote-patch.cjs"`, { encoding: 'utf8' });
+const res = execSync(`ssh -i C:\\Users\\Dhanya\\.ssh\\google_compute_engine -o StrictHostKeyChecking=no Dhanya@35.200.130.81 "sudo docker cp /tmp/remote-patch.cjs sentinel-gcp-control-plane:/app/remote-patch.cjs && sudo docker exec -i sentinel-gcp-control-plane node /app/remote-patch.cjs"`, { encoding: 'utf8' });
 console.log(res);

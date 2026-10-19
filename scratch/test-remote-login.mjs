@@ -1,5 +1,5 @@
 async function testLogin() {
-  const loginRes = await fetch("https://34-14-220-41.sslip.io/v1/auth/login", {
+  const loginRes = await fetch("https://35-200-130-81.sslip.io/v1/auth/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({

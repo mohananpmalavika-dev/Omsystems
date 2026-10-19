@@ -18,6 +18,6 @@ docker compose -f docker-compose.gcp.yml run --rm --no-deps -T \
   -v "$UPLOAD_DIRECTORY/verify-installed-installer.mjs:/tmp/verify-installed-installer.mjs:ro" \
   --entrypoint node control-plane /tmp/verify-installed-installer.mjs
 docker compose -f docker-compose.gcp.yml up -d --no-deps --force-recreate --wait --wait-timeout 180 control-plane dashboard
-curl --fail --silent --show-error https://34-14-220-41.sslip.io/health
+curl --fail --silent --show-error https://35-200-130-81.sslip.io/health
 echo
 echo INSTALLER_FIX_DEPLOYED

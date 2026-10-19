@@ -1,7 +1,7 @@
 const {execFileSync} = require('node:child_process');
 const {gzipSync} = require('node:zlib');
 const {chromium} = require('playwright');
-const base = 'https://34-14-220-41.sslip.io';
+const base = 'https://35-200-130-81.sslip.io';
 const cameraId = process.env.RECORDING_TEST_CAMERA_ID || 'fa884a52-2378-4981-9c09-4620c12a9de5';
 function remote(script) {
   const command = 'printf %s ' + gzipSync(Buffer.from(script)).toString('base64') + ' | base64 -d | gzip -d | bash';

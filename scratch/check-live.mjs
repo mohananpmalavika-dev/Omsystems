@@ -1,4 +1,4 @@
-const CONTROL_PLANE_URL = 'https://34-14-220-41.sslip.io';
+const CONTROL_PLANE_URL = 'https://35-200-130-81.sslip.io';
 
 async function diagnose() {
   console.log('--- Step 1: Login ---');
@@ -64,7 +64,7 @@ async function diagnose() {
     console.log('Session response body:', JSON.stringify(sessionData));
 
     if (sessionRes.ok && sessionData?.token) {
-      const gwUrl = sessionData.mediaGatewayUrl || 'https://34-14-220-41.sslip.io';
+      const gwUrl = sessionData.mediaGatewayUrl || 'https://35-200-130-81.sslip.io';
       console.log(`Attempting /v1/live/start at ${gwUrl}...`);
       const startRes = await fetch(`${gwUrl}/v1/live/start`, {
         method: 'POST',

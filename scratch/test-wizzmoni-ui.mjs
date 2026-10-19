@@ -6,7 +6,7 @@ async function testDashboard() {
   const page = await context.newPage();
 
   console.log('Navigating to login page...');
-  await page.goto('https://34-14-220-41.sslip.io/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.goto('https://35-200-130-81.sslip.io/login', { waitUntil: 'domcontentloaded', timeout: 30000 });
   await page.waitForTimeout(2000);
 
   const passTab = page.getByRole('button', { name: 'Password', exact: true });
@@ -32,7 +32,7 @@ async function testDashboard() {
   console.log('Links on page:', links);
 
   // Navigate to /cameras or /camera-monitoring if available
-  await page.goto('https://34-14-220-41.sslip.io/camera-monitoring', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.goto('https://35-200-130-81.sslip.io/camera-monitoring', { waitUntil: 'domcontentloaded', timeout: 30000 });
   await page.waitForTimeout(3000);
   await page.screenshot({ path: 'scratch/wizzmoni_camera_monitoring.png', fullPage: true });
 

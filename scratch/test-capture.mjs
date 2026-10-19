@@ -8,7 +8,7 @@ async function main() {
   });
   const page = await context.newPage();
 
-  for (const host of ['https://3-7-216-169.sslip.io', 'https://34-14-220-41.sslip.io']) {
+  for (const host of ['https://3-7-216-169.sslip.io', 'https://35-200-130-81.sslip.io']) {
     console.log('Testing host:', host);
     try {
       await page.goto(`${host}/login`, { waitUntil: 'domcontentloaded', timeout: 12000 });

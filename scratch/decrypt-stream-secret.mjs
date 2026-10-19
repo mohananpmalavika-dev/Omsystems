@@ -7,7 +7,7 @@ const pool = new Pool({
 });
 
 async function main() {
-  const res = await pool.query("SELECT reference, encrypted_uri FROM central_stream_secrets WHERE reference LIKE '%DVR-ch8%' OR reference LIKE '%dvr-ch8%'");
+  const res = await pool.query("SELECT reference, edge_agent_id, encrypted_uri FROM central_stream_secrets WHERE reference LIKE '%bettaih-ch1' OR reference LIKE '%rajkot-ch1' OR reference LIKE '%kollam-ch1' LIMIT 10");
   console.log('Rows found:', res.rows.length);
   const key = Buffer.from('eqNsNVnJvPqhSqTktB2W2Jmjd22ycKaOj0cWL6Y+92U=', 'base64');
   

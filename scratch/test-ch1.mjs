@@ -1,4 +1,4 @@
-const CONTROL_PLANE_URL = 'https://34-14-220-41.sslip.io';
+const CONTROL_PLANE_URL = 'https://35-200-130-81.sslip.io';
 
 async function testChannel1() {
   const camId = 'bbc2a91e-e91d-43ea-bd76-041d8d8607e4'; // Channel 1

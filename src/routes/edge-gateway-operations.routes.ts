@@ -300,6 +300,36 @@ export async function registerEdgeGatewayOperationsRoutes(
     }
   });
 
+  app.post("/v1/edge-agents/:id/restart", async (request, reply) => {
+    const { id } = agentParams.parse(request.params);
+    const agent = await store.getEdgeAgent(id);
+    if (!agent) {
+      return reply.code(404).send({
+        error: "edge_agent_not_found",
+        message: "Gateway not found",
+      });
+    }
+    if (!(await requireDeviceAccess(request, reply, store, agent.branchId))) {
+      return;
+    }
+
+    const command = await store.createEdgeCommand({
+      edgeAgentId: id,
+      type: "restart-agent",
+      payload: { branchId: agent.branchId },
+      requestedBy: request.currentUser.id,
+    });
+    await writeGatewayAudit(request, store, agent.branchId, "edge_gateway.restart_requested", {
+      edgeAgentId: id,
+      commandId: command.id,
+    });
+    return reply.code(202).send({
+      commandId: command.id,
+      status: "queued",
+      message: `Restart command queued for edge agent ${agent.name || id}`,
+    });
+  });
+
   app.get("/v1/edge-agents/:id/bootstrap", async (request, reply) => {
     const { id } = agentParams.parse(request.params);
     const agent = await store.getEdgeAgent(id);

@@ -10,7 +10,7 @@ const pool = new Pool({
 const branchId = '921d336d-baa9-4b25-9f9f-f6542bba94cc';
 const agentId = '9f108498-4dd5-4a21-b810-eec9e538953c';
 const userId = '00000000-0000-4000-8000-000000000201'; // user-global-admin
-const relayBase = `https://34-14-220-41.sslip.io/v1/edge-media/${agentId}`;
+const relayBase = `https://35-200-130-81.sslip.io/v1/edge-media/${agentId}`;
 
 async function main() {
   console.log('Fetching all 8 Hajipur cameras...');

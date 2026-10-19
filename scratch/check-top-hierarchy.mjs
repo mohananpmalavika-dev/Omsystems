@@ -1,0 +1,13 @@
+import { execSync } from 'node:child_process';
+
+const sql = `
+SELECT id, name, node_type, parent_id, path, is_active
+FROM resource_nodes 
+WHERE parent_id IS NULL OR node_type IN ('company', 'zone', 'region')
+ORDER BY node_type, name;
+`;
+
+const base64 = Buffer.from(sql).toString('base64');
+const cmd = `gcloud compute ssh kryptovision-server --zone=asia-south1-b --project=project-7866fc3f-5dd5-4495-804 --quiet --command="echo '${base64}' | base64 -d | sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid"`;
+
+console.log(execSync(cmd, { encoding: 'utf8' }));

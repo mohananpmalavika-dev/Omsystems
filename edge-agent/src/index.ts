@@ -42,7 +42,7 @@ import {
   stageSignedUpdate,
 } from "./updates/signed-update.js";
 import { readFile } from "node:fs/promises";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { isIP } from "node:net";
 import { createRequire } from "node:module";
 import { join } from "node:path";
@@ -94,8 +94,36 @@ if (installEnvironmentFile && (
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.49\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.50\n");
   process.exit(0);
+}
+
+// Automatic fleet migration: if pointed to old GCP server, rewrite config and update process.env
+try {
+  const oldHost = "34-14-220-41.sslip.io";
+  const newHost = "35-200-130-81.sslip.io";
+  const configCandidatePaths = [
+    runtime.configPath,
+    join(process.cwd(), "config", "edge-agent.env"),
+    join(process.cwd(), "edge-agent.env"),
+    join(process.cwd(), ".env"),
+  ].filter((p): p is string => Boolean(p && existsSync(p)));
+
+  for (const cfgFile of configCandidatePaths) {
+    const raw = readFileSync(cfgFile, "utf8");
+    if (raw.includes(oldHost)) {
+      const updated = raw.replaceAll(oldHost, newHost);
+      writeFileSync(cfgFile, updated, "utf8");
+      logger.info(`Migrated ${cfgFile} to point to ${newHost}`);
+    }
+  }
+
+  if (process.env.CONTROL_PLANE_URL?.includes(oldHost)) {
+    process.env.CONTROL_PLANE_URL = process.env.CONTROL_PLANE_URL.replaceAll(oldHost, newHost);
+    logger.info(`Updated CONTROL_PLANE_URL in runtime to point to ${newHost}`);
+  }
+} catch (migErr) {
+  logger.warn("Fleet auto-migration check error", { error: migErr instanceof Error ? migErr.message : String(migErr) });
 }
 
 const config = loadConfigOrExit();

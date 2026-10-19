@@ -11,7 +11,7 @@ process.env.SENTINEL_EDGE_IMPORT_ONLY='1';
 const require=createRequire(import.meta.url);
 if(typeof require(path.resolve(root+'/edge-agent.bundle')).runEdgeAgent!=='function')throw new Error('bundle_entrypoint_missing');
 delete process.env.SENTINEL_EDGE_IMPORT_ONLY;
-const manifest={version:'0.1.48',artifactUrl:'https://34-14-220-41.sslip.io/v1/edge-updates/artifacts/0.1.48/edge-agent.bundle',sha256:createHash('sha256').update(bytes).digest('hex'),notes:'Pilot helmet capture: retain configured main source and back off failed cameras for one minute'};
+const manifest={version:'0.1.48',artifactUrl:'https://35-200-130-81.sslip.io/v1/edge-updates/artifacts/0.1.48/edge-agent.bundle',sha256:createHash('sha256').update(bytes).digest('hex'),notes:'Pilot helmet capture: retain configured main source and back off failed cameras for one minute'};
 const signature=signEdgeUpdateManifest(manifest,await readFile('config/keys/evidence-signing.pem','utf8'));
 await writeFile(root+'/manifest.json',JSON.stringify({...manifest,signature,id:'pilot-helmet-capture-0.1.48',releasedAt:new Date().toISOString()},null,2));
 console.log(JSON.stringify({version:manifest.version,bytes:bytes.length,sha256:manifest.sha256,signed:true,scope:'manual pilot activation; no fleet release published'}));

@@ -1102,6 +1102,10 @@ export const cameraInventoryApi = {
     `/v1/branches/${encodeURIComponent(branchId)}/cameras/${encodeURIComponent(cameraId)}/recovery`,
     { method: "POST", body: "{}" },
   ),
+  restartEdgeAgent: (edgeAgentId: string) => fetchApi<{ commandId: string; status: string; message: string }>(
+    `/v1/edge-agents/${encodeURIComponent(edgeAgentId)}/restart`,
+    { method: "POST", body: "{}" },
+  ),
   listGatewayCommands: (branchId: string) =>
     fetchApi<{ data: any[] }>(`/v1/branches/${encodeURIComponent(branchId)}/edge-commands`),
   startScan: (branchId: string, edgeAgentId?: string) =>

@@ -3,7 +3,7 @@ import { execSync } from 'node:child_process';
 
 const agentId = '9f108498-4dd5-4a21-b810-eec9e538953c';
 const userId = '00000000-0000-4000-8000-000000000201'; // user-global-admin
-const relayBase = `https://34-14-220-41.sslip.io/v1/edge-media/${agentId}`;
+const relayBase = `https://35-200-130-81.sslip.io/v1/edge-media/${agentId}`;
 
 // 1. Fetch all 32 cameras
 const fetchSql = `
@@ -18,7 +18,7 @@ JOIN branches b ON b.id = c.branch_node_id
 ORDER BY b.name ASC, c.recorder_channel ASC;
 `;
 const base64 = Buffer.from(fetchSql).toString('base64');
-const cmd = `ssh -i C:\\Users\\Dhanya\\.ssh\\google_compute_engine -o StrictHostKeyChecking=no Dhanya@34.14.220.41 "echo '${base64}' | base64 -d | sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid -t -A -F'|'"`;
+const cmd = `ssh -i C:\\Users\\Dhanya\\.ssh\\google_compute_engine -o StrictHostKeyChecking=no Dhanya@35.200.130.81 "echo '${base64}' | base64 -d | sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid -t -A -F'|'"`;
 
 const output = execSync(cmd, { encoding: 'utf8' }).trim();
 const lines = output.split('\n').filter(Boolean);
@@ -42,8 +42,8 @@ import fs from 'node:fs';
 const insertSessionsSql = `INSERT INTO live_sessions (id, camera_id, user_id, token_hash, expires_at, purpose, profile) VALUES ${sessionValues.join(',\n')};`;
 const tempFile = 'scratch/insert-live-sessions.sql';
 fs.writeFileSync(tempFile, insertSessionsSql, 'utf8');
-execSync(`scp -i C:\\Users\\Dhanya\\.ssh\\google_compute_engine -o StrictHostKeyChecking=no ${tempFile} Dhanya@34.14.220.41:/tmp/insert-live-sessions.sql`, { stdio: 'inherit' });
-execSync(`ssh -i C:\\Users\\Dhanya\\.ssh\\google_compute_engine -o StrictHostKeyChecking=no Dhanya@34.14.220.41 "sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid < /tmp/insert-live-sessions.sql"`, { stdio: 'inherit' });
+execSync(`scp -i C:\\Users\\Dhanya\\.ssh\\google_compute_engine -o StrictHostKeyChecking=no ${tempFile} Dhanya@35.200.130.81:/tmp/insert-live-sessions.sql`, { stdio: 'inherit' });
+execSync(`ssh -i C:\\Users\\Dhanya\\.ssh\\google_compute_engine -o StrictHostKeyChecking=no Dhanya@35.200.130.81 "sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid < /tmp/insert-live-sessions.sql"`, { stdio: 'inherit' });
 console.log(`Created live session tokens for all ${tokens.length} cameras in sentinel_grid database.\n`);
 
 console.log('--- TESTING LIVE VIEW START VIA EDGE RELAY FOR ALL CAMERAS ---');

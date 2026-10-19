@@ -2,7 +2,8 @@
 
 import { FieldVisual } from "@/components/field-visual";
 import { useState, useEffect } from "react";
-import { ArrowLeft, Server, Camera, Building2, RefreshCw, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Server, Camera, Building2, RefreshCw, AlertTriangle, RotateCcw } from "lucide-react";
+import { cameraInventoryApi } from "@/lib/api-client";
 import { AppLayout } from "@/components/app-layout";
 import { AdminStreamPreferenceCard } from "@/components/admin/AdminStreamPreferenceCard";
 
@@ -112,6 +113,21 @@ export default function SystemManagementPage() {
   const [statsError, setStatsError] = useState<string | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: ManagedResource; id: string; name: string } | null>(null);
+  const [restartingId, setRestartingId] = useState<string | null>(null);
+
+  const handleRestartGateway = async (id: string, name: string) => {
+    if (restartingId) return;
+    if (!confirm(`Are you sure you want to restart Edge Agent "${name}"? The remote service will exit and restart automatically.`)) return;
+    setRestartingId(id);
+    try {
+      await cameraInventoryApi.restartEdgeAgent(id);
+      alert(`Restart command successfully queued for ${name}.`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to queue restart command");
+    } finally {
+      setRestartingId(null);
+    }
+  };
 
   useEffect(() => {
     void loadStats();
@@ -413,6 +429,27 @@ export default function SystemManagementPage() {
                             </td>
                             <td style={{ padding: '1rem', fontSize: '0.875rem', color: 'var(--ink)' }}>{gateway.branch_name || 'Unknown'}</td>
                             <td style={{ padding: '1rem', textAlign: 'center' }}>
+                              <button
+                                onClick={() => void handleRestartGateway(gateway.id, gateway.name)}
+                                disabled={restartingId === gateway.id}
+                                style={{
+                                  padding: '0.25rem 0.5rem',
+                                  background: '#0d6efd',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: restartingId === gateway.id ? 'not-allowed' : 'pointer',
+                                  fontSize: '0.875rem',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.25rem',
+                                  marginRight: '0.5rem'
+                                }}
+                                title="Restart Edge Agent on remote PC"
+                              >
+                                <RotateCcw size={13} className={restartingId === gateway.id ? "spin" : undefined} />
+                                {restartingId === gateway.id ? "Restarting…" : "Restart"}
+                              </button>
                               <button
                                 onClick={() => setDeleteConfirm({ type: 'gateway', id: gateway.id, name: gateway.name })}
                                 style={{

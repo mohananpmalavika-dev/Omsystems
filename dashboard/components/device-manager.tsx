@@ -14,6 +14,7 @@ import {
   FileSpreadsheet,
   Plus,
   RefreshCw,
+  RotateCcw,
   Router,
   Search,
   Server,
@@ -2091,7 +2092,7 @@ export function DeviceManager() {
 
   async function issueGatewayCommand(
     gateway: EdgeAgent,
-    type: "rediscover" | "restart-media" | "collect-logs" | "apply-update",
+    type: "rediscover" | "restart-media" | "collect-logs" | "apply-update" | "restart-agent",
   ) {
     if (!selectedBranch) return;
     setSaving(true);
@@ -2100,6 +2101,8 @@ export function DeviceManager() {
       const command = await cameraInventoryApi.sendGatewayCommand(selectedBranch, gateway.id, { type });
       setNotice(type === "apply-update"
         ? `Lightweight patch queued for ${gateway.name}. The scanner will download only the signed application changes, restart, and keep its existing media runtime and configuration.`
+        : type === "restart-agent"
+        ? `Restart command queued for ${gateway.name}. The remote Edge Agent service will restart automatically.`
         : `${type.replaceAll("-", " ")} queued for ${gateway.name}. Command ${String(command.id).slice(0, 8)} is fully audited.`);
     } catch (reason) {
       setError(messageOf(reason, "Gateway command could not be queued."));
@@ -2430,6 +2433,13 @@ export function DeviceManager() {
                       <button type="button" aria-label={`Rediscover devices using ${gateway.name}`} title="Rediscover cameras and recorders" disabled={saving || !gatewayReady} onClick={() => void issueGatewayCommand(gateway, "rediscover")}><Network size={13}/></button>
                       <button type="button" aria-label={`Collect diagnostics from ${gateway.name}`} title="Collect redacted diagnostics" disabled={saving || !gatewayReady} onClick={() => void issueGatewayCommand(gateway, "collect-logs")}><Activity size={13}/></button>
                       <button type="button" aria-label={`Restart media on ${gateway.name}`} title="Restart the branch media service" disabled={saving || !gatewayReady} onClick={() => void issueGatewayCommand(gateway, "restart-media")}><RefreshCw size={13}/></button>
+                      <button
+                        type="button"
+                        aria-label={`Restart agent on ${gateway.name}`}
+                        title="Restart the remote Edge Agent process"
+                        disabled={saving || !gatewayReady}
+                        onClick={() => void issueGatewayCommand(gateway, "restart-agent")}
+                      ><RotateCcw size={13}/></button>
                       <button
                         type="button"
                         aria-label={`Update ${gateway.name}`}

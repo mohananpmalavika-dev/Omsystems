@@ -32,6 +32,6 @@ async function inspect(host, name) {
 
 async function run() {
   await inspect('http://3.7.216.169:8080', 'AWS');
-  await inspect('https://34-14-220-41.sslip.io', 'GCP');
+  await inspect('https://35-200-130-81.sslip.io', 'GCP');
 }
 run();

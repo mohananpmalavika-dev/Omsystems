@@ -11,7 +11,7 @@ const token = jwt.sign(
   { expiresIn: '1h' }
 );
 
-const CONTROL_PLANE = 'https://34-14-220-41.sslip.io';
+const CONTROL_PLANE = 'https://35-200-130-81.sslip.io';
 const AGENT_ID = '09181b97-0674-43ee-9d47-4b8c96f71a6b';
 
 const cameras = [

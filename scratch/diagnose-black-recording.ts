@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 const install='C:/Program Files/Sentinel Grid/Edge Agent';
 const identity=await new DeviceIdentityStore(`${install}/data/device-identity.enc`,`${install}/data/device-identity.key`).load();
 if(!identity) throw new Error('identity_missing');
-const control=new GatewayClient('https://34-14-220-41.sslip.io',undefined);control.useEdgeCredential(identity.credential);
+const control=new GatewayClient('https://35-200-130-81.sslip.io',undefined);control.useEdgeCredential(identity.credential);
 const bootstrap=await control.getDiscoveryBootstrap(identity.agentId);
 for(const camera of await control.listMonitoringCameras(identity.agentId,'0.1.48')) {
   if(!/Channel [678]$/.test(camera.name??''))continue;

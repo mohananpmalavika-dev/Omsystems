@@ -6,7 +6,7 @@
 
 const CONTROL_PLANE_URL = process.env.CONTROL_PLANE_URL || 
                           process.env.CONTROL_PLANE_INTERNAL_URL || 
-                          'https://34-14-220-41.sslip.io';
+                          'https://35-200-130-81.sslip.io';
 
 async function diagnose() {
   console.log('🔍 Diagnosing Maintenance API Connectivity\n');

@@ -1,8 +1,1 @@
-{
-    "sha256":  "88499ab905415544a203bb869824458cb3823b826f4bdac6b2e9c188e89f9389",
-    "installerFile":  "KryptonVisionInstaller-v0.1.49-windows.exe",
-    "signedAt":  "2026-10-13T09:26:08.6784521Z",
-    "signerThumbprint":  "492444B636DC7C2F1FC7FE6E30F80DE06EE6282F",
-    "installerSha256":  "f3230274a30b18f00aa0671d4f476d41693ac1bfaa6d89b8aae052392577d722",
-    "installerSourceSha256":  "43ce7c85beeb5b4bfd87670281c28bd3aa11046c555f984ecbbca453aace8ef5"
-}
+{"sha256":"b80b4a0b4f2b1e65829845c1828afda7f0708b191b6f9c98411a56d117d3f79f","installerFile":"KryptonVisionInstaller-v0.1.50-windows.exe","installerSha256":"97f49ea3f8810b39276328c0f8a8e99a2be75de976b1b3e5f46de60b39a2bf82","installerSourceSha256":"a6c3b3e48a98cdb88ddb83e5e0e9ff2cbbb3c22be25763e3aa79d79669f1352c","signerThumbprint":"492444B636DC7C2F1FC7FE6E30F80DE06EE6282F","signedAt":"2026-10-19T04:21:39.117Z"}

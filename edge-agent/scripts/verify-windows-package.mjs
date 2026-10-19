@@ -1,4 +1,4 @@
-import { copyFileSync, cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,14 +6,16 @@ import { tmpdir } from "node:os";
 
 const edgeRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const executable = process.argv[2] || join(edgeRoot, "release", "edge-agent.exe");
-const nativeSharpBinary = join(
+const sharpLibDir = join(
   dirname(executable),
   "node_modules",
   "@img",
   "sharp-win32-x64",
   "lib",
-  "sharp-win32-x64-0.35.4.node",
 );
+const sharpFiles = existsSync(sharpLibDir) ? readdirSync(sharpLibDir) : [];
+const sharpNodeFileName = sharpFiles.find(f => f.endsWith(".node"));
+const nativeSharpBinary = sharpNodeFileName ? join(sharpLibDir, sharpNodeFileName) : join(sharpLibDir, "sharp-win32-x64-0.35.5.node");
 const sharpRuntimeDependencies = [
   join(dirname(executable), "node_modules", "sharp", "package.json"),
   join(dirname(executable), "node_modules", "semver", "package.json"),

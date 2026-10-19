@@ -121,7 +121,7 @@ services:
       ANALYTICS_ENGINE_SHARED_KEY: ${ANALYTICS_ENGINE_SHARED_KEY:-a65b48592403d53d9a8bc1229b9d1ac605d36bf31f3ab636cbb379071d565532}
       ANALYTICS_SOURCE_SHARED_KEY: ${ANALYTICS_SOURCE_SHARED_KEY:-10bcf3c15292e4a76522e6c2b73644cd0f480e57fc67ab293ec60ac5c6a82844}
       REPORT_DOWNLOAD_SECRET: ${REPORT_DOWNLOAD_SECRET:-beb9be9407b659e637760235d2f6fb466508133082374c489d5ccbf8f8ba0faf}
-      CONTROL_PLANE_PUBLIC_URL: ${CONTROL_PLANE_PUBLIC_URL:-https://34-14-220-41.sslip.io}
+      CONTROL_PLANE_PUBLIC_URL: ${CONTROL_PLANE_PUBLIC_URL:-https://35-200-130-81.sslip.io}
       EDGE_UPDATE_SIGNING_PRIVATE_KEY: ${EDGE_UPDATE_SIGNING_PRIVATE_KEY:-"-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIP74jLjXCr8DBSSP9ZzMwqyr3YEJs4G+Z8yIX2wfJ+x3\n-----END PRIVATE KEY-----\n"}
       # GCP is the managed public relay. Edge Agents establish an authenticated
       # outbound WebSocket, so branches need no public IP, DNS, VPN, or manual
@@ -173,7 +173,7 @@ services:
       NODE_ENV: production
       PORT: 10000
       HOSTNAME: 0.0.0.0
-      PUBLIC_DASHBOARD_URL: ${PUBLIC_DASHBOARD_URL:-https://34-14-220-41.sslip.io}
+      PUBLIC_DASHBOARD_URL: ${PUBLIC_DASHBOARD_URL:-https://35-200-130-81.sslip.io}
       # Match the existing control-plane private-container DB policy.
       DB_SSL: "false"
       DATABASE_TLS_MODE: "DISABLED"
@@ -222,8 +222,8 @@ services:
       # Without this, every live stream request returns 503 stream_secret_unavailable.
       STREAM_SECRET_PROVIDER_URL: http://control-plane:8080
       STREAM_SECRET_PROVIDER_KEY: ${MEDIA_GATEWAY_SHARED_KEY:-cbe91a924912683e42b03365a68f37d0ef307e52caee53dd305af9f550909bb2}
-      PUBLIC_HLS_BASE_URL: ${PUBLIC_HLS_BASE_URL:-https://34-14-220-41.sslip.io/hls}
-      PUBLIC_WEBRTC_BASE_URL: ${PUBLIC_WEBRTC_BASE_URL:-https://34-14-220-41.sslip.io/webrtc}
+      PUBLIC_HLS_BASE_URL: ${PUBLIC_HLS_BASE_URL:-https://35-200-130-81.sslip.io/hls}
+      PUBLIC_WEBRTC_BASE_URL: ${PUBLIC_WEBRTC_BASE_URL:-https://35-200-130-81.sslip.io/webrtc}
     ports:
       - "8090:8090"
       - "8888:8888"

@@ -1,4 +1,4 @@
-import { existsSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -28,7 +28,10 @@ export function inspectBundledWindowsRuntime() {
   return REQUIRED_BUNDLE_ASSETS.map(([name, path]) => {
     if (!existsSync(path)) throw new Error(`The native Windows installer is missing ${name}`);
     const metadata = statSync(path);
-    const nativeBinary = join(path, "@img", "sharp-win32-x64", "lib", "sharp-win32-x64-0.35.4.node");
+    const sharpLib = join(path, "@img", "sharp-win32-x64", "lib");
+    const sharpFiles = existsSync(sharpLib) ? readdirSync(sharpLib) : [];
+    const sharpNodeFile = sharpFiles.find((file) => file.endsWith(".node"));
+    const nativeBinary = sharpNodeFile ? join(sharpLib, sharpNodeFile) : join(sharpLib, "sharp-win32-x64-0.35.5.node");
     const requiredModels = ["manifest.json", "detector.onnx", "recognizer.onnx", "liveness.onnx"];
     if (name === "Secure face ONNX models") {
       const missingModels = requiredModels.filter((file) => {

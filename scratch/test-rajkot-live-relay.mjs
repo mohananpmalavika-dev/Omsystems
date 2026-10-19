@@ -4,7 +4,7 @@ import { execSync } from 'child_process';
 const ch1CameraId = '0fc5c021-4246-4659-87a0-0ba4c6f36240'; // Rajkot - Channel 1
 const userId = '043561dc-a162-48ca-b7e4-290a9c4ad1ff';
 const agentId = '9f108498-4dd5-4a21-b810-eec9e538953c';
-const relayBase = `https://34-14-220-41.sslip.io/v1/edge-media/${agentId}`;
+const relayBase = `https://35-200-130-81.sslip.io/v1/edge-media/${agentId}`;
 const profile = 'sub';
 
 async function main() {

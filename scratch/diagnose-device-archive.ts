@@ -7,7 +7,7 @@ import { probeRtsp } from '../edge-agent/src/streaming/rtsp-probe.js';
 const install = 'C:/Program Files/Sentinel Grid/Edge Agent';
 const identity = await new DeviceIdentityStore(`${install}/data/device-identity.enc`, `${install}/data/device-identity.key`).load();
 if (!identity) throw new Error('identity_missing');
-const control = new GatewayClient('https://34-14-220-41.sslip.io', undefined);
+const control = new GatewayClient('https://35-200-130-81.sslip.io', undefined);
 control.useEdgeCredential(identity.credential);
 const credential = (await control.getDiscoveryBootstrap(identity.agentId)).credentials.find(item => item.host === '192.168.29.171');
 if (!credential) throw new Error('recorder_credential_missing');

@@ -63,7 +63,7 @@ async function main() {
       env: {
         ...process.env,
         EDGE_UPDATE_SIGNING_PRIVATE_KEY: signingKey || "",
-        CONTROL_PLANE_PUBLIC_URL: process.env.CONTROL_PLANE_PUBLIC_URL || "https://34-14-220-41.sslip.io",
+        CONTROL_PLANE_PUBLIC_URL: process.env.CONTROL_PLANE_PUBLIC_URL || "https://35-200-130-81.sslip.io",
       },
       stdio: "inherit",
     });
@@ -91,7 +91,7 @@ async function main() {
     }
 
     // 6. Upsert into edge_update_releases
-    const publicUrl = process.env.CONTROL_PLANE_PUBLIC_URL?.replace(/\/+$/, "") || "https://34-14-220-41.sslip.io";
+    const publicUrl = process.env.CONTROL_PLANE_PUBLIC_URL?.replace(/\/+$/, "") || "https://35-200-130-81.sslip.io";
     const artifactUrl = manifest.artifactUrl || `${publicUrl}/v1/edge-updates/artifacts/${encodeURIComponent(targetVersion)}/edge-agent.bundle`;
 
     await pool.query(`

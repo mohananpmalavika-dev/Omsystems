@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 
-const CONTROL_PLANE_URL = "https://34-14-220-41.sslip.io";
+const CONTROL_PLANE_URL = "https://35-200-130-81.sslip.io";
 const CAMERA_ID = "e79fe538-f8db-45c6-949e-d64849a81aee";
 const EDGE_AGENT_TUNNEL = "https://nottingham-approved-logging-roberts.trycloudflare.com";
 
