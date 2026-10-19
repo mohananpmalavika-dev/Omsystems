@@ -1,0 +1,50 @@
+[
+  {
+    "id": "yolov8n",
+    "path": "detection/yolox_tiny.onnx",
+    "bytes": 20219662,
+    "checksumMatches": true
+  },
+  {
+    "id": "helmet",
+    "path": "safety/helmet-motorcycle.onnx",
+    "bytes": 16570770,
+    "checksumMatches": true
+  },
+  {
+    "id": "face-detector",
+    "path": "face/face-detector.onnx",
+    "bytes": 232589,
+    "checksumMatches": true
+  },
+  {
+    "id": "face-embedding",
+    "path": "face/face-embedding.onnx",
+    "bytes": 9896933,
+    "checksumMatches": true
+  },
+  {
+    "id": "anpr-detector",
+    "path": "vehicle/license-plate-detector.onnx",
+    "bytes": 4146213,
+    "checksumMatches": true
+  },
+  {
+    "id": "anpr-recognizer",
+    "path": "vehicle/license-plate-recognizer.onnx",
+    "bytes": 16378030,
+    "checksumMatches": true
+  },
+  {
+    "id": "helmet-head-localizer",
+    "path": "safety/helmet-head-localizer.onnx",
+    "bytes": 28207460,
+    "checksumMatches": true
+  },
+  {
+    "id": "helmet-head-evidence",
+    "path": "safety/helmet-head-embedding.onnx",
+    "bytes": 89117001,
+    "checksumMatches": true
+  }
+]

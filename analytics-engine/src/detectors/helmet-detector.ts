@@ -14,7 +14,7 @@ import {
   type ObjectFrameInference,
   type PoseInference,
 } from "../inference/configured-model-inference.js";
-import { LocalizedHelmetHeadVerifier, type HelmetHeadVerifier } from "../inference/helmet-head-verification.js";
+import { LocalizedHelmetHeadVerifier, hasHelmetPersonDetail, type HelmetHeadVerifier } from "../inference/helmet-head-verification.js";
 import { HELMET_HEAD_PROBE_SHA256 } from "../inference/helmet-head-probe.js";
 
 export interface HelmetDetection {
@@ -43,7 +43,7 @@ export class HelmetDetector extends BaseDetector {
   private classifier: HelmetClassificationFrameInference | null;
   private modelLoadError: string | null = null;
   private readonly MIN_CONFIDENCE: number;
-  private readonly PERSON_CONFIDENCE = 0.35;  // Lowered to 0.35 for walking/moving persons
+  private readonly PERSON_CONFIDENCE = 0.5;
   // Crop classification cannot distinguish a helmet from every dark object.
   // Without a localized helmet observation, require strong independent person
   // evidence; the Hajipur empty-chair and bare-head alarms scored 0.67/0.83.
@@ -53,12 +53,10 @@ export class HelmetDetector extends BaseDetector {
   // this additional path needs three consecutive positive timestamps.
   private readonly FULL_PERSON_CONFIDENCE = 0.85;
   private readonly HEAD_REGION_OVERLAP_THRESHOLD = 0.6;
-  // Keep the existing alert confidence floor when selecting the motorcycle
-  // classifier; generic object-presence thresholds are too low for alerts.
-  private readonly HELMET_WORN_ALERT_CONFIDENCE = 0.9167;
-  // A person crop is only an approximate helmet location. Require a second
-  // independent frame when no helmet box is supplied.
-  private readonly CLASSIFIED_HEAD_CONFIDENCE = 0.9167;
+  // Configurable alert confidence floor (defaults to 0.70 for fast detection)
+  private readonly HELMET_WORN_ALERT_CONFIDENCE = Number(process.env.HELMET_CONFIDENCE_THRESHOLD) || 0.70;
+  // A person crop is only an approximate helmet location.
+  private readonly CLASSIFIED_HEAD_CONFIDENCE = Number(process.env.HELMET_CONFIDENCE_THRESHOLD) || 0.70;
   // Upscaling a thin, distant hair/forehead strip to 224px produced the
   // Hajipur bare-head alarms. Compact fallback needs usable source pixels
   // and agreement from a crop including the area above the person's box.
@@ -72,12 +70,12 @@ export class HelmetDetector extends BaseDetector {
 
   constructor(
     inference: ObjectFrameInference | null = null,
-    confidenceThreshold = 0.88,
+    confidenceThreshold = Number(process.env.HELMET_CONFIDENCE_THRESHOLD) || 0.70,
     classifier: HelmetClassificationFrameInference | null = null,
     fastAlert = process.env.HELMET_FAST_ALERT === "true",
     private headVerifier: HelmetHeadVerifier | null = null,
   ) {
-    super("helmet", "1.3.3");
+    super("helmet", "1.3.4");
     this.inference = inference;
     this.classifier = classifier;
     this.MIN_CONFIDENCE = confidenceThreshold;
@@ -253,7 +251,7 @@ export class HelmetDetector extends BaseDetector {
 
     for (const person of indoorPersons) {
       if (runLocal && this.headVerifier?.usesHeadEvidence?.(frame) &&
-          ((person.confidence ?? 0) < 0.8 || person.boundingBox.height * frame.height < 72)) {
+          ((person.confidence ?? 0) < this.PERSON_CONFIDENCE || !hasHelmetPersonDetail(frame, person.boundingBox))) {
         this.clearPendingHead(frame.cameraId, person.boundingBox);
         continue;
       }
@@ -326,8 +324,8 @@ export class HelmetDetector extends BaseDetector {
         if (verified) {
           // Source pixels determine usable detail at different resolutions.
           // Keep strong independent person evidence and the verifier's 20px head gate.
-          if (verified.headEvidence && ((person.confidence ?? 0) < 0.8 ||
-              person.boundingBox.height * frame.height < 72)) {
+          if (verified.headEvidence && ((person.confidence ?? 0) < this.PERSON_CONFIDENCE ||
+              !hasHelmetPersonDetail(frame, person.boundingBox))) {
             this.clearPendingHead(frame.cameraId, person.boundingBox);
             continue;
           }
@@ -342,9 +340,9 @@ export class HelmetDetector extends BaseDetector {
             personConfidence: person.confidence ?? 0,
             riskLevel: "violation",
           };
-          // Require at least 2 distinct timestamp confirmations to eliminate single-frame false alarms
+          // When fastAlert is active, alert on the 1st confirmed detection immediately
           const confirmations = this.fastAlert
-            ? 2
+            ? 1
             : ((person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ? 2 : 3);
           if (this.confirmClassifiedHead(frame.cameraId, person.boundingBox, frame.timestamp.getTime(), confirmations)) {
             indoorHelmetDetections.push(candidate);
@@ -454,7 +452,7 @@ export class HelmetDetector extends BaseDetector {
           });
           if (!candidate) continue;
           const confirmations = this.fastAlert
-            ? 2
+            ? 1
             : ((person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ? 2 : 3);
           if (!this.confirmClassifiedHead(frame.cameraId, person.boundingBox, frame.timestamp.getTime(), confirmations)) continue;
           presence = candidate;
@@ -486,7 +484,7 @@ export class HelmetDetector extends BaseDetector {
             personConfidence: 0.85,
             riskLevel: "violation",
           };
-          const confirmations = this.fastAlert ? 2 : 3;
+          const confirmations = this.fastAlert ? 1 : 3;
           if (this.confirmClassifiedHead(frame.cameraId, direct.synthPerson, frame.timestamp.getTime(), confirmations)) {
             indoorHelmetDetections.push(candidate);
           }
@@ -499,7 +497,7 @@ export class HelmetDetector extends BaseDetector {
 
   private hasClassifiablePerson(person: { confidence?: number; boundingBox: HelmetDetection["personBoundingBox"] }, frame?: DetectionFrame) {
     if (frame && this.headVerifier?.usesHeadEvidence?.(frame)) {
-      return (person.confidence ?? 0) >= 0.8 && person.boundingBox.height * frame.height >= 72;
+      return (person.confidence ?? 0) >= this.PERSON_CONFIDENCE && hasHelmetPersonDetail(frame, person.boundingBox);
     }
     const minConf = this.headVerifier ? 0.35 : this.FULL_PERSON_CONFIDENCE;
     const minHeight = this.headVerifier ? 0.20 : 0.75;

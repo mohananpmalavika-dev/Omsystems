@@ -151,7 +151,7 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
     // An unoccluded, bare human face directly contradicts a full face-concealing helmet.
     // If a transparent/clear visor is worn, the face can be visible while the helmet shell
     // encloses the head and crown.
-    if (this.faceDetector) {
+    if (this.faceDetector && !this.usesHeadEvidence(frame)) {
       let facePending = this.faceFrames.get(frame);
       if (!facePending) {
         facePending = this.faceDetector.run(frame);
@@ -305,11 +305,23 @@ function expand(box: Box, padding: number): Box {
   const bottom = Math.min(1, box.y + box.height * (1 + padding));
   return { x, y, width: right - x, height: bottom - y };
 }
+export function hasHelmetPersonDetail(frame: DetectionFrame, person: Box): boolean {
+  const height = person.height * frame.height;
+  return height >= 72 || (height >= 64 && person.width * frame.width / height >= 0.6);
+}
+
 function validHead(frame: DetectionFrame, person: Box, head: Box) {
   if (![head.x,head.y,head.width,head.height].every(Number.isFinite) || head.width <= 0 || head.height <= 0 ||
       head.width * frame.width < 20 || head.height * frame.height < 20) return false;
+  // A desk can hide the lower body, and overhead cameras make the helmet a
+  // larger fraction of the observed person. Keep the head anchored at the
+  // top of a compact person box before extending its association region.
+  // A helmet carried below the anatomical head must not use this extension.
+  const compact = person.width * frame.width / (person.height * frame.height) >= 0.6 &&
+    head.y <= person.y + person.height * 0.12 &&
+    head.y + head.height / 2 <= person.y + person.height * 0.4;
   const region = { x:person.x, y:Math.max(0,person.y-person.height*.2), width:person.width,
-    bottom:Math.min(1,person.y+person.height*.35) };
+    bottom:Math.min(1,person.y+person.height*(compact ? .7 : .35)) };
   const intersection = Math.max(0,Math.min(region.x+region.width,head.x+head.width)-Math.max(region.x,head.x)) *
     Math.max(0,Math.min(region.bottom,head.y+head.height)-Math.max(region.y,head.y));
   return intersection / (head.width * head.height) >= .75;

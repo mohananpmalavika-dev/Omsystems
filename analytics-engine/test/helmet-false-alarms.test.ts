@@ -28,8 +28,10 @@ describe("helmet false-alarm evidence", () => {
     for(const seconds of [0,2,4]) expect(await detector.detect(frame(seconds,[candidate]))).toEqual([]);
     expect(classifier.run).toHaveBeenCalledTimes(9);
     centeredScore = 0.97;
-    expect((await detector.detect(frame(6,[candidate]))).length).toBe(fastAlert ? 1 : 0);
-    if (!fastAlert) {
+    expect(await detector.detect(frame(6,[candidate]))).toEqual([]);
+    if (fastAlert) {
+      expect(await detector.detect(frame(8,[candidate]))).toHaveLength(1);
+    } else {
       centeredScore = 0.6186870484580556;
       expect(await detector.detect(frame(8,[candidate]))).toEqual([]);
       centeredScore = 0.97;

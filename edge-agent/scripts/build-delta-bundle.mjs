@@ -9,7 +9,9 @@ import { build } from "esbuild";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const edgeRoot = join(scriptDir, "..");
 const packageJson = JSON.parse(await readFile(join(edgeRoot, "package.json"), "utf8"));
-const version = packageJson.version || "0.1.0";
+// Application patches can advance independently of the signed EXE installer.
+const version = process.env.EDGE_DELTA_BUNDLE_VERSION?.trim() || packageJson.version || "0.1.0";
+if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version)) throw new Error("Invalid delta bundle version");
 
 const outputDir = join(edgeRoot, "release", "updates", version);
 await mkdir(outputDir, { recursive: true });

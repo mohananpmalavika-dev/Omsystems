@@ -28,22 +28,23 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("camera frame health", () => {
-  it("preserves requested helmet frame detail in the decoder and upload", async () => {
+  it.each([{width:640,height:360},{width:1280,height:720}])("preserves $width x $height helmet frame detail in compressed uploads", async size => {
     const send=vi.fn(async()=>undefined);
     const service=new CameraHeartbeatService("http://control.example","branch","agent",undefined,
       "ffprobe","ffmpeg",undefined,undefined,undefined,send);
     service.replaceCameras([{id:"camera",name:"Camera",rtspUrl:"rtsp://camera/main",enabled:true,
-      analyticsEnabled:true,analyticsResolution:{width:1280,height:720}}]);
+      analyticsEnabled:true,analyticsResolution:size}]);
     await (service as any).sendAllAnalyticsFrames();
-    expect(rgbStreams.createRtspRgbStream).toHaveBeenCalledWith("rtsp://camera/main","ffmpeg",1280,720,expect.any(Function));
+    expect(rgbStreams.createRtspRgbStream).toHaveBeenCalledWith("rtsp://camera/main","ffmpeg",size.width,size.height,expect.any(Function));
     const payload=(send.mock.calls as unknown as [[{width:number;height:number;imageBase64:string}]])[0][0];
-    expect(payload).toMatchObject({width:1280,height:720});
+    expect(payload).toMatchObject(size);
     expect(payload).toMatchObject({imageEncoding:"jpeg"});
     const decoded=await sharp(Buffer.from(payload.imageBase64,"base64")).raw().toBuffer({resolveWithObject:true});
-    expect(decoded.info).toMatchObject({width:1280,height:720,channels:3});
-    expect(decoded.data.length).toBe(1280*720*3);
-    expect(Buffer.from(payload.imageBase64,"base64").length).toBeLessThan(1280*720*3);
-    service.replaceCameras([{id:"camera",name:"Camera",rtspUrl:"rtsp://camera/main",enabled:true,analyticsEnabled:true}]);
+    expect(decoded.info).toMatchObject({...size,channels:3});
+    expect(decoded.data.length).toBe(size.width*size.height*3);
+    expect(Buffer.from(payload.imageBase64,"base64").length).toBeLessThan(size.width*size.height*3);
+    service.replaceCameras([{id:"camera",name:"Camera",rtspUrl:"rtsp://camera/main",enabled:true,analyticsEnabled:true,
+      analyticsResolution:size.width===640?{width:1280,height:720}:{width:640,height:360}}]);
     await (service as any).sendAllAnalyticsFrames();
     expect(rgbStreams.createRtspRgbStream).toHaveBeenCalledTimes(2);
     service.stop();
@@ -55,7 +56,7 @@ describe("camera frame health", () => {
       "ffprobe","ffmpeg",undefined,undefined,undefined,send,local);
     service.replaceCameras([{id:"camera",name:"Camera",rtspUrl:"rtsp://camera/main",enabled:true,analyticsEnabled:true}]);
     const first=(service as any).sendAllAnalyticsFrames();
-    await new Promise(resolve=>setImmediate(resolve));
+    await vi.waitFor(()=>expect(send).toHaveBeenCalledOnce());
     await (service as any).sendAllAnalyticsFrames();
     expect(send).toHaveBeenCalledTimes(2);
     expect(local).toHaveBeenCalledOnce();
@@ -71,7 +72,7 @@ describe("camera frame health", () => {
       id, name: id, rtspUrl: `rtsp://camera/${id}`, enabled: true, analyticsEnabled: true,
     })));
     const firstTick = (service as any).sendAllAnalyticsFrames();
-    expect(send).toHaveBeenCalledTimes(6);
+    await vi.waitFor(()=>expect(send).toHaveBeenCalledTimes(6));
     await new Promise(resolve => setImmediate(resolve));
     await (service as any).sendAllAnalyticsFrames();
     expect(send.mock.calls.filter(([payload]) => payload.cameraId === "slow")).toHaveLength(1);
@@ -108,6 +109,7 @@ describe("camera frame health", () => {
     const camera = {id:"camera",name:"Camera",rtspUrl:"rtsp://camera/old",enabled:true,analyticsEnabled:true};
     service.replaceCameras([camera]);
     const oldTick = (service as any).sendAllAnalyticsFrames();
+    await vi.waitFor(()=>expect(send).toHaveBeenCalledOnce());
     service.replaceCameras([{...camera,rtspUrl:"rtsp://camera/recovered"}]);
     // The next tick notices the source replacement while the old upload runs.
     await (service as any).sendAllAnalyticsFrames();
@@ -115,6 +117,22 @@ describe("camera frame health", () => {
     await oldTick;
     await (service as any).sendAllAnalyticsFrames();
     expect(send).toHaveBeenCalledTimes(2);
+    service.stop();
+  });
+
+  it("discards an old-source frame when its source changes during JPEG encoding",async()=>{
+    const send=vi.fn(async()=>undefined);
+    const service=new CameraHeartbeatService("http://control.example","branch","agent",undefined,
+      "ffprobe","ffmpeg",undefined,undefined,undefined,send);
+    const camera={id:"camera",name:"Camera",rtspUrl:"rtsp://camera/old",enabled:true,analyticsEnabled:true};
+    service.replaceCameras([camera]);
+    const oldTick=(service as any).sendAllAnalyticsFrames();
+    service.replaceCameras([{...camera,rtspUrl:"rtsp://camera/new"}]);
+    await (service as any).sendAllAnalyticsFrames();
+    await oldTick;
+    expect(send).not.toHaveBeenCalled();
+    await (service as any).sendAllAnalyticsFrames();
+    expect(send).toHaveBeenCalledOnce();
     service.stop();
   });
 
@@ -165,7 +183,8 @@ describe("camera frame health", () => {
       expect(send).toHaveBeenCalledTimes(3);
       now.mockReturnValue(3_000);
       await (service as any).sendAllAnalyticsFrames();
-      expect(send.mock.calls.map(([payload]) => payload.cameraId)).toEqual(["failed", "working", "working", "failed", "working"]);
+      expect(send.mock.calls.filter(([payload]) => payload.cameraId === "failed")).toHaveLength(2);
+      expect(send.mock.calls.filter(([payload]) => payload.cameraId === "working")).toHaveLength(3);
     } finally { service.stop(); now.mockRestore(); }
   });
 
@@ -176,6 +195,7 @@ describe("camera frame health", () => {
       "ffprobe", "ffmpeg", undefined, undefined, undefined, send);
     const pending = (service as any).deliverAnalyticsFrame("camera", Buffer.alloc(3), 1, 1, "edge-rtsp-scheduled");
     await (service as any).deliverAnalyticsFrame("camera", Buffer.alloc(3), 1, 1, "edge-rtsp-health");
+    await vi.waitFor(()=>expect(send).toHaveBeenCalledOnce());
     expect(send).toHaveBeenCalledOnce();
     finish();
     await pending;

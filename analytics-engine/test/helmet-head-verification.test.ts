@@ -18,6 +18,58 @@ const localizer = (label="helmet", boundingBox=box) => ({run:vi.fn(async()=>[{la
 beforeEach(() => vi.clearAllMocks());
 
 describe("independent helmet head verification", () => {
+  it.each([
+    {name:"Rajkot seated Channel 3",confidence:.6658,person:{x:.513316,y:.267806,width:.106453,height:.198239},head:{x:.536877,y:.263374,width:.076329,height:.127620}},
+    {name:"Rajkot overhead Channel 5",confidence:.8899,person:{x:.463247,y:.251435,width:.293740,height:.748565},head:{x:.483094,y:.231562,width:.244978,height:.412614}},
+  ])("associates a complete head with the compact person in $name",async sample=>{
+    const evidence={run:vi.fn(async()=>score(.95))};
+    const verifier=new LocalizedHelmetHeadVerifier(localizer("head",sample.head),{run:vi.fn(async()=>score(.01))},null,null,evidence);
+    const detector=new HelmetDetector(null,.75,{run:vi.fn(async()=>score(.01))},true,verifier);
+    await detector.initialize();
+    const capture=(time:number):DetectionFrame=>({...frame(),timestamp:new Date(time),metadata:{inferenceMode:"local-onnx",
+      detections:[{label:"person",confidence:sample.confidence,boundingBox:sample.person}]}});
+    expect(await detector.detect(capture(0))).toEqual([]);
+    expect((await detector.detect(capture(2000)))[0]).toMatchObject({detectionType:"helmet-worn",requiresAlert:true,confidence:.95});
+    await detector.cleanup();
+  });
+  it("does not associate a carried helmet below the head of a compact person",async()=>{
+    const compact={x:.3,y:.2,width:.25,height:.5};
+    const carried={x:.35,y:.43,width:.13,height:.18};
+    const evidence={run:vi.fn(async()=>score(.999))};
+    const objects={run:vi.fn(async(f:DetectionFrame)=>f.width===640 ? [{label:"helmet",confidence:.8,boundingBox:carried}] : [])};
+    const verifier=new LocalizedHelmetHeadVerifier(objects,{run:vi.fn(async()=>score(.999))},null,null,evidence);
+    expect(await verifier.verify(frame(),compact,.8)).toBeNull();
+    expect(evidence.run).not.toHaveBeenCalled();
+  });
+  it("retains negative complete-head classification even when a face is visible through the candidate",async()=>{
+    const evidence={run:vi.fn(async()=>score(.01))};
+    const faceDetector={run:vi.fn(async()=>[{label:"face",confidence:.95,boundingBox:box}])};
+    const verifier=new LocalizedHelmetHeadVerifier(localizer("head"),{run:vi.fn(async()=>score(.999))},faceDetector,null,evidence);
+    expect(await verifier.verify(frame(),person,.8)).toBeNull();
+    expect(evidence.run).toHaveBeenCalledOnce();
+  });
+  it.each(["rajkot-channel-3", "kollam-channel-1", "new-branch-channel"])("uses the 0.50 person minimum on %s and still requires two fresh helmet verifications", async cameraId => {
+    const verify=vi.fn(async()=>({boundingBox:box,classificationConfidence:.95,localizationConfidence:.8,headEvidence:true}));
+    const detector=new HelmetDetector(null,.75,{run:vi.fn(async()=>score(.01))},true,
+      {usesHeadEvidence:()=>true,verify});
+    await detector.initialize();
+    const sample=(time:number,confidence:number):DetectionFrame=>({...frame(),cameraId,timestamp:new Date(time),
+      metadata:{inferenceMode:"local-onnx",detections:[{label:"person",confidence,boundingBox:person}]}});
+    expect(await detector.detect(sample(0,.499))).toEqual([]);
+    expect(verify).not.toHaveBeenCalled();
+    expect(await detector.detect(sample(2000,.5))).toEqual([]);
+    expect(await detector.detect(sample(2000,.5))).toEqual([]);
+    expect((await detector.detect(sample(4000,.5)))[0]).toMatchObject({requiresAlert:true,confidence:.95});
+    await detector.cleanup();
+  });
+  it("does not alert at the 0.50 person minimum when complete-head verification rejects the frame", async()=>{
+    const detector=new HelmetDetector(null,.75,{run:vi.fn(async()=>score(.99))},true,
+      {usesHeadEvidence:()=>true,verify:vi.fn(async()=>null)});
+    await detector.initialize();
+    for(const time of [0,2000,4000])expect(await detector.detect({...frame(),timestamp:new Date(time),metadata:{
+      inferenceMode:"local-onnx",detections:[{label:"person",confidence:.5,boundingBox:person}]}})).toEqual([]);
+    await detector.cleanup();
+  });
   it("retains a narrow side-on person with localized legacy helmet evidence", async () => {
     const narrow={x:.2,y:.2,width:.04,height:.4};
     const head={x:.205,y:.2,width:.028,height:.032};
@@ -41,7 +93,8 @@ describe("independent helmet head verification", () => {
     await detector.initialize();
     const walking = {...frame(),width:1280,height:720,imageData:Buffer.alloc(1280*720*3),
       metadata:{inferenceMode:"local-onnx",detections:[{label:"person",confidence:.95,boundingBox:distant}]}};
-    expect((await detector.detect(walking))[0]).toMatchObject({detectionType:"helmet-worn",requiresAlert:true});
+    expect(await detector.detect(walking)).toEqual([]);
+    expect((await detector.detect({...walking,timestamp:new Date(2000)}))[0]).toMatchObject({detectionType:"helmet-worn",requiresAlert:true});
     await detector.cleanup();
   });
   it("finds a distant head in a native-pixel region and maps it back to the full frame", async () => {
@@ -108,7 +161,8 @@ describe("independent helmet head verification", () => {
       loaders.objects.mockResolvedValue(localizer("head"));
       const detector=new HelmetDetector(null,.75,null,true);await detector.initialize();
       expect(loaders.classifier).toHaveBeenCalledWith("helmet-head-evidence");
-      expect((await detector.detect({...frame(),cameraId:"new-camera"}))[0]).toMatchObject({requiresAlert:true,confidence:.95});
+      expect(await detector.detect({...frame(),cameraId:"new-camera"})).toEqual([]);
+      expect((await detector.detect({...frame(),cameraId:"new-camera",timestamp:new Date(2000)}))[0]).toMatchObject({requiresAlert:true,confidence:.95});
       await detector.cleanup();
     }finally{vi.unstubAllEnvs();}
   });
@@ -138,8 +192,9 @@ describe("independent helmet head verification", () => {
   it("permits strong adapted evidence in fast mode without combining distant people", async () => {
     const verifier=new LocalizedHelmetHeadVerifier(localizer("head"),{run:vi.fn(async()=>score(.01))},null,null,{run:vi.fn(async()=>score(.95))});
     const detector=new HelmetDetector(null,.75,{run:vi.fn(async()=>score(.01))},true,verifier);await detector.initialize();
-    expect((await detector.detect(frame()))[0]).toMatchObject({detectionType:"helmet-worn",requiresAlert:true,confidence:.95});
-    const weak=frame();weak.metadata!.detections[0].confidence=.7;
+    expect(await detector.detect(frame())).toEqual([]);
+    expect((await detector.detect({...frame(),timestamp:new Date(2000)}))[0]).toMatchObject({detectionType:"helmet-worn",requiresAlert:true,confidence:.95});
+    const weak={...frame(),timestamp:new Date(4000)};weak.metadata!.detections[0].confidence=.499;
     expect(await detector.detect(weak)).toEqual([]);
     await detector.cleanup();
   });

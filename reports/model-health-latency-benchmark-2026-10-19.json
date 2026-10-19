@@ -1,0 +1,12 @@
+[
+  {
+    "name": "baseline",
+    "coldMs": 797.1659000000001,
+    "warmAverageMs": 602.46839
+  },
+  {
+    "name": "candidate",
+    "coldMs": 438.0686000000005,
+    "warmAverageMs": 9.866079999999965
+  }
+]

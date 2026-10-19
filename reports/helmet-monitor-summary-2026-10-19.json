@@ -1,0 +1,28 @@
+{
+  "windowStart": "2026-10-19T10:21:57Z",
+  "windowEnd": "2026-10-19T10:31:57Z",
+  "timezone": "Asia/Calcutta",
+  "branchOfInterest": "Rajkot",
+  "helmetEvents": [],
+  "helmetAlerts": [],
+  "initialState": {
+    "aiState": "AI_DEGRADED",
+    "helmetModelMissing": true,
+    "cachedCameras": 32,
+    "missingFrameEntries": 18,
+    "missingFrameBranch": "KOLLAM"
+  },
+  "modelChecksums": "reports/helmet-model-recovery-checks-2026-10-19.json",
+  "productionChecksumsAllEightMatch": true,
+  "productionModelRestorationPerformedByThisMonitor": false,
+  "firstOperationalSample": "2026-10-19T10:26:24.20102+00:00",
+  "lastSuccessfulHealthSample": "2026-10-19T10:31:40.428391+00:00",
+  "healthTimeoutSamples": 5,
+  "rajkotCoverage": "reports/rajkot-frame-coverage-2026-10-19.json",
+  "limitations": [
+    "Monitored AI event records, alert records, service health and frame metadata; no visual confirmation of a wearer.",
+    "Initial missing models and control-plane restart interrupted processing.",
+    "KOLLAM 18 camera entries had no fresh cached frames; gateway last heartbeat 2026-10-19T09:32:04Z.",
+    "No recorded helmet detection does not establish that no helmet wearer appeared."
+  ]
+}

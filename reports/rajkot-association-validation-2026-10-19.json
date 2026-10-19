@@ -1,0 +1,1738 @@
+{
+  "checkedAt": "2026-10-19T11:22:10.748Z",
+  "config": {
+    "confidenceThreshold": 0.75,
+    "objectThreshold": 0.35,
+    "fastAlert": true,
+    "evidenceCameras": [
+      "*"
+    ]
+  },
+  "positiveSequences": [
+    {
+      "channel": 3,
+      "frames": [
+        {
+          "capturedAt": "2026-10-19T11:19:27.187Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.7309391059017116,
+              "boundingBox": {
+                "x": 0.5151164071179964,
+                "y": 0.2648839227998335,
+                "width": 0.08657193683006825,
+                "height": 0.2016156573931423
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.6097601496678919,
+              "boundingBox": {
+                "x": 0.6239169071866626,
+                "y": 0.481246998537838,
+                "width": 0.1433446491407092,
+                "height": 0.4157029148584184
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.3779734244005084,
+              "boundingBox": {
+                "x": 0.6286343238784123,
+                "y": 0.4827465790104266,
+                "width": 0.10152201581563336,
+                "height": 0.1968520516714254
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-19T11:19:35.197Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.7028195299726576,
+              "boundingBox": {
+                "x": 0.5146500457592046,
+                "y": 0.2639509879275833,
+                "width": 0.08770412419890639,
+                "height": 0.20044806846053015
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.5294093998557514,
+              "boundingBox": {
+                "x": 0.0741454714054285,
+                "y": 0.1427227999070028,
+                "width": 0.07982754561094992,
+                "height": 0.19210497198629148
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.40261771134009194,
+              "boundingBox": {
+                "x": 0.6227376814216116,
+                "y": 0.48258478232373636,
+                "width": 0.1467398936643568,
+                "height": 0.4229360723404578
+              }
+            }
+          ],
+          "results": [
+            {
+              "detectionType": "helmet-worn",
+              "status": "SUCCESS",
+              "provenance": "LIVE_INFERENCE",
+              "confidence": 0.992414338542458,
+              "durationSeconds": 1,
+              "objects": [
+                {
+                  "label": "helmet",
+                  "confidence": 0.992414338542458,
+                  "boundingBox": {
+                    "x": 0.5256457924842834,
+                    "y": 0.2592693010965983,
+                    "width": 0.07636935710906978,
+                    "height": 0.1231101777818468
+                  }
+                },
+                {
+                  "label": "person",
+                  "confidence": 0.7028195299726576,
+                  "boundingBox": {
+                    "x": 0.5146500457592046,
+                    "y": 0.2639509879275833,
+                    "width": 0.08770412419890639,
+                    "height": 0.20044806846053015
+                  }
+                }
+              ],
+              "metadata": {
+                "headEvidenceModel": "helmet-head-evidence",
+                "headEvidenceProbeSha256": "6b893fba3321f8203b22073d0510e98336e7f636e0e1aa2771605a2b79a04da9",
+                "compliantCount": 1,
+                "threatType": "helmet_worn_inside_facility",
+                "evidenceSource": "localized-head-classification",
+                "localizedHeads": [
+                  {
+                    "boundingBox": {
+                      "x": 0.5256457924842834,
+                      "y": 0.2592693010965983,
+                      "width": 0.07636935710906978,
+                      "height": 0.1231101777818468
+                    },
+                    "localizationConfidence": 0.6393918300327641
+                  }
+                ]
+              },
+              "executionMetadata": {
+                "status": "SUCCESS",
+                "provenance": "LIVE_INFERENCE",
+                "modelId": "helmet-classifier",
+                "modelVersion": "1.3.4",
+                "simulated": false,
+                "timestamp": "2026-10-19T11:22:13.112Z"
+              },
+              "requiresAlert": true
+            }
+          ]
+        },
+        {
+          "capturedAt": "2026-10-19T11:19:41.205Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.735391114727463,
+              "boundingBox": {
+                "x": 0.6235088131353279,
+                "y": 0.4817699010388561,
+                "width": 0.1430893084968471,
+                "height": 0.40487293303805627
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.6949771588814926,
+              "boundingBox": {
+                "x": 0.5155800251265822,
+                "y": 0.26856291612777267,
+                "width": 0.08745474257062713,
+                "height": 0.19671355327432327
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.533403985311871,
+              "boundingBox": {
+                "x": 0.07887483161865123,
+                "y": 0.14552525071167552,
+                "width": 0.07780969137057304,
+                "height": 0.18570045114242087
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-19T11:19:51.284Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.7135092246148389,
+              "boundingBox": {
+                "x": 0.5142095221179591,
+                "y": 0.2612669092231494,
+                "width": 0.08769142734282642,
+                "height": 0.2085516409449772
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.6352751416343381,
+              "boundingBox": {
+                "x": 0.6207539309209719,
+                "y": 0.4846817496616555,
+                "width": 0.14657174472778667,
+                "height": 0.4184025643994788
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.49571809639914477,
+              "boundingBox": {
+                "x": 0.07630054640104697,
+                "y": 0.14209338655658815,
+                "width": 0.10197147293687744,
+                "height": 0.19942291547450147
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-19T11:20:01.214Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.7559446528743408,
+              "boundingBox": {
+                "x": 0.6234352152324785,
+                "y": 0.49005133819537583,
+                "width": 0.14178619491592592,
+                "height": 0.4259167463523038
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.7210482340959246,
+              "boundingBox": {
+                "x": 0.5147283610551463,
+                "y": 0.26195069765818274,
+                "width": 0.08816101338564142,
+                "height": 0.20275018764606184
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.46154659147790156,
+              "boundingBox": {
+                "x": 0.06698428185336869,
+                "y": 0.15106165857133472,
+                "width": 0.07740953382744231,
+                "height": 0.1932753591508586
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.384565165489974,
+              "boundingBox": {
+                "x": 0.6333773698669136,
+                "y": 0.4942265720111087,
+                "width": 0.0872972055673753,
+                "height": 0.20874945696227426
+              }
+            }
+          ],
+          "results": [
+            {
+              "detectionType": "helmet-worn",
+              "status": "SUCCESS",
+              "provenance": "LIVE_INFERENCE",
+              "confidence": 0.9098529440312472,
+              "durationSeconds": 1,
+              "objects": [
+                {
+                  "label": "helmet",
+                  "confidence": 0.9098529440312472,
+                  "boundingBox": {
+                    "x": 0.5298444300889968,
+                    "y": 0.25928363800048826,
+                    "width": 0.06994523406028752,
+                    "height": 0.10874866909450948
+                  }
+                },
+                {
+                  "label": "person",
+                  "confidence": 0.7210482340959246,
+                  "boundingBox": {
+                    "x": 0.5147283610551463,
+                    "y": 0.26195069765818274,
+                    "width": 0.08816101338564142,
+                    "height": 0.20275018764606184
+                  }
+                }
+              ],
+              "metadata": {
+                "headEvidenceModel": "helmet-head-evidence",
+                "headEvidenceProbeSha256": "6b893fba3321f8203b22073d0510e98336e7f636e0e1aa2771605a2b79a04da9",
+                "compliantCount": 1,
+                "threatType": "helmet_worn_inside_facility",
+                "evidenceSource": "localized-head-classification",
+                "localizedHeads": [
+                  {
+                    "boundingBox": {
+                      "x": 0.5298444300889968,
+                      "y": 0.25928363800048826,
+                      "width": 0.06994523406028752,
+                      "height": 0.10874866909450948
+                    },
+                    "localizationConfidence": 0.7127714762177675
+                  }
+                ]
+              },
+              "executionMetadata": {
+                "status": "SUCCESS",
+                "provenance": "LIVE_INFERENCE",
+                "modelId": "helmet-classifier",
+                "modelVersion": "1.3.4",
+                "simulated": false,
+                "timestamp": "2026-10-19T11:22:15.512Z"
+              },
+              "requiresAlert": true
+            }
+          ]
+        },
+        {
+          "capturedAt": "2026-10-19T11:20:09.280Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.6959279658033779,
+              "boundingBox": {
+                "x": 0.5145738072401009,
+                "y": 0.2641755602647071,
+                "width": 0.08914010473284362,
+                "height": 0.1992784513689565
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.5682981758262358,
+              "boundingBox": {
+                "x": 0.6273056454647171,
+                "y": 0.48876268253739386,
+                "width": 0.1402784764239171,
+                "height": 0.4044316972144584
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.40000715736172054,
+              "boundingBox": {
+                "x": 0.6305458855380941,
+                "y": 0.4904251453250227,
+                "width": 0.0963927243343643,
+                "height": 0.19563840840711777
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.3870248049007188,
+              "boundingBox": {
+                "x": 0.06136754957463253,
+                "y": 0.1554977336527301,
+                "width": 0.10200984432279023,
+                "height": 0.435655978393074
+              }
+            }
+          ],
+          "results": [
+            {
+              "detectionType": "helmet-worn",
+              "status": "SUCCESS",
+              "provenance": "LIVE_INFERENCE",
+              "confidence": 0.9448392285790408,
+              "durationSeconds": 1,
+              "objects": [
+                {
+                  "label": "helmet",
+                  "confidence": 0.9448392285790408,
+                  "boundingBox": {
+                    "x": 0.5276885271072388,
+                    "y": 0.26131988631354436,
+                    "width": 0.07306733131408694,
+                    "height": 0.10788221359252942
+                  }
+                },
+                {
+                  "label": "person",
+                  "confidence": 0.6959279658033779,
+                  "boundingBox": {
+                    "x": 0.5145738072401009,
+                    "y": 0.2641755602647071,
+                    "width": 0.08914010473284362,
+                    "height": 0.1992784513689565
+                  }
+                }
+              ],
+              "metadata": {
+                "headEvidenceModel": "helmet-head-evidence",
+                "headEvidenceProbeSha256": "6b893fba3321f8203b22073d0510e98336e7f636e0e1aa2771605a2b79a04da9",
+                "compliantCount": 1,
+                "threatType": "helmet_worn_inside_facility",
+                "evidenceSource": "localized-head-classification",
+                "localizedHeads": [
+                  {
+                    "boundingBox": {
+                      "x": 0.5276885271072388,
+                      "y": 0.26131988631354436,
+                      "width": 0.07306733131408694,
+                      "height": 0.10788221359252942
+                    },
+                    "localizationConfidence": 0.5363456243417062
+                  }
+                ]
+              },
+              "executionMetadata": {
+                "status": "SUCCESS",
+                "provenance": "LIVE_INFERENCE",
+                "modelId": "helmet-classifier",
+                "modelVersion": "1.3.4",
+                "simulated": false,
+                "timestamp": "2026-10-19T11:22:16.223Z"
+              },
+              "requiresAlert": true
+            }
+          ]
+        },
+        {
+          "capturedAt": "2026-10-19T11:20:17.234Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.7027894029993718,
+              "boundingBox": {
+                "x": 0.5161080158373609,
+                "y": 0.25858008584270253,
+                "width": 0.08641854989113507,
+                "height": 0.20899259885422927
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.6805312577045441,
+              "boundingBox": {
+                "x": 0.6263631576519546,
+                "y": 0.4872365294727709,
+                "width": 0.13907330884570668,
+                "height": 0.3972139253856381
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.3681977122591462,
+              "boundingBox": {
+                "x": 0.6294606066084837,
+                "y": 0.48862776564417526,
+                "width": 0.08890099903895066,
+                "height": 0.20515846041152025
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.3554907201564532,
+              "boundingBox": {
+                "x": 0.059172198719839045,
+                "y": 0.15502777515644203,
+                "width": 0.08091828118352136,
+                "height": 0.31320538789136776
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-19T11:20:27.212Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.7118034595943925,
+              "boundingBox": {
+                "x": 0.5142971149988618,
+                "y": 0.265476763650306,
+                "width": 0.08883499893164926,
+                "height": 0.20286156806290712
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.561115005452244,
+              "boundingBox": {
+                "x": 0.06708550672119919,
+                "y": 0.14794761738530057,
+                "width": 0.06811501450260661,
+                "height": 0.2973869757506078
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.4953730206960927,
+              "boundingBox": {
+                "x": 0.6334805552244915,
+                "y": 0.4889110233265037,
+                "width": 0.0839524818070494,
+                "height": 0.19679864895019206
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.4529334346336569,
+              "boundingBox": {
+                "x": 0.6283816285752749,
+                "y": 0.4898025396446897,
+                "width": 0.13678301233961887,
+                "height": 0.40771600162758753
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-19T11:20:39.199Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.757181563034873,
+              "boundingBox": {
+                "x": 0.5150113646560791,
+                "y": 0.27421849829567935,
+                "width": 0.08606861490682927,
+                "height": 0.18642766218820933
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.6630161403854231,
+              "boundingBox": {
+                "x": 0.6145424145367733,
+                "y": 0.5311855421442897,
+                "width": 0.128910566403455,
+                "height": 0.455788407095552
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.4114718969449669,
+              "boundingBox": {
+                "x": 0.03610383920207768,
+                "y": 0.14916992749185026,
+                "width": 0.10025869710268584,
+                "height": 0.20731200211526196
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-19T11:20:47.209Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.8354675264308753,
+              "boundingBox": {
+                "x": 0.3175944960748093,
+                "y": 0.06656911581712703,
+                "width": 0.07178828355205091,
+                "height": 0.38842667586357577
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.7618659199773248,
+              "boundingBox": {
+                "x": 0.5148719122436268,
+                "y": 0.27609485603694706,
+                "width": 0.08673560442762362,
+                "height": 0.18712981212054625
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.6139376471566038,
+              "boundingBox": {
+                "x": 0.05384645722821883,
+                "y": 0.15475523390134469,
+                "width": 0.06976050488046817,
+                "height": 0.1944650010203441
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-19T11:20:57.253Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.7295606129033061,
+              "boundingBox": {
+                "x": 0.5143755343636143,
+                "y": 0.2703909626544493,
+                "width": 0.08796021996333847,
+                "height": 0.19261195167161388
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.5361005533814023,
+              "boundingBox": {
+                "x": 0.060642354348021454,
+                "y": 0.15704865005860272,
+                "width": 0.07222063807901202,
+                "height": 0.26931663092245794
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-19T11:21:07.200Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.7827497303922542,
+              "boundingBox": {
+                "x": 0.13385614955533795,
+                "y": 0.43147616000806627,
+                "width": 0.15992221518446195,
+                "height": 0.513567759409125
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.748888590223558,
+              "boundingBox": {
+                "x": 0.5150732777424465,
+                "y": 0.2672342332616925,
+                "width": 0.08593640625780163,
+                "height": 0.1998712556779706
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.4477105657205058,
+              "boundingBox": {
+                "x": 0.031376507638109466,
+                "y": 0.15572295099185615,
+                "width": 0.11447975454318744,
+                "height": 0.4242902928551131
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-19T11:21:11.199Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.7357992855301063,
+              "boundingBox": {
+                "x": 0.5160300804760201,
+                "y": 0.26602489119915473,
+                "width": 0.08448392066252752,
+                "height": 0.2027899748852191
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.5347356999171069,
+              "boundingBox": {
+                "x": 0.05984815993433799,
+                "y": 0.16041605462347633,
+                "width": 0.07045677915470286,
+                "height": 0.21011357898442587
+              }
+            }
+          ],
+          "results": [
+            {
+              "detectionType": "helmet-worn",
+              "status": "SUCCESS",
+              "provenance": "LIVE_INFERENCE",
+              "confidence": 0.9359022463037313,
+              "durationSeconds": 1,
+              "objects": [
+                {
+                  "label": "helmet",
+                  "confidence": 0.9359022463037313,
+                  "boundingBox": {
+                    "x": 0.5277924925088883,
+                    "y": 0.2547396818796794,
+                    "width": 0.07861530184745791,
+                    "height": 0.1260324160257975
+                  }
+                },
+                {
+                  "label": "person",
+                  "confidence": 0.7357992855301063,
+                  "boundingBox": {
+                    "x": 0.5160300804760201,
+                    "y": 0.26602489119915473,
+                    "width": 0.08448392066252752,
+                    "height": 0.2027899748852191
+                  }
+                }
+              ],
+              "metadata": {
+                "headEvidenceModel": "helmet-head-evidence",
+                "headEvidenceProbeSha256": "6b893fba3321f8203b22073d0510e98336e7f636e0e1aa2771605a2b79a04da9",
+                "compliantCount": 1,
+                "threatType": "helmet_worn_inside_facility",
+                "evidenceSource": "localized-head-classification",
+                "localizedHeads": [
+                  {
+                    "boundingBox": {
+                      "x": 0.5277924925088883,
+                      "y": 0.2547396818796794,
+                      "width": 0.07861530184745791,
+                      "height": 0.1260324160257975
+                    },
+                    "localizationConfidence": 0.6874291767291041
+                  }
+                ]
+              },
+              "executionMetadata": {
+                "status": "SUCCESS",
+                "provenance": "LIVE_INFERENCE",
+                "modelId": "helmet-classifier",
+                "modelVersion": "1.3.4",
+                "simulated": false,
+                "timestamp": "2026-10-19T11:22:21.861Z"
+              },
+              "requiresAlert": true
+            }
+          ]
+        },
+        {
+          "capturedAt": "2026-10-19T11:21:21.207Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.6379857331522345,
+              "boundingBox": {
+                "x": 0.045467138059894364,
+                "y": 0.16660071445726665,
+                "width": 0.08126811729280128,
+                "height": 0.19260230823678381
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.5537406393142987,
+              "boundingBox": {
+                "x": 0.6393230122570226,
+                "y": 0.5104918549010192,
+                "width": 0.10963207927770524,
+                "height": 0.3564992505647566
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-19T11:21:31.193Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.5646454753585459,
+              "boundingBox": {
+                "x": 0.5118598894329516,
+                "y": 0.18405448792645002,
+                "width": 0.1551354660640707,
+                "height": 0.3082310294837636
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.5146253823340068,
+              "boundingBox": {
+                "x": 0.6403191893304032,
+                "y": 0.4813172449079438,
+                "width": 0.1094833747383821,
+                "height": 0.2746338928515887
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.5039132683229894,
+              "boundingBox": {
+                "x": 0.051349964844579876,
+                "y": 0.1804696570038869,
+                "width": 0.06929639556528056,
+                "height": 0.16710763630804398
+              }
+            }
+          ],
+          "results": []
+        }
+      ],
+      "alertFrames": 4
+    },
+    {
+      "channel": 5,
+      "frames": [
+        {
+          "capturedAt": "2026-10-19T11:17:29.375Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.8594854377972396,
+              "boundingBox": {
+                "x": 0.43824731527689104,
+                "y": 0.3857907953563578,
+                "width": 0.32040128517456673,
+                "height": 0.6142092046436423
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.7222587612859854,
+              "boundingBox": {
+                "x": 0.17970561701496476,
+                "y": 0.00039361495440655604,
+                "width": 0.08262825113119152,
+                "height": 0.10095269223158547
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-19T11:17:39.388Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.8783294881361883,
+              "boundingBox": {
+                "x": 0.49475561501324294,
+                "y": 0.3652618823591301,
+                "width": 0.31977961921902576,
+                "height": 0.63473811764087
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.6941908585102965,
+              "boundingBox": {
+                "x": 0.17648532250091237,
+                "y": 0,
+                "width": 0.08653877429267925,
+                "height": 0.10075856096773206
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.38893128481469574,
+              "boundingBox": {
+                "x": 0.3841528070927282,
+                "y": 0.0008633422642278951,
+                "width": 0.08392169309750497,
+                "height": 0.14294269337723498
+              }
+            }
+          ],
+          "results": [
+            {
+              "detectionType": "helmet-worn",
+              "status": "SUCCESS",
+              "provenance": "LIVE_INFERENCE",
+              "confidence": 0.9956160222439203,
+              "durationSeconds": 1,
+              "objects": [
+                {
+                  "label": "helmet",
+                  "confidence": 0.9956160222439203,
+                  "boundingBox": {
+                    "x": 0.5456463932991028,
+                    "y": 0.35220152537027993,
+                    "width": 0.2702545881271362,
+                    "height": 0.4505618201361762
+                  }
+                },
+                {
+                  "label": "person",
+                  "confidence": 0.8783294881361883,
+                  "boundingBox": {
+                    "x": 0.49475561501324294,
+                    "y": 0.3652618823591301,
+                    "width": 0.31977961921902576,
+                    "height": 0.63473811764087
+                  }
+                }
+              ],
+              "metadata": {
+                "headEvidenceModel": "helmet-head-evidence",
+                "headEvidenceProbeSha256": "6b893fba3321f8203b22073d0510e98336e7f636e0e1aa2771605a2b79a04da9",
+                "compliantCount": 1,
+                "threatType": "helmet_worn_inside_facility",
+                "evidenceSource": "localized-head-classification",
+                "localizedHeads": [
+                  {
+                    "boundingBox": {
+                      "x": 0.5456463932991028,
+                      "y": 0.35220152537027993,
+                      "width": 0.2702545881271362,
+                      "height": 0.4505618201361762
+                    },
+                    "localizationConfidence": 0.7102497945447084
+                  }
+                ]
+              },
+              "executionMetadata": {
+                "status": "SUCCESS",
+                "provenance": "LIVE_INFERENCE",
+                "modelId": "helmet-classifier",
+                "modelVersion": "1.3.4",
+                "simulated": false,
+                "timestamp": "2026-10-19T11:22:25.152Z"
+              },
+              "requiresAlert": true
+            }
+          ]
+        },
+        {
+          "capturedAt": "2026-10-19T11:17:47.387Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.8684302442109519,
+              "boundingBox": {
+                "x": 0.4743597674210335,
+                "y": 0.3650483222874892,
+                "width": 0.3162786306186661,
+                "height": 0.6349516777125108
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.580059541101317,
+              "boundingBox": {
+                "x": 0.17791728950077557,
+                "y": 0.0009983605066500453,
+                "width": 0.08159394356693145,
+                "height": 0.10054783530284742
+              }
+            }
+          ],
+          "results": [
+            {
+              "detectionType": "helmet-worn",
+              "status": "SUCCESS",
+              "provenance": "LIVE_INFERENCE",
+              "confidence": 0.9896570717261125,
+              "durationSeconds": 1,
+              "objects": [
+                {
+                  "label": "helmet",
+                  "confidence": 0.9896570717261125,
+                  "boundingBox": {
+                    "x": 0.5143370747566223,
+                    "y": 0.3448932647705078,
+                    "width": 0.25560224056243896,
+                    "height": 0.4518031650119358
+                  }
+                },
+                {
+                  "label": "person",
+                  "confidence": 0.8684302442109519,
+                  "boundingBox": {
+                    "x": 0.4743597674210335,
+                    "y": 0.3650483222874892,
+                    "width": 0.3162786306186661,
+                    "height": 0.6349516777125108
+                  }
+                }
+              ],
+              "metadata": {
+                "headEvidenceModel": "helmet-head-evidence",
+                "headEvidenceProbeSha256": "6b893fba3321f8203b22073d0510e98336e7f636e0e1aa2771605a2b79a04da9",
+                "compliantCount": 1,
+                "threatType": "helmet_worn_inside_facility",
+                "evidenceSource": "localized-head-classification",
+                "localizedHeads": [
+                  {
+                    "boundingBox": {
+                      "x": 0.5143370747566223,
+                      "y": 0.3448932647705078,
+                      "width": 0.25560224056243896,
+                      "height": 0.4518031650119358
+                    },
+                    "localizationConfidence": 0.7820649086442302
+                  }
+                ]
+              },
+              "executionMetadata": {
+                "status": "SUCCESS",
+                "provenance": "LIVE_INFERENCE",
+                "modelId": "helmet-classifier",
+                "modelVersion": "1.3.4",
+                "simulated": false,
+                "timestamp": "2026-10-19T11:22:26.098Z"
+              },
+              "requiresAlert": true
+            }
+          ]
+        },
+        {
+          "capturedAt": "2026-10-19T11:17:55.394Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.8898902881915305,
+              "boundingBox": {
+                "x": 0.46324650714739163,
+                "y": 0.25143545773549636,
+                "width": 0.293740265630343,
+                "height": 0.7485645422645036
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.686012951218089,
+              "boundingBox": {
+                "x": 0.1347874134984492,
+                "y": 0,
+                "width": 0.12794078859473762,
+                "height": 0.12204938474826876
+              }
+            }
+          ],
+          "results": [
+            {
+              "detectionType": "helmet-worn",
+              "status": "SUCCESS",
+              "provenance": "LIVE_INFERENCE",
+              "confidence": 0.9848443079174138,
+              "durationSeconds": 1,
+              "objects": [
+                {
+                  "label": "helmet",
+                  "confidence": 0.9848443079174138,
+                  "boundingBox": {
+                    "x": 0.48309439420700073,
+                    "y": 0.2315622329711914,
+                    "width": 0.24497759342193604,
+                    "height": 0.4126135508219402
+                  }
+                },
+                {
+                  "label": "person",
+                  "confidence": 0.8898902881915305,
+                  "boundingBox": {
+                    "x": 0.46324650714739163,
+                    "y": 0.25143545773549636,
+                    "width": 0.293740265630343,
+                    "height": 0.7485645422645036
+                  }
+                }
+              ],
+              "metadata": {
+                "headEvidenceModel": "helmet-head-evidence",
+                "headEvidenceProbeSha256": "6b893fba3321f8203b22073d0510e98336e7f636e0e1aa2771605a2b79a04da9",
+                "compliantCount": 1,
+                "threatType": "helmet_worn_inside_facility",
+                "evidenceSource": "localized-head-classification",
+                "localizedHeads": [
+                  {
+                    "boundingBox": {
+                      "x": 0.48309439420700073,
+                      "y": 0.2315622329711914,
+                      "width": 0.24497759342193604,
+                      "height": 0.4126135508219402
+                    },
+                    "localizationConfidence": 0.6874467757261584
+                  }
+                ]
+              },
+              "executionMetadata": {
+                "status": "SUCCESS",
+                "provenance": "LIVE_INFERENCE",
+                "modelId": "helmet-classifier",
+                "modelVersion": "1.3.4",
+                "simulated": false,
+                "timestamp": "2026-10-19T11:22:26.738Z"
+              },
+              "requiresAlert": true
+            }
+          ]
+        },
+        {
+          "capturedAt": "2026-10-19T11:18:05.438Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.8551401072383982,
+              "boundingBox": {
+                "x": 0.42125109984649206,
+                "y": 0.20377654523985156,
+                "width": 0.3107731067152378,
+                "height": 0.7962234547601484
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.5379051085878075,
+              "boundingBox": {
+                "x": 0.13469982552115503,
+                "y": 0.0008965492378527446,
+                "width": 0.12227461651564106,
+                "height": 0.11989364947466091
+              }
+            }
+          ],
+          "results": [
+            {
+              "detectionType": "helmet-worn",
+              "status": "SUCCESS",
+              "provenance": "LIVE_INFERENCE",
+              "confidence": 0.9711586043666971,
+              "durationSeconds": 1,
+              "objects": [
+                {
+                  "label": "helmet",
+                  "confidence": 0.9711586043666971,
+                  "boundingBox": {
+                    "x": 0.4076154351234436,
+                    "y": 0.20543094211154514,
+                    "width": 0.2367816686630249,
+                    "height": 0.36001298692491335
+                  }
+                },
+                {
+                  "label": "person",
+                  "confidence": 0.8551401072383982,
+                  "boundingBox": {
+                    "x": 0.42125109984649206,
+                    "y": 0.20377654523985156,
+                    "width": 0.3107731067152378,
+                    "height": 0.7962234547601484
+                  }
+                }
+              ],
+              "metadata": {
+                "headEvidenceModel": "helmet-head-evidence",
+                "headEvidenceProbeSha256": "6b893fba3321f8203b22073d0510e98336e7f636e0e1aa2771605a2b79a04da9",
+                "compliantCount": 1,
+                "threatType": "helmet_worn_inside_facility",
+                "evidenceSource": "localized-head-classification",
+                "localizedHeads": [
+                  {
+                    "boundingBox": {
+                      "x": 0.4076154351234436,
+                      "y": 0.20543094211154514,
+                      "width": 0.2367816686630249,
+                      "height": 0.36001298692491335
+                    },
+                    "localizationConfidence": 0.8783623883218752
+                  }
+                ]
+              },
+              "executionMetadata": {
+                "status": "SUCCESS",
+                "provenance": "LIVE_INFERENCE",
+                "modelId": "helmet-classifier",
+                "modelVersion": "1.3.4",
+                "simulated": false,
+                "timestamp": "2026-10-19T11:22:27.681Z"
+              },
+              "requiresAlert": true
+            }
+          ]
+        },
+        {
+          "capturedAt": "2026-10-19T11:18:15.384Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.9118123789682926,
+              "boundingBox": {
+                "x": 0.45641600112105374,
+                "y": 0.16200138933028915,
+                "width": 0.3135871944369345,
+                "height": 0.8284653565536811
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.5357006323797435,
+              "boundingBox": {
+                "x": 0.16016434766260232,
+                "y": 0.001313285971297311,
+                "width": 0.09843220613507606,
+                "height": 0.11057795618130986
+              }
+            }
+          ],
+          "results": [
+            {
+              "detectionType": "helmet-worn",
+              "status": "SUCCESS",
+              "provenance": "LIVE_INFERENCE",
+              "confidence": 0.9928592114853223,
+              "durationSeconds": 1,
+              "objects": [
+                {
+                  "label": "helmet",
+                  "confidence": 0.9928592114853223,
+                  "boundingBox": {
+                    "x": 0.48565884828567507,
+                    "y": 0.14770192040337457,
+                    "width": 0.21929738521575926,
+                    "height": 0.37224074469672297
+                  }
+                },
+                {
+                  "label": "person",
+                  "confidence": 0.9118123789682926,
+                  "boundingBox": {
+                    "x": 0.45641600112105374,
+                    "y": 0.16200138933028915,
+                    "width": 0.3135871944369345,
+                    "height": 0.8284653565536811
+                  }
+                }
+              ],
+              "metadata": {
+                "headEvidenceModel": "helmet-head-evidence",
+                "headEvidenceProbeSha256": "6b893fba3321f8203b22073d0510e98336e7f636e0e1aa2771605a2b79a04da9",
+                "compliantCount": 1,
+                "threatType": "helmet_worn_inside_facility",
+                "evidenceSource": "localized-head-classification",
+                "localizedHeads": [
+                  {
+                    "boundingBox": {
+                      "x": 0.48565884828567507,
+                      "y": 0.14770192040337457,
+                      "width": 0.21929738521575926,
+                      "height": 0.37224074469672297
+                    },
+                    "localizationConfidence": 0.7724185935107037
+                  }
+                ]
+              },
+              "executionMetadata": {
+                "status": "SUCCESS",
+                "provenance": "LIVE_INFERENCE",
+                "modelId": "helmet-classifier",
+                "modelVersion": "1.3.4",
+                "simulated": false,
+                "timestamp": "2026-10-19T11:22:28.459Z"
+              },
+              "requiresAlert": true
+            }
+          ]
+        },
+        {
+          "capturedAt": "2026-10-19T11:18:27.431Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.7046718732080848,
+              "boundingBox": {
+                "x": 0.16385066414997398,
+                "y": 0.0013476570841388666,
+                "width": 0.09331380019336108,
+                "height": 0.10787844629638241
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.6809512751673168,
+              "boundingBox": {
+                "x": 0.39137253451423193,
+                "y": 0.014990308294155081,
+                "width": 0.1594898333992827,
+                "height": 0.3739808829437536
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.5421321943298949,
+              "boundingBox": {
+                "x": 0.3831060794235738,
+                "y": 0.0009745750154560308,
+                "width": 0.08924014944083991,
+                "height": 0.16654707152774845
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-19T11:18:37.483Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.6758310940210208,
+              "boundingBox": {
+                "x": 0.16250742096423149,
+                "y": 0.000863467704801455,
+                "width": 0.08612144024960888,
+                "height": 0.10943179828435952
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.6367029261021173,
+              "boundingBox": {
+                "x": 0.3920021083123497,
+                "y": 0.0073192564972425584,
+                "width": 0.1619727376153659,
+                "height": 0.35521485721555923
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.6104949142282656,
+              "boundingBox": {
+                "x": 0.3840678227514956,
+                "y": 0.0013392698091990282,
+                "width": 0.08754721813595995,
+                "height": 0.15863020541532258
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-19T11:18:47.501Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.6765341259298907,
+              "boundingBox": {
+                "x": 0.39018513221753687,
+                "y": 0.005233427157731637,
+                "width": 0.15828729444624573,
+                "height": 0.38055943879518045
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.6750142751403274,
+              "boundingBox": {
+                "x": 0.1444227609084318,
+                "y": 0.002130145718855798,
+                "width": 0.1164352550781459,
+                "height": 0.11581391143401858
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.5148654518680758,
+              "boundingBox": {
+                "x": 0.38353872395854766,
+                "y": 0.0007425418464453375,
+                "width": 0.08284100009092848,
+                "height": 0.1526368369008927
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-19T11:18:57.387Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.7034220274212473,
+              "boundingBox": {
+                "x": 0.38999306171340614,
+                "y": 0.006631298213601775,
+                "width": 0.12967127237619908,
+                "height": 0.38460004988762936
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.7013300962726987,
+              "boundingBox": {
+                "x": 0.16169100826446117,
+                "y": 0.0007025777170759552,
+                "width": 0.08742932405069742,
+                "height": 0.10809777956784086
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-19T11:19:07.576Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.7252591803106512,
+              "boundingBox": {
+                "x": 0.17067040319163368,
+                "y": 0.00015451878695699526,
+                "width": 0.08367368488136934,
+                "height": 0.10417474618061409
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.698702829147237,
+              "boundingBox": {
+                "x": 0.3895092509445488,
+                "y": 0.001930027509758612,
+                "width": 0.1434468889948617,
+                "height": 0.3896882828027692
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.4712077515621189,
+              "boundingBox": {
+                "x": 0.38282284967297897,
+                "y": 0.0009034545278945392,
+                "width": 0.08184689005440682,
+                "height": 0.1529217929351047
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-19T11:19:19.201Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.6659715239287038,
+              "boundingBox": {
+                "x": 0.17900114670507405,
+                "y": 0.0008353340190276987,
+                "width": 0.07390596676108185,
+                "height": 0.09964044911788368
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.642607310512787,
+              "boundingBox": {
+                "x": 0.390814857707366,
+                "y": 0.0042458956374226585,
+                "width": 0.14306722064243205,
+                "height": 0.38807631143949756
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-19T11:19:30.834Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.7360988029630633,
+              "boundingBox": {
+                "x": 0.18027271799384664,
+                "y": 0.0009821205794126545,
+                "width": 0.09032690045496067,
+                "height": 0.09747393911255159
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.5937078149241586,
+              "boundingBox": {
+                "x": 0.3907866867478155,
+                "y": 0.007920103676815319,
+                "width": 0.1256026992852714,
+                "height": 0.32060600861014055
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-19T11:19:38.730Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.7172355746922321,
+              "boundingBox": {
+                "x": 0.3901568564236878,
+                "y": 0.002564508113258567,
+                "width": 0.13610896602671352,
+                "height": 0.3940245057106656
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.6993839552847732,
+              "boundingBox": {
+                "x": 0.17123495203780206,
+                "y": 0.0013525221785223277,
+                "width": 0.09321107220519512,
+                "height": 0.10389940541232591
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.46131635148294947,
+              "boundingBox": {
+                "x": 0.3838817347167384,
+                "y": 0.0006602665511306801,
+                "width": 0.08011250621202859,
+                "height": 0.14956237531944253
+              }
+            }
+          ],
+          "results": []
+        },
+        {
+          "capturedAt": "2026-10-19T11:19:48.642Z",
+          "width": 640,
+          "height": 360,
+          "persons": [
+            {
+              "label": "person",
+              "confidence": 0.7110851191423535,
+              "boundingBox": {
+                "x": 0.38985738026919947,
+                "y": 0.004555142267786112,
+                "width": 0.1327571941007425,
+                "height": 0.38960290885249454
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.6945023756933466,
+              "boundingBox": {
+                "x": 0.18138421971846627,
+                "y": 0.0011229772330049249,
+                "width": 0.0760682715204479,
+                "height": 0.09681550611049589
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.45831296371086694,
+              "boundingBox": {
+                "x": 0.3833435455233811,
+                "y": 0.0007662780594410476,
+                "width": 0.08375549728255294,
+                "height": 0.1501322103720868
+              }
+            },
+            {
+              "label": "person",
+              "confidence": 0.37150791107232095,
+              "boundingBox": {
+                "x": 0.1336450042083638,
+                "y": 0.02861685748141926,
+                "width": 0.05110104415948416,
+                "height": 0.09711999332067553
+              }
+            }
+          ],
+          "results": []
+        }
+      ],
+      "alertFrames": 5
+    }
+  ],
+  "negativeCandidates": [
+    {
+      "file": "scratch/helmet-false-f5781a86-8527-4a30-a94a-3f256555fbcb.jpg",
+      "personCandidates": 3,
+      "verified": []
+    },
+    {
+      "file": "scratch/helmet-new-false-alert-raw.jpg",
+      "personCandidates": 1,
+      "verified": []
+    },
+    {
+      "file": "tmp/helmet-channel-7.jpg",
+      "personCandidates": 1,
+      "verified": []
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-0.jpg",
+      "personCandidates": 1,
+      "verified": []
+    },
+    {
+      "file": "scratch/helmet-false-f0b4f55e-00c0-442c-a0e1-3d6a05150bdf.jpg",
+      "personCandidates": 3,
+      "verified": []
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-1.jpg",
+      "personCandidates": 1,
+      "verified": []
+    },
+    {
+      "file": "scratch/helmet-rajkot-original-2.jpg",
+      "personCandidates": 1,
+      "verified": []
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/0e556390-887c-472d-a0e4-b694e4cd1ea7.jpg",
+      "personCandidates": 3,
+      "verified": []
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/2889bea6-ca6e-4a0b-b8d3-9f9e5bc65c16.jpg",
+      "personCandidates": 1,
+      "verified": []
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/34181b1e-58c9-451b-b258-d2d865cb0d56.jpg",
+      "personCandidates": 4,
+      "verified": []
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/3d62d89e-6cd2-465e-b46c-f42837b01231.jpg",
+      "personCandidates": 4,
+      "verified": []
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4599426c-6cf4-4046-9fa6-59d09f077c23.jpg",
+      "personCandidates": 3,
+      "verified": []
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/4e39d73f-c089-4791-ba0a-ba8ece18b2b4.jpg",
+      "personCandidates": 2,
+      "verified": []
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/606e7e81-8b11-4f7c-ade2-48fd9beb9dd4.jpg",
+      "personCandidates": 2,
+      "verified": []
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/b3d41e23-fe4b-449c-bdd3-d82a63ea9a5b.jpg",
+      "personCandidates": 1,
+      "verified": []
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/c4864755-99b9-44d9-a030-5a86e8b96358.jpg",
+      "personCandidates": 2,
+      "verified": []
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/d8a4be2f-c231-433c-bdd8-d64736f9cfe5.jpg",
+      "personCandidates": 3,
+      "verified": []
+    },
+    {
+      "file": "tmp/helmet-permanent-benchmark/negative/fbdd11e7-734d-47d0-8715-dfe0d25fa380.jpg",
+      "personCandidates": 4,
+      "verified": []
+    },
+    {
+      "file": "tmp/bettiah-walking-fix-20261008/package/fixtures/carried.jpg",
+      "personCandidates": 1,
+      "verified": []
+    },
+    {
+      "file": "tmp/rajkot-live-20261019/channel-3-20261019T110657878Z.jpg",
+      "personCandidates": 1,
+      "verified": []
+    }
+  ],
+  "eventsSubmitted": 0,
+  "summary": {
+    "positiveChannels": [
+      {
+        "channel": 3,
+        "frames": 15,
+        "alertFrames": 4
+      },
+      {
+        "channel": 5,
+        "frames": 15,
+        "alertFrames": 5
+      }
+    ],
+    "negativeFrames": 20,
+    "negativeVerifiedHeads": 0,
+    "eventsSubmitted": 0
+  }
+}

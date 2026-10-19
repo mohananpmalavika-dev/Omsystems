@@ -115,12 +115,15 @@ describe("calibrated shutter transitions", () => {
   });
   it("accepts calibrated frame requests and creates shutter events before motion/GPU scheduling, including a snapshot", async () => {
     const pipeline=new AnalyticsPipeline();
-    const internals=pipeline as unknown as {isInitialized:boolean;healthDetector:{detect:unknown};motionDetector:{detect:unknown};scheduler:{scheduleFrame:unknown}};
+    const internals=pipeline as unknown as {isInitialized:boolean;healthDetector:{detect:unknown};motionDetector:{detect:unknown};objectDetector:{detect:unknown};scheduler:{scheduleFrame:unknown}};
     internals.isInitialized=true;
     vi.spyOn(pipeline,"initialize").mockResolvedValue();
     vi.spyOn(pipeline,"cleanup").mockResolvedValue();
     vi.spyOn(internals.healthDetector,"detect" as never).mockResolvedValue([] as never);
     vi.spyOn(internals.motionDetector,"detect" as never).mockResolvedValue([] as never);
+    // Frame ingestion also observes person counts when shutter rules are the
+    // only active rules. This fixture skips model initialization deliberately.
+    vi.spyOn(internals.objectDetector,"detect" as never).mockResolvedValue([] as never);
     vi.spyOn(internals.scheduler,"scheduleFrame" as never).mockReturnValue({shouldProcess:false,modelsToRun:[]} as never);
     const submit=vi.fn(async()=>({accepted:true}));
     const sourceKey="shutter-frame-source-key-for-tests";

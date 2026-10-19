@@ -551,18 +551,19 @@ export class CameraHeartbeatService {
     this.analyticsDeliveryInProgress.add(cameraId);
     const sourceVersion = this.cameraSourceVersions.get(cameraId) ?? 0;
     try {
-      // HD raw RGB would quadruple uplink traffic. Preserve native detail in
-      // high-quality JPEG while keeping local inference on the original RGB.
-      const hd = width > 640 || height > 360;
-      const image = hd ? await sharp(frame, {raw:{width,height,channels:3}})
-        .jpeg({quality:95, chromaSubsampling:"4:4:4"}).toBuffer() : frame;
+      // Raw RGB also saturates shared uplinks at 640x360 across many cameras.
+      // Preserve resolution and colour detail while local inference retains
+      // the original RGB. Upload backpressure includes the encoding work.
+      const image = await sharp(frame, {raw:{width,height,channels:3}})
+        .jpeg({quality:95, chromaSubsampling:"4:4:4"}).toBuffer();
+      if ((this.cameraSourceVersions.get(cameraId) ?? 0) !== sourceVersion) return;
       await this.analyticsFrameSender({
         cameraId,
         capturedAt,
         width,
         height,
         imageBase64: image.toString("base64"),
-        ...(hd ? {imageEncoding:"jpeg" as const} : {}),
+        imageEncoding:"jpeg",
         metadata: { source, edgeAgentId: this.edgeAgentId },
       });
       this.analyticsDeliveryRetryAfter.delete(cameraId);

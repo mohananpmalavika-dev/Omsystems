@@ -3,11 +3,14 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ModelManager, type ModelManagerOptions } from "../src/model-manager.js";
+import fs from "node:fs";
+import { createHash } from "node:crypto";
 
 const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
@@ -104,6 +107,54 @@ describe("retained inference session lifetime", () => {
 });
 
 describe("model provisioning contract", () => {
+  it("reuses verified bytes for health polling and detects replacement or deletion", async () => {
+    const modelsDirectory = await mkdtemp(path.join(os.tmpdir(), "sentinel-checksums-"));
+    temporaryDirectories.push(modelsDirectory);
+    const manager = new ModelManager({ modelsDirectory, enableGPU: false, startCleanupTimer: false });
+    await manager.initialize();
+    const artifact = path.join(modelsDirectory, "verified.onnx");
+    const bytes = Buffer.from("verified-model-bytes");
+    await writeFile(artifact, bytes);
+    manager.addModelConfig({ id: "verified", name: "Verified model", path: "verified.onnx", type: "onnx", priority: "high",
+      sha256: createHash("sha256").update(bytes).digest("hex") });
+    const reads = vi.spyOn(fs, "readFileSync");
+    for (let i = 0; i < 5; i++) {
+      expect(manager.isModelAvailable("verified")).toBe(true);
+      expect(manager.getModelInventory().find(model => model.id === "verified")?.status).toBe("available");
+    }
+    expect(reads.mock.calls.filter(([file]) => file === artifact)).toHaveLength(1);
+    // Same-sized replacement must invalidate the previous successful check.
+    const replacement = path.join(modelsDirectory, "replacement.onnx");
+    await writeFile(replacement, Buffer.alloc(bytes.length, 1));
+    fs.renameSync(replacement, artifact);
+    expect(manager.isModelAvailable("verified")).toBe(false);
+    expect(reads.mock.calls.filter(([file]) => file === artifact)).toHaveLength(2);
+    await rm(artifact);
+    expect(manager.isModelAvailable("verified")).toBe(false);
+    await writeFile(artifact, bytes);
+    expect(manager.isModelAvailable("verified")).toBe(true);
+    await manager.shutdown();
+  });
+
+  it("checks only the requested model and honours a changed expected checksum", async () => {
+    const modelsDirectory = await mkdtemp(path.join(os.tmpdir(), "sentinel-single-checksum-"));
+    temporaryDirectories.push(modelsDirectory);
+    const manager = new ModelManager({ modelsDirectory, enableGPU: false, startCleanupTimer: false });
+    await manager.initialize();
+    const bytes = Buffer.from("model");
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    for (const id of ["a", "b"]) {
+      await writeFile(path.join(modelsDirectory, `${id}.onnx`), bytes);
+      manager.addModelConfig({ id, name: id, path: `${id}.onnx`, type: "onnx", priority: "high", sha256 });
+    }
+    const reads = vi.spyOn(fs, "readFileSync");
+    expect(manager.isModelAvailable("a")).toBe(true);
+    expect(reads.mock.calls.filter(([file]) => file === path.join(modelsDirectory, "b.onnx"))).toHaveLength(0);
+    manager.getModelConfig("a")!.sha256 = "0".repeat(64);
+    expect(manager.isModelAvailable("a")).toBe(false);
+    expect(reads.mock.calls.filter(([file]) => file === path.join(modelsDirectory, "a.onnx"))).toHaveLength(1);
+    await manager.shutdown();
+  });
   it("discovers and loads every required manifest model through the runtime cache", async () => {
     const modelsDirectory = await mkdtemp(path.join(os.tmpdir(), "sentinel-models-"));
     temporaryDirectories.push(modelsDirectory);

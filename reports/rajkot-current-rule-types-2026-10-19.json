@@ -1,0 +1,8 @@
+[{"camera":"Rajkot - Channel 1","rules":[{"detection" : "helmet-worn", "confidence" : 0.7000, "seconds" : 1.000, "cooldown" : 20}]}, 
+ {"camera":"Rajkot - Channel 2","rules":[{"detection" : "helmet-worn", "confidence" : 0.7000, "seconds" : 1.000, "cooldown" : 20}]}, 
+ {"camera":"Rajkot - Channel 3","rules":[{"detection" : "helmet-worn", "confidence" : 0.7000, "seconds" : 1.000, "cooldown" : 20}]}, 
+ {"camera":"Rajkot - Channel 4","rules":[{"detection" : "helmet-worn", "confidence" : 0.7000, "seconds" : 1.000, "cooldown" : 20}]}, 
+ {"camera":"Rajkot - Channel 5","rules":[{"detection" : "helmet-worn", "confidence" : 0.7000, "seconds" : 1.000, "cooldown" : 20}]}, 
+ {"camera":"Rajkot - Channel 6","rules":[{"detection" : "helmet-worn", "confidence" : 0.7000, "seconds" : 1.000, "cooldown" : 20}]}, 
+ {"camera":"Rajkot - Channel 7","rules":[{"detection" : "helmet-worn", "confidence" : 0.7000, "seconds" : 1.000, "cooldown" : 20}]}, 
+ {"camera":"Rajkot - Channel 8","rules":[{"detection" : "dual-control-verification", "confidence" : 0.6500, "seconds" : 0.000, "cooldown" : 30}, {"detection" : "helmet-worn", "confidence" : 0.7000, "seconds" : 1.000, "cooldown" : 20}]}]

@@ -10,7 +10,7 @@
  * - Performance monitoring
  */
 
-import * as fs from 'fs';
+import fs from 'node:fs';
 import * as path from 'path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -132,6 +132,7 @@ export class ModelManager {
   private isInitialized = false;
   private loadTimes: number[] = [];
   private readonly pendingLoads = new Map<string, Promise<any>>();
+  private readonly verifiedArtifacts = new Map<string, { fingerprint: string; sha256: string }>();
   private cleanupTimer: ReturnType<typeof setInterval> | undefined;
 
   // GPU detection
@@ -698,10 +699,14 @@ export class ModelManager {
   }
 
   getModelInventory(): ModelAvailability[] {
-    return this.getAllConfigs().map((config) => {
+    return this.getAllConfigs().map(config => this.getModelAvailability(config));
+  }
+
+  private getModelAvailability(config: ModelConfig): ModelAvailability {
       const configuredPath = this.configuredPath(config);
       const resolvedPath = this.resolveModelPath(configuredPath);
       if (!fs.existsSync(resolvedPath)) {
+        this.verifiedArtifacts.delete(resolvedPath);
         return availability(config, configuredPath, resolvedPath, 'missing', null, 'model file not found');
       }
       const stats = fs.statSync(resolvedPath);
@@ -712,7 +717,14 @@ export class ModelManager {
         ? process.env[config.sha256Environment]?.trim().toLowerCase()
         : config.sha256?.toLowerCase();
       if (expectedHash) {
-        const actualHash = createHash('sha256').update(fs.readFileSync(resolvedPath)).digest('hex');
+        // Health polling must not repeatedly read every large ONNX model on
+        // the inference event loop. Reverify whenever the artifact changes.
+        const fingerprint = `${stats.dev}:${stats.ino}:${stats.size}:${stats.mtimeMs}:${stats.ctimeMs}`;
+        const cached = this.verifiedArtifacts.get(resolvedPath);
+        const actualHash = cached?.fingerprint === fingerprint
+          ? cached.sha256
+          : createHash('sha256').update(fs.readFileSync(resolvedPath)).digest('hex');
+        this.verifiedArtifacts.set(resolvedPath, { fingerprint, sha256: actualHash });
         if (actualHash !== expectedHash) {
           return availability(config, configuredPath, resolvedPath, 'invalid', stats.size, `sha256 mismatch: expected ${expectedHash}; received ${actualHash}`);
         }
@@ -725,7 +737,6 @@ export class ModelManager {
         stats.size,
         null,
       );
-    });
   }
 
   getProvisioningSummary() {
@@ -744,7 +755,8 @@ export class ModelManager {
   }
 
   isModelAvailable(modelId: string): boolean {
-    const model = this.getModelInventory().find((item) => item.id === modelId);
+    const config = this.configs.get(modelId);
+    const model = config ? this.getModelAvailability(config) : undefined;
     return model?.status === 'available' || model?.status === 'loaded';
   }
 
@@ -836,6 +848,7 @@ export class ModelManager {
     }
 
     this.models.clear();
+    this.verifiedArtifacts.clear();
     this.stats.totalMemoryUsage = 0;
     
     console.log('All models cleared');
