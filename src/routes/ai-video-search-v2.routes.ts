@@ -203,10 +203,13 @@ export async function registerAIVideoSearchV2Routes(app: FastifyInstance, pool: 
         [user.tenantId]
       );
 
-      // Generate smart suggestions based on activity
+      // Generate smart suggestions based on activity including multilingual queries
       const suggestions: string[] = [
+        "ഇന്നലെ വൈകുന്നേരം 7 മണിക്ക് ശേഷം മഞ്ഞ ഷർട്ട് ഇട്ട് ബാഗുമായി വന്ന ആളെ കാണിക്കുക",
+        "ഇന്നത്തെ ബ്രാഞ്ചിലെ പ്രധാന സംഭവങ്ങൾ എന്തൊക്കെയാണ്?",
         "Show me all people in the last hour",
         "Find vehicles in the parking lot",
+        "Show person wearing yellow shirt with bag",
         "Show me any incidents today",
       ];
 
@@ -232,6 +235,47 @@ export async function registerAIVideoSearchV2Routes(app: FastifyInstance, pool: 
       return reply.code(500).send({
         success: false,
         error: "suggestions_failed",
+      });
+    }
+  });
+
+  /**
+   * POST /api/v1/video-search/summary
+   * 
+   * Generate AI Video Summary report ("Talk to your CCTV" - Video RAG)
+   */
+  app.post("/api/v1/video-search/summary", async (request, reply) => {
+    try {
+      const user = request.currentUser;
+      const body = z.object({
+        branchId: z.string().optional(),
+        branchName: z.string().optional(),
+        query: z.string().optional(),
+        timeRange: z.object({
+          from: z.string().optional(),
+          to: z.string().optional(),
+        }).optional(),
+      }).parse(request.body || {});
+
+      const { vlmVideoRAGService } = await import("../services/vlm-video-rag.service.js");
+      const summary = await vlmVideoRAGService.generateVideoSummaryReport({
+        tenantId: user?.tenantId,
+        branchId: body.branchId,
+        branchName: body.branchName,
+        timeRange: body.timeRange,
+        query: body.query || "ഇന്നത്തെ ബ്രാഞ്ചിലെ പ്രധാന സംഭവങ്ങൾ എന്തൊക്കെയാണ്?",
+      });
+
+      return {
+        success: true,
+        data: summary,
+      };
+    } catch (error) {
+      app.log.error({ error }, "[AIVideoSearch] Failed to generate video summary");
+      return reply.code(500).send({
+        success: false,
+        error: "summary_failed",
+        message: error instanceof Error ? error.message : "Unknown error",
       });
     }
   });

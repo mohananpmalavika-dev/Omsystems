@@ -177,7 +177,88 @@ export class PostgresStore
       [reference, baseReference, edgeAgentId ?? null],
     );
     const encrypted = result.rows[0]?.encrypted_uri;
-    return encrypted ? new CentralStreamVault().decrypt(reference, encrypted) : undefined;
+    if (encrypted) {
+      return new CentralStreamVault().decrypt(reference, encrypted);
+    }
+
+    const baseResult = await this.pool.query<{ encrypted_uri: string }>(
+      `SELECT encrypted_uri FROM central_stream_secrets WHERE reference = $1 LIMIT 1`,
+      [baseReference],
+    );
+    if (baseResult.rows[0]?.encrypted_uri) {
+      return new CentralStreamVault().decrypt(baseReference, baseResult.rows[0].encrypted_uri);
+    }
+
+    // Dynamic resolution fallback: Construct verified RTSP URI from camera record and saved device credentials
+    const camRes = await this.pool.query<{
+      id: string;
+      branch_node_id: string;
+      ip_address: string;
+      channel: number | null;
+      recorder_channel: number | null;
+      vendor: string | null;
+      model: string | null;
+      source_type: string | null;
+      edge_agent_id: string | null;
+    }>(
+      `SELECT id, branch_node_id, host(ip_address) as ip_address, channel, recorder_channel,
+              vendor, model, source_type, edge_agent_id
+       FROM cameras
+       WHERE connection_secret_ref = $1 OR connection_secret_ref = $2
+       LIMIT 1`,
+      [reference, baseReference],
+    );
+
+    const cam = camRes.rows[0];
+    if (cam && cam.ip_address && cam.branch_node_id) {
+      const credRes = await this.pool.query<{ encrypted_login: string }>(
+        `SELECT encrypted_login FROM central_device_credentials
+         WHERE branch_id = $1::uuid AND host = $2::inet
+         LIMIT 1`,
+        [cam.branch_node_id, cam.ip_address],
+      );
+      const credRow = credRes.rows[0];
+      if (credRow) {
+        try {
+          const vault = new CentralStreamVault();
+          const decryptedJson = vault.decrypt(`device:${cam.branch_node_id}:${cam.ip_address}`, credRow.encrypted_login);
+          const login = JSON.parse(decryptedJson) as { username?: string; password?: string };
+          const username = login.username ?? "admin";
+          const password = login.password ?? "";
+          const auth = username ? `${encodeURIComponent(username)}:${encodeURIComponent(password)}@` : "";
+          const ch = cam.recorder_channel ?? cam.channel ?? 1;
+          const isSub = reference.endsWith("#sub") || cam.source_type === "analog-dvr-channel" || cam.source_type === "nvr-channel";
+          const subtype = reference.endsWith("#main") ? 0 : isSub ? 1 : 0;
+          
+          let sourceUri: string;
+          const vendorLower = (cam.vendor || "").toLowerCase();
+          const isHikvision = vendorLower.includes("hik");
+
+          if (isHikvision) {
+            sourceUri = `rtsp://${auth}${cam.ip_address}:554/Streaming/Channels/${ch}0${subtype + 1}`;
+          } else {
+            sourceUri = `rtsp://${auth}${cam.ip_address}:554/cam/realmonitor?channel=${ch}&subtype=${subtype}`;
+          }
+
+          const agentMatch = /^edge:\/\/([0-9a-fA-F-]{36})\//.exec(reference);
+          const targetAgentId = agentMatch ? agentMatch[1] : (cam.edge_agent_id || edgeAgentId);
+          if (targetAgentId) {
+            const enc = vault.encrypt(reference, sourceUri);
+            await this.pool.query(
+              `INSERT INTO central_stream_secrets (reference, edge_agent_id, encrypted_uri)
+               VALUES ($1, $2::uuid, $3)
+               ON CONFLICT (reference) DO UPDATE
+               SET encrypted_uri = EXCLUDED.encrypted_uri, updated_at = now()`,
+              [reference, targetAgentId, enc],
+            ).catch(() => undefined);
+          }
+
+          return sourceUri;
+        } catch {}
+      }
+    }
+
+    return undefined;
   }
 
   async upsertDeviceCredentials(edgeAgentId: string, credentials: Array<{ host: string; username: string; password: string }>, overwrite = true, requestedBranchId?: string): Promise<number> {

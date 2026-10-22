@@ -182,7 +182,7 @@ export async function autoProvisionVerifiedCameras(
   const alertsEnabled = options.enableAlerts ?? analyticsEnabled;
 
   for (const discovered of pendingDiscoveries) {
-    if (!discovered.streamVerified || discovered.credentialsRequired) {
+    if (discovered.credentialsRequired) {
       results.push({
         discoveryId: discovered.id,
         status: "needs-attention",

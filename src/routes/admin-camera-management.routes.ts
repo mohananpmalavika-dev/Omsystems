@@ -436,7 +436,7 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
     try {
       client = await store.db.connect();
       await client.query('BEGIN');
-      const camerasRes = await client.query('SELECT id, name FROM cameras WHERE branch_node_id = $1', [branchId]);
+      const camerasRes = await client.query('SELECT id FROM cameras WHERE branch_node_id = $1', [branchId]);
       let deletedCount = 0;
       for (const row of camerasRes.rows) {
         const deletion = await deleteCamera(client, row.id, app);

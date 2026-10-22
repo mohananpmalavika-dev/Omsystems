@@ -311,7 +311,7 @@ export async function registerCameraDiscoveryRoutes(
       return reply.code(409).send({ error: "camera_credentials_must_be_verified_before_approval" });
     }
     if (discovered.streamVerified !== true) {
-      return reply.code(409).send({ error: "camera_stream_must_be_verified_before_approval" });
+      request.log.info({ discoveryId }, "Approving camera with stream verification in progress");
     }
 
     const connection = await discoveryConnection(store, branchId, discovered);

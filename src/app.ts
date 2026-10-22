@@ -2954,6 +2954,7 @@ export async function buildApp(options?: {
     }
 
     // Initialize security services and collectors
+    try {
       const { setDatabase } = await import("./config/database.js");
       const dbPool = (store as any).pool ?? (store as any).db;
       if (dbPool) {

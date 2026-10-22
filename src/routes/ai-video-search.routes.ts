@@ -15,6 +15,7 @@ import type { Pool } from "pg";
 import { AIVideoSearchService, VideoSearchError, ValidationError as SearchValidationError } from "../services/ai-video-search.js";
 import { VideoSearchIntegrationPipeline, PipelineError } from "../services/video-search-integration.js";
 import { initializeMetrics, getMetrics } from "../services/video-search-metrics.js";
+import { vlmVideoRAGService } from "../services/vlm-video-rag.service.js";
 
 /**
  * Error response formatter
@@ -232,6 +233,9 @@ export async function registerAIVideoSearchRoutes(
       });
 
       // Queue search if complex
+      let rawSummary: any = null;
+      let rawQueryUnderstanding: any = null;
+
       const searchOperation = async () => {
         const results = await aiVideoSearch.searchByNaturalLanguage(
           tenantId,
@@ -245,6 +249,9 @@ export async function registerAIVideoSearchRoutes(
             limit: body.limit,
           }
         );
+
+        rawSummary = (results as any)?.summary || null;
+        rawQueryUnderstanding = (results as any)?.queryUnderstanding || null;
 
         // Enrich results with context
         return await integrationPipeline.enrichSearchResults(tenantId, results);
@@ -277,9 +284,11 @@ export async function registerAIVideoSearchRoutes(
         query: body.query,
         results: enrichedResults,
         total: enrichedResults.length,
+        summary: rawSummary,
         metadata: {
           complexity,
           responseTimeMs,
+          queryUnderstanding: rawQueryUnderstanding,
         },
       };
     } catch (error) {
@@ -304,6 +313,44 @@ export async function registerAIVideoSearchRoutes(
       const errorResponse = formatErrorResponse(error);
       app.log.error({ error, route: "natural-language-search" }, "Video search failed");
       return reply.code(errorResponse.statusCode).send(errorResponse);
+    }
+  });
+
+  /**
+   * AI Video Summary Report Endpoint ("Talk to your CCTV" - Video RAG)
+   * POST /v1/ai-video-search/summary
+   */
+  app.post("/v1/ai-video-search/summary", async (request, reply) => {
+    try {
+      const body = z.object({
+        branchId: z.string().optional(),
+        branchName: z.string().optional(),
+        query: z.string().optional(),
+        timeRange: z.object({
+          from: z.string().optional(),
+          to: z.string().optional(),
+        }).optional(),
+      }).parse(request.body || {});
+
+      const tenantId = request.currentUser?.tenantId;
+      const summary = await vlmVideoRAGService.generateVideoSummaryReport({
+        tenantId,
+        branchId: body.branchId,
+        branchName: body.branchName,
+        timeRange: body.timeRange,
+        query: body.query || "ഇന്നത്തെ ബ്രാഞ്ചിലെ പ്രധാന സംഭവങ്ങൾ എന്തൊക്കെയാണ്?",
+      });
+
+      return {
+        success: true,
+        summary,
+      };
+    } catch (error) {
+      app.log.error({ error }, "Failed to generate AI video summary");
+      return reply.code(500).send({
+        error: "SUMMARY_GENERATION_FAILED",
+        message: error instanceof Error ? error.message : "Failed to generate video summary",
+      });
     }
   });
 

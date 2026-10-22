@@ -215,12 +215,14 @@
     <div class="quick-chips">
       <span class="chip" onclick="sendChip('What AI features are available?')">🤖 AI Features</span>
       <span class="chip" onclick="sendChip('features enthaanu')">🌸 Features (ML)</span>
+      <span class="chip" onclick="sendChip('KryptonVision ke kya features hain?')">🇮🇳 फीचर्स (Hindi)</span>
       <span class="chip" onclick="sendChip('What is KryptonVision?')">ℹ️ About</span>
       <span class="chip" onclick="sendChip('Supported cameras')">📷 Cameras</span>
       <span class="chip" onclick="sendChip('Banking NBFC module')">🏦 Banking</span>
       <span class="chip" onclick="sendChip('How do I sign in?')">🔐 Login</span>
       <span class="chip" onclick="sendChip('Edge agent install guide')">⚙️ Edge Agent</span>
       <span class="chip" onclick="sendChip('enthellam features unduo')">💬 Manglish</span>
+      <span class="chip" onclick="sendChip('kaise use karein')">🗣️ Hinglish</span>
     </div>
 
     <!-- Messages -->
@@ -228,10 +230,11 @@
       <div class="welcome" id="welcomeScreen">
         <div class="welcome-orb">🛡️</div>
         <h2>Hello! I'm KryptonAI</h2>
-        <p>Ask me about KryptonVision features, CCTV and VMS, or simple general knowledge. I understand English, Malayalam &amp; Manglish!</p>
+        <p>Ask me about KryptonVision features, CCTV and VMS, or general knowledge. I understand English, Malayalam (മലയാളം), Hindi (हिन्दी), Manglish &amp; Hinglish!</p>
         <div class="welcome-chips">
           <span class="chip" onclick="sendChip('What AI features are available?')">🤖 AI Features</span>
           <span class="chip" onclick="sendChip('enthellam features unduo')">🌸 ML-ൽ ചോദിക്കൂ</span>
+          <span class="chip" onclick="sendChip('KryptonVision ke kya features hain?')">🇮🇳 हिंदी में पूछें</span>
           <span class="chip" onclick="sendChip('Banking NBFC module')">🏦 Banking</span>
           <span class="chip" onclick="sendChip('What is VMS software?')">📹 VMS basics</span>
         </div>
@@ -243,10 +246,11 @@
       <div class="lang-toggle">
         <button class="lang-btn active" id="btnEN" onclick="setLang('en')">EN</button>
         <button class="lang-btn" id="btnML" onclick="setLang('ml')">ML</button>
+        <button class="lang-btn" id="btnHI" onclick="setLang('hi')">HI</button>
       </div>
       <div class="input-wrap">
         <textarea id="msgInput" rows="1"
-          placeholder="Ask about features, CCTV, VMS, or general knowledge…"
+          placeholder="Ask in English, Malayalam, Hindi, Manglish or Hinglish…"
           onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
         <button class="send-btn" id="sendBtn" onclick="sendMessage()" title="Send">➤</button>
       </div>
@@ -266,9 +270,15 @@
     currentLang = lang;
     document.getElementById('btnEN').classList.toggle('active', lang === 'en');
     document.getElementById('btnML').classList.toggle('active', lang === 'ml');
-    document.getElementById('msgInput').placeholder = lang === 'ml'
-      ? 'Features, cameras, analytics… Malayalam-ൽ ചോദിക്കൂ!'
-      : 'Ask about features, CCTV, VMS, or general knowledge…';
+    document.getElementById('btnHI').classList.toggle('active', lang === 'hi');
+    const msgInput = document.getElementById('msgInput');
+    if (lang === 'hi') {
+      msgInput.placeholder = 'फीचर्स, कैमरे, एनालिटिक्स… हिंदी में पूछें!';
+    } else if (lang === 'ml') {
+      msgInput.placeholder = 'Features, cameras, analytics… മലയാളത്തിൽ ചോദിക്കൂ!';
+    } else {
+      msgInput.placeholder = 'Ask about features, CCTV, VMS, or general knowledge…';
+    }
   }
 
   function autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; }
@@ -314,12 +324,19 @@
   }
 
   function renderAIResponse(data) {
+    let msg = data.message;
+    let sugs = data.suggestions || [];
+    if (currentLang === 'hi') {
+      msg = data.messageHi || data.message;
+      sugs = data.suggestionsHi || data.suggestions || [];
+    } else if (currentLang === 'ml') {
+      msg = data.messageMl || data.message;
+      sugs = data.suggestionsMl || data.suggestions || [];
+    }
+
     if (data.type === 'feature_cards' && data.cards && data.cards.length > 0) {
-      const headerMsg = (currentLang === 'ml' && data.messageMl) ? data.messageMl : data.message;
-      renderFeatureCards(headerMsg, data.cards, data.suggestions, data.suggestionsMl);
+      renderFeatureCards(msg, data.cards, data.suggestions, data.suggestionsMl, data.suggestionsHi);
     } else {
-      const msg = (currentLang === 'ml' && data.messageMl) ? data.messageMl : data.message;
-      const sugs = (currentLang === 'ml' && data.suggestionsMl) ? data.suggestionsMl : (data.suggestions || []);
       appendAIMsg(markdownToHTML(msg), sugs);
     }
   }
@@ -341,23 +358,34 @@
     append(el);
   }
 
-  function renderFeatureCards(headerMsg, cards, suggestions, suggestionsMl) {
+  function renderFeatureCards(headerMsg, cards, suggestions, suggestionsMl, suggestionsHi) {
     const el = document.createElement('div');
     el.className = 'msg';
-    const activeSugs = (currentLang === 'ml' && suggestionsMl) ? suggestionsMl : (suggestions || []);
+    let activeSugs = suggestions || [];
+    if (currentLang === 'hi' && suggestionsHi) activeSugs = suggestionsHi;
+    else if (currentLang === 'ml' && suggestionsMl) activeSugs = suggestionsMl;
+
     const sugsHTML = activeSugs.length
       ? `<div class="suggestions">${activeSugs.map(s => `<button class="suggestion-btn" onclick="sendChip('${escAttr(s)}')">${esc(s)}</button>`).join('')}</div>`
       : '';
-    const cardsHTML = cards.map(c => `
+
+    const cardsHTML = cards.map(c => {
+      let initialDesc = c.description;
+      if (currentLang === 'hi' && c.descriptionHi) initialDesc = c.descriptionHi;
+      else if (currentLang === 'ml' && c.descriptionMl) initialDesc = c.descriptionMl;
+
+      return `
       <div class="feature-card">
         <div class="card-icon">${c.icon}</div>
         <div class="card-title">${esc(c.title)}</div>
-        <div class="card-title-ml">${esc(c.titleMl)}</div>
-        <div class="card-desc" data-en="${escAttr(c.description)}" data-ml="${escAttr(c.descriptionMl)}">
-          ${currentLang === 'ml' ? esc(c.descriptionMl) : esc(c.description)}
+        ${c.titleMl ? `<div class="card-title-ml" style="font-size:12px;color:#94a3b8">${esc(c.titleMl)}</div>` : ''}
+        ${c.titleHi ? `<div class="card-title-hi" style="font-size:12px;color:#cbd5e1">${esc(c.titleHi)}</div>` : ''}
+        <div class="card-desc" data-en="${escAttr(c.description)}" data-ml="${escAttr(c.descriptionMl || c.description)}" data-hi="${escAttr(c.descriptionHi || c.description)}">
+          ${esc(initialDesc)}
         </div>
-        <div class="card-tags">${c.tags.map(t => `<span class="card-tag">${esc(t)}</span>`).join('')}</div>
-      </div>`).join('');
+        <div class="card-tags">${(c.tags || []).map(t => `<span class="card-tag">${esc(t)}</span>`).join('')}</div>
+      </div>`;
+    }).join('');
 
     el.innerHTML = `
       <div class="avatar ai">🛡️</div>
@@ -366,8 +394,9 @@
           <div style="font-weight:600;margin-bottom:12px;color:#fff">${markdownToHTML(headerMsg)}</div>
           <div class="ml-toggle">
             <span>Show in:</span>
-            <button class="toggle-btn ${currentLang !== 'ml' ? 'active' : ''}" onclick="toggleCardLang(this,'en')">English</button>
-            <button class="toggle-btn ${currentLang === 'ml' ? 'active' : ''}" onclick="toggleCardLang(this,'ml')">Malayalam</button>
+            <button class="toggle-btn ${currentLang === 'en' ? 'active' : ''}" onclick="toggleCardLang(this,'en')">English</button>
+            <button class="toggle-btn ${currentLang === 'ml' ? 'active' : ''}" onclick="toggleCardLang(this,'ml')">മലയാളം</button>
+            <button class="toggle-btn ${currentLang === 'hi' ? 'active' : ''}" onclick="toggleCardLang(this,'hi')">हिन्दी</button>
           </div>
           <div class="feature-cards-grid">${cardsHTML}</div>
           ${sugsHTML}
@@ -380,7 +409,11 @@
     const container = btn.closest('.bubble');
     container.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    container.querySelectorAll('.card-desc').forEach(d => { d.textContent = lang === 'ml' ? d.dataset.ml : d.dataset.en; });
+    container.querySelectorAll('.card-desc').forEach(d => {
+      if (lang === 'hi') d.textContent = d.dataset.hi || d.dataset.en;
+      else if (lang === 'ml') d.textContent = d.dataset.ml || d.dataset.en;
+      else d.textContent = d.dataset.en;
+    });
   }
 
   function appendTyping() {

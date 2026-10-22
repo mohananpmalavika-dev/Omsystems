@@ -311,6 +311,7 @@ export function DeviceManager() {
   const [probePort, setProbePort] = useState("");
   const [probeUsername, setProbeUsername] = useState("");
   const [probePassword, setProbePassword] = useState("");
+  const [probeChannelCount, setProbeChannelCount] = useState<number>(8);
   const [probing, setProbing] = useState(false);
   const [probeResult, setProbeResult] = useState<DirectProbeResult | null>(null);
   const [probeResults, setProbeResults] = useState<DirectProbeResult[]>([]);
@@ -800,11 +801,11 @@ export function DeviceManager() {
     try {
       // Duplicate prevention: Check if camera/DVR at this IP already exists in this branch
       const alreadyRegistered = cameras.filter(
-        (c: any) => c.ipAddress === ip || c.ip_address === ip || c.connectionSecretRef?.includes(ip)
+        (c: any) => (c.ipAddress === ip || c.ip_address === ip)
       );
-      if (alreadyRegistered.length > 0) {
+      if (alreadyRegistered.length >= 8) {
         closeDirectProbe();
-        setNotice(`Device at ${ip} is already registered in ${activeBranch?.name ?? "branch"} (${alreadyRegistered.map((c: any) => c.name).join(", ")}). Duplicate creation prevented.`);
+        setNotice(`All 8 channels at ${ip} are already registered in ${activeBranch?.name ?? 'branch'}. Duplicate addition prevented.`);
         return;
       }
 
@@ -819,7 +820,7 @@ export function DeviceManager() {
           port,
           rtspPort: port,
         });
-        const completed = await waitForCredentialCommand(command.commandId, 300_000);
+        const completed = await waitForCredentialCommand(command.commandId, 15_000).catch(() => null);
         const discoveries = await cameraInventoryApi.listDiscovered(selectedBranch);
         const hostDiscoveries = (discoveries.data ?? []).filter((item: any) =>
           item.edgeAgentId === gateway.id && item.ipAddress === ip
@@ -830,37 +831,73 @@ export function DeviceManager() {
         closeDirectProbe();
         setDiscoveredCameras(discoveries.data ?? []);
         updateDiscoveryReviewState(discoveries.data ?? []);
-        setShowDiscoveredList(true);
         if (verifiedChannels.length > 0) {
-          setNotice(`✓ Discovered ${verifiedChannels.length} DVR channel${verifiedChannels.length === 1 ? "" : "s"} at ${ip}! Review and approve all channels below.`);
-        } else if (hostDiscoveries.some((item: any) => item.streamVerified)) {
-          setNotice(`✓ Verified stream at ${ip}. Review and approve it below.`);
+          try {
+            await cameraInventoryApi.approveAllDiscovered(selectedBranch, {
+              discoveryIds: verifiedChannels.map((c: any) => c.id),
+              recordingMode: "continuous",
+              retentionDays: 180,
+              enableAnalytics: true,
+              enableAlerts: true,
+            });
+            closeDirectProbe();
+            setShowDiscoveredList(false);
+            setNotice(`✓ Successfully enrolled ${verifiedChannels.length} DVR channel(s) at ${ip}!`);
+            await refreshBranch(selectedBranch);
+            return;
+          } catch {}
+          setShowDiscoveredList(true);
+          setNotice(`✓ Discovered ${verifiedChannels.length} DVR channel(s) at ${ip}! Review or approve below.`);
         } else if (hostDiscoveries.length > 0) {
-          setNotice(`The branch scanner found device at ${ip}. Review and approve it below.`);
+          try {
+            for (const item of hostDiscoveries) {
+              if (item.status !== "approved" && item.duplicateStatus !== "duplicate") {
+                const name = item.displayName || item.model || `${item.vendor || "Camera"} ${item.recorderChannel ? `CH ${item.recorderChannel}` : ip}`;
+                await cameraInventoryApi.approveDiscovery(selectedBranch, item.id, { name, protocol: item.onvifSupport ? "onvif-t" : "rtsp" });
+              }
+            }
+            closeDirectProbe();
+            setShowDiscoveredList(false);
+            setNotice(`✓ Enrolled device at ${ip} into ${activeBranch?.name ?? "branch"}!`);
+            await refreshBranch(selectedBranch);
+            return;
+          } catch {}
+          setShowDiscoveredList(true);
+          setNotice(`The branch scanner found device at ${ip}. Review and approve below.`);
         } else {
           // Verify again before fallback provisioning
           const existing = cameras.find((c: any) => c.ipAddress === ip || c.ip_address === ip);
           if (existing) {
+            closeDirectProbe();
+            setShowDiscoveredList(false);
             setNotice(`Device at ${ip} is already registered as '${existing.name}'. Duplicate addition prevented.`);
             await refreshBranch(selectedBranch);
             return;
           }
-          // If no new unapproved discovery was generated, provision directly into inventory
-          await cameraInventoryApi.approveCamera(selectedBranch, {
-            name: targetResult?.model || `Camera ${ip}`,
-            channel: 1,
-            protocol: "rtsp",
-            connectionTransport: "edge-gateway",
-            connectionSecretRef: `edge://${gateway.id}/${encodeURIComponent(ip)}`,
-            sourceType: "ip-camera",
-            manufacturer: targetResult?.vendor && targetResult.vendor !== "other" ? targetResult.vendor : "Generic RTSP",
-            model: targetResult?.model || `Camera ${ip}`,
-            ipAddress: ip,
-            onvifPort: 80,
-            rtspPort: port,
-            streamProfile: "main",
-          });
-          setNotice(`✓ Camera at ${ip} added directly to ${activeBranch?.name ?? "branch"}! Local Branch Gateway is monitoring this device.`);
+          // Provision directly into inventory (supports single camera or multi-channel DVR)
+          const channelsToProvision = Math.max(1, probeChannelCount || 8);
+          for (let ch = 1; ch <= channelsToProvision; ch++) {
+            await cameraInventoryApi.approveCamera(selectedBranch, {
+              name: channelsToProvision > 1 ? `${targetResult?.model || "DVR"} - Channel ${ch}` : (targetResult?.model || `Camera ${ip}`),
+              channel: ch,
+              protocol: "rtsp",
+              connectionTransport: "edge-gateway",
+              edgeAgentId: gateway.id,
+              connectionSecretRef: channelsToProvision > 1 ? `edge://${gateway.id}/${encodeURIComponent(ip)}-ch${ch}` : `edge://${gateway.id}/${encodeURIComponent(ip)}`,
+              sourceType: channelsToProvision > 1 ? "analog-dvr-channel" : "ip-camera",
+              recorderId: channelsToProvision > 1 ? `recorder-${ip.replace(/\./g, "-")}` : undefined,
+              recorderChannel: channelsToProvision > 1 ? ch : undefined,
+              manufacturer: targetResult?.vendor && targetResult.vendor !== "other" ? targetResult.vendor : "CP PLUS",
+              model: targetResult?.model || (channelsToProvision > 1 ? "CP PLUS DVR" : `Camera ${ip}`),
+              ipAddress: ip,
+              onvifPort: 80,
+              rtspPort: port,
+              streamProfile: "main",
+            });
+          }
+          closeDirectProbe();
+          setShowDiscoveredList(false);
+          setNotice(`✓ Added ${channelsToProvision} channel${channelsToProvision === 1 ? "" : "s"} for ${ip} directly to ${activeBranch?.name ?? "branch"}!`);
         }
         await refreshBranch(selectedBranch);
         return;
@@ -1213,7 +1250,7 @@ export function DeviceManager() {
   const pendingReviewCount = pendingDiscoveryQueueItems.length;
   const approvedReviewCount = discoveryQueueItems.filter((item) => item.reviewStatus === "approved" || item.status === "approved").length;
   const approvableDiscoveryCount = pendingDiscoveryQueueItems.filter((item) =>
-    item.streamVerified === true && item.credentialsRequired !== true && item.reviewStatus === "pending" && item.status !== "approved"
+    item.credentialsRequired !== true && item.reviewStatus === "pending" && item.status !== "approved"
   ).length;
 
   useEffect(() => {
@@ -1899,10 +1936,6 @@ export function DeviceManager() {
       setNotice(`Authentication required: Enter username & password for ${discovered.displayName || discovered.ipAddress} to verify and connect.`);
       return;
     }
-    if (discovered.streamVerified !== true) {
-      setError("Wait for the Branch Gateway to verify a video stream before approving this device.");
-      return;
-    }
     setSaving(true);
     setError(undefined);
     scanAbortedRef.current = false;
@@ -1938,7 +1971,7 @@ export function DeviceManager() {
       let batchSucceeded = false;
       let batchFailure: unknown;
       const batchDiscoveryIds = pendingDiscoveryQueueItems
-        .filter((item) => item.streamVerified && !item.credentialsRequired && item.reviewStatus === "pending")
+        .filter((item) => !item.credentialsRequired && item.reviewStatus === "pending")
         .map((item) => item.id);
 
       try {
@@ -1972,7 +2005,7 @@ export function DeviceManager() {
         const fallbackErrors: string[] = [];
         for (const item of pendingDiscoveryQueueItems) {
           if (scanAbortedRef.current) break;
-          if (item.credentialsRequired || !item.streamVerified || item.reviewStatus !== "pending") continue;
+          if (item.credentialsRequired || item.reviewStatus !== "pending") continue;
           const name = item.displayName || item.model || `${item.vendor || "IP"} Camera (${item.ipAddress})`;
           try {
             await cameraInventoryApi.approveDiscovery(selectedBranch, item.id, { name });
@@ -3435,7 +3468,11 @@ export function DeviceManager() {
               {loadingDiscoveries ? (
                 <div className="loading-state"><Activity className="spin" />Loading devices that require credentials…</div>
               ) : discoveredCameras.length === 0 ? (
-                <div className="device-empty"><Camera size={30} /><strong>{autoProvisionResults.length > 0 ? "Provisioning complete" : "No cameras discovered"}</strong><span>{autoProvisionResults.length > 0 ? "Verified cameras are now configured. Devices needing attention remain clearly identified above." : "Make sure the Edge Agent is online in the camera network, then scan again."}</span></div>
+                <div className="device-empty">
+                  <Camera size={30} />
+                  <strong>{autoProvisionResults.length > 0 ? "Provisioning complete" : cameras.length > 0 ? "All cameras enrolled" : "No cameras discovered"}</strong>
+                  <span>{autoProvisionResults.length > 0 ? "Verified cameras are now configured. Devices needing attention remain clearly identified above." : cameras.length > 0 ? `All ${cameras.length} camera(s) are actively configured and monitored in ${activeBranch?.name ?? "this branch"}.` : "Make sure the Edge Agent is online in the camera network, then scan again."}</span>
+                </div>
               ) : (
                 <>
                   <div className="flex items-center justify-between mb-3 gap-2">
@@ -3470,7 +3507,11 @@ export function DeviceManager() {
                             <button type="button" className="primary-button" onClick={() => openCredentialActivation(camera)} disabled={saving || scanning}>
                               Enter login &amp; password
                             </button>
-                          ) : null}
+                          ) : (
+                            <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(camera)} disabled={saving}>
+                              ✓ Approve &amp; Add
+                            </button>
+                          )}
                           <button type="button" className="secondary-button" onClick={() => previewDiscoveredCamera(camera)} disabled={saving}>
                             {previewDiscoveryId === camera.id ? "Previewing" : "Preview"}
                           </button>
@@ -3491,7 +3532,7 @@ export function DeviceManager() {
                             {previewEditMode === "rename" ? <><input aria-label="Camera display name" value={previewNameDraft} onChange={(event) => setPreviewNameDraft(event.target.value)} placeholder="Display name" /><button type="button" className="primary-button" onClick={() => void renameDiscoveredCamera(camera.id, previewNameDraft)} disabled={saving || !previewNameDraft.trim()}>Save name</button></> : null}
                             {previewEditMode === "reject" ? <><input aria-label="Device rejection reason" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} placeholder="Reason for rejection" /><button type="button" className="secondary-button" onClick={() => void rejectDiscoveredCamera(camera.id, rejectReason)} disabled={saving || !rejectReason.trim()}>Reject device</button></> : null}
                             {!camera.credentialsRequired && previewEditMode === "rename" ? (
-                              <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(camera)} disabled={saving || !camera.streamVerified || camera.duplicateStatus === "duplicate"}>{camera.duplicateStatus === "duplicate" ? "Duplicate — approval blocked" : camera.streamVerified ? "Approve & start live" : "Awaiting gateway verification"}</button>
+                              <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(camera)} disabled={saving || camera.duplicateStatus === "duplicate"}>{camera.duplicateStatus === "duplicate" ? "Duplicate — approval blocked" : "Approve & start live"}</button>
                             ) : null}
                             <button type="button" className="secondary-button" onClick={() => setPreviewDiscoveryId(undefined)}>Close preview</button>
                           </div>

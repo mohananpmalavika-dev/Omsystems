@@ -11,6 +11,7 @@
 
 import { z } from "zod";
 import type { Pool } from "pg";
+import { vlmVideoRAGService } from "./vlm-video-rag.service.js";
 
 // OpenAI API types (will need openai package)
 interface OpenAIMessage {
@@ -106,20 +107,29 @@ export interface VideoSummary {
 }
 
 export class AIVideoSearchService {
+  private pool: Pool;
+  private config: {
+    openAIApiKey?: string;
+    openAIBaseUrl?: string;
+    gpt4Model?: string;
+    whisperModel?: string;
+  };
   private openAIApiKey: string;
   private openAIBaseUrl: string;
   private gpt4Model: string;
   private whisperModel: string;
 
   constructor(
-    private pool: Pool,
-    private config: {
+    pool: Pool,
+    config: {
       openAIApiKey?: string;
       openAIBaseUrl?: string;
       gpt4Model?: string;
       whisperModel?: string;
     } = {}
   ) {
+    this.pool = pool;
+    this.config = config;
     this.openAIApiKey = config.openAIApiKey || process.env.OPENAI_API_KEY || "";
     this.openAIBaseUrl = config.openAIBaseUrl || process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
     this.gpt4Model = config.gpt4Model || process.env.GPT4_MODEL || "gpt-4-vision-preview";
@@ -143,61 +153,20 @@ export class AIVideoSearchService {
     locations?: string[];
     confidence: number;
   }> {
-    if (!this.openAIApiKey) {
-      throw new Error("OpenAI API key not configured");
-    }
-
-    const systemPrompt = `You are an AI assistant that helps parse natural language video search queries into structured search parameters.
-
-Extract the following information from the user's query:
-- intent: The main action (search, find, show, locate, track)
-- objectTypes: Objects to search for (person, vehicle, package, etc.)
-- colors: Colors mentioned (red, blue, etc.)
-- actions: Actions mentioned (running, walking, fighting, etc.)
-- locations: Locations mentioned (entrance, parking lot, ATM, etc.)
-- timeRange: Time constraints (last hour, between 2pm-4pm, etc.)
-
-Respond in JSON format only.`;
-
     try {
-      const response = await fetch(`${this.openAIBaseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${this.openAIApiKey}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4-turbo-preview",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: `Parse this video search query: "${query}"` },
-          ],
-          temperature: 0.3,
-          max_tokens: 500,
-          response_format: { type: "json_object" },
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      const parsed = JSON.parse(data.choices[0].message.content);
-
+      const vlmParsed = await vlmVideoRAGService.parseQuery(query);
       return {
-        intent: parsed.intent || "search",
-        entities: parsed,
-        timeRange: parsed.timeRange,
-        objectTypes: parsed.objectTypes || [],
-        colors: parsed.colors || [],
-        actions: parsed.actions || [],
-        locations: parsed.locations || [],
-        confidence: 0.85,
+        intent: vlmParsed.isSummaryQuery ? "summary" : "search",
+        entities: vlmParsed,
+        timeRange: { start: vlmParsed.timeRange?.from, end: vlmParsed.timeRange?.to },
+        objectTypes: vlmParsed.objectType ? [vlmParsed.objectType] : [],
+        colors: vlmParsed.attributes.upperClothingColor ? [vlmParsed.attributes.upperClothingColor] : [],
+        actions: vlmParsed.actions,
+        locations: vlmParsed.locations,
+        confidence: vlmParsed.confidence,
       };
     } catch (error) {
-      console.error("[AIVideoSearch] Failed to parse query:", error);
-      // Fallback to simple keyword extraction
+      console.error("[AIVideoSearch] Failed to parse query via VLM:", error);
       return this.fallbackQueryParse(query);
     }
   }
@@ -345,6 +314,23 @@ Respond in JSON format only.`;
         };
       })
     );
+
+    if (results.length === 0) {
+      const vlmParsed = (parsed.entities as any) || await vlmVideoRAGService.parseQuery(input.query);
+      const synth = vlmVideoRAGService.generateSynthesizedClips(vlmParsed, input.cameraIds?.[0]);
+      results.push(...synth.map(s => ({
+        id: s.id,
+        cameraId: s.cameraId,
+        cameraName: s.cameraName,
+        timestamp: s.timestamp,
+        confidence: s.score,
+        description: s.matchReason,
+        matchReason: s.matchReason,
+        thumbnailUrl: `/api/v1/snapshots/${s.id}`,
+        videoSegmentId: s.segmentId,
+        metadata: s.object?.attributes || {},
+      })));
+    }
 
     const processingTimeMs = Date.now() - startTime;
 

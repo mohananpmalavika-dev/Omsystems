@@ -546,7 +546,7 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-100">KryptonAI</h2>
-              <p className="text-xs text-slate-400">Intelligent Security Assistant</p>
+              <p className="text-xs text-slate-400">Intelligent Assistant · English | മലയാളം | हिन्दी | Manglish</p>
             </div>
           </div>
           <button
@@ -705,7 +705,7 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Ask KryptonAI anything... (e.g., 'Show me all cameras', 'Lock doors on floor 3')"
+                placeholder="Ask KryptonAI in English, മലയാളം, हिन्दी, Manglish, or Hinglish... (e.g. 'Show cameras', 'ലൈൻ ക്രോസിംഗ് എങ്ങനെ', 'कैमरा स्टेटस दिखाइए', 'camera status enganeyanu')"
                 className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
                 rows={2}
                 disabled={isLoading || isRecording}

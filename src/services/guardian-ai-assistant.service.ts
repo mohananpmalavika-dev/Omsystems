@@ -13,6 +13,7 @@ import { z } from "zod";
 import type { Pool } from "pg";
 import { activeCamera } from "../database/active-resource.js";
 import { CCTV_VMS_PRIMER, cctvKnowledgeAnswer } from "./guardian-cctv-knowledge.js";
+import { detectLanguage, getLocalizedGuide } from "./guardian-feature-guides.js";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -681,10 +682,63 @@ export function isFeatureQuestion(query: string): boolean {
 
 export function featureGuideResponse(query: string, isGuest = false, previousRoute?: AppRouteItem): GuardianResponse | null {
   const specificFeature = APP_ROUTES.some((route) => route.keywords.some((keyword) => keyword.includes(" ") && keyword.length >= 6 && query.toLowerCase().includes(keyword)));
-  const catalogQuestion = /\b(?:all|list|available|ella|full)\b.*\b(?:features?|modules?|pages?)\b|\b(?:features?|modules?|pages?)\b.*\b(?:available|und|ella)\b/i.test(query);
+  const catalogQuestion = /\b(?:all|list|available|ella|full|kya kya|enthokke|enthellam|features?|modules?|pages?)\b.*\b(?:features?|modules?|pages?|und|ella|hai|hain)\b|\b(?:features?|modules?|pages?)\b.*\b(?:available|und|ella|kya|enthaanu)\b/i.test(query)
+    || /(?:ഫീച്ചറുകൾ|സവിശേഷതകൾ|फीचर्स|सुविधा)/.test(query);
+
   if ((!isFeatureQuestion(query) && !(query.trim().endsWith("?") && specificFeature) && !catalogQuestion) || isExplicitNavigationRequest(query)) return null;
   if (/\b(?:who|when|which year|invented|capital of|translate|calculate)\b/i.test(query)) return null;
+
   if (catalogQuestion) {
+    if (isGuest) {
+      const lang = detectLanguage(query);
+      if (lang === "hi") {
+        return {
+          message:
+            "**KryptonVision के AI और सुरक्षा फीचर्स (AI & Security Features):**\n\nइस प्लेटफ़ॉर्म में 12 प्रमुख एंटरप्राइज़ सुरक्षा क्षमताएं शामिल हैं:",
+          messageHi:
+            "**KryptonVision के AI और सुरक्षा फीचर्स (AI & Security Features):**\n\nइस प्लेटफ़ॉर्म में 12 प्रमुख एंटरप्राइज़ सुरक्षा क्षमताएं शामिल हैं:",
+          messageMl:
+            "**KryptonVision-ന്റെ AI & Security ഫീച്ചറുകൾ:**\n\nഈ platform-ൽ ഉള്ള പ്രധാന capabilities:",
+          type: "feature_cards",
+          cards: KRYPTON_PRODUCT_FEATURES,
+          suggestions: ["KryptonVision क्या है?", "कौन से कैमरे समर्थित हैं?", "साइन इन कैसे करें?"],
+          suggestionsHi: ["KryptonVision क्या है?", "कौन से कैमरे समर्थित हैं?", "साइन इन कैसे करें?"],
+          suggestionsMl: ["KryptonVision എന്താണ്?", "Supported cameras ഏതൊക്കെ?", "Sign in എങ്ങനെ ചെയ്യും?"],
+          timestamp: new Date().toISOString(),
+        };
+      }
+      if (lang === "ml") {
+        return {
+          message:
+            "**KryptonVision-ന്റെ AI & Security ഫീച്ചറുകൾ:**\n\nഈ platform-ൽ ഉള്ള പ്രധാന capabilities:",
+          messageMl:
+            "**KryptonVision-ന്റെ AI & Security ഫീച്ചറുകൾ:**\n\nഈ platform-ൽ ഉള്ള പ്രധാന capabilities:",
+          messageHi:
+            "**KryptonVision के AI और सुरक्षा फीचर्स:**",
+          type: "feature_cards",
+          cards: KRYPTON_PRODUCT_FEATURES,
+          suggestions: ["What is KryptonVision?", "Which cameras are supported?", "How do I sign in?"],
+          suggestionsMl: ["KryptonVision എന്താണ്?", "Supported cameras ഏതൊക്കെ?", "Sign in എങ്ങനെ ചെയ്യും?"],
+          suggestionsHi: ["KryptonVision क्या है?", "कौन से कैमरे समर्थित हैं?", "साइन इन कैसे करें?"],
+          timestamp: new Date().toISOString(),
+        };
+      }
+      return {
+        message:
+          "**KryptonVision AI & Security Capabilities:**\n\nHere are the 12 core platform features available across all branches:",
+        messageMl:
+          "**KryptonVision-ന്റെ AI & Security ഫീച്ചറുകൾ:**",
+        messageHi:
+          "**KryptonVision के AI और सुरक्षा फीचर्स:**",
+        type: "feature_cards",
+        cards: KRYPTON_PRODUCT_FEATURES,
+        suggestions: ["What is KryptonVision?", "Which cameras are supported?", "How do I sign in?"],
+        suggestionsMl: ["KryptonVision എന്താണ്?", "Supported cameras ഏതൊക്കെ?", "Sign in എങ്ങനെ ചെയ്യും?"],
+        suggestionsHi: ["KryptonVision क्या है?", "कौन से कैमरे समर्थित हैं?", "साइन इन कैसे करें?"],
+        timestamp: new Date().toISOString(),
+      };
+    }
+
     const groups = ["WORKSPACE", "OPERATIONS", "INVESTIGATE & PLAYBACK", "INTELLIGENCE & AI", "DEVICE HEALTH & MAINTENANCE", "AUDIT & REPORTING", "ADMINISTRATION"];
     const sections = groups.map((category) => {
       const names = APP_ROUTES.filter((route) => route.category === category).slice(0, 5).map((route) => route.label);
@@ -692,16 +746,27 @@ export function featureGuideResponse(query: string, isGuest = false, previousRou
     }).filter(Boolean).join("\n");
     return { message: `KryptonVision modules include:\n${sections}\n\nSee the full [Module Directory](/modules) for every workspace and its link.${isGuest ? " Sign in to open role-restricted pages." : ""}`, type: "text", timestamp: new Date().toISOString() };
   }
+
   const matchedRoute = resolveAppRoute(query);
   const refersToPrevious = Boolean(previousRoute && /\b(?:this|that|it|athu|athinte|ithu|ee module)\b/i.test(query) && (!matchedRoute || !query.toLowerCase().includes(matchedRoute.label.toLowerCase())));
   const route = refersToPrevious ? previousRoute : matchedRoute;
   if (!route) return null;
+
   const guide = FEATURE_GUIDES[route.href] ?? CATEGORY_GUIDES[route.category] ?? CATEGORY_GUIDES.WORKSPACE!;
-  const manglish = /\b(?:evide|engane|enthina|entha|cheyy|paranj|ariyanam|module ne|kurich)\b/i.test(query) || /[\u0D00-\u0D7F]/.test(query);
+  const lang = detectLanguage(query);
   const path = `${route.category} → ${route.label}`;
-  const message = manglish
-    ? `**${route.label}**\n\n**Evide:** ${path}\n**Open cheyyan:** [${route.label}](${route.href})\n**Purpose:** ${guide.purpose}\n**Working:** ${guide.working}\n**Engane use cheyyam:**\n${guide.steps.map((step, index) => `${index + 1}. ${step}`).join("\n")}${isGuest ? "\n\nEe page access cheyyan sign in cheyyanam; role permission anusarich access labhikkum." : ""}`
-    : `**${route.label}**\n\n**Path:** ${path}\n**Open:** [${route.label}](${route.href})\n**Purpose:** ${guide.purpose}\n**How it works:** ${guide.working}\n**How to use it:**\n${guide.steps.map((step, index) => `${index + 1}. ${step}`).join("\n")}${isGuest ? "\n\nSign in to open this page; access depends on your role." : ""}`;
+
+  if (lang === "hi") {
+    const message = `**${route.label}**\n\n**रास्ता (Path):** ${path}\n**खोलें:** [${route.label}](${route.href})\n**उद्देश्य (Purpose):** ${guide.purpose}\n**कार्यप्रणाली (Working):** ${guide.working}\n**उपयोग कैसे करें (How to use):**\n${guide.steps.map((step, index) => `${index + 1}. ${step}`).join("\n")}${isGuest ? "\n\nइस पृष्ठ को खोलने के लिए साइन इन करें; पहुंच आपकी भूमिका पर निर्भर करती है।" : ""}`;
+    return { message, type: "text", timestamp: new Date().toISOString() };
+  }
+
+  if (lang === "ml") {
+    const message = `**${route.label}**\n\n**Evide:** ${path}\n**Open cheyyan:** [${route.label}](${route.href})\n**Purpose:** ${guide.purpose}\n**Working:** ${guide.working}\n**Engane use cheyyam:**\n${guide.steps.map((step, index) => `${index + 1}. ${step}`).join("\n")}${isGuest ? "\n\nEe page access cheyyan sign in cheyyanam; role permission anusarich access labhikkum." : ""}`;
+    return { message, type: "text", timestamp: new Date().toISOString() };
+  }
+
+  const message = `**${route.label}**\n\n**Path:** ${path}\n**Open:** [${route.label}](${route.href})\n**Purpose:** ${guide.purpose}\n**How it works:** ${guide.working}\n**How to use it:**\n${guide.steps.map((step, index) => `${index + 1}. ${step}`).join("\n")}${isGuest ? "\n\nSign in to open this page; access depends on your role." : ""}`;
   return { message, type: "text", timestamp: new Date().toISOString() };
 }
 
@@ -737,15 +802,18 @@ export interface GuardianContext {
 export interface GuardianFeatureCard {
   title: string;
   titleMl: string;
+  titleHi?: string;
   icon: string;
   description: string;
   descriptionMl: string;
+  descriptionHi?: string;
   tags: string[];
 }
 
 export interface GuardianResponse {
   message: string;
   messageMl?: string;
+  messageHi?: string;
   type: "text" | "action" | "suggestion" | "warning" | "error" | "feature_cards";
   cards?: GuardianFeatureCard[];
   actions?: Array<{
@@ -756,6 +824,7 @@ export interface GuardianResponse {
   }>;
   suggestions?: string[];
   suggestionsMl?: string[];
+  suggestionsHi?: string[];
   requiresConfirmation?: boolean;
   timestamp: string;
 }
@@ -769,30 +838,39 @@ export const KRYPTON_PRODUCT_FEATURES: GuardianFeatureCard[] = [
     icon: "🧠",
     title: "Facial Recognition",
     titleMl: "മുഖം തിരിച്ചറിയൽ (Face Recognition)",
+    titleHi: "चेहरा पहचान (Facial Recognition)",
     description:
       "Real-time identification of enrolled employees, VIP visitors, and blacklisted individuals from live camera feeds. " +
       "Supports multi-face detection, liveness check, and instant alert dispatch.",
     descriptionMl:
       "ലൈവ് ക്യാമറ ഫീഡിൽ നിന്ന് enrolled employees, VIP visitors, blacklisted ആളുകളെ real-time-ൽ തിരിച്ചറിയും. " +
       "Multi-face detection, liveness check, instant alert dispatch എന്നിവ support ചെയ്യുന്നു.",
+    descriptionHi:
+      "लाइव कैमरा फीड से नामांकित कर्मचारियों, वीआईपी आगंतुकों और ब्लैकलिस्ट किए गए व्यक्तियों की रीयल-टाइम पहचान। " +
+      "मल्टी-फेस डिटेक्शन, लाइवनेस चेक और तुरंत अलर्ट डिस्पैच का समर्थन करता है।",
     tags: ["AI", "Biometric", "Security", "Real-time"],
   },
   {
     icon: "🚗",
     title: "ANPR — Automatic Number Plate Recognition",
     titleMl: "ANPR — വാഹന നമ്പർ തിരിച്ചറിയൽ",
+    titleHi: "ANPR — स्वचालित नंबर प्लेट पहचान",
     description:
       "Automatic license plate recognition for vehicle access control. Supports allowlist/blocklist alerts, " +
       "entry/exit logging, and integration with parking and logistics systems.",
     descriptionMl:
       "വാഹനങ്ങളുടെ നമ്പർ പ്ലേറ്റ് automatic-ആയി തിരിച്ചറിഞ്ഞ് access control നടത്തും. " +
       "Allowlist/blocklist alerts, entry/exit logging, parking & logistics integration support ചെയ്യുന്നു.",
+    descriptionHi:
+      "वाहन प्रवेश और निकास नियंत्रण के लिए ऑटोमैटिक लाइसेंस प्लेट पहचान। अनुमति/अवरुद्ध (Allowlist/Blocklist) अलर्ट, " +
+      "लॉगिंग और पार्किंग एकीकरण का समर्थन करता है।",
     tags: ["AI", "Vehicle", "ANPR", "Access Control"],
   },
   {
     icon: "🔴",
     title: "Perimeter & Intrusion Detection",
     titleMl: "കടന്നുകയറ്റ ഡിറ്റക്ഷൻ & വെർച്വൽ ട്രിപ്‌വയർ",
+    titleHi: "परिधि एवं घुसपैठ पहचान (वर्चुअल ट्रिपवायर)",
     description:
       "Virtual tripwires, sterile zone breach detection, and boundary crossing alarms. " +
       "Draw custom zones on any camera canvas and set directional rules (A→B, B→A, bidirectional).",
@@ -800,24 +878,32 @@ export const KRYPTON_PRODUCT_FEATURES: GuardianFeatureCard[] = [
       "ഏതൊരു ക്യാമറയിലും virtual tripwires വരച്ച് boundary crossing alerts set ചെയ്യാം. " +
       "Sterile zone breach, directional rules (A→B, B→A, bidirectional) support ഉണ്ട്. " +
       "Analytics → Rules & Automation page-ൽ configure ചെയ്യാം.",
+    descriptionHi:
+      "वर्चुअल ट्रिपवायर, वर्जित क्षेत्र में घुसपैठ और बाउंड्री क्रॉसिंग अलार्म। " +
+      "किसी भी कैमरे पर कस्टम ज़ोन बनाएं और दिशात्मक नियम (A→B, B→A, दोनों दिशाओं में) सेट करें।",
     tags: ["AI", "Perimeter", "Intrusion", "Virtual Tripwire"],
   },
   {
     icon: "👥",
     title: "Crowd & Loitering Analytics",
     titleMl: "ജനക്കൂട്ടം & സംശയകരമായ ലോയ്‌റ്ററിംഗ് ഡിറ്റക്ഷൻ",
+    titleHi: "भीड़ और संदिग्ध भटकाव (लोइटरिंग) विश्लेषण",
     description:
       "Real-time crowd density monitoring with overcrowding alerts. Detects suspicious loitering " +
       "in sensitive areas like ATMs, bank lobbies, and vaults.",
     descriptionMl:
       "Real-time crowd density monitor ചെയ്ത് overcrowding alerts അയക്കും. ATM, bank lobby, vault-ൽ " +
       "suspicious loitering detect ചെയ്ത് ഉടൻ alert നൽകും.",
+    descriptionHi:
+      "रीयल-टाइम भीड़ घनत्व निगरानी और ओवरक्राउडिंग अलर्ट। एटीएम, बैंक लॉबी और वॉल्ट जैसे संवेदनशील क्षेत्रों में " +
+      "संदिग्ध भटकाव का पता लगाकर तुरंत अलर्ट जारी करता है।",
     tags: ["AI", "Crowd", "Analytics", "Loitering"],
   },
   {
     icon: "🏦",
     title: "Banking & NBFC Compliance Module",
     titleMl: "ബാങ്കിംഗ് & NBFC കംപ്ലയൻസ് മൊഡ്യൂൾ",
+    titleHi: "बैंकिंग एवं एनबीएफसी अनुपालन मॉड्यूल",
     description:
       "Automated vault dual-custody verification, cash counter camera monitoring, teller area security, " +
       "strong-room checks, and daily executive MIS surveillance health reports.",
@@ -825,36 +911,48 @@ export const KRYPTON_PRODUCT_FEATURES: GuardianFeatureCard[] = [
       "Vault opening/closing-ൽ dual-custody ഉറപ്പാക്കും. Cash counter coverage, teller area security, " +
       "strong-room checks, daily executive MIS reports — ഇവ automated ആയി run ആകും. " +
       "Gold loan branches, banks, NBFC-കൾക്ക് ഇത് specially designed ആണ്.",
+    descriptionHi:
+      "स्वचालित वॉल्ट डुअल-कस्टडी सत्यापन, कैश काउंटर कैमरा निगरानी, टेलर क्षेत्र सुरक्षा, स्ट्रॉन्ग-रूम जांच " +
+      "और दैनिक स्वचालित एमआईएस निगरानी स्वास्थ्य रिपोर्ट। बैंक और एनबीएफसी के लिए विशेष अनुकूलित।",
     tags: ["Banking", "NBFC", "Vault", "Compliance", "MIS Reports"],
   },
   {
     icon: "🎙️",
     title: "Voice Authentication & Biometrics",
     titleMl: "ശബ്ദ ആധികാരീകരണം (Voice ID Login)",
+    titleHi: "ध्वनि बायोमेट्रिक्स एवं वॉयस लॉगिन",
     description:
       "Enroll a voice passphrase for password-free login. Uses voice biometrics to authenticate " +
       "operators securely without typing credentials.",
     descriptionMl:
       "ഒരു voice passphrase enroll ചെയ്ത ശേഷം password ടൈപ്പ് ചെയ്യാതെ voice ID ഉപയോഗിച്ച് login ചെയ്യാം. " +
       "Login page-ൽ 'Voice Login' button click ചെയ്ത് phrase speak ചെയ്താൽ authenticate ആകും.",
+    descriptionHi:
+      "बिना पासवर्ड टाइप किए लॉगिन करने के लिए वॉयस पासफ़्रेज़ नामांकित करें। पासवर्ड रहित सुरक्षित ऑपरेटर " +
+      "प्रमाणीकरण के लिए वॉयस बायोमेट्रिक्स का उपयोग करता है।",
     tags: ["Biometric", "Voice", "Authentication", "Security"],
   },
   {
     icon: "🌐",
     title: "Multi-Branch Command Center",
     titleMl: "മൾട്ടി-ബ്രാഞ്ച് കമാൻഡ് സെന്റർ",
+    titleHi: "मल्टी-ब्रांच कमांड सेंटर एवं लाइव वीडियो वॉल",
     description:
       "Centralized live video wall, PTZ camera control, and unified alert escalation across all branches. " +
       "Real-time branch health dashboard with per-branch camera status.",
     descriptionMl:
       "എല്ലാ branches-ലെയും ലൈവ് video wall ഒരിടത്ത് നിന്ന് control ചെയ്യാം. " +
       "PTZ control, unified alert escalation, real-time branch health — centralized ആയി manage ചെയ്യാം.",
+    descriptionHi:
+      "केंद्रीकृत लाइव वीडियो वॉल, पीटीजेड कैमरा नियंत्रण और सभी शाखाओं में एकीकृत अलर्ट एस्केलेशन। " +
+      "प्रत्येक शाखा की कैमरा स्थिति के साथ रीयल-टाइम शाखा स्वास्थ्य डैशबोर्ड।",
     tags: ["Multi-Branch", "Live Video", "PTZ", "Command Center"],
   },
   {
     icon: "💾",
     title: "Edge Agent & Offline Recording",
     titleMl: "Edge Agent & ഓഫ്‌ലൈൻ വീഡിയോ റെക്കോർഡിംഗ്",
+    titleHi: "एज एजेंट एवं ऑफ़लाइन वीडियो रिकॉर्डिंग",
     description:
       "Local edge appliance (Windows PC / Jetson / Intel x86) records video continuously even when internet is down. " +
       "Encrypted sync to cloud when connectivity resumes. Each branch gets its own edge agent.",
@@ -862,36 +960,48 @@ export const KRYPTON_PRODUCT_FEATURES: GuardianFeatureCard[] = [
       "Internet ഇല്ലെങ്കിലും edge PC-ൽ locally video record ആകും. " +
       "Internet restore ആയ ശേഷം encrypted ആയി cloud-ലേക്ക് sync ആകും. " +
       "Windows PC-ൽ installer download ചെയ്ത് Run as Administrator ആയി install ചെയ്യാം.",
+    descriptionHi:
+      "इंटरनेट बंद होने पर भी स्थानीय एज उपकरण (Windows PC / Jetson / Intel x86) लगातार वीडियो रिकॉर्ड करता है। " +
+      "इंटरनेट बहाल होने पर क्लाउड पर एन्क्रिप्टेड ऑटो-सिंक। प्रत्येक शाखा का अपना एज एजेंट होता है।",
     tags: ["Edge", "Offline", "Recording", "High Availability"],
   },
   {
     icon: "📋",
     title: "Evidence & Audit Trail",
     titleMl: "തെളിവ് & ഓഡിറ്റ് ട്രെയിൽ",
+    titleHi: "साक्ष्य एवं ऑडिट ट्रेल (चेन ऑफ़ कस्टडी)",
     description:
       "Tamper-evident evidence packages with chain of custody. Export incident clips, screenshots, " +
       "and audit logs for legal or compliance purposes. HSM-signed for integrity.",
     descriptionMl:
       "Incidents-ൽ video clip, screenshots, audit logs — tamper-evident ആയി export ചെയ്യാം. " +
       "HSM signing ഉള്ളതിനാൽ evidence-ന്റെ integrity legally provable ആണ്.",
+    descriptionHi:
+      "चेन ऑफ़ कस्टडी के साथ छेड़छाड़-रोधी साक्ष्य पैकेज। कानूनी या अनुपालन उद्देश्यों के लिए घटना क्लिप, स्क्रीनशॉट " +
+      "और ऑडिट लॉग का एचएसएम डिजिटल हस्ताक्षर के साथ सुरक्षित निर्यात।",
     tags: ["Evidence", "Audit", "Legal", "Compliance"],
   },
   {
     icon: "🤖",
     title: "AI Video Search",
     titleMl: "AI വീഡിയോ സെർച്ച്",
+    titleHi: "एआई प्राकृतिक भाषा वीडियो खोज",
     description:
       "Search recorded footage using natural language: 'show me a person in red shirt at main entrance between 10am-12pm'. " +
       "Powered by vision AI for rapid forensic investigation.",
     descriptionMl:
       "'Red shirt ധരിച്ച ആൾ main entrance-ൽ 10am-12pm-ൽ' എന്ന് natural language-ൽ search ചെയ്ത് " +
-      "recorded footage-ൽ നിന്ن instantly clips കാണാം. Forensic investigation-ന് ഉപകരിക്കും.",
+      "recorded footage-ൽ നിന്ൻ instantly clips കാണാം. Forensic investigation-ന് ഉപകരിക്കും.",
+    descriptionHi:
+      "प्राकृतिक भाषा का उपयोग करके रिकॉर्ड किए गए फुटेज खोजें: 'कल शाम 7 बजे के बाद पीली शर्ट और बैग के साथ आए व्यक्ति को दिखाइए'। " +
+      "त्वरित फोरेंसिक जांच के लिए विज़न-एलएलएम द्वारा संचालित।",
     tags: ["AI", "Video Search", "Forensic", "Analytics"],
   },
   {
     icon: "🚨",
     title: "Incident Management & SOP Workflow",
     titleMl: "ഇൻസിഡന്റ് മാനേജ്‌മെന്റ് & SOP വർക്ക്‌ഫ്ലോ",
+    titleHi: "इंसिडेंट प्रबंधन एवं एसओपी वर्कफ़्लो",
     description:
       "Automated incident creation, operator assignment, escalation timers, SOP checklists, " +
       "and resolution audit trail. Integrates with physical siren, SMS, and guard dispatch.",
@@ -899,18 +1009,25 @@ export const KRYPTON_PRODUCT_FEATURES: GuardianFeatureCard[] = [
       "Alert trigger ആകുമ്പോൾ automatically incident create ആകും, operator-ന് assign ആകും, " +
       "escalation timer run ആകും. SOP checklist, SMS, physical siren, guard dispatch — " +
       "ഒരൊറ്റ workflow-ൽ handle ചെയ്യും.",
+    descriptionHi:
+      "स्वचालित घटना निर्माण, ऑपरेटर असाइनमेंट, एस्केलेशन टाइमर, एसओपी चेकलिस्ट और सायरन, एसएमएस और गार्ड डिस्पैच के साथ " +
+      "समाधान ऑडिट ट्रेल।",
     tags: ["Incident", "SOP", "Workflow", "Escalation"],
   },
   {
     icon: "🔒",
     title: "Access Control & Secure Area Authorization",
     titleMl: "ആക്‌സസ് കൺട്രോൾ & സെക്യൂർ ഏരിയ ഓതറൈസേഷൻ",
+    titleHi: "एक्सेस कंट्रोल एवं सुरक्षित क्षेत्र प्राधिकरण",
     description:
       "Role-based access control (RBAC/ABAC), secure area whitelists, dual-person authorization zones, " +
       "and door lock/unlock integrations.",
     descriptionMl:
       "Role-based access control, secure area whitelists, dual-person authorization zones " +
       "(vault entry-ക്ക് 2 authorized ആളുകൾ ഒരേ സമയം ഉണ്ടായിരിക്കണം), door lock/unlock integration.",
+    descriptionHi:
+      "भूमिका-आधारित एक्सेस कंट्रोल (RBAC/ABAC), सुरक्षित क्षेत्र श्वेतसूची, वॉल्ट दोहरी-व्यक्ति प्राधिकरण ज़ोन " +
+      "(वॉल्ट में 2 अधिकृत व्यक्ति एक साथ होने चाहिए), और डोर लॉक/अनलॉक एकीकरण।",
     tags: ["Access Control", "ABAC", "RBAC", "Security"],
   },
 ];
@@ -1482,7 +1599,7 @@ export class GuardianAIAssistant {
 - A question about where a feature is, its link, purpose, or workflow is an explanation request. Only navigate when the user explicitly commands you to open a page.
 - Also answer ordinary general knowledge questions directly, including simple science, history, geography, language, and arithmetic. Do not force unrelated questions into KryptonVision features or require sign-in for general knowledge.
 - Keep general answers clear and brief, explain further when asked, and say when you are unsure. Do not guess about current or changing facts without a reliable source.
-- Match the user's language, including Malayalam or Manglish. For guests, explain general features but never disclose organization data or perform operations.
+- Match the user's language, with full fluency in Malayalam (മലയാളം), Manglish (Malayalam in Latin script), Hindi (हिन्दी), Hinglish (Hindi in Latin script), and English. For guests, explain general features but never disclose organization data or perform operations.
 ROUTE DIRECTORY (page name | path):
 ${APP_ROUTES.map((route) => `${route.label} | ${route.href}`).join("\n")}`;
     const generalKnowledgePolicy = `GENERAL KNOWLEDGE: Answer ordinary questions beyond KryptonVision directly. For CCTV and VMS questions, use the following training reference and explain terms, workflows, comparisons, or troubleshooting at the level requested.\n${CCTV_VMS_PRIMER}`;
@@ -1498,9 +1615,11 @@ ${generalKnowledgePolicy}
 IMPORTANT CONTEXT:
 The user is currently a GUEST (pre-login mode) and has not authenticated yet.
 
-LANGUAGE & LOCALIZATION (മലയാളം / MANGLISH):
-- You understand English, Malayalam, and Manglish (Malayalam written in Latin script, e.g. "line cross evide set cheyyunnath", "cctv stream kaanikku", "agent work aakunnilla", "engane install cheyyum").
-- When asked in Malayalam or Manglish, reply warmly and helpfully in Malayalam/Manglish or bilingual English+Malayalam with step-by-step guidance!
+LANGUAGE & LOCALIZATION (ENGLISH / മലയാളം / MANGLISH / हिन्दी / HINGLISH):
+- You natively understand English, Malayalam (മലയാളം), Manglish (Malayalam in Latin script), Hindi (हिन्दी), and Hinglish (Hindi in Latin script).
+- When asked in Malayalam or Manglish, reply fluently and helpfully in Malayalam/Manglish with step-by-step guidance!
+- When asked in Hindi or Hinglish (e.g. "कैमरा कैसे जोड़ें", "लाइन क्रॉसिंग कैसे सेट करें", "kya features hai", "camera dikhao"), reply fluently and helpfully in Hindi/Hinglish with step-by-step guidance!
+- When asked in English, reply in English. Always match the user's chosen language.
 
 KRYPTONVISION PLATFORM ARCHITECTURE & HOW-TO KNOWLEDGE:
 1. LINE CROSSING & VIRTUAL TRIPWIRES (ലൈൻ ക്രോസ്സിംഗ് സെറ്റ് ചെയ്യുന്നത്):
@@ -1601,9 +1720,11 @@ Your role:
 - Assist operators in daily operations and emergency situations
 - Be concise, professional, and action-oriented
 
-LANGUAGE & LOCALIZATION (മലയാളം / MANGLISH):
-- You natively understand English, Malayalam, and Manglish (Malayalam written in Latin script, e.g. "line cross evide set cheyyunnath", "cctv stream kaanikku", "agent work aakunnilla", "engane install cheyyum").
-- When asked in Malayalam or Manglish, reply warmly and helpfully in Malayalam/Manglish or bilingual English+Malayalam with step-by-step guidance!
+LANGUAGE & LOCALIZATION (ENGLISH / മലയാളം / MANGLISH / हिन्दी / HINGLISH):
+- You natively understand English, Malayalam (മലയാളം), Manglish (Malayalam in Latin script), Hindi (हिन्दी), and Hinglish (Hindi in Latin script).
+- When asked in Malayalam or Manglish, reply fluently and helpfully in Malayalam/Manglish with step-by-step guidance!
+- When asked in Hindi or Hinglish (e.g. "कैमरा कैसे जोड़ें", "लाइन क्रॉसिंग कैसे सेट करें", "kya features hai", "camera dikhao"), reply fluently and helpfully in Hindi/Hinglish with step-by-step guidance!
+- When asked in English, reply in English. Always match the user's chosen language.
 
 KRYPTONVISION PLATFORM HOW-TO KNOWLEDGE:
 1. LINE CROSSING & VIRTUAL TRIPWIRES (ലൈൻ ക്രോസ്സിംഗ് സെറ്റ് ചെയ്യുന്നത്):
@@ -2419,6 +2540,7 @@ Personality:
     timestamp: string
   ): GuardianResponse {
     const lower = message.toLowerCase().trim();
+    const lang = detectLanguage(message);
 
     // 1. General greetings
     if (
@@ -2429,21 +2551,100 @@ Personality:
       lower.startsWith("hello ") ||
       lower.startsWith("hey ") ||
       lower.includes("namaskaram") ||
+      lower.includes("namaste") ||
+      lower.includes("namaskar") ||
+      lower.includes("pranam") ||
       lower.includes("good morning") ||
       lower.includes("good evening") ||
       lower.includes("good afternoon") ||
       lower === "who are you" ||
       lower === "kryptonai"
     ) {
+      if (lang === "hi") {
+        return {
+          message:
+            "नमस्ते! मैं KryptonAI हूँ, आपका इंटेलिजेंट सुरक्षा और वीडियो एनालिटिक्स सहायक। आप मुझसे KryptonVision के फीचर्स, सीसीटीवी/वीएमएस अवधारणाओं या सामान्य ज्ञान के बारे में हिंदी में पूछ सकते हैं।\n\nलाइव कैमरे, अलर्ट या शाखा रिकॉर्ड देखने के लिए कृपया लॉगिन करें।",
+          messageHi:
+            "नमस्ते! मैं KryptonAI हूँ, आपका इंटेलिजेंट सुरक्षा और वीडियो एनालिटिक्स सहायक। आप मुझसे KryptonVision के फीचर्स, सीसीटीवी/वीएमएस अवधारणाओं या सामान्य ज्ञान के बारे में हिंदी में पूछ सकते हैं।\n\nलाइव कैमरे, अलर्ट या शाखा रिकॉर्ड देखने के लिए कृपया लॉगिन करें।",
+          messageMl:
+            "നമസ്കാരം! ഞാൻ KryptonAI ആണ്. KryptonVision ഫീച്ചറുകൾ, CCTV & VMS സംശയങ്ങൾ എന്നിവയെക്കുറിച്ച് എന്നോട് ചോദിക്കാം!\n\nലൈവ് ഫീഡുകൾ, അലർട്ടുകൾ എന്നിവ കാണാൻ ദയവായി ലോഗിൻ ചെയ്യുക.",
+          type: "text",
+          suggestions: [
+            "KryptonVision क्या है?",
+            "कौन-कौन से AI फीचर्स हैं?",
+            "कौन से कैमरे समर्थित हैं?",
+            "साइन इन कैसे करें?",
+          ],
+          suggestionsHi: [
+            "KryptonVision क्या है?",
+            "कौन-कौन से AI फीचर्स हैं?",
+            "कौन से कैमरे समर्थित हैं?",
+            "साइन इन कैसे करें?",
+          ],
+          suggestionsMl: [
+            "KryptonVision എന്താണ്?",
+            "AI ഫീച്ചറുകൾ ഏതൊക്കെ?",
+            "Supported cameras ഏതൊക്കെ?",
+            "Sign in എങ്ങനെ ചെയ്യും?",
+          ],
+          timestamp,
+        };
+      }
+      if (lang === "ml") {
+        return {
+          message:
+            "നമസ്കാരം! ഞാൻ KryptonAI ആണ്. KryptonVision ഫീച്ചറുകൾ, CCTV & VMS സാങ്കേതിക സംശയങ്ങൾ എന്നിവയെക്കുറിച്ച് എന്നോട് ചോദിക്കാം!\n\nലൈവ് ക്യാമറകൾ, അലർട്ടുകൾ എന്നിവ കാണാൻ ദയവായി അക്കൗണ്ടിലേക്ക് ലോഗിൻ ചെയ്യുക.",
+          messageMl:
+            "നമസ്കാരം! ഞാൻ KryptonAI ആണ്. KryptonVision ഫീച്ചറുകൾ, CCTV & VMS സാങ്കേതിക സംശയങ്ങൾ എന്നിവയെക്കുറിച്ച് എന്നോട് ചോദിക്കാം!\n\nലൈവ് ക്യാമറകൾ, അലർട്ടുകൾ എന്നിവ കാണാൻ ദയവായി അക്കൗണ്ടിലേക്ക് ലോഗിൻ ചെയ്യുക.",
+          messageHi:
+            "नमस्ते! मैं KryptonAI हूँ, आपका इंटेलिजेंट सुरक्षा और वीडियो एनालिटिक्स सहायक।",
+          type: "text",
+          suggestions: [
+            "KryptonVision എന്താണ്?",
+            "AI ഫീച്ചറുകൾ ഏതൊക്കെ?",
+            "Supported cameras ഏതൊക്കെ?",
+            "Sign in എങ്ങനെ ചെയ്യും?",
+          ],
+          suggestionsMl: [
+            "KryptonVision എന്താണ്?",
+            "AI ഫീച്ചറുകൾ ഏതൊക്കെ?",
+            "Supported cameras ഏതൊക്കെ?",
+            "Sign in എങ്ങനെ ചെയ്യും?",
+          ],
+          suggestionsHi: [
+            "KryptonVision क्या है?",
+            "कौन-कौन से AI फीचर्स हैं?",
+            "कौन से कैमरे समर्थित हैं?",
+            "साइन इन कैसे करें?",
+          ],
+          timestamp,
+        };
+      }
       return {
         message:
-          "Hello! I am KryptonAI. Ask me about KryptonVision, CCTV and VMS concepts, or simple general knowledge.\n\nTo view live feeds, alerts, or your organization's records, sign in with your account.",
+          "Hello! I am KryptonAI. Ask me about KryptonVision, CCTV and VMS concepts, or simple general knowledge in English, Malayalam, Hindi, or Manglish.\n\nTo view live feeds, alerts, or your organization's records, please sign in with your account.",
+        messageMl:
+          "നമസ്കാരം! ഞാൻ KryptonAI ആണ്. KryptonVision ഫീച്ചറുകൾ, CCTV & VMS സാങ്കേതിക സംശയങ്ങൾ എന്നിവയെക്കുറിച്ച് ചോദിക്കാം!",
+        messageHi:
+          "नमस्ते! मैं KryptonAI हूँ। KryptonVision फीचर्स और सीसीटीवी के बारे में बेझिझक पूछें।",
         type: "text",
         suggestions: [
           "What is KryptonVision?",
           "What AI features are available?",
           "Which cameras are supported?",
           "How do I sign in?",
+        ],
+        suggestionsMl: [
+          "KryptonVision എന്താണ്?",
+          "AI ഫീച്ചറുകൾ ഏതൊക്കെ?",
+          "Supported cameras ഏതൊക്കെ?",
+          "Sign in എങ്ങനെ ചെയ്യും?",
+        ],
+        suggestionsHi: [
+          "KryptonVision क्या है?",
+          "कौन-कौन से AI फीचर्स हैं?",
+          "कौन से कैमरे समर्थित हैं?",
+          "साइन इन कैसे करें?",
         ],
         timestamp,
       };
@@ -2462,8 +2663,52 @@ Personality:
       lower.includes("voice id") ||
       lower.includes("voice auth") ||
       lower.includes("credentials") ||
-      lower.includes("forgot")
+      lower.includes("forgot") ||
+      lower.includes("login kaise") ||
+      lower.includes("sign in kaise") ||
+      lower.includes("login engane") ||
+      lower.includes("sign in engane")
     ) {
+      if (lang === "hi") {
+        return {
+          message:
+            "**KryptonVision में साइन इन कैसे करें:**\n\n• **मानक लॉगिन:** लॉगिन स्क्रीन पर अपना यूज़रनेम और पासवर्ड दर्ज करें और **Sign In** दबाएं।\n• **वॉयस आईडी लॉगिन:** यदि आपने वॉयस पासफ़्रेज़ एनरोल किया है, तो **Voice Login** बटन दबाकर अपना पासफ़्रेज़ बोलें।\n• **पासवर्ड भूल गए:** पासवर्ड रीसेट के लिए सुरक्षित ओटीपी प्राप्त करने हेतु **Forgot Password** पर क्लिक करें।\n• **नया खाता:** नया खाता बनवाने के लिए अपने सुरक्षा व्यवस्थापक से संपर्क करें।",
+          messageHi:
+            "**KryptonVision में साइन इन कैसे करें:**\n\n• **मानक लॉगिन:** लॉगिन स्क्रीन पर अपना यूज़रनेम और पासवर्ड दर्ज करें और **Sign In** दबाएं।\n• **वॉयस आईडी लॉगिन:** यदि आपने वॉयस पासफ़्रेज़ एनरोल किया है, तो **Voice Login** बटन दबाकर अपना पासफ़्रेज़ बोलें।\n• **पासवर्ड भूल गए:** पासवर्ड रीसेट के लिए सुरक्षित ओटीपी प्राप्त करने हेतु **Forgot Password** पर क्लिक करें।",
+          type: "text",
+          suggestions: [
+            "KryptonVision क्या है?",
+            "कौन से AI फीचर्स हैं?",
+            "कौन से कैमरे समर्थित हैं?",
+          ],
+          suggestionsHi: [
+            "KryptonVision क्या है?",
+            "कौन से AI फीचर्स हैं?",
+            "कौन से कैमरे समर्थित हैं?",
+          ],
+          timestamp,
+        };
+      }
+      if (lang === "ml") {
+        return {
+          message:
+            "**KryptonVision-ൽ Sign In ചെയ്യുന്ന വിധം:**\n\n• **Standard Login:** Username-ഉം Password-ഉം നൽകി **Sign In** click ചെയ്യുക.\n• **Voice ID Login:** വോയ്സ് എൻറോൾ ചെയ്തിട്ടുണ്ടെങ്കിൽ **Voice Login** ക്ലിക്ക് ചെയ്ത് പാസ്ഫ്രേസ് പറയുക.\n• **Forgot Password:** OTP വഴി പാസ്‌വേഡ് റീസെറ്റ് ചെയ്യാൻ **Forgot Password** ഉപയോഗിക്കാം.\n• **New Account:** പുതിയ അക്കൗണ്ടിനായി സിസ്റ്റം അഡ്മിനിസ്ട്രേറ്ററെ സമീപിക്കുക.",
+          messageMl:
+            "**KryptonVision-ൽ Sign In ചെയ്യുന്ന വിധം:**\n\n• **Standard Login:** Username-ഉം Password-ഉം നൽകി **Sign In** click ചെയ്യുക.\n• **Voice ID Login:** വോയ്സ് എൻറോൾ ചെയ്തിട്ടുണ്ടെങ്കിൽ **Voice Login** ക്ലിക്ക് ചെയ്ത് പാസ്ഫ്രേസ് പറയുക.",
+          type: "text",
+          suggestions: [
+            "KryptonVision എന്താണ്?",
+            "AI ഫീച്ചറുകൾ ഏതൊക്കെ?",
+            "Supported cameras ഏതൊക്കെ?",
+          ],
+          suggestionsMl: [
+            "KryptonVision എന്താണ്?",
+            "AI ഫീച്ചറുകൾ ഏതൊക്കെ?",
+            "Supported cameras ഏതൊക്കെ?",
+          ],
+          timestamp,
+        };
+      }
       return {
         message:
           "**How to Sign In to KryptonVision:**\n\n• **Standard Login:** Enter your Username and Password on the login screen and click **Sign In**.\n• **Voice ID Login:** If your profile has an enrolled voice passphrase, click the **Voice Login** button to authenticate by speaking your phrase.\n• **Forgot Password:** Click **Forgot Password** on the login form to receive a secure OTP for password reset.\n• **New Account:** Contact your organization's security administrator to get your account provisioned.",
@@ -2492,8 +2737,50 @@ Personality:
       lower.includes("cp plus") ||
       lower.includes("axis") ||
       lower.includes("uniview") ||
-      lower.includes("hanwha")
+      lower.includes("hanwha") ||
+      lower.includes("camera kaun") ||
+      lower.includes("camera ethokke")
     ) {
+      if (lang === "hi") {
+        return {
+          message:
+            "**समर्थित सीसीटीवी कैमरे एवं प्रोटोकॉल (Supported Cameras & Protocols):**\n\n• **मानक प्रोटोकॉल:** मानक RTSP स्ट्रीमिंग और ONVIF (Profiles S, G, एवं T) का पूर्ण समर्थन।\n• **समर्थित ब्रांड्स:** Hikvision, Dahua, CP Plus, Uniview, Axis Communications, Hanwha Vision, और कोई भी ONVIF-अनुरूप IP कैमरा/NVR/DVR।\n• **एज गेटवे:** स्थानीय हार्डवेयर (Jetson, Intel x86, Raspberry Pi 4/5) पर 24/7 ऑफ़लाइन रिकॉर्डिंग और नेटवर्क आने पर सुरक्षित सिंक।",
+          messageHi:
+            "**समर्थित सीसीटीवी कैमरे एवं प्रोटोकॉल:**\n\n• **मानक प्रोटोकॉल:** RTSP एवं ONVIF (Profile S/G/T)।\n• **ब्रांड्स:** Hikvision, Dahua, CP Plus, Axis, Uniview, Hanwha।",
+          type: "text",
+          suggestions: [
+            "KryptonVision क्या है?",
+            "AI फीचर्स कौन-कौन से हैं?",
+            "साइन इन कैसे करें?",
+          ],
+          suggestionsHi: [
+            "KryptonVision क्या है?",
+            "AI फीचर्स कौन-कौन से हैं?",
+            "साइन इन कैसे करें?",
+          ],
+          timestamp,
+        };
+      }
+      if (lang === "ml") {
+        return {
+          message:
+            "**Supported CCTV Cameras & Protocols:**\n\n• **Standard Protocols:** RTSP streaming, ONVIF (Profiles S, G, T) പൂർണ്ണ പിന്തുണ.\n• **Supported Hardware Brands:** Hikvision, Dahua, CP Plus, Uniview, Axis Communications, Hanwha Vision എന്നിവയും എല്ലാ ONVIF IP ക്യാമറകളും/NVRകളും.\n• **Edge Gateways:** Jetson, Intel x86, Raspberry Pi ഡിവൈസുകളിൽ offline video buffering പിന്തുണയുണ്ട്.",
+          messageMl:
+            "**Supported CCTV Cameras & Protocols:**\n\n• **Protocols:** RTSP, ONVIF (Profile S/G/T).\n• **Brands:** Hikvision, Dahua, CP Plus, Axis, Uniview, Hanwha.",
+          type: "text",
+          suggestions: [
+            "KryptonVision എന്താണ്?",
+            "AI ഫീച്ചറുകൾ ഏതൊക്കെ?",
+            "Sign in എങ്ങനെ ചെയ്യും?",
+          ],
+          suggestionsMl: [
+            "KryptonVision എന്താണ്?",
+            "AI ഫീച്ചറുകൾ ഏതൊക്കെ?",
+            "Sign in എങ്ങനെ ചെയ്യും?",
+          ],
+          timestamp,
+        };
+      }
       return {
         message:
           "**Supported CCTV Cameras & Protocols:**\n\n• **Standard Protocols:** Full support for standard RTSP streaming and ONVIF (Profiles S, G, and T).\n• **Supported Hardware Brands:** Hikvision, Dahua, CP Plus, Uniview, Axis Communications, Hanwha Vision, and any ONVIF-compliant IP cameras / NVRs / DVRs.\n• **Edge Gateways:** Works with local edge appliances (Jetson, Intel x86, Raspberry Pi 4/5) with automated offline video buffering and encrypted sync.",
@@ -2510,14 +2797,53 @@ Personality:
     // 4. Platform overview / What is KryptonVision / Sentinel Grid
     if (
       lower.includes("what is kryptonvision") ||
-      lower.includes("what is sentinel") ||
-      lower.includes("what is this") ||
+      lower.includes("what is sentinel grid") ||
+      lower.includes("about platform") ||
       lower.includes("about kryptonvision") ||
-      lower.includes("about") ||
-      lower.includes("entha ith") ||
-      lower.includes("enthanu") ||
-      lower.includes("overview")
+      lower.includes("tell me about") ||
+      lower.includes("kryptonvision kya hai") ||
+      lower.includes("kryptonvision enthanu")
     ) {
+      if (lang === "hi") {
+        return {
+          message:
+            "**KryptonVision** (Sentinel Grid द्वारा संचालित) एक एंटरप्राइज़ AI भौतिक सुरक्षा और वीडियो निगरानी प्रबंधन प्लेटफ़ॉर्म है।\n\n**प्रमुख क्षमताएं:**\n1. **एज AI वीडियो एनालिटिक्स:** लाइव चेहरा पहचान (Face Recognition), घुसपैठ पहचान, भीड़ घनत्व (Crowd) और ANPR।\n2. **मल्टी-ब्रांच कंट्रोल सेंटर:** सभी शाखाओं के लिए केंद्रीकृत लाइव वीडियो वॉल, पीटीजेड नियंत्रण और एकीकृत अलर्ट।\n3. **बैंकिंग एवं एनबीएफसी अनुपालन:** वॉल्ट दोहरी निगरानी (Dual-Custody) टाइमर, कैश काउंटर सुरक्षा और दैनिक एमआईएस रिपोर्ट।\n4. **उच्च उपलब्धता एज आर्किटेक्चर:** इंटरनेट बंद होने पर भी स्थानीय रिकॉर्डिंग और नेटवर्क आने पर सुरक्षित क्लाउड सिंक।",
+          messageHi:
+            "**KryptonVision** एक एंटरप्राइज़ AI सुरक्षा एवं वीडियो प्रबंधन प्लेटफ़ॉर्म है।",
+          type: "text",
+          suggestions: [
+            "AI फीचर्स कौन-कौन से हैं?",
+            "कौन से कैमरे समर्थित हैं?",
+            "साइन इन कैसे करें?",
+          ],
+          suggestionsHi: [
+            "AI फीचर्स कौन-कौन से हैं?",
+            "कौन से कैमरे समर्थित हैं?",
+            "साइन इन कैसे करें?",
+          ],
+          timestamp,
+        };
+      }
+      if (lang === "ml") {
+        return {
+          message:
+            "**KryptonVision** (Sentinel Grid) ഒരു എന്റർപ്രൈസ് AI ഫിസിക്കൽ സെക്യൂരിറ്റി & വീഡിയോ സർവൈലൻസ് പ്ലാറ്റ്‌ഫോമാണ്.\n\n**പ്രധാന പ്രത്യേകതകൾ:**\n1. **Edge AI Analytics:** ഫേസ് റെക്കഗ്നിഷൻ, ഇൻട്രൂഷൻ ഡിറ്റക്ഷൻ, ക്രൗഡ്, ANPR.\n2. **Multi-Branch Control:** എല്ലാ ശാഖകളിലെയും ക്യാമറകൾ ഒരുമിച്ച് കാണാനുള്ള ലൈവ് വീഡിയോ വാൾ.\n3. **Banking/NBFC Compliance:** വോൾട്ട് ഡ്യുവൽ-കസ്റ്റഡി, ക്യാഷ് കൗണ്ടർ സുരക്ഷ, ഓട്ടോമേറ്റഡ് MIS റിപ്പോർട്ടുകൾ.\n4. **Edge Architecture:** ഇന്റർനെറ്റ് ഇല്ലെങ്കിലും ലോക്കൽ റെക്കോർഡിംഗ്, കണക്റ്റിവിറ്റി വരുമ്പോൾ ക്ലൗഡ് സിങ്ക്.",
+          messageMl:
+            "**KryptonVision** ഒരു എന്റർപ്രൈസ് AI ഫിസിക്കൽ സെക്യൂരിറ്റി പ്ലാറ്റ്‌ഫോമാണ്.",
+          type: "text",
+          suggestions: [
+            "AI ഫീച്ചറുകൾ ഏതൊക്കെ?",
+            "Supported cameras ഏതൊക്കെ?",
+            "Sign in എങ്ങനെ ചെയ്യും?",
+          ],
+          suggestionsMl: [
+            "AI ഫീച്ചറുകൾ ഏതൊക്കെ?",
+            "Supported cameras ഏതൊക്കെ?",
+            "Sign in എങ്ങനെ ചെയ്യും?",
+          ],
+          timestamp,
+        };
+      }
       return {
         message:
           "**KryptonVision** (powered by Sentinel Grid) is an enterprise AI physical security and video surveillance management platform.\n\nKey capabilities include:\n1. **Edge AI Video Analytics:** Real-time facial recognition, intrusion detection, crowd density, and ANPR.\n2. **Multi-Branch Control Center:** Centralized live video walls, PTZ control, and unified alert escalation across all branches.\n3. **Banking & NBFC Compliance:** Vault dual-custody timers, cash counter security monitoring, and automated daily surveillance reports.\n4. **High Availability Edge Architecture:** Offline video recording and automatic synchronization when network resumes.",
@@ -2531,76 +2857,70 @@ Personality:
       };
     }
 
-    // 5. Features / AI analytics capabilities
+    // 5. Features / AI analytics capabilities query
     const isFeatureQuery =
       lower.includes("feature") ||
       lower.includes("analytic") ||
       lower.includes("capability") ||
       lower.includes("capabilities") ||
-      lower.includes("face recognition") ||
-      lower.includes("facial") ||
-      lower.includes("anpr") ||
-      lower.includes("license plate") ||
-      lower.includes("intrusion") ||
-      lower.includes("crowd") ||
-      lower.includes("loitering") ||
       lower.includes("what can") ||
       lower.includes("what does") ||
       lower.includes("what features") ||
       lower.includes("ai features") ||
       lower.includes("enthellam") ||
-      lower.includes("enthu okke") ||
-      lower.includes("enthu features") ||
+      lower.includes("enthokke") ||
       lower.includes("features enthaanu") ||
-      lower.includes("features enthokke") ||
       lower.includes("features unduo") ||
-      lower.includes("features undoo") ||
       lower.includes("features undo") ||
       lower.includes("features ullathu") ||
-      lower.includes("features undayo") ||
-      lower.includes("enthanu features") ||
-      lower.includes("ethu features") ||
-      lower.includes("njan enthellam cheyyan") ||
-      lower.includes("enthu cheyyan") ||
-      lower.includes("enthu okke ayyo") ||
-      lower.includes("platform enthu") ||
-      lower.includes("product enthu") ||
-      lower.includes("system enthu") ||
-      lower.includes("ai unduo") ||
-      lower.includes("ai undoo") ||
-      lower.includes("ai undo") ||
-      (lower.includes("ai") && lower.includes("enthu")) ||
-      (lower.includes("ai") && lower.includes("entha"));
-
-    const isMalayalamQuery =
-      lower.includes("enthu") ||
-      lower.includes("entha") ||
-      lower.includes("enthellam") ||
-      lower.includes("enthu okke") ||
-      lower.includes("unduo") ||
-      lower.includes("undoo") ||
-      lower.includes("undo") ||
-      lower.includes("ullathu") ||
-      lower.includes("paranjal") ||
-      lower.includes("cheyyanam") ||
-      lower.includes("cheyyam") ||
-      lower.includes("ayyo") ||
-      lower.includes("aaano") ||
-      lower.includes("aano") ||
-      lower.includes("anuu") ||
-      lower.includes("engane") ||
-      lower.includes("evide") ||
-      lower.includes("enikku") ||
-      lower.includes("njan");
+      lower.includes("फीचर्स") ||
+      lower.includes("फीचर") ||
+      lower.includes("खूबियां") ||
+      lower.includes("सुविधा") ||
+      lower.includes("സവിശേഷത") ||
+      lower.includes("ഫീച്ചർ") ||
+      lower.includes("ഫീച്ചറുകൾ") ||
+      (lower.includes("kya") && lower.includes("hai")) ||
+      (lower.includes("kya") && lower.includes("features")) ||
+      (lower.includes("features") && lower.includes("batao"));
 
     if (isFeatureQuery) {
-      if (isMalayalamQuery) {
+      if (lang === "hi") {
         return {
           message:
-            "**KryptonVision-ന്റെ AI & Security ഫീച്ചറുകൾ:**",
+            "**KryptonVision के AI और सुरक्षा फीचर्स (AI & Security Features):**\n\nइस प्लेटफ़ॉर्म में 12 प्रमुख एंटरप्राइज़ सुरक्षा क्षमताएं शामिल हैं:",
+          messageHi:
+            "**KryptonVision के AI और सुरक्षा फीचर्स (AI & Security Features):**\n\nइस प्लेटफ़ॉर्म में 12 प्रमुख एंटरप्राइज़ सुरक्षा क्षमताएं शामिल हैं:",
           messageMl:
-            "**KryptonVision-ന്റെ AI & Security ഫീച്ചറുകൾ:**\n\n" +
-            "ഈ platform-ൽ ഉള്ള പ്രധാന capabilities:",
+            "**KryptonVision-ന്റെ AI & Security ഫീച്ചറുകൾ:**\n\nഈ platform-ൽ ഉള്ള പ്രധാന capabilities:",
+          type: "feature_cards",
+          cards: KRYPTON_PRODUCT_FEATURES,
+          suggestions: [
+            "KryptonVision क्या है?",
+            "कौन से कैमरे समर्थित हैं?",
+            "साइन इन कैसे करें?",
+          ],
+          suggestionsHi: [
+            "KryptonVision क्या है?",
+            "कौन से कैमरे समर्थित हैं?",
+            "साइन इन कैसे करें?",
+          ],
+          suggestionsMl: [
+            "KryptonVision എന്താണ്?",
+            "Supported cameras ഏതൊക്കെ?",
+            "Sign in എങ്ങനെ ചെയ്യും?",
+          ],
+          timestamp,
+        };
+      }
+      if (lang === "ml") {
+        return {
+          message:
+            "**KryptonVision-ന്റെ AI & Security ഫീച്ചറുകൾ:**\n\nഈ platform-ൽ ഉള്ള പ്രധാന capabilities:",
+          messageMl:
+            "**KryptonVision-ന്റെ AI & Security ഫീച്ചറുകൾ:**\n\nഈ platform-ൽ ഉള്ള പ്രധാന capabilities:",
+          messageHi:
+            "**KryptonVision के AI और सुरक्षा फीचर्स:**",
           type: "feature_cards",
           cards: KRYPTON_PRODUCT_FEATURES,
           suggestions: [
@@ -2613,12 +2933,21 @@ Personality:
             "Supported cameras ഏതൊക്കെ?",
             "Sign in എങ്ങനെ ചെയ്യും?",
           ],
+          suggestionsHi: [
+            "KryptonVision क्या है?",
+            "कौन से कैमरे समर्थित हैं?",
+            "साइन इन कैसे करें?",
+          ],
           timestamp,
         };
       }
       return {
         message:
-          "**KryptonVision AI & Security Capabilities:**",
+          "**KryptonVision AI & Security Capabilities:**\n\nHere are the 12 core platform features available across all branches:",
+        messageMl:
+          "**KryptonVision-ന്റെ AI & Security ഫീച്ചറുകൾ:**",
+        messageHi:
+          "**KryptonVision के AI और सुरक्षा फीचर्स:**",
         type: "feature_cards",
         cards: KRYPTON_PRODUCT_FEATURES,
         suggestions: [
@@ -2626,318 +2955,101 @@ Personality:
           "Which cameras are supported?",
           "How do I sign in?",
         ],
-        timestamp,
-      };
-    }
-
-    // 6. NBFC / Banking explanation (informational)
-    if (
-      lower.includes("what is nbfc") ||
-      lower.includes("banking module") ||
-      lower.includes("vault monitoring")
-    ) {
-      return {
-        message:
-          "The **NBFC & Banking Operations Module** is designed for gold loan branches, banks, and secure commercial facilities. It enforces security compliance:\n• Automated vault opening/closing dual-custody verification\n• Real-time cash counter camera coverage\n• Strong-room security checks and teller area monitoring\n• Automated daily surveillance health MIS reports\n\n*Note: To view live vault cameras, branch audit logs, or branch operational reports, please log in to your account.*",
-        type: "text",
-        suggestions: [
-          "How do I sign in?",
-          "What is KryptonVision?",
-          "Supported CCTV cameras",
+        suggestionsMl: [
+          "KryptonVision എന്താണ്?",
+          "Supported cameras ഏതൊക്കെ?",
+          "Sign in എങ്ങനെ ചെയ്യും?",
+        ],
+        suggestionsHi: [
+          "KryptonVision क्या है?",
+          "कौन से कैमरे समर्थित हैं?",
+          "साइन इन कैसे करें?",
         ],
         timestamp,
       };
     }
 
-    // 6b. Polygon Zone / Line Crossing / Virtual Tripwire — comprehensive bilingual guide
-    const isLineCrossQuery =
+    // ── SPECIFIC FEATURE GUIDES (MULTILINGUAL) ──────────────────────────
+
+    // 1. Line Crossing / Virtual Tripwire / Polygon Zone
+    if (
       lower.includes("line cross") ||
-      lower.includes("line crossing") ||
       lower.includes("tripwire") ||
-      lower.includes("boundary") ||
       lower.includes("polygon") ||
-      lower.includes("zone") ||
-      lower.includes("virtual zone") ||
-      lower.includes("draw zone") ||
-      lower.includes("draw line") ||
       lower.includes("sterile zone") ||
       lower.includes("restricted zone") ||
-      lower.includes("restricted area") ||
-      lower.includes("intrusion zone") ||
-      lower.includes("analytics rule") ||
-      lower.includes("rules automation") ||
-      lower.includes("lain cross") ||
-      lower.includes("laim cross") ||
-      lower.includes("line kroos") ||
-      lower.includes("polygon set") ||
-      lower.includes("polygon varak") ||
-      lower.includes("polygon varakk") ||
-      lower.includes("zone set") ||
-      lower.includes("zone varakk") ||
-      lower.includes("zone varak") ||
-      lower.includes("zone undaak") ||
-      lower.includes("zone undak") ||
-      lower.includes("zone create") ||
-      lower.includes("line varakk") ||
-      lower.includes("line varak") ||
-      lower.includes("virtual line") ||
-      lower.includes("cross cheyyumbol") ||
-      lower.includes("cross cheyyumpoL") ||
-      lower.includes("cross alert") ||
-      lower.includes("kadannu poyal") ||
-      lower.includes("kadannal") ||
-      lower.includes("kadan poyal") ||
-      lower.includes("boundary alert");
-
-    if (isLineCrossQuery) {
+      lower.includes("लाइन क्रॉस") ||
+      lower.includes("ट्रिपवायर") ||
+      lower.includes("പോളിഗോൺ") ||
+      lower.includes("ലൈൻ ക്രോസിംഗ്")
+    ) {
       const isPolygon =
         lower.includes("polygon") ||
-        lower.includes("zone") ||
         lower.includes("sterile") ||
         lower.includes("restricted") ||
-        lower.includes("intrusion zone") ||
-        lower.includes("zone set") ||
-        lower.includes("zone varak") ||
-        lower.includes("zone undaak") ||
-        lower.includes("zone undak") ||
-        lower.includes("zone create");
-
-      if (isPolygon) {
-        return {
-          message:
-            "**Polygon Zone (Sterile / Restricted Area) — എവിടെ, എങ്ങനെ Set ചെയ്യാം:**\n\n" +
-            "📍 **Path:** Dashboard → **Analytics ➔ Rules & Automation** (`/analytics/rules`)\n\n" +
-            "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
-            "1️⃣ Login ചെയ്ത ശേഷം ഇടത് sidebar-ൽ **Analytics** → **Rules & Automation** click ചെയ്യുക.\n" +
-            "   🔗 Direct URL: `/analytics/rules`\n\n" +
-            "2️⃣ **Branch** (ഏത് branch?) & **Camera** (ഏത് camera?) dropdown-ൽ നിന്ന് select ചെയ്യുക.\n\n" +
-            "3️⃣ **\"Visual Zone & Virtual Tripwire Designer\"** tool-ൽ mode **\"Polygon Zone\"** select ചെയ്യുക.\n" +
-            "   *(Default \"Virtual Tripwire\" ആണ്, അത് polygon zone-ലേക്ക് switch ചെയ്യുക)*\n\n" +
-            "4️⃣ Camera-യുടെ live canvas-ൽ **3 or more points click** ചെയ്ത് ഒരു closed polygon വരയ്ക്കുക.\n" +
-            "   • ഓരോ click-ഉം ഓരോ corner point ആണ്.\n" +
-            "   • Last point first point-ൽ click ചെയ്ത് polygon close ചെയ്യുക.\n\n" +
-            "5️⃣ **\"Save Zone Definition\"** button click ചെയ്യുക.\n\n" +
-            "6️⃣ **Rule Configuration** section-ൽ (Page-ന്റെ bottom-ൽ):\n" +
-            "   • **Condition Type:** `Zone Intrusion` (zone_intrusion) select ചെയ്യുക.\n" +
-            "   • **Action:** Alert / Siren / SMS / Incident — ഏത് action വേണം?\n" +
-            "   • **\"Save Rule\"** click ചെയ്യുക.\n\n" +
-            "✅ ഇനി ആ polygon zone-ലേക്ക് ആരെങ്കിലും കടന്നു കഴിഞ്ഞാൽ automatic alert trigger ആകും!\n\n" +
-            "*(Configuration ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
-          type: "text",
-          suggestions: [
-            "Line Crossing (Virtual Tripwire) set cheyyaan",
-            "What AI features are available?",
-            "How do I sign in?",
-            "Edge Agent installation guide",
-          ],
-          timestamp,
-        };
-      }
-
-      // Line Crossing / Virtual Tripwire
-      return {
-        message:
-          "**Line Crossing (Virtual Tripwire) — എവിടെ, എങ്ങനെ Set ചെയ്യാം:**\n\n" +
-          "📍 **Path:** Dashboard → **Analytics ➔ Rules & Automation** (`/analytics/rules`)\n\n" +
-          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
-          "1️⃣ Login ചെയ്ത ശേഷം ഇടത് sidebar-ൽ **Analytics** → **Rules & Automation** click ചെയ്യുക.\n" +
-          "   🔗 Direct URL: `/analytics/rules`\n\n" +
-          "2️⃣ **Branch** & **Camera** dropdown-ൽ നിന്ന് select ചെയ്യുക.\n\n" +
-          "3️⃣ **\"Visual Zone & Virtual Tripwire Designer\"** tool-ൽ mode **\"Virtual Tripwire\"** select ചെയ്യുക.\n" +
-          "   *(Quick preset: **⚡ Door Ingress Tripwire** click ചെയ്ത് automatically set ആക്കാം)*\n\n" +
-          "4️⃣ **Direction** select ചെയ്യുക:\n" +
-          "   • `A ➔ B` — ഒരു direction-ൽ cross ചെയ്താൽ alert\n" +
-          "   • `B ➔ A` — opposite direction-ൽ cross ചെയ്താൽ alert\n" +
-          "   • `A ⇄ B` — ഏത് direction-ലും cross ചെയ്താൽ alert (bidirectional)\n\n" +
-          "5️⃣ Camera-യുടെ live canvas-ൽ **2 points click** ചെയ്ത് line വരയ്ക്കുക.\n" +
-          "   • Point A (🟢 Green) — line-ന്റെ start\n" +
-          "   • Point B (🔵 Blue) — line-ന്റെ end\n\n" +
-          "6️⃣ **\"Save Tripwire Definition\"** button click ചെയ്യുക.\n\n" +
-          "7️⃣ **Rule Configuration** section-ൽ:\n" +
-          "   • **Condition Type:** `Line Crossing` (line_crossing) select ചെയ്യുക.\n" +
-          "   • **Action:** Alert / Siren / SMS / Incident — ഏത് action വേണം?\n" +
-          "   • **\"Save Rule\"** click ചെയ്യുക.\n\n" +
-          "✅ ഇനി ആ line cross ചെയ്ത് ആരെങ്കിലും കടന്നാൽ automatic alert trigger ആകും!\n\n" +
-          "💡 **Polygon Zone vs Line Crossing:**\n" +
-          "   • **Line Crossing** = ഒരു straight line cross ചെയ്യുമ്പോൾ alert (2 points)\n" +
-          "   • **Polygon Zone** = ഒരു area/region-ലേക്ക് കടക്കുമ്പോൾ alert (3+ points, closed shape)\n\n" +
-          "*(Configuration ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
-        type: "text",
-        suggestions: [
-          "Polygon Zone set cheyyaan",
-          "What AI features are available?",
-          "How do I sign in?",
-          "Edge Agent installation guide",
-        ],
-        timestamp,
-      };
+        lower.includes("പോളിഗോൺ") ||
+        lower.includes("पॉलीगॉन");
+      const guideKey = isPolygon ? "polygon_zone" : "line_crossing";
+      const guide = getLocalizedGuide(guideKey, lang, timestamp);
+      if (guide) return guide;
     }
 
+    // 2. Edge Agent setup & installation
     if (
-      (lower.includes("edge") || lower.includes("agent") || lower.includes("installer")) &&
-      (lower.includes("install") || lower.includes("another") || lower.includes("work") || lower.includes("system") || lower.includes("setup"))
+      (lower.includes("edge") || lower.includes("agent") || lower.includes("installer") || lower.includes("एजेंट")) &&
+      (lower.includes("install") || lower.includes("setup") || lower.includes("work") || lower.includes("ഇൻസ്റ്റാൾ") || lower.includes("इंस्टॉल"))
     ) {
-      return {
-        message: "**Edge Agent installation**\n\n**Where:** [Edge Agent Management](/operations/edge-fleet). After signing in, select the branch and use its current installer and one-time gateway activation workflow. Do not reuse another branch activation. Approve the Windows administrator prompt and check the displayed agent status. If setup fails, give the administrator the exact error shown; do not share activation codes or camera passwords.",
-        type: "text",
-        suggestions: ["How do I sign in?", "What is KryptonVision?"],
-        timestamp,
-      };
+      const guide = getLocalizedGuide("edge_agent", lang, timestamp);
+      if (guide) return guide;
     }
 
-    // ── 7. FACE RECOGNITION / WATCHLIST ─────────────────────────────────
-    const isFaceQuery =
+    // 3. Facial Recognition
+    if (
       lower.includes("face recognition") ||
       lower.includes("facial") ||
       lower.includes("face id") ||
       lower.includes("watchlist") ||
       lower.includes("blacklist") ||
-      lower.includes("whitelist") ||
-      lower.includes("enroll face") ||
-      lower.includes("enroll person") ||
-      lower.includes("face enroll") ||
-      lower.includes("add face") ||
-      lower.includes("vip face") ||
       lower.includes("mukham") ||
-      lower.includes("mukha") ||
-      lower.includes("face set") ||
-      lower.includes("face add") ||
-      lower.includes("face register") ||
-      lower.includes("face configure") ||
-      lower.includes("face evide") ||
-      lower.includes("face engane") ||
-      lower.includes("face recognition evide") ||
-      lower.includes("face recognition engane");
-
-    if (isFaceQuery) {
-      return {
-        message:
-          "**Face Recognition & Watchlist — എവിടെ, എങ്ങനെ Set ചെയ്യാം:**\n\n" +
-          "📍 **Path:** Dashboard → **Analytics → Face Recognition & Watchlists** (`/analytics/face-recognition`)\n\n" +
-          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
-          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Analytics → Face Recognition & Watchlists** click ചെയ്യുക.\n" +
-          "   🔗 Direct URL: `/analytics/face-recognition`\n\n" +
-          "2️⃣ **\"+ Enroll Person\"** button click ചെയ്യുക.\n\n" +
-          "3️⃣ Details fill ചെയ്യുക:\n" +
-          "   • **Name** — ആളിന്റെ പേര്\n" +
-          "   • **Category** — `VIP` / `Employee` / `Blacklisted` / `Watchlist`\n" +
-          "   • **Photo** — clear face photo upload ചെയ്യുക (minimum 1, recommended 3-5 angles)\n\n" +
-          "4️⃣ **\"Save\"** click ചെയ്യുക — enrollment complete!\n\n" +
-          "5️⃣ **Alert Rule Set ചെയ്യാൻ:**\n" +
-          "   • Analytics → Rules & Automation (`/analytics/rules`) → Condition: `Face Match` select ചെയ്യുക.\n" +
-          "   • Blacklisted person detected ആകുമ്പോൾ auto-alert set ആകും.\n\n" +
-          "✅ ഇനി enroll ചെയ്ത face camera-ൽ appear ആകുമ്പോൾ automatic recognition!\n\n" +
-          "*(Configuration ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
-        type: "text",
-        suggestions: [
-          "How do I sign in?",
-          "ANPR vehicle tracking set cheyyaan",
-          "What AI features are available?",
-          "Line Crossing set cheyyaan",
-        ],
-        timestamp,
-      };
+      lower.includes("चेहरा पहचान") ||
+      lower.includes("ഫേസ് റെക്കഗ്നിഷൻ")
+    ) {
+      const guide = getLocalizedGuide("facial_recognition", lang, timestamp);
+      if (guide) return guide;
     }
 
-    // ── 8. ANPR / VEHICLE TRACKING ───────────────────────────────────────
-    const isAnprQuery =
+    // 4. ANPR (Vehicle License Plate Recognition)
+    if (
       lower.includes("anpr") ||
       lower.includes("number plate") ||
       lower.includes("license plate") ||
       lower.includes("vehicle") ||
       lower.includes("vahana") ||
-      lower.includes("car plate") ||
-      lower.includes("plate recognition") ||
-      lower.includes("vehicle tracking") ||
-      lower.includes("vehicle alert") ||
-      lower.includes("vehicle access") ||
-      lower.includes("blocklist vehicle") ||
-      lower.includes("allowlist vehicle") ||
-      lower.includes("anpr evide") ||
-      lower.includes("anpr engane") ||
-      lower.includes("anpr set") ||
-      lower.includes("vehicle set");
-
-    if (isAnprQuery) {
-      return {
-        message:
-          "**ANPR (Vehicle Number Plate Recognition) — എവിടെ, എങ്ങനെ Set ചെയ്യാം:**\n\n" +
-          "📍 **Path:** Dashboard → **Analytics → ANPR & Vehicle Telemetry** (`/analytics/anpr`)\n\n" +
-          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
-          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Analytics → ANPR & Vehicle Telemetry** click ചെയ്യുക.\n" +
-          "   🔗 Direct URL: `/analytics/anpr`\n\n" +
-          "2️⃣ ANPR module-ൽ **Camera Assignment** — ഏത് camera-ൽ number plates capture ചെയ്യണം എന്ന് select ചെയ്യുക.\n\n" +
-          "3️⃣ **Allowlist / Blocklist** configure ചെയ്യാൻ:\n" +
-          "   • **Allowlist** — permitted vehicles (employees, authorized visitors)\n" +
-          "   • **Blocklist** — blocked vehicles (alert trigger ആകും)\n" +
-          "   • Number plate format: `KL01AB1234`\n\n" +
-          "4️⃣ **Alert Rule Set ചെയ്യാൻ:**\n" +
-          "   • Analytics → Rules & Automation (`/analytics/rules`) → Condition: `ANPR Match` select ചെയ്യുക.\n" +
-          "   • Blocklist vehicle detected ആകുമ്പോൾ auto-alert set ആകും.\n\n" +
-          "5️⃣ **Entry / Exit Logs** — `/analytics/anpr` page-ൽ timestamp, plate, camera location സഹിതം entry/exit log automatically record ആകും.\n\n" +
-          "✅ ഇനി blocklist vehicle enter ചെയ്യുമ്പോൾ immediate alert!\n\n" +
-          "*(Configuration ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
-        type: "text",
-        suggestions: [
-          "How do I sign in?",
-          "Face Recognition set cheyyaan",
-          "Line Crossing set cheyyaan",
-          "What AI features are available?",
-        ],
-        timestamp,
-      };
+      lower.includes("गाड़ी नंबर") ||
+      lower.includes("वाहन") ||
+      lower.includes("നമ്പർ പ്ലേറ്റ്")
+    ) {
+      const guide = getLocalizedGuide("anpr", lang, timestamp);
+      if (guide) return guide;
     }
 
-    // ── 9. CROWD & LOITERING ANALYTICS ───────────────────────────────────
-    const isCrowdQuery =
+    // 5. Crowd & Loitering Analytics
+    if (
       lower.includes("crowd") ||
       lower.includes("loitering") ||
       lower.includes("overcrowding") ||
-      lower.includes("people count") ||
       lower.includes("footfall") ||
-      lower.includes("janakkoottam") ||
-      lower.includes("loitering detection") ||
-      lower.includes("loitering alert") ||
-      lower.includes("crowd alert") ||
-      lower.includes("crowd detection") ||
-      lower.includes("crowd density") ||
-      lower.includes("crowd set") ||
-      lower.includes("crowd evide") ||
-      lower.includes("crowd engane") ||
-      lower.includes("queue") ||
-      lower.includes("waiting line");
-
-    if (isCrowdQuery) {
-      return {
-        message:
-          "**Crowd & Loitering Analytics — എവിടെ, എങ്ങനെ Set ചെയ്യാം:**\n\n" +
-          "📍 **Path:** Dashboard → **Analytics → Crowd & Counter Queue** (`/analytics/crowd`)\n\n" +
-          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
-          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Analytics → Crowd & Counter Queue** click ചെയ്യുക.\n" +
-          "   🔗 Direct URL: `/analytics/crowd`\n\n" +
-          "2️⃣ Camera select ചെയ്ത് **Crowd Density Threshold** set ചെയ്യുക.\n" +
-          "   • Example: 10+ people detected → alert trigger\n\n" +
-          "3️⃣ **Loitering Alert** set ചെയ്യാൻ:\n" +
-          "   • Analytics → Rules & Automation (`/analytics/rules`) → Condition: `Loitering` select ചെയ്യുക.\n" +
-          "   • **Loitering Duration Threshold** set ചെയ്യുക (e.g., 5 minutes in same area).\n\n" +
-          "4️⃣ **Alert Action** configure ചെയ്യുക:\n" +
-          "   • Alert / SMS / Siren / Guard Dispatch — ഏത് action വേണം?\n\n" +
-          "✅ ഇനി ATM, bank lobby, vault area-ൽ suspicious loitering automatically detect ആകും!\n\n" +
-          "💡 **People Counting / Heatmaps:** `/analytics/people` page-ൽ footfall count & heatmap കാണാം.\n\n" +
-          "*(Configuration ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
-        type: "text",
-        suggestions: [
-          "How do I sign in?",
-          "Face Recognition set cheyyaan",
-          "ANPR set cheyyaan",
-          "What AI features are available?",
-        ],
-        timestamp,
-      };
+      lower.includes("भीड़") ||
+      lower.includes("ठहराव") ||
+      lower.includes("ക്രൗഡ്") ||
+      lower.includes("ലോയ്‌റ്ററിംഗ്")
+    ) {
+      const guide = getLocalizedGuide("crowd_loitering", lang, timestamp);
+      if (guide) return guide;
     }
 
-    // ── 10. BANKING / NBFC / VAULT ────────────────────────────────────────
-    const isBankingQuery =
+    // 6. Banking & NBFC Vault Operations
+    if (
       lower.includes("vault") ||
       lower.includes("cash counter") ||
       lower.includes("banking") ||
@@ -2946,434 +3058,113 @@ Personality:
       lower.includes("teller") ||
       lower.includes("strong room") ||
       lower.includes("strongroom") ||
-      lower.includes("gold loan") ||
-      lower.includes("bank module") ||
-      lower.includes("vault monitoring") ||
-      lower.includes("vault evide") ||
-      lower.includes("vault engane") ||
-      lower.includes("vault set") ||
-      lower.includes("vault camera") ||
-      lower.includes("vault dual") ||
-      lower.includes("nbfc set") ||
-      lower.includes("nbfc evide") ||
-      lower.includes("banking set") ||
-      lower.includes("banking evide") ||
-      lower.includes("cash counter set") ||
-      lower.includes("teller set");
-
-    if (isBankingQuery) {
-      return {
-        message:
-          "**Banking & NBFC / Vault Module — എവിടെ, എങ്ങനെ Set ചെയ്യാം:**\n\n" +
-          "📍 **Path:** Dashboard → **Analytics → Banking & Cash Counters** (`/analytics/banking`)\n\n" +
-          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
-          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Analytics → Banking & Cash Counters** click ചെയ്യുക.\n" +
-          "   🔗 Direct URL: `/analytics/banking`\n\n" +
-          "2️⃣ **Vault Setup:**\n" +
-          "   • Vault camera assign ചെയ്യുക (strong-room camera select)\n" +
-          "   • **Dual Custody Rule** enable ചെയ്യുക — vault open ചെയ്യാൻ 2 authorized persons present ആയിരിക്കണം.\n" +
-          "   • Dual custody timer configure ചെയ്യുക.\n\n" +
-          "3️⃣ **Cash Counter Setup:**\n" +
-          "   • Cash counter camera assign ചെയ്യുക.\n" +
-          "   • **Unauthorized Access Alert** enable ചെയ്യുക.\n\n" +
-          "4️⃣ **Teller Area Coverage:**\n" +
-          "   • Teller cameras configure ചെയ്ത് coverage verify ചെയ്യുക.\n\n" +
-          "5️⃣ **Daily MIS Reports:**\n" +
-          "   • Reports → Executive MIS Reports (`/reports/mis`) → Daily surveillance health report auto-generate ആകും.\n\n" +
-          "6️⃣ **NBFC Watchlist** (`/analytics/nbfc-watchlist`) — defaulters, suspicious persons watchlist manage ചെയ്യാം.\n\n" +
-          "✅ Vault dual-custody violation, unauthorized cash counter access — all automatically monitored!\n\n" +
-          "*(Configuration ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
-        type: "text",
-        suggestions: [
-          "How do I sign in?",
-          "MIS Reports evide kaanam",
-          "Face Recognition set cheyyaan",
-          "What AI features are available?",
-        ],
-        timestamp,
-      };
+      lower.includes("वॉल्ट") ||
+      lower.includes("कैश काउंटर") ||
+      lower.includes("വോൾട്ട്") ||
+      lower.includes("ക്യാഷ് കൗണ്ടർ")
+    ) {
+      const guide = getLocalizedGuide("nbfc_banking", lang, timestamp);
+      if (guide) return guide;
     }
 
-    // ── 11. AI VIDEO SEARCH ───────────────────────────────────────────────
-    const isVideoSearchQuery =
+    // 7. Natural Language AI Video Search (VLM / Video RAG)
+    if (
       lower.includes("video search") ||
       lower.includes("search footage") ||
       lower.includes("find person") ||
       lower.includes("ai search") ||
       lower.includes("smart search") ||
-      lower.includes("search video") ||
       lower.includes("forensic search") ||
-      lower.includes("video saarch") ||
-      lower.includes("video thadukal") ||
-      lower.includes("search cheyyaan") ||
-      lower.includes("search evide") ||
-      lower.includes("search engane") ||
-      lower.includes("footage search") ||
-      lower.includes("clip search") ||
-      lower.includes("find in recording");
-
-    if (isVideoSearchQuery) {
-      return {
-        message:
-          "**AI Smart Video Search — എവിടെ, എങ്ങനെ Use ചെയ്യാം:**\n\n" +
-          "📍 **Path:** Dashboard → **AI Smart Video Search** (`/video-search`)\n\n" +
-          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
-          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Investigate → AI Smart Video Search** click ചെയ്യുക.\n" +
-          "   🔗 Direct URL: `/video-search`\n\n" +
-          "2️⃣ Search query type ചെയ്യുക — **natural language** ഉപയോഗിക്കാം:\n" +
-          "   • \"Red shirt person at main entrance between 10am-12pm\"\n" +
-          "   • \"Person carrying bag near ATM yesterday\"\n" +
-          "   • \"Blue car at parking at 3pm\"\n\n" +
-          "3️⃣ **Filters** set ചെയ്യുക:\n" +
-          "   • **Camera** — ഏത് camera-ൽ search ചെയ്യണം\n" +
-          "   • **Date & Time Range** — ഏത് time range-ൽ\n" +
-          "   • **Branch** — ഏത് branch\n\n" +
-          "4️⃣ **Search** click ചെയ്യുക — AI matching clips automatically list ആകും.\n\n" +
-          "5️⃣ Result clips **preview** ചെയ്ത് **Download / Export to Evidence** ചെയ്യാം.\n\n" +
-          "✅ Minutes-ൽ hours of footage-ൽ നിന്ന് specific person/object/vehicle കണ്ടെത്താം!\n\n" +
-          "*(Search ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
-        type: "text",
-        suggestions: [
-          "How do I sign in?",
-          "Evidence export cheyyaan",
-          "Face Recognition set cheyyaan",
-          "What AI features are available?",
-        ],
-        timestamp,
-      };
+      lower.includes("वीडियो सर्च") ||
+      lower.includes("खोज") ||
+      lower.includes("വീഡിയോ സെർച്ച്")
+    ) {
+      const guide = getLocalizedGuide("ai_video_search", lang, timestamp);
+      if (guide) return guide;
     }
 
-    // ── 12. INCIDENT MANAGEMENT ───────────────────────────────────────────
-    const isIncidentQuery =
+    // 8. Incident Management & SOPs
+    if (
       lower.includes("incident") ||
       lower.includes("create incident") ||
       lower.includes("guard dispatch") ||
-      lower.includes("escalation") ||
       lower.includes("sop") ||
-      lower.includes("incident management") ||
-      lower.includes("incident evide") ||
-      lower.includes("incident engane") ||
-      lower.includes("incident set") ||
-      lower.includes("incident create") ||
-      lower.includes("incident workflow") ||
-      lower.includes("dispatch guard") ||
-      lower.includes("operator assign") ||
-      lower.includes("sop checklist");
-
-    if (isIncidentQuery) {
-      return {
-        message:
-          "**Incident Management & SOP Workflow — എവിടെ, എങ്ങനെ Use ചെയ്യാം:**\n\n" +
-          "📍 **Path:** Dashboard → **Incident Response** (`/incidents`)\n\n" +
-          "**Auto-Incident Creation (Recommended):**\n\n" +
-          "1️⃣ Analytics → Rules & Automation (`/analytics/rules`) → Alert Rule create ചെയ്യുമ്പോൾ Action-ൽ **\"Create Incident\"** select ചെയ്യുക.\n" +
-          "   → Rule trigger ആകുമ്പോൾ automatically incident create ആകും, operator-ന് assign ആകും.\n\n" +
-          "**Manual Incident Create:**\n\n" +
-          "2️⃣ Sidebar-ൽ **Incident Response** click ചെയ്ത് **\"+ New Incident\"** click ചെയ്യുക.\n" +
-          "   🔗 Direct URL: `/incidents`\n\n" +
-          "3️⃣ Fill ചെയ്യുക:\n" +
-          "   • **Title** — incident description\n" +
-          "   • **Severity** — Low / Medium / High / Critical\n" +
-          "   • **Branch & Camera** — incident location\n" +
-          "   • **Assign to Operator** — ആർക്ക് assign ചെയ്യണം\n\n" +
-          "4️⃣ **SOP Checklist** — configured SOPs automatically appear ആകും. Operator items ✅ tick ചെയ്ത് proceed ചെയ്യും.\n\n" +
-          "5️⃣ **Guard Dispatch:** Incident-ൽ **\"Dispatch Guard\"** button click ചെയ്ത് location specify ചെയ്യുക.\n\n" +
-          "6️⃣ **Escalation Timer** — configurable time-ൽ unresolved incidents automatically escalate ആകും.\n\n" +
-          "✅ Complete audit trail with timestamps, operator actions, evidence clips!\n\n" +
-          "*(Incidents manage ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
-        type: "text",
-        suggestions: [
-          "How do I sign in?",
-          "Line Crossing alert set cheyyaan",
-          "Evidence export cheyyaan",
-          "What AI features are available?",
-        ],
-        timestamp,
-      };
+      lower.includes("घटना") ||
+      lower.includes("इंसिडेंट") ||
+      lower.includes("ഇൻസിഡന്റ്")
+    ) {
+      const guide = getLocalizedGuide("incident_management", lang, timestamp);
+      if (guide) return guide;
     }
 
-    // ── 13. VOICE AUTHENTICATION ──────────────────────────────────────────
-    const isVoiceAuthQuery =
+    // 9. Voice Biometric Authentication (Voice ID)
+    if (
       lower.includes("voice auth") ||
       lower.includes("voice login") ||
       lower.includes("voice id") ||
-      lower.includes("enroll voice") ||
-      lower.includes("voice enroll") ||
       lower.includes("voice passphrase") ||
       lower.includes("voice biometric") ||
       lower.includes("shabdam") ||
-      lower.includes("voice set") ||
-      lower.includes("voice evide") ||
-      lower.includes("voice engane") ||
-      lower.includes("voice register") ||
-      lower.includes("voice setup") ||
-      lower.includes("voice authentication");
-
-    if (isVoiceAuthQuery) {
-      return {
-        message:
-          "**Voice Authentication (Voice ID Login) — എവിടെ, എങ്ങനെ Enroll ചെയ്യാം:**\n\n" +
-          "📍 **Path:** Dashboard → **Account & Security Settings** (`/account/security`)\n\n" +
-          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
-          "1️⃣ Login ചെയ്ത ശേഷം top-right profile icon click ചെയ്ത് **Account Settings → Security** click ചെയ്യുക.\n" +
-          "   🔗 Direct URL: `/account/security`\n\n" +
-          "2️⃣ **\"Voice Biometric Enrollment\"** section-ൽ **\"Enroll Voice ID\"** click ചെയ്യുക.\n\n" +
-          "3️⃣ **Passphrase** record ചെയ്യുക:\n" +
-          "   • Screen-ൽ shown passphrase clearly speak ചെയ്യുക.\n" +
-          "   • 3 recordings (multiple angles/moods) — better accuracy-ക്ക്.\n\n" +
-          "4️⃣ **\"Save Voice Profile\"** click ചെയ്യുക.\n\n" +
-          "5️⃣ **Login ചെയ്യുന്ന വിധം (Voice ID):**\n" +
-          "   • Login page-ൽ **\"Voice Login\"** button click ചെയ്യുക.\n" +
-          "   • Enrolled passphrase speak ചെയ്യുക → authenticated!\n\n" +
-          "💡 **Admin-level Voice Enrollment** (users-ന് വേണ്ടി enroll ചെയ്യാൻ):\n" +
-          "   → Admin → Users & RBAC (`/admin/users`) → User select → Voice Enrollment tab.\n\n" +
-          "✅ Password type ചെയ്യേണ്ട, voice alone use ചെയ്ത് secure login!\n\n" +
-          "*(Enrollment ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
-        type: "text",
-        suggestions: [
-          "How do I sign in?",
-          "Face Recognition set cheyyaan",
-          "What AI features are available?",
-        ],
-        timestamp,
-      };
+      lower.includes("वॉयस लॉगिन") ||
+      lower.includes("വോയ്സ് ലോഗിൻ")
+    ) {
+      const guide = getLocalizedGuide("voice_id", lang, timestamp);
+      if (guide) return guide;
     }
 
-    // ── 14. EVIDENCE EXPORT ───────────────────────────────────────────────
-    const isEvidenceQuery =
+    // 10. Evidence Export & Chain of Custody
+    if (
       lower.includes("evidence") ||
       lower.includes("export clip") ||
-      lower.includes("export video") ||
       lower.includes("chain of custody") ||
-      lower.includes("video export") ||
-      lower.includes("clip export") ||
-      lower.includes("evidence export") ||
-      lower.includes("download clip") ||
-      lower.includes("save clip") ||
-      lower.includes("evidence evide") ||
-      lower.includes("evidence engane") ||
-      lower.includes("evidence set") ||
-      lower.includes("evidence package");
-
-    if (isEvidenceQuery) {
-      return {
-        message:
-          "**Evidence & Chain of Custody Export — എവിടെ, എങ്ങനെ Use ചെയ്യാം:**\n\n" +
-          "📍 **Path:** Dashboard → **Evidence & Chain of Custody** (`/evidence`)\n\n" +
-          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
-          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Investigate → Evidence & Chain of Custody** click ചെയ്യുക.\n" +
-          "   🔗 Direct URL: `/evidence`\n\n" +
-          "2️⃣ **\"Create Evidence Package\"** click ചെയ്യുക.\n\n" +
-          "3️⃣ Details fill ചെയ്യുക:\n" +
-          "   • **Title** — case/incident name\n" +
-          "   • **Camera & Time Range** — ഏത് camera, ഏത് time\n" +
-          "   • **Video Clips** — specific time slots select ചെയ്ത് clip attach ചെയ്യുക\n" +
-          "   • **Screenshots** — key frames add ചെയ്യാം\n\n" +
-          "4️⃣ **HSM Digital Signature** — evidence package automatically HSM-signed ആകും (tamper-evident).\n\n" +
-          "5️⃣ **Export:**\n" +
-          "   • **Download** — local system-ലേക്ക് download ചെയ്യാം\n" +
-          "   • **Share Link** — secure link generate ചെയ്ത് share ചെയ്യാം\n" +
-          "   • **Email** — directly email ചെയ്യാം\n\n" +
-          "6️⃣ **Audit Log** — evidence package access history automatically track ആകും.\n\n" +
-          "✅ Legally admissible, tamper-evident evidence export — court/legal use-ന് ready!\n\n" +
-          "*(Evidence export ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
-        type: "text",
-        suggestions: [
-          "How do I sign in?",
-          "AI Video Search set cheyyaan",
-          "Incident management evide",
-          "What AI features are available?",
-        ],
-        timestamp,
-      };
+      lower.includes("साक्ष्य") ||
+      lower.includes("एविडेंस") ||
+      lower.includes("തെളിവ്") ||
+      lower.includes("എവിഡൻസ്")
+    ) {
+      const guide = getLocalizedGuide("evidence_export", lang, timestamp);
+      if (guide) return guide;
     }
 
-    // ── 15. MIS REPORTS ───────────────────────────────────────────────────
-    const isMisQuery =
+    // 11. Executive MIS Reports & Graphs
+    if (
       lower.includes("mis report") ||
       lower.includes("executive report") ||
       lower.includes("daily report") ||
-      lower.includes("graphic report") ||
       lower.includes("surveillance report") ||
-      lower.includes("mis evide") ||
-      lower.includes("mis engane") ||
-      lower.includes("report evide") ||
-      lower.includes("report engane") ||
-      lower.includes("report kaanam") ||
-      lower.includes("mis kaanam") ||
-      lower.includes("mis dashboard") ||
-      lower.includes("report download") ||
-      lower.includes("mis download") ||
-      lower.includes("surveillance digest");
-
-    if (isMisQuery) {
-      return {
-        message:
-          "**Executive MIS Reports & Daily Surveillance Digest — എവിടെ, എങ്ങനെ കാണാം:**\n\n" +
-          "📍 **Path:** Dashboard → **Reports → Executive MIS Reports & Graphs** (`/reports/mis`)\n\n" +
-          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
-          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Reports → Executive MIS Reports & Graphs** click ചെയ്യുക.\n" +
-          "   🔗 Direct URL: `/reports/mis`\n\n" +
-          "2️⃣ **Date Range** select ചെയ്യുക — Daily / Weekly / Monthly.\n\n" +
-          "3️⃣ **Branch** filter ചെയ്യുക — ഏത് branch-ന്റെ report?\n\n" +
-          "4️⃣ Report includes:\n" +
-          "   • 📊 Camera uptime & health stats\n" +
-          "   • 🚨 Alert summary (by category, severity)\n" +
-          "   • 🎥 Recording coverage percentage\n" +
-          "   • 👥 Footfall & crowd analytics\n" +
-          "   • 🏦 Vault compliance (banking branches)\n" +
-          "   • 📈 Charts & graphs\n\n" +
-          "5️⃣ **Download / Export:**\n" +
-          "   • **PDF** — printable format\n" +
-          "   • **Excel** — data export\n" +
-          "   • **Email** — schedule daily auto-email to executives\n\n" +
-          "💡 **Daily Surveillance Digest:** `/reports` → automated daily summary.\n\n" +
-          "✅ Management-ന് daily surveillance health at-a-glance!\n\n" +
-          "*(Reports കാണാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
-        type: "text",
-        suggestions: [
-          "How do I sign in?",
-          "Banking NBFC vault module set cheyyaan",
-          "Evidence export cheyyaan",
-          "What AI features are available?",
-        ],
-        timestamp,
-      };
+      lower.includes("एमआईएस रिपोर्ट") ||
+      lower.includes("റിപ്പോർട്ട്")
+    ) {
+      const guide = getLocalizedGuide("mis_reports", lang, timestamp);
+      if (guide) return guide;
     }
 
-    // ── 16. FALL DETECTION ────────────────────────────────────────────────
-    const isFallQuery =
+    // 12. Fall Detection
+    if (
       lower.includes("fall detection") ||
-      lower.includes("worker fall") ||
-      lower.includes("elderly fall") ||
       lower.includes("fall alert") ||
-      lower.includes("fall detect") ||
-      lower.includes("fall evide") ||
-      lower.includes("fall engane") ||
-      lower.includes("fall set") ||
       lower.includes("veezhcha") ||
-      lower.includes("veezhu") ||
-      lower.includes("fall down") ||
-      lower.includes("person fell");
-
-    if (isFallQuery) {
-      return {
-        message:
-          "**Fall Detection (Worker / Elderly) — എവിടെ, എങ്ങനെ Set ചെയ്യാം:**\n\n" +
-          "📍 **Path:** Dashboard → **Analytics → Worker & Elderly Fall Detection** (`/analytics/fall`)\n\n" +
-          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
-          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Analytics → Worker & Elderly Fall** click ചെയ്യുക.\n" +
-          "   🔗 Direct URL: `/analytics/fall`\n\n" +
-          "2️⃣ **Camera Assignment** — fall detection enable ചെയ്യേണ്ട cameras select ചെയ്യുക.\n" +
-          "   • Factory floor, elderly care areas, staircases, etc.\n\n" +
-          "3️⃣ **Detection Sensitivity** configure ചെയ്യുക:\n" +
-          "   • High / Medium / Low (False alarm trade-off)\n\n" +
-          "4️⃣ **Alert Rule Set ചെയ്യാൻ:**\n" +
-          "   • Analytics → Rules & Automation (`/analytics/rules`) → Condition: `Fall Detection` select ചെയ്യുക.\n" +
-          "   • Action: Alert / SMS / Guard Dispatch\n\n" +
-          "✅ Fall detect ആകുമ്പോൾ immediate alert — medical emergency response ആകാം!\n\n" +
-          "*(Configuration ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
-        type: "text",
-        suggestions: [
-          "How do I sign in?",
-          "Incident management evide",
-          "What AI features are available?",
-        ],
-        timestamp,
-      };
+      lower.includes("गिरने") ||
+      lower.includes("വീഴ്ച")
+    ) {
+      const guide = getLocalizedGuide("fall_detection", lang, timestamp);
+      if (guide) return guide;
     }
 
-    // ── 17. CAMERA TAMPER DETECTION ───────────────────────────────────────
-    const isTamperQuery =
+    // 13. Camera Tamper & Defocus
+    if (
       lower.includes("tamper") ||
-      lower.includes("camera tamper") ||
       lower.includes("defocus") ||
-      lower.includes("blind camera") ||
       lower.includes("camera covered") ||
       lower.includes("camera blocked") ||
-      lower.includes("camera obstruction") ||
-      lower.includes("tamper evide") ||
-      lower.includes("tamper engane") ||
-      lower.includes("tamper set") ||
-      lower.includes("tamper alert") ||
-      lower.includes("camera vandal");
-
-    if (isTamperQuery) {
-      return {
-        message:
-          "**Camera Tamper & Defocus Detection — എവിടെ, എങ്ങനെ Set ചെയ്യാം:**\n\n" +
-          "📍 **Path:** Dashboard → **Analytics → Camera Tamper & Defocus** (`/analytics/camera-tamper`)\n\n" +
-          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
-          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Analytics → Camera Tamper & Defocus** click ചെയ്യുക.\n" +
-          "   🔗 Direct URL: `/analytics/camera-tamper`\n\n" +
-          "2️⃣ Tamper detection enable ചെയ്യേണ്ട **cameras select** ചെയ്യുക.\n\n" +
-          "3️⃣ **Detection Types** enable ചെയ്യുക:\n" +
-          "   • **Defocus** — camera lens blur ആകുമ്പോൾ alert\n" +
-          "   • **Covered/Blocked** — camera physically block ചെയ്യുമ്പോൾ alert\n" +
-          "   • **Moved/Redirected** — camera angle change ആകുമ്പോൾ alert\n" +
-          "   • **Dark Frame** — camera feed black ആകുമ്പോൾ alert\n\n" +
-          "4️⃣ **Alert Rule:**\n" +
-          "   • Analytics → Rules & Automation → Condition: `Camera Tamper` select ചെയ്യുക.\n\n" +
-          "✅ Camera vandalism immediately detect ആകും — security blind-spot ഉണ്ടാകില്ല!\n\n" +
-          "*(Configuration ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
-        type: "text",
-        suggestions: [
-          "How do I sign in?",
-          "Camera obstruction set cheyyaan",
-          "What AI features are available?",
-        ],
-        timestamp,
-      };
+      lower.includes("छेड़छाड़") ||
+      lower.includes("തടസ്സം")
+    ) {
+      const guide = getLocalizedGuide("camera_tamper", lang, timestamp);
+      if (guide) return guide;
     }
 
-    // ── 18. EMPLOYEE / PEOPLE TRACKING & ATTENDANCE ───────────────────────
-    const isAttendanceQuery =
-      lower.includes("attendance") ||
-      lower.includes("employee tracking") ||
-      lower.includes("people tracking") ||
-      lower.includes("footfall") ||
-      lower.includes("visitor tracking") ||
-      lower.includes("heatmap") ||
-      lower.includes("people count") ||
-      lower.includes("headcount") ||
-      lower.includes("attendance evide") ||
-      lower.includes("attendance engane") ||
-      lower.includes("attendance set") ||
-      lower.includes("employee evide") ||
-      lower.includes("employee engane") ||
-      lower.includes("people evide") ||
-      lower.includes("haajari");
-
-    if (isAttendanceQuery) {
-      return {
-        message:
-          "**People Counting, Heatmaps & Employee Tracking — എവിടെ, എങ്ങനെ Set ചെയ്യാം:**\n\n" +
-          "📍 **Path:** Dashboard → **Analytics → People Counting & Heatmaps** (`/analytics/people`)\n\n" +
-          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
-          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Analytics → People Counting & Heatmaps** click ചെയ്യുക.\n" +
-          "   🔗 Direct URL: `/analytics/people`\n\n" +
-          "2️⃣ **Camera Assignment** — people count ചെയ്യേണ്ട cameras select ചെയ്യുക.\n" +
-          "   • Entrance cameras, lobby cameras, floor cameras\n\n" +
-          "3️⃣ **Counting Zones** define ചെയ്യുക — entrance line draw ചെയ്ത് IN / OUT count ചെയ്യാം.\n\n" +
-          "4️⃣ **Heatmap View** — ഏത് area-ൽ ആളുകൾ കൂടുതൽ time spend ചെയ്യുന്നു എന്ന് visualize ആകും.\n\n" +
-          "5️⃣ **Employee Activity Tracking:**\n" +
-          "   • Face Recognition + People Counting combine ചെയ്ത് employee presence track ആകും.\n" +
-          "   • Reports → Daily Digest-ൽ headcount summary കിട്ടും.\n\n" +
-          "✅ Real-time footfall count, peak hours, zone utilization — all automatically!\n\n" +
-          "*(Configuration ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
-        type: "text",
-        suggestions: [
-          "How do I sign in?",
-          "Face Recognition set cheyyaan",
-          "MIS Reports evide kaanam",
-          "What AI features are available?",
-        ],
-        timestamp,
-      };
-    }
-
-    // 7. Request for module data, operational records, cameras, alerts, reports (Requires Login)
-
+    // Protected operational data warning
     const isModuleOrOperationalRequest =
       lower.includes("camera") ||
       lower.includes("feed") ||
@@ -3386,26 +3177,55 @@ Personality:
       lower.includes("vault") ||
       lower.includes("teller") ||
       lower.includes("cash") ||
-      lower.includes("nbfc") ||
-      lower.includes("attendance") ||
-      lower.includes("employee") ||
-      lower.includes("visitor") ||
-      lower.includes("report") ||
-      lower.includes("mis") ||
       lower.includes("guard") ||
       lower.includes("door") ||
       lower.includes("lock") ||
-      lower.includes("dispatch") ||
       lower.includes("show me") ||
-      lower.includes("open ") ||
-      lower.includes("poku") ||
+      lower.includes("dikhao") ||
       lower.includes("kaanik") ||
-      lower.includes("edukk") ||
-      lower.includes("navigate") ||
-      lower.includes("dashboard") ||
-      lower.includes("module");
+      lower.includes("दिखाओ");
 
     if (isModuleOrOperationalRequest) {
+      if (lang === "hi") {
+        return {
+          message:
+            "🔒 **लॉगिन आवश्यक है (Authentication Required)**\n\nलाइव कैमरा फीड, सुरक्षा अलर्ट, वॉल्ट स्थिति या परिचालन डेटा देखने के लिए कृपया अपने KryptonVision खाते में लॉगिन करें।\n\nलॉगिन करने के बाद आपको अपनी संस्था के सभी लाइव कैमरों और एनालिटिक्स रिपोर्ट तक पूरी पहुँच प्राप्त होगी।",
+          messageHi:
+            "🔒 **लॉगिन आवश्यक है**\n\nलाइव कैमरा फीड और सुरक्षा अलर्ट देखने के लिए कृपया साइन इन करें।",
+          type: "text",
+          suggestions: [
+            "साइन इन कैसे करें?",
+            "KryptonVision क्या है?",
+            "कौन से AI फीचर्स हैं?",
+          ],
+          suggestionsHi: [
+            "साइन इन कैसे करें?",
+            "KryptonVision क्या है?",
+            "कौन से AI फीचर्स हैं?",
+          ],
+          timestamp,
+        };
+      }
+      if (lang === "ml") {
+        return {
+          message:
+            "🔒 **Authentication Required**\n\nലൈവ് ക്യാമറ ഫീഡുകൾ, സെക്യൂരിറ്റി അലർട്ടുകൾ, വോൾട്ട് വിവരങ്ങൾ എന്നിവ കാണാൻ ദയവായി നിങ്ങളുടെ KryptonVision അക്കൗണ്ടിലേക്ക് സൈൻ ഇൻ ചെയ്യുക.\n\nലോഗിൻ ചെയ്ത ശേഷം നിങ്ങളുടെ സ്ഥാപനത്തിലെ എല്ലാ ലൈവ് ക്യാമറകളും അനലിറ്റിക്സ് റിപ്പോർട്ടുകളും ലഭ്യമാകും.",
+          messageMl:
+            "🔒 **ലോഗിൻ ചെയ്യുക**\n\nലൈവ് ക്യാമറ ഫീഡുകൾ കാണാൻ ദയവായി ലോഗിൻ ചെയ്യുക.",
+          type: "text",
+          suggestions: [
+            "Sign in എങ്ങനെ ചെയ്യും?",
+            "KryptonVision എന്താണ്?",
+            "AI ഫീച്ചറുകൾ ഏതൊക്കെ?",
+          ],
+          suggestionsMl: [
+            "Sign in എങ്ങനെ ചെയ്യും?",
+            "KryptonVision എന്താണ്?",
+            "AI ഫീച്ചറുകൾ ഏതൊക്കെ?",
+          ],
+          timestamp,
+        };
+      }
       return {
         message:
           "🔒 **Authentication Required**\n\nTo view live camera feeds, branch status, security alerts, and operational module data, please sign in to your KryptonVision account on the login page.\n\nOnce logged in, you will have secure access to your organization's monitoring modules, active surveillance streams, and analytics reports.",
@@ -3419,16 +3239,16 @@ Personality:
       };
     }
 
-    // 8. General fallback for unauthenticated guest
-    if (/\?|\b(?:what|who|when|where|why|how|explain|define|calculate|translate)\b|(?:എന്താണ്|എങ്ങനെ|ആരാണ്)/i.test(message)) {
+    // General fallback for unauthenticated guest
+    if (/\?|\b(?:what|who|when|where|why|how|explain|define|calculate|translate)\b|(?:എന്താണ്|എങ്ങനെ|ആരാണ്)|(?:क्या|कैसे|कहाँ|क्यों)/i.test(message)) {
       return {
-        message: this.openAIApiKey
-          ? "I couldn't reach the AI knowledge service just now. Please try your question again shortly."
-          : "General knowledge answers need the AI knowledge service. Please try again after KryptonAI is configured.",
+        message:
+          "I couldn't reach the AI knowledge service just now. Please try your question again shortly or ask about KryptonVision platform features.",
         type: "text",
         timestamp,
       };
     }
+
     return {
       message:
         "I am KryptonAI, your security operations assistant. In pre-login mode, I can answer general questions about KryptonVision platform features, supported camera hardware, and signing in.\n\nTo view organization-specific module data, live camera streams, or incident queues, please sign in with your account credentials or Voice ID.",
