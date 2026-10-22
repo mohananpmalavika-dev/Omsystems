@@ -34,6 +34,34 @@
 .empty { text-align: center; padding: 70px 15px; font-size: 13px; color: var(--muted); }
 .attention { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); padding: 12px 0; font-size: 12px; }
 .attention strong { color: #e44f67; }
+.reportCards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 18px; }
+.reportCards button { display: flex; align-items: center; gap: 11px; padding: 17px 14px; border-radius: 13px; border: 1px solid var(--line); background: var(--surface); text-align: left; color: var(--muted); transition: border-color .15s, background .15s; }
+.reportCards button > span { flex: 1; min-width: 0; }
+.reportCards strong { display: block; font-size: 12px; color: var(--ink); }
+.reportCards small { display: block; font-size: 10px; margin-top: 5px; line-height: 1.5; }
+.reportCards button[aria-pressed="true"] { border-color: #4b7bdc; background: #4b7bdc0e; color: #4176d4; box-shadow: inset 0 -3px #4b7bdc; }
+.dashboard button:focus-visible, .dashboard input:focus-visible, .dashboard select:focus-visible { outline: 2px solid #4b7bdc; outline-offset: 3px; }
+.dashboard button:disabled { opacity: .45; cursor: not-allowed; }
+.benchmarks { display: flex; flex-wrap: wrap; align-items: center; gap: 13px; margin: 0 0 18px; color: var(--muted); font-size: 11px; }
+.benchmarks > span { font-weight: 750; color: var(--ink); }
+.benchmarks label { display: inline-flex; align-items: center; gap: 8px; }
+.benchmarks select, .watchFilters select { color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-size: 11px; }
+.watchHeading { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; align-items: start; }
+.watchHeading > div:first-child { max-width: 750px; }
+.watchFilters { display: flex; flex-wrap: wrap; gap: 10px; margin: 5px 0 18px; }
+.watchFilters label { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; color: var(--muted); background: var(--surface); flex: 1; max-width: 380px; min-width: 180px; }
+.watchFilters input { width: 100%; min-width: 0; outline: none; background: transparent; color: var(--ink); font-size: 12px; }
+.priority { display: inline-flex; border-radius: 6px; padding: 5px 8px; color: var(--accent); border: 1px solid var(--accent); font-size: 10px; font-weight: 750; }
+.table small { display: block; color: var(--muted); font-size: 10px; font-weight: 400; line-height: 1.5; margin-top: 5px; }
+.table td { vertical-align: top; }
+.table button { display: inline-flex; align-items: center; gap: 4px; }
+.table .findings { white-space: normal; min-width: 260px; max-width: 420px; line-height: 1.6; }
+.pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-top: 18px; font-size: 11px; color: var(--muted); }
+.pagination > div { display: flex; gap: 12px; align-items: center; }
+.pagination button { border: 1px solid var(--line); color: var(--ink); padding: 7px 12px; border-radius: 7px; }
+.srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+@media(max-width: 1100px) { .reportCards { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 @media(max-width: 1100px) { .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media(max-width: 700px) { .dashboard { padding: 14px; border-radius: 16px; } .grid { grid-template-columns: 1fr; } .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .kpi { padding: 13px; } .panel { padding: 16px; } .chart { height: 255px; } }
 @media print { .dashboard { background: #fff; color: #14243c; border: 0; } .actions,.tabs { display: none; } .panel,.kpi { break-inside: avoid; box-shadow: none; } .grid { grid-template-columns: 1fr 1fr; } }
+@media print { .reportCards,.watchFilters,.pagination { display: none; } .dashboard { --ink: #14243c; --muted: #506078; --surface: #fff; --line: #cdd5e2; } .tableWrap { overflow: visible; } .table { white-space: normal; font-size: 9px; } .table th,.table td { padding: 6px; } .table .findings { min-width: 130px; } }

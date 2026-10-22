@@ -569,7 +569,7 @@ function MisReportsContent() {
           )}
         </div>
 
-        {activeTab === 'all-in-one' && data && !loading && <ExecutiveManagementReport branches={data.branchMatrix || []} trend={data.dateWiseBreakdown || []} period={`${data.metadata?.startDate ? new Date(data.metadata.startDate).toLocaleDateString('en-IN',{timeZone:'Asia/Kolkata'}) : ''} – ${data.metadata?.endDate ? new Date(data.metadata.endDate).toLocaleDateString('en-IN',{timeZone:'Asia/Kolkata'}) : ''}`} onBranch={id=>{setSelectedBranch(id);setGroupBy('branch');}}/>}
+        {activeTab === 'all-in-one' && data && !loading && <ExecutiveManagementReport branches={data.branchMatrix || []} trend={data.dateWiseBreakdown || []} generatedAt={data.metadata?.generatedAt} period={`${data.metadata?.startDate ? new Date(data.metadata.startDate).toLocaleDateString('en-IN',{timeZone:'Asia/Kolkata'}) : ''} – ${data.metadata?.endDate ? new Date(data.metadata.endDate).toLocaleDateString('en-IN',{timeZone:'Asia/Kolkata'}) : ''}`} onBranch={id=>{setSelectedBranch(id);setGroupBy('branch');}}/>}
         {/* Executive Summary Scorecards */}
         {activeTab !== "branch-opening" && summary && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 print:grid-cols-3">
@@ -615,22 +615,22 @@ function MisReportsContent() {
 
             <div className="bg-slate-900/70 border border-slate-800/80 rounded-xl p-4 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 left-0 h-1 w-full bg-indigo-500" />
-              <span className="text-xs font-medium text-slate-400 block mb-1">SLA Compliance</span>
+              <span className="text-xs font-medium text-slate-400 block mb-1">Reported P1 SLA</span>
               <div className="flex items-baseline justify-between">
                 <span className="text-2xl font-bold text-indigo-400">{summary.avgSla != null ? `${summary.avgSla}%` : "—"}</span>
                 <span className="text-xs text-slate-400 font-semibold">P1 acknowledgement</span>
               </div>
-              <span className="text-[11px] text-slate-500 mt-1 block">{summary.avgSla != null ? "Response target met" : "not measured"}</span>
+              <span className="text-[11px] text-slate-500 mt-1 block">{summary.avgSla != null ? "Average of available branch values" : "not measured"}</span>
             </div>
 
             <div className="bg-slate-900/70 border border-slate-800/80 rounded-xl p-4 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 left-0 h-1 w-full bg-teal-500" />
-              <span className="text-xs font-medium text-slate-400 block mb-1">Retention Compliance</span>
+              <span className="text-xs font-medium text-slate-400 block mb-1">Configured Retention</span>
               <div className="flex items-baseline justify-between">
                 <span className="text-2xl font-bold text-teal-400">{summary.avgRetentionDays != null ? `${summary.avgRetentionDays}d` : "—"}</span>
-                <span className="text-xs text-slate-400 font-semibold">Measured policy</span>
+                <span className="text-xs text-slate-400 font-semibold">Branch average</span>
               </div>
-              <span className="text-[11px] text-slate-500 mt-1 block">{summary.avgRetentionDays != null ? (summary.avgRetentionDays >= 90 ? "100% Statutory passed" : "Review retention policy") : "not configured"}</span>
+              <span className="text-[11px] text-slate-500 mt-1 block">{summary.avgRetentionDays != null ? "Verify policy and recording history" : "not configured"}</span>
             </div>
           </div>
         )}

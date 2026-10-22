@@ -1,0 +1,1 @@
+{"version":1,"agentId":"b950f232-557e-42cd-8bc8-8f4490d0b68b","branchId":"00000000-0000-4000-8000-000000000104","recorders":[{"id":"recorder-192.168.29.58","name":"CP PLUS Multi-channel DVR","deviceType":"dvr","vendor":"cp-plus","model":"Multi-channel DVR","host":"192.168.29.58","port":80,"rtspPort":554,"branchId":"00000000-0000-4000-8000-000000000104"}]}
