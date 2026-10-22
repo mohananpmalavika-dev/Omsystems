@@ -62,10 +62,28 @@ import { recoverCamera } from "./recovery/camera-recovery.js";
 import { startAgentPresenceHeartbeat } from "./runtime/agent-presence.js";
 import { assertMediaPortAvailable } from "./runtime/media-port-check.js";
 import { PhysicalSirenController, physicalSirenTriggerFromPayload } from "./alerts/physical-siren.js";
-import { SecureFaceRuntime } from "./ai/secure-face-runtime.js";
+type SecureFaceRuntime = import("./ai/secure-face-runtime.js").SecureFaceRuntime;
 import { SecureFaceObservationBuffer } from "./ai/secure-face-observation-buffer.js";
 
 const MEDIA_RUNTIME_RETRY_INTERVAL_MS = 30_000;
+
+function restartEdgeProcess() {
+  if (process.platform === "win32") {
+    try {
+      const { spawn } = createRequire(import.meta.url)("node:child_process");
+      const child = spawn(process.execPath, process.argv.slice(1), {
+        detached: true,
+        stdio: "ignore",
+        cwd: process.cwd(),
+      });
+      child.unref();
+      logger.info("Spawned detached edge agent process for self-restart", { pid: child.pid });
+    } catch (e) {
+      logger.warn("Failed to spawn self-restart process", { error: String(e) });
+    }
+  }
+  process.exit(75);
+}
 
 export async function runEdgeAgent() {
 const argv = process.argv.slice(2);
@@ -94,7 +112,7 @@ if (installEnvironmentFile && (
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.51\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.52\n");
   process.exit(0);
 }
 
@@ -141,6 +159,7 @@ if (hasArgument(argv, "--verify-secure-face")) {
     process.stderr.write("Secure face AI is disabled. Set SECURE_FACE_AI_ENABLED=true before verifying local models.\n");
     process.exit(1);
   }
+  const { SecureFaceRuntime } = await import("./ai/secure-face-runtime.js");
   const secureFaceRuntime = new SecureFaceRuntime({
     manifestPath: config.SECURE_FACE_MODEL_MANIFEST,
     minLivenessScore: config.SECURE_FACE_MIN_LIVENESS,
@@ -176,8 +195,14 @@ if (!scanOnce && !isDiagnostic && process.env.SENTINEL_EDGE_PATCH_RUNTIME !== "1
       config.EDGE_AGENT_VERSION,
     );
     if (activePatch) {
-      await runActivePatch(activePatch, config.EDGE_UPDATE_STAGING_PATH);
-      return;
+      try {
+        await runActivePatch(activePatch, config.EDGE_UPDATE_STAGING_PATH);
+        return;
+      } catch (patchErr) {
+        logger.error("Active patch execution failed; falling back to packaged binary runtime", {
+          error: patchErr instanceof Error ? patchErr.message : String(patchErr),
+        });
+      }
     }
   }
 }
@@ -325,6 +350,7 @@ let secureFaceRuntime: SecureFaceRuntime | null = null;
 const secureFaceBuffer = new SecureFaceObservationBuffer(config.SECURE_FACE_MIN_OBSERVATIONS);
 if (config.SECURE_FACE_AI_ENABLED) {
   try {
+    const { SecureFaceRuntime } = await import("./ai/secure-face-runtime.js");
     secureFaceRuntime = new SecureFaceRuntime({
       manifestPath: config.SECURE_FACE_MODEL_MANIFEST,
       minLivenessScore: config.SECURE_FACE_MIN_LIVENESS,
@@ -538,7 +564,7 @@ while (!stopping) {
         });
         if (outcome.restartAgent) {
           logger.info("Restarting edge agent after acknowledged remote command", { commandId: command.id });
-          process.exit(75);
+          restartEdgeProcess();
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -589,7 +615,7 @@ while (!stopping) {
             logger.info("Autonomous zero-touch OTA update activated. Restarting edge agent to apply patch...", {
               version: nextRelease.version,
             });
-            process.exit(75);
+            restartEdgeProcess();
           }
         }
       } catch (updateErr) {

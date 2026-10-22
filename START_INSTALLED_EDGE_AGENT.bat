@@ -18,6 +18,10 @@ taskkill /F /IM mediamtx.exe /T >nul 2>&1
 if exist "C:\Program Files\Sentinel Grid\Edge Agent\data\edge-agent.lock" (
     del /F /Q "C:\Program Files\Sentinel Grid\Edge Agent\data\edge-agent.lock" >nul 2>&1
 )
+if exist "C:\Program Files\Sentinel Grid\Edge Agent\data\updates\active.json" (
+    echo Cleaning broken staged update...
+    del /F /Q "C:\Program Files\Sentinel Grid\Edge Agent\data\updates\active.json" >nul 2>&1
+)
 
 if exist "%~dp0edge-agent\release\edge-agent.exe" (
     echo [1.5/3] Updating edge-agent binary from release build...

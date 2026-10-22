@@ -20,7 +20,7 @@ rtsp: yes
 rtspAddress: 127.0.0.1:8554
 protocols: [tcp]
 rtmp: no
-webrtc: no
+webrtc: yes
 webrtcAddress: 127.0.0.1:8889
 webrtcLocalUDPAddress: :8189
 webrtcAllowOrigins: ['*']

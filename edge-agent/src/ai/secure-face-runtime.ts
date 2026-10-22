@@ -2,8 +2,44 @@ import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import * as ort from "onnxruntime-node";
-import sharp from "./sharp-runtime.js";
+import type * as OrtType from "onnxruntime-node";
+import type SharpType from "sharp";
+
+let cachedOrt: typeof OrtType | null = null;
+let cachedSharp: typeof SharpType | null = null;
+
+async function getOrt(): Promise<typeof OrtType> {
+  if (cachedOrt) return cachedOrt;
+  try {
+    const mod = await import("onnxruntime-node");
+    cachedOrt = ((mod as unknown as { default?: typeof OrtType }).default ?? mod) as typeof OrtType;
+    return cachedOrt;
+  } catch (err) {
+    const { createRequire } = await import("node:module");
+    const { dirname: getDir, join } = await import("node:path");
+    const sidecarDirectory = (process as NodeJS.Process & { pkg?: unknown }).pkg
+      ? getDir(process.execPath)
+      : process.cwd();
+    const load = createRequire(join(sidecarDirectory, "edge-agent-runtime.cjs"));
+    try {
+      cachedOrt = load("onnxruntime-node") as typeof OrtType;
+      return cachedOrt;
+    } catch {
+      throw new Error(`onnxruntime_node_unavailable: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+}
+
+async function getSharp(): Promise<typeof SharpType> {
+  if (cachedSharp) return cachedSharp;
+  try {
+    const s = await import("./sharp-runtime.js");
+    cachedSharp = s.default;
+    return cachedSharp;
+  } catch (err) {
+    throw new Error(`sharp_unavailable: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
 
 type Artifact = {
   id: "detector" | "recognizer" | "liveness";
@@ -21,7 +57,7 @@ type Manifest = { version: 1; artifacts: Artifact[] };
 export interface SecureFaceRuntimeOptions {
   manifestPath: string;
   minLivenessScore: number;
-  executionProviders?: ort.InferenceSession.ExecutionProviderConfig[];
+  executionProviders?: OrtType.InferenceSession.ExecutionProviderConfig[];
 }
 
 export interface SecureFaceObservation {
@@ -34,9 +70,9 @@ export interface SecureFaceObservation {
 }
 
 export class SecureFaceRuntime {
-  private detector: ort.InferenceSession | null = null;
-  private recognizer: ort.InferenceSession | null = null;
-  private liveness: ort.InferenceSession | null = null;
+  private detector: OrtType.InferenceSession | null = null;
+  private recognizer: OrtType.InferenceSession | null = null;
+  private liveness: OrtType.InferenceSession | null = null;
   private artifacts = new Map<Artifact["id"], Artifact>();
   private unavailableReason: string | null = "not_initialized";
 
@@ -54,6 +90,7 @@ export class SecureFaceRuntime {
       const filePath = resolve(dirname(manifestPath), artifact.file);
       if (!(await verified(filePath, artifact.sha256))) throw new Error(`secure_face_artifact_unverified:${id}`);
     }
+    const ort = await getOrt();
     const providers = this.options.executionProviders ?? ["cpu"];
     const load = async (id: Artifact["id"]) => {
       const artifact = this.artifacts.get(id)!;
@@ -86,6 +123,7 @@ export class SecureFaceRuntime {
     const detectorArtifact = this.artifacts.get("detector")!;
     const detection = await this.detect(rgb, frameWidth, frameHeight, detectorArtifact);
     if (!detection) return null;
+    const sharp = await getSharp();
     const face = await sharp(rgb, { raw: { width: frameWidth, height: frameHeight, channels: 3 } })
       .extract({ left: detection.x, top: detection.y, width: detection.width, height: detection.height })
       .resize(112, 112, { fit: "fill" }).raw().toBuffer();
@@ -105,8 +143,9 @@ export class SecureFaceRuntime {
   private async detect(rgb: Buffer, sourceWidth: number, sourceHeight: number, artifact: Artifact) {
     if (artifact.output !== "post-nms-xywh-score") throw new Error("secure_face_detector_adapter_unsupported");
     const resized = await resizeRgb(rgb, sourceWidth, sourceHeight, artifact.input.width, artifact.input.height);
-    const outputs = await this.detector!.run({ [this.detector!.inputNames[0]!]: tensor(resized, artifact.input) });
-    const output = firstFloatOutput(outputs);
+    const tensorInput = await tensor(resized, artifact.input);
+    const outputs = await this.detector!.run({ [this.detector!.inputNames[0]!]: tensorInput });
+    const output = await firstFloatOutput(outputs);
     let best: { x: number; y: number; width: number; height: number; score: number } | null = null;
     for (let index = 0; index + 4 < output.length; index += 5) {
       const [x, y, width, height, score] = [output[index]!, output[index + 1]!, output[index + 2]!, output[index + 3]!, output[index + 4]!];
@@ -126,8 +165,9 @@ export class SecureFaceRuntime {
   private async liveScore(faceRgb: Buffer, artifact: Artifact) {
     if (artifact.output !== "binary-live-logits") throw new Error("secure_face_liveness_adapter_unsupported");
     const image = await resizeRgb(faceRgb, 112, 112, artifact.input.width, artifact.input.height);
-    const outputs = await this.liveness!.run({ [this.liveness!.inputNames[0]!]: tensor(image, artifact.input) });
-    const values = firstFloatOutput(outputs);
+    const tensorInput = await tensor(image, artifact.input);
+    const outputs = await this.liveness!.run({ [this.liveness!.inputNames[0]!]: tensorInput });
+    const values = await firstFloatOutput(outputs);
     if (values.length !== 2) throw new Error("secure_face_liveness_output_invalid");
     const max = Math.max(values[0]!, values[1]!);
     const denominator = Math.exp(values[0]! - max) + Math.exp(values[1]! - max);
@@ -137,8 +177,9 @@ export class SecureFaceRuntime {
   private async embed(faceRgb: Buffer, artifact: Artifact) {
     if (artifact.output !== "embedding") throw new Error("secure_face_recognizer_adapter_unsupported");
     const image = await resizeRgb(faceRgb, 112, 112, artifact.input.width, artifact.input.height);
-    const outputs = await this.recognizer!.run({ [this.recognizer!.inputNames[0]!]: tensor(image, artifact.input) });
-    const values = firstFloatOutput(outputs);
+    const tensorInput = await tensor(image, artifact.input);
+    const outputs = await this.recognizer!.run({ [this.recognizer!.inputNames[0]!]: tensorInput });
+    const values = await firstFloatOutput(outputs);
     if (values.length !== 512) throw new Error("secure_face_embedding_dimension_invalid");
     const magnitude = Math.sqrt(values.reduce((sum, value) => sum + value * value, 0));
     if (!Number.isFinite(magnitude) || magnitude < 1e-12) throw new Error("secure_face_embedding_invalid");
@@ -147,10 +188,12 @@ export class SecureFaceRuntime {
 }
 
 async function resizeRgb(input: Buffer, width: number, height: number, targetWidth: number, targetHeight: number) {
+  const sharp = await getSharp();
   return sharp(input, { raw: { width, height, channels: 3 } }).resize(targetWidth, targetHeight, { fit: "fill" }).raw().toBuffer();
 }
 
-function tensor(rgb: Buffer, input: Artifact["input"]) {
+async function tensor(rgb: Buffer, input: Artifact["input"]) {
+  const ort = await getOrt();
   const data = new Float32Array(3 * input.width * input.height);
   const pixels = input.width * input.height;
   for (let pixel = 0; pixel < pixels; pixel++) {
@@ -162,7 +205,8 @@ function tensor(rgb: Buffer, input: Artifact["input"]) {
   return new ort.Tensor("float32", data, [1, 3, input.height, input.width]);
 }
 
-function firstFloatOutput(outputs: Record<string, ort.OnnxValue>) {
+async function firstFloatOutput(outputs: Record<string, OrtType.OnnxValue>) {
+  const ort = await getOrt();
   const output = outputs[Object.keys(outputs)[0] ?? ""];
   if (!(output instanceof ort.Tensor) || !(output.data instanceof Float32Array)) throw new Error("secure_face_model_output_invalid");
   return output.data;
