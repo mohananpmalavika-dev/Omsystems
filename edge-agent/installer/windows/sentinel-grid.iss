@@ -4,14 +4,14 @@
 
 [Setup]
 AppName=KryptonVision Edge Agent
-AppVersion=0.1.50
+AppVersion=0.1.54
 AppPublisher=KryptonVision
 AppPublisherURL=https://sentinel-grid.com
 AppSupportURL=https://sentinel-grid.com/support
 DefaultDirName={autopf}\Sentinel Grid\Edge Agent
 DefaultGroupName=KryptonVision
 OutputDir=output
-OutputBaseFilename=KryptonVisionInstaller-v0.1.50-windows
+OutputBaseFilename=KryptonVisionInstaller-v0.1.54-windows
 Compression=lzma2/max
 SolidCompression=yes
 PrivilegesRequired=admin
@@ -486,8 +486,19 @@ begin
   Arguments := '--run --config "' + ConfigPath + '"';
   TaskXml :=
     '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">' + #13#10 +
-    '  <RegistrationInfo><Description>KryptonVision branch edge agent</Description></RegistrationInfo>' + #13#10 +
-    '  <Triggers><BootTrigger><Enabled>true</Enabled></BootTrigger></Triggers>' + #13#10 +
+    '  <RegistrationInfo><Description>KryptonVision branch edge agent 24/7 watchdog</Description></RegistrationInfo>' + #13#10 +
+    '  <Triggers>' + #13#10 +
+    '    <BootTrigger><Enabled>true</Enabled></BootTrigger>' + #13#10 +
+    '    <TimeTrigger>' + #13#10 +
+    '      <StartBoundary>2026-01-01T00:00:00</StartBoundary>' + #13#10 +
+    '      <Enabled>true</Enabled>' + #13#10 +
+    '      <Repetition>' + #13#10 +
+    '        <Interval>PT1M</Interval>' + #13#10 +
+    '        <Duration>P9999D</Duration>' + #13#10 +
+    '        <StopAtDurationEnd>false</StopAtDurationEnd>' + #13#10 +
+    '      </Repetition>' + #13#10 +
+    '    </TimeTrigger>' + #13#10 +
+    '  </Triggers>' + #13#10 +
     '  <Principals><Principal id="System"><UserId>S-1-5-18</UserId><RunLevel>HighestAvailable</RunLevel></Principal></Principals>' + #13#10 +
     '  <Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><AllowHardTerminate>true</AllowHardTerminate><StartWhenAvailable>true</StartWhenAvailable><AllowStartOnDemand>true</AllowStartOnDemand><Enabled>true</Enabled><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><RestartOnFailure><Interval>PT1M</Interval><Count>999</Count></RestartOnFailure></Settings>' + #13#10 +
     '  <Actions Context="System"><Exec><Command>' + XmlText(ProgramPath) + '</Command><Arguments>' + XmlText(Arguments) + '</Arguments><WorkingDirectory>' + XmlText(AppPath) + '</WorkingDirectory></Exec></Actions>' + #13#10 +
@@ -564,7 +575,7 @@ begin
   UnpackRuntime;
   HadPersistentGatewayCredential := HasPersistentGatewayCredential;
   if HadPersistentGatewayCredential and FileExists(ConfigPath) then
-    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.50')
+    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.54')
   else
     WriteFreshConfig;
   ProtectConfigFile;
@@ -578,7 +589,7 @@ begin
   SaveStringToFile(AddBackslash(AppPath) + 'install-info.txt',
     'Installation Date: ' + GetDateTimeString('yyyy-mm-dd hh:nn:ss', #0, #0) + #13#10 +
     'Installation Path: ' + AppPath + #13#10 +
-    'Version: 0.1.50' + #13#10 +
+    'Version: 0.1.54' + #13#10 +
     'Installer: Native Windows', False);
 end;
 

@@ -555,12 +555,7 @@ export async function registerEdgeAgentPackageRoutes(
     const { branchId } = branchParams.parse(request.params);
     const body = activationInstallerBody.parse(request.body);
     const format = body.format ?? "zip";
-    if (format === "exe") {
-      return reply.code(410).send({
-        error: "unsigned_dynamic_installer_removed",
-        message: "Download the ZIP installer package. Per-branch configuration is kept outside the executable.",
-      });
-    }
+
     const branch = await store.getNode(branchId);
     if (!branch || branch.type !== "branch") return reply.code(404).send({ error: "branch_not_found" });
 
@@ -633,6 +628,25 @@ export async function registerEdgeAgentPackageRoutes(
       const signingCertificate = await readWindowsInstallerSigningCertificate(releaseDir);
       const safeBranchName = branch.name.replace(/[^a-zA-Z0-9_-]/g, "-");
       const envConfig = Buffer.from(activationConfiguration(activation.agentName, version, packageOptions, body.activationCode), "utf8");
+
+      if (format === "exe") {
+        await store.writeAudit({
+          tenantId: branch.tenantId,
+          actorUserId: request.currentUser.id,
+          action: "edge_agent.installer_downloaded",
+          resourceNodeId: branchId,
+          outcome: "success",
+          sourceIp: request.ip,
+          details: { activationId: body.activationId, version, platform: "windows", format: "exe" },
+        });
+
+        const exeBuffer = await readFile(installerPath);
+        reply.header("Cache-Control", "no-store, private");
+        reply.header("Content-Type", "application/vnd.microsoft.portable-executable");
+        reply.header("Content-Length", String(exeBuffer.length));
+        reply.header("Content-Disposition", `attachment; filename="KryptonVisionInstaller-v${installerVersion}-windows.exe"`);
+        return reply.send(exeBuffer);
+      }
 
       if (format === "zip") {
         const installerEntry = await getCachedExecutableEntry(installerPath, { size: installerSize, mtimeMs: installerMtime });
