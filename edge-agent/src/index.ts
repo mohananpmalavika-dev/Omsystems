@@ -71,13 +71,16 @@ function restartEdgeProcess() {
   if (process.platform === "win32") {
     try {
       const { spawn } = createRequire(import.meta.url)("node:child_process");
-      const child = spawn(process.execPath, process.argv.slice(1), {
+      const args = process.argv.slice(1);
+      const cmdArgs = ["/c", "timeout", "/t", "2", "/nobreak", ">nul", "&", `"${process.execPath}"`, ...args.map((a) => `"${a}"`)];
+      const child = spawn("cmd.exe", cmdArgs, {
         detached: true,
         stdio: "ignore",
         cwd: process.cwd(),
+        windowsHide: true,
       });
       child.unref();
-      logger.info("Spawned detached edge agent process for self-restart", { pid: child.pid });
+      logger.info("Spawned detached delayed edge agent process for self-restart", { pid: child.pid });
     } catch (e) {
       logger.warn("Failed to spawn self-restart process", { error: String(e) });
     }

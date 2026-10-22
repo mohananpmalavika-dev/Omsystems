@@ -27,11 +27,7 @@ taskkill /F /IM mediamtx.exe /T >nul 2>&1
 taskkill /F /IM ffmpeg.exe /T >nul 2>&1
 taskkill /F /IM cloudflared.exe /T >nul 2>&1
 
-echo [2/5] Cleaning broken 0.1.51 update pointer & locks...
-if exist "%AGENT_DIR%\data\updates\active.json" (
-    del /F /Q "%AGENT_DIR%\data\updates\active.json" >nul 2>&1
-    echo   - Removed broken active.json (Rollback to stable v0.1.50)
-)
+echo [2/5] Cleaning stale locks...
 if exist "%AGENT_DIR%\data\edge-agent.lock" (
     del /F /Q "%AGENT_DIR%\data\edge-agent.lock" >nul 2>&1
     echo   - Cleared lock file
