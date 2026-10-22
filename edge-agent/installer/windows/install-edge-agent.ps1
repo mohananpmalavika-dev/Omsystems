@@ -269,16 +269,15 @@ if (-not [string]::IsNullOrWhiteSpace($activationCode) -and $existingIdentityFil
 }
 
 $action = New-ScheduledTaskAction -Execute $Executable -Argument "--run --config `"$ConfigPath`"" -WorkingDirectory $InstallDirectory
-$trigger = New-ScheduledTaskTrigger -AtStartup
+$startupTrigger = New-ScheduledTaskTrigger -AtStartup
+$watchdogTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration ([TimeSpan]::MaxValue)
 $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-# Task Scheduler rejects sub-minute ISO-8601 repetition intervals (for example
-# PT10S). One minute is the platform minimum and still gives the gateway a
-# quick recovery path after a process crash or a short control-plane outage.
+# Task Scheduler checks every minute to ensure the agent is kept alive 24/7 without AnyDesk or TeamViewer
 $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
 if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
   Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
 }
-Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description "Sentinel Grid branch camera, recorder, storage and network monitoring agent" | Out-Null
+Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($startupTrigger, $watchdogTrigger) -Principal $principal -Settings $settings -Description "Sentinel Grid branch camera, recorder, storage and network monitoring agent" | Out-Null
 
 # Local-subnet only: this permits authenticated live-video handoff from branch
 # LAN and directly attached VPN clients without exposing a public media tunnel.

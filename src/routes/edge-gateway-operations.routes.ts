@@ -319,14 +319,34 @@ export async function registerEdgeGatewayOperationsRoutes(
       payload: { branchId: agent.branchId },
       requestedBy: request.currentUser.id,
     });
+
+    let tunnelDispatched = false;
+    if (options.controlPlanePublicUrl) {
+      try {
+        const tunnelEndpoint = new URL(`/v1/edge-media/${encodeURIComponent(id)}/v1/management/restart`, options.controlPlanePublicUrl);
+        const tunnelRes = await fetch(tunnelEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: AbortSignal.timeout(2000),
+        }).catch(() => null);
+        if (tunnelRes && (tunnelRes.status === 200 || tunnelRes.status === 202)) {
+          tunnelDispatched = true;
+        }
+      } catch {
+        // Fall back to queued command
+      }
+    }
+
     await writeGatewayAudit(request, store, agent.branchId, "edge_gateway.restart_requested", {
       edgeAgentId: id,
       commandId: command.id,
+      instantTunnelDispatched: tunnelDispatched,
     });
     return reply.code(202).send({
       commandId: command.id,
       status: "queued",
-      message: `Restart command queued for edge agent ${agent.name || id}`,
+      instantTunnelDispatched: tunnelDispatched,
+      message: `Restart command queued for edge agent ${agent.name || id}${tunnelDispatched ? " (dispatched instantly via reverse tunnel)" : ""}`,
     });
   });
 

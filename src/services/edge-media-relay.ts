@@ -104,6 +104,7 @@ export function registerEdgeMediaRelay(app: FastifyInstance, store: ControlPlane
     const path = `/${suffix}`;
     const method = request.method;
     const allowed = path === "/health" && ["GET", "HEAD"].includes(method)
+      || path === "/v1/management/restart" && method === "POST"
       || path === "/v1/live/start" && method === "POST"
       || /^\/v1\/live\/[a-zA-Z0-9_-]+$/.test(path) && method === "DELETE"
       || ["/v1/storage/search", "/v1/storage/play"].includes(path) && ["POST", "OPTIONS"].includes(method)

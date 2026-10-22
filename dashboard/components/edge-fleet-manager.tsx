@@ -33,6 +33,7 @@ import {
   ExternalLink,
   Shield,
   Filter,
+  Power,
 } from "lucide-react";
 
 interface EdgeAgentTelemetry {
@@ -285,6 +286,30 @@ export function EdgeFleetManager() {
       }
     } catch (err: any) {
       setActionError(err.message || "Failed to reconcile configuration.");
+    } finally {
+      setActionLoading(null);
+      setConfirmModal(null);
+    }
+  };
+
+  const handleSingleRestart = async (agent: EdgeAgentItem) => {
+    setActionLoading(`restarting-${agent.id}`);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/v1/edge-agents/${encodeURIComponent(agent.id)}/restart`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok) {
+        setActionSuccessMsg(`Remote restart command queued for ${agent.branchName} gateway. The agent will cleanly cycle.`);
+        await fetchFleetData();
+      } else {
+        throw new Error(data?.message || data?.error || "Restart command rejected by control plane.");
+      }
+    } catch (err: any) {
+      setActionError(err.message || "Failed to initiate remote gateway restart.");
     } finally {
       setActionLoading(null);
       setConfirmModal(null);
@@ -1112,7 +1137,7 @@ export function EdgeFleetManager() {
             </div>
 
             {/* Quick Actions Bar */}
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <button
                 onClick={() => {
                   setConfirmModal({
@@ -1128,7 +1153,25 @@ export function EdgeFleetManager() {
                 className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50"
               >
                 <ArrowUpCircle className="w-4 h-4" />
-                <span>Remote Upgrade v{selectedAgent.desiredAgentVersion || latestFleetVersion}</span>
+                <span>Upgrade v{selectedAgent.desiredAgentVersion || latestFleetVersion}</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setConfirmModal({
+                    isOpen: true,
+                    title: `Restart ${selectedAgent.branchName} Gateway?`,
+                    description: `Queue a remote restart command for ${selectedAgent.hostname}. The edge agent will execute a clean self-restart without AnyDesk/TeamViewer.`,
+                    confirmText: `Restart Gateway`,
+                    variant: "warning",
+                    onConfirm: () => handleSingleRestart(selectedAgent),
+                  });
+                }}
+                disabled={actionLoading !== null}
+                className="p-2.5 rounded-xl bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 font-bold text-xs border border-rose-800/60 flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <Power className="w-4 h-4 text-rose-400" />
+                <span>Remote Restart</span>
               </button>
 
               <button

@@ -445,7 +445,7 @@ if (scanOnce) {
 }
 if (config.LIVE_MEDIA_ENABLED) {
   lastMediaRuntimeStartAttemptAt = Date.now();
-  edgeMediaRuntime = await startEdgeMediaRuntimeIfAvailable({ config, gateway: control, agentId });
+  edgeMediaRuntime = await startEdgeMediaRuntimeIfAvailable({ config, gateway: control, agentId, onRemoteRestart: restartEdgeProcess });
 }
 
 // Hardware TPM 2.0 Attestation Initialization
@@ -1576,6 +1576,7 @@ async function recoverEdgeMediaRuntimeIfNeeded() {
     config,
     gateway: control,
     agentId,
+    onRemoteRestart: restartEdgeProcess,
   });
   if (!recoveredRuntime) return;
 
@@ -1896,7 +1897,7 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
       if (!config.LIVE_MEDIA_ENABLED) throw new Error("live_media_disabled");
       await refreshManagedMediaBootstrap();
       await edgeMediaRuntime?.stop();
-      edgeMediaRuntime = await startEdgeMediaRuntime({ config, gateway: control, agentId });
+      edgeMediaRuntime = await startEdgeMediaRuntime({ config, gateway: control, agentId, onRemoteRestart: restartEdgeProcess });
       return { result: { status: "restarted", publicUrl: edgeMediaRuntime.publicUrl } };
     case "restart-agent":
       return { result: { status: "restart_acknowledged" }, restartAgent: true };

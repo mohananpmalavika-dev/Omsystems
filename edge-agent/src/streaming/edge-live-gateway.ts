@@ -34,6 +34,7 @@ export interface EdgeMediaRuntimeInput {
   config: EdgeConfig;
   gateway: GatewayClient;
   agentId: string;
+  onRemoteRestart?: () => void;
 }
 
 export type QuickTunnelChild = Pick<ChildProcessWithoutNullStreams, "kill" | "once">;
@@ -171,6 +172,7 @@ interface LiveGatewayOptions {
   accessTtlMs: number;
   onTalkComplete?: ConstructorParameters<typeof TalkSessionRegistry>[1];
   talkSessions?: TalkSessionRegistry;
+  onRemoteRestart?: () => void;
 }
 
 export class EdgeLiveGateway {
@@ -233,6 +235,15 @@ export class EdgeLiveGateway {
     }
     if ((request.method === "GET" || request.method === "HEAD") && url.pathname === "/health") {
       return sendJson(response, 200, { status: "ok", service: "sentinel-edge-media-gateway" });
+    }
+    if (request.method === "POST" && url.pathname === "/v1/management/restart") {
+      sendJson(response, 202, { status: "restarting", message: "Edge agent remote restart initiated over reverse tunnel" });
+      if (this.options.onRemoteRestart) {
+        setTimeout(() => {
+          this.options.onRemoteRestart?.();
+        }, 150);
+      }
+      return;
     }
     if (["GET", "HEAD", "OPTIONS"].includes(request.method ?? "") && url.pathname.startsWith("/hls/")) {
       return this.proxyHls(request, response);
@@ -611,6 +622,7 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
       onTalkComplete: async (completion) => {
         await input.gateway.completeTalkSession(input.agentId, completion.sessionId, completion);
       },
+      ...(input.onRemoteRestart ? { onRemoteRestart: input.onRemoteRestart } : {}),
     });
     await liveGateway.listen({ host: config.EDGE_LIVE_GATEWAY_HOST, port: config.EDGE_LIVE_GATEWAY_PORT });
 

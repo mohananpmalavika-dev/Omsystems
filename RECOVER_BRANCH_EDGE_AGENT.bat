@@ -42,15 +42,15 @@ echo [4/5] Registering robust auto-restarting Scheduled Task...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$taskName = 'Sentinel Grid Edge Agent'; ^
    $exe = '%AGENT_DIR%\edge-agent.exe'; ^
-   $args = '--run --config \"%%AGENT_DIR%%\config\edge-agent.env\"'; ^
    $action = New-ScheduledTaskAction -Execute $exe -Argument '--run --config \"C:\Program Files\Sentinel Grid\Edge Agent\config\edge-agent.env\"' -WorkingDirectory '%AGENT_DIR%'; ^
    $bootTrigger = New-ScheduledTaskTrigger -AtStartup; ^
+   $watchdogTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration ([TimeSpan]::MaxValue); ^
    $principal = New-ScheduledTaskPrincipal -UserId 'NT AUTHORITY\SYSTEM' -LogonType ServiceAccount -RunLevel Highest; ^
-   $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 0); ^
+   $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew; ^
    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue; ^
-   Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $bootTrigger -Principal $principal -Settings $settings | Out-Null; ^
+   Register-ScheduledTask -TaskName $taskName -Action $action -Trigger @($bootTrigger, $watchdogTrigger) -Principal $principal -Settings $settings | Out-Null; ^
    Start-ScheduledTask -TaskName $taskName; ^
-   Write-Host '  - Scheduled Task registered with auto-restart.'"
+   Write-Host '  - Scheduled Task registered with 24/7 repeating 1-minute auto-heal watchdog.'"
 
 echo [5/5] Verifying Edge Agent process startup...
 timeout /t 5 /nobreak >nul
