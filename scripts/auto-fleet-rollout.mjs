@@ -175,13 +175,21 @@ async function main() {
 
       // Check if command already queued or running
       const pendingRes = await pool.query(`
-        SELECT id FROM edge_commands
+        SELECT id, payload FROM edge_commands
         WHERE edge_agent_id = $1 AND command_type = 'apply-update' AND status IN ('queued', 'running')
       `, [agent.id]);
 
       if (pendingRes.rows.length > 0) {
-        alreadyPendingCount++;
-        continue;
+        const queuedVersion = pendingRes.rows[0].payload?.releaseVersion;
+        if (queuedVersion === targetVersion) {
+          alreadyPendingCount++;
+          continue;
+        }
+        // Supersede older queued update with the newest target release
+        await pool.query(`
+          UPDATE edge_commands SET status = 'cancelled'
+          WHERE edge_agent_id = $1 AND command_type = 'apply-update' AND status = 'queued'
+        `, [agent.id]);
       }
 
       // Queue apply-update command
