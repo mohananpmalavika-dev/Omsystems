@@ -5,7 +5,7 @@ import { discoverMdnsDevices } from "./discovery/mdns-discovery.js";
 import { onvifEndpointRole, onvifServiceCandidates } from "./discovery/onvif-service-candidates.js";
 import { createDeviceFingerprint } from "./discovery/device-fingerprint.js";
 import { fingerprintHttpRecorder } from "./discovery/recorder-http-fingerprint.js";
-import { discoverRtspDevices, discoverRtspRecorderChannels, normalizeRtspDiscoveryCodec, recorderIdForHost, runWithConcurrency, type RtspRecorderChannel } from "./discovery/rtsp-network-scan.js";
+import { discoverRtspDevices, discoverRtspRecorderChannels, normalizeRtspDiscoveryCodec, recorderIdForHost, runWithConcurrency, tryTcpConnect, type RtspRecorderChannel } from "./discovery/rtsp-network-scan.js";
 import { resolveNeighborMac } from "./discovery/network-neighbor.js";
 import type { VendorStreamFamily, VendorStreamCandidate } from "./devices/vendor-stream-adapter.js";
 import { fallbackCredentialsRequired, needsRecorderRtspFallback, rtspOnvifExclusions } from "./discovery/onvif-fallback-policy.js";
@@ -670,8 +670,11 @@ async function scanBranch(options: {
     .filter(a => a.branchId !== branchId)
     .flatMap(a => a.vpnNetworks);
   const belongsToThisBranch = (host: string) => {
+    if (options.target) {
+      if (excludedBranchNetworks.length > 0 && hostInNetworks(host, excludedBranchNetworks)) return false;
+      return true;
+    }
     if (branchNetworks.length > 0 && hostInNetworks(host, branchNetworks)) return true;
-    if (options.target && !hostInNetworks(host, excludedBranchNetworks)) return true;
     if (isRemoteBranch) return false;
     return !hostInNetworks(host, excludedBranchNetworks);
   };
@@ -1162,10 +1165,20 @@ async function scanBranch(options: {
         const endpointRole = onvifEndpointRole(endpoint);
         const isRecorder = Boolean(recorderFingerprint) || endpointRole === "recorder";
         const vendorFamily = identifyVendorFamily(...endpoint.scopes, ...endpoint.types);
-        const candidatePorts = [
+        const rawCandidatePorts = [
           ...(options.target?.rtspPort ? [options.target.rtspPort] : []),
-          554, 8554, 8000, 37777, 5554,
-        ].filter((port, index, arr) => arr.indexOf(port) === index);
+          554, 8554, 8000, 5554,
+        ].filter((port, index, arr) => arr.indexOf(port) === index && port !== 37777);
+
+        const openPorts: number[] = [];
+        for (const p of rawCandidatePorts) {
+          if (await tryTcpConnect(endpoint.remoteAddress, p, 400)) {
+            openPorts.push(p);
+          }
+        }
+        const candidatePorts = openPorts.length > 0
+          ? openPorts
+          : (options.target?.rtspPort ? [options.target.rtspPort] : [554]);
 
         const familiesToTest: VendorStreamFamily[] = recorderFingerprint?.vendor
           ? [recorderFingerprint.vendor]
@@ -1419,26 +1432,25 @@ async function scanBranch(options: {
       }
     }
   }
-  if (config.RTSP_SCAN_ENABLED) {
+  if (!options.target && config.RTSP_SCAN_ENABLED) {
     try {
       const ports = parseDiscoveryPorts(config.RTSP_SCAN_PORTS, "RTSP_SCAN_PORTS");
       const recorderHttpPorts = parseDiscoveryPorts(config.RECORDER_HTTP_PORTS, "RECORDER_HTTP_PORTS");
       const paths = String(config.RTSP_SCAN_PATHS).split(",").map((p) => p.trim()).filter(Boolean);
       const cidr = !isRemoteBranch && config.RTSP_SCAN_CIDR ? String(config.RTSP_SCAN_CIDR).trim() : undefined;
-      const vpnScanNetworks = isRemoteBranch ? branchNetworks : options.target || cidr ? [] : await dbCredentialProvider.getVpnScanNetworks().catch((error) => {
+      const vpnScanNetworks = isRemoteBranch ? branchNetworks : cidr ? [] : await dbCredentialProvider.getVpnScanNetworks().catch((error) => {
         logger.warn("Unable to load VPN scan networks from the control plane", {
           error: error instanceof Error ? error.message : String(error),
         });
         return [];
       });
-      const dbHosts = options.target ? [options.target.ipAddress] : await dbCredentialProvider.getKnownHosts().catch((error) => {
+      const dbHosts = await dbCredentialProvider.getKnownHosts().catch((error) => {
         logger.warn("Unable to load saved camera addresses from the control plane", {
           error: error instanceof Error ? error.message : String(error),
         });
         return [];
       });
-      const knownHosts = options.target ? [options.target.ipAddress]
-        : [...new Set([...dbHosts, ...multicastDiscoveredHosts])].filter(belongsToThisBranch);
+      const knownHosts = [...new Set([...dbHosts, ...multicastDiscoveredHosts])].filter(belongsToThisBranch);
       const rtspOptions = {
         configuredNetworksOnly: isRemoteBranch,
         excludeNetworks: excludedBranchNetworks,
@@ -1488,12 +1500,11 @@ async function scanBranch(options: {
         credentialsForHost: credentialsForScan,
         hosts: knownHosts,
         excludeHosts: rtspOnvifExclusions({
-          ...(options.target ? { targetIpAddress: options.target.ipAddress } : {}),
           onvifHosts: endpoints.map((endpoint) => endpoint.remoteAddress),
           handledOnvifHosts,
           recorderFallbackHosts,
         }),
-        restrictToHosts: Boolean(options.target),
+        restrictToHosts: false,
       } satisfies Omit<import("./discovery/rtsp-network-scan.js").RtspScanOptions, "cidr" | "cidrs">;
       if (cidr) {
         (rtspOptions as import("./discovery/rtsp-network-scan.js").RtspScanOptions).cidr = cidr;

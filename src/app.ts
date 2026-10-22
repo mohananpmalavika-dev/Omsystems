@@ -2940,7 +2940,11 @@ export async function buildApp(options?: {
     }
 
     // Initialize security services and collectors
-    try {
+      const { setDatabase } = await import("./config/database.js");
+      const dbPool = (store as any).pool ?? (store as any).db;
+      if (dbPool) {
+        try { setDatabase(dbPool); } catch {}
+      }
       const { SecurityServicesFactory } = await import("./security/services/index.js");
       const { SecurityMonitor } = await import("./security/monitoring/security-monitor.js");
       

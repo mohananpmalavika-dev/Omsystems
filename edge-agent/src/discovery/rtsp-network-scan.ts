@@ -157,7 +157,7 @@ export async function runWithConcurrency<T>(
   ));
 }
 
-function tryTcpConnect(host: string, port: number, timeoutMs: number): Promise<boolean> {
+export function tryTcpConnect(host: string, port: number, timeoutMs: number): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = new net.Socket();
     let settled = false;
@@ -250,6 +250,10 @@ export async function discoverRtspRecorderChannels(input: {
     } else if (credentialsRequired) {
       // Authentication failures are host-wide. One batch is enough to create a
       // credential activation record without hammering every possible channel.
+      break;
+    } else if (discovered.length === 0 && !input.scanFullRange && first >= 4) {
+      // If the first batch (1..4) produced 0 channels and no credentials failed, this device
+      // does not support this vendor RTSP profile. Stop immediately instead of scanning 16+ channels.
       break;
     }
   }

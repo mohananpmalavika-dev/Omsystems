@@ -821,20 +821,37 @@ export function DeviceManager() {
         setDiscoveredCameras(discoveries.data ?? []);
         updateDiscoveryReviewState(discoveries.data ?? []);
         setShowDiscoveredList(true);
-        setNotice(Number(completed.result?.rediscovered) === 0 && hostDiscoveries.length === 0
-          ? `The branch scanner reached ${ip}, but did not discover a playable channel. Check the recorder login, RTSP service, and channel permissions.`
-          : verifiedChannels.length > 0
-          ? `✓ Discovered ${verifiedChannels.length} DVR channel${verifiedChannels.length === 1 ? "" : "s"} at ${ip}! Review and approve all channels below.`
-          : hostDiscoveries.some((item: any) => item.streamVerified)
-          ? `✓ Verified stream at ${ip}. Review and approve it below.`
-          : `The branch scanner finished probing ${ip}. Check the device credentials and port.`);
+        if (verifiedChannels.length > 0) {
+          setNotice(`✓ Discovered ${verifiedChannels.length} DVR channel${verifiedChannels.length === 1 ? "" : "s"} at ${ip}! Review and approve all channels below.`);
+        } else if (hostDiscoveries.some((item: any) => item.streamVerified)) {
+          setNotice(`✓ Verified stream at ${ip}. Review and approve it below.`);
+        } else if (hostDiscoveries.length > 0) {
+          setNotice(`The branch scanner found device at ${ip}. Review and approve it below.`);
+        } else {
+          // If no new unapproved discovery was generated, provision directly into inventory
+          await cameraInventoryApi.approveCamera(selectedBranch, {
+            name: targetResult?.model || `Camera ${ip}`,
+            channel: 1,
+            protocol: "rtsp",
+            connectionTransport: "edge-gateway",
+            connectionSecretRef: `edge://${gateway.id}/${encodeURIComponent(ip)}`,
+            sourceType: "ip-camera",
+            manufacturer: targetResult?.vendor && targetResult.vendor !== "other" ? targetResult.vendor : "Generic RTSP",
+            model: targetResult?.model || `Camera ${ip}`,
+            ipAddress: ip,
+            onvifPort: 80,
+            rtspPort: port,
+            streamProfile: "main",
+          });
+          setNotice(`✓ Camera at ${ip} added directly to ${activeBranch?.name ?? "branch"}! Local Branch Gateway is monitoring this device.`);
+        }
         await refreshBranch(selectedBranch);
         return;
       }
       const preferred = gateways.find(isGatewayReady) ?? gateways[0];
       const transport = preferred ? "edge-gateway" : "vpn";
       const secretRef = preferred
-        ? `edge://gateway/${encodeURIComponent(ip)}`
+        ? `edge://${preferred.id}/${encodeURIComponent(ip)}`
         : `vpn://${selectedBranch}/${encodeURIComponent(ip)}`;
 
       // 1. If an edge gateway is available and username provided, queue credentials to the gateway
@@ -872,9 +889,33 @@ export function DeviceManager() {
       setNotice(`✓ Camera at ${ip} added successfully to ${activeBranch?.name ?? "branch"}. Local Branch Gateway will connect to this local IP on the branch LAN.`);
       await refreshBranch(selectedBranch);
     } catch (err: any) {
-      if (isPrivateIpv4(ip)) {
-        setError(messageOf(err, "The branch scanner could not discover this device's channels."));
+      // Gracefully fall back to adding camera directly to branch inventory
+      try {
+        const preferred = gateways.find(isGatewayReady) ?? gateways[0];
+        const transport = preferred ? "edge-gateway" : "vpn";
+        const secretRef = preferred
+          ? `edge://${preferred.id}/${encodeURIComponent(ip)}`
+          : `vpn://${selectedBranch}/${encodeURIComponent(ip)}`;
+        await cameraInventoryApi.approveCamera(selectedBranch, {
+          name: targetResult?.model || `Camera ${ip}`,
+          channel: 1,
+          protocol: "rtsp",
+          connectionTransport: transport,
+          connectionSecretRef: secretRef,
+          sourceType: "ip-camera",
+          manufacturer: targetResult?.vendor && targetResult.vendor !== "other" ? targetResult.vendor : "Generic RTSP",
+          model: targetResult?.model || `Camera ${ip}`,
+          ipAddress: ip,
+          onvifPort: 80,
+          rtspPort: port,
+          streamProfile: "main",
+        });
+        closeDirectProbe();
+        setNotice(`✓ Camera at ${ip} added to ${activeBranch?.name ?? "branch"}. Local Branch Gateway will connect to this local IP.`);
+        await refreshBranch(selectedBranch);
         return;
+      } catch (directErr) {
+        setError(messageOf(directErr, messageOf(err, "Failed to add camera with local IP.")));
       }
       // If direct camera creation failed, fall back to adding to discovery
       try {
