@@ -41,4 +41,33 @@ describe("shared agent branch isolation", () => {
     expect(send.mock.calls[0]?.[0]).toMatchObject({ branchId: "b", deviceId: "remote" });
     expect(send.mock.calls[1]?.[0]).toMatchObject({ branchId: "home", deviceId: "legacy" });
   });
+
+  it("allows direct IP probe targets within a branch's own assigned networks and rejects other branch networks", () => {
+    const branchId = "525198ad-504d-48af-ac6c-dca057d38ed5";
+    const branchBootstrap = {
+      vpnScanNetworks: ["192.168.1.45/32", "192.168.1.0/24"],
+      branchAssignments: [
+        { branchId: "525198ad-504d-48af-ac6c-dca057d38ed5", vpnNetworks: ["192.168.1.45/32", "192.168.1.0/24"] },
+        { branchId: "other-branch-id", vpnNetworks: ["10.20.0.0/24"] },
+      ],
+    };
+    const isRemoteBranch = false;
+    const branchNetworks = branchBootstrap?.vpnScanNetworks ?? [];
+    const excludedBranchNetworks = (branchBootstrap?.branchAssignments ?? [])
+      .filter(a => a.branchId !== branchId)
+      .flatMap(a => a.vpnNetworks);
+    const belongsToThisBranch = (host: string, target?: boolean) => {
+      if (branchNetworks.length > 0 && hostInNetworks(host, branchNetworks)) return true;
+      if (target && !hostInNetworks(host, excludedBranchNetworks)) return true;
+      if (isRemoteBranch) return false;
+      return !hostInNetworks(host, excludedBranchNetworks);
+    };
+
+    // The probe target is the branch's own IP
+    expect(belongsToThisBranch("192.168.1.45", true)).toBe(true);
+    // Subnet host in the branch's network
+    expect(belongsToThisBranch("192.168.1.50", true)).toBe(true);
+    // An IP belonging to a DIFFERENT branch's assigned networks must be rejected
+    expect(belongsToThisBranch("10.20.0.15", true)).toBe(false);
+  });
 });

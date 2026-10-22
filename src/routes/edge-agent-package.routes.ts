@@ -609,7 +609,16 @@ export async function registerEdgeAgentPackageRoutes(
       } catch {
         throw missingWindowsReleaseError(executablePath);
       }
-      const installerPath = nativeWindowsInstallerPath(root, version);
+      let installerVersion = version;
+      try {
+        const manifestRaw = await readFile(join(releaseDir, "windows-release.json"), "utf8");
+        const manifestParsed = JSON.parse(manifestRaw.replace(/^\uFEFF/, "")) as { installerFile?: string };
+        const match = typeof manifestParsed?.installerFile === "string" ? /^KryptonVisionInstaller-v([0-9A-Za-z.-]+)-windows\.exe$/.exec(manifestParsed.installerFile) : null;
+        if (match?.[1]) installerVersion = match[1];
+      } catch {
+        installerVersion = version;
+      }
+      const installerPath = nativeWindowsInstallerPath(root, installerVersion);
       let installerSize: number;
       let installerMtime: number;
       try {
@@ -636,7 +645,7 @@ export async function registerEdgeAgentPackageRoutes(
           "",
           "1. Extract this ZIP to a local folder.",
           `2. Import "${signingCertificateFilename}" into Trusted Root Certification Authorities and Trusted Publishers for the current Windows user.`,
-          `3. Double-click "KryptonVisionInstaller-v${version}-windows.exe".`,
+          `3. Double-click "KryptonVisionInstaller-v${installerVersion}-windows.exe".`,
           "4. Approve the Windows administrator prompt.",
           "5. Wait for the installer to validate the configuration and enroll the gateway.",
           "",
@@ -650,7 +659,7 @@ export async function registerEdgeAgentPackageRoutes(
 
         const entries: Array<ZipEntry> = [
           {
-            name: `KryptonVisionInstaller-v${version}-windows.exe`,
+            name: `KryptonVisionInstaller-v${installerVersion}-windows.exe`,
             compressedData: installerEntry.compressedData,
             uncompressedLength: installerEntry.uncompressedLength,
             crc: installerEntry.crc,

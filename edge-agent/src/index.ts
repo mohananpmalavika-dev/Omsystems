@@ -112,7 +112,7 @@ if (installEnvironmentFile && (
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.52\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.53\n");
   process.exit(0);
 }
 
@@ -663,11 +663,17 @@ async function scanBranch(options: {
   // Remote branch discovery is strictly limited to that branch's routed IPs.
   const branchBootstrap = (isRemoteBranch || identity) ? await control.getDiscoveryBootstrap(agentId, branchId) : undefined;
   const branchNetworks = branchBootstrap?.vpnScanNetworks ?? [];
-  const excludedBranchNetworks = isRemoteBranch ? [] : (branchBootstrap?.branchAssignments ?? []).flatMap(a => a.vpnNetworks);
-  const belongsToThisBranch = (host: string) => isRemoteBranch
-    ? hostInNetworks(host, branchNetworks) : !hostInNetworks(host, excludedBranchNetworks);
-  if (isRemoteBranch && branchNetworks.length === 0) throw new Error("branch_vpn_networks_required");
-  if (isRemoteBranch && !config.RTSP_SCAN_ENABLED) throw new Error("remote_branch_requires_rtsp_scan");
+  const excludedBranchNetworks = (branchBootstrap?.branchAssignments ?? [])
+    .filter(a => a.branchId !== branchId)
+    .flatMap(a => a.vpnNetworks);
+  const belongsToThisBranch = (host: string) => {
+    if (branchNetworks.length > 0 && hostInNetworks(host, branchNetworks)) return true;
+    if (options.target && !hostInNetworks(host, excludedBranchNetworks)) return true;
+    if (isRemoteBranch) return false;
+    return !hostInNetworks(host, excludedBranchNetworks);
+  };
+  if (isRemoteBranch && !options.target && branchNetworks.length === 0) throw new Error("branch_vpn_networks_required");
+  if (isRemoteBranch && !options.target && !config.RTSP_SCAN_ENABLED) throw new Error("remote_branch_requires_rtsp_scan");
   if (options.target && !belongsToThisBranch(options.target.ipAddress)) throw new Error("target_outside_branch_networks");
   const persistStreamSecrets = options.persistStreamSecrets ?? true;
   const credentialsForScan = scanCredentialResolver(

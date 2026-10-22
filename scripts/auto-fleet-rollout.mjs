@@ -39,7 +39,7 @@ async function main() {
   // 1. Read edge agent package.json
   const edgePackagePath = join(repoRoot, "edge-agent", "package.json");
   const edgePackage = JSON.parse(await readFile(edgePackagePath, "utf8"));
-  const targetVersion = edgePackage.version;
+  const targetVersion = process.env.EDGE_DELTA_BUNDLE_VERSION?.trim() || edgePackage.version;
   console.log(`[FleetRollout] Target Edge Agent Version: v${targetVersion}`);
 
   // 2. Ensure signing key is available
