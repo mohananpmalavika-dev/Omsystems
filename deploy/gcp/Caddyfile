@@ -19,6 +19,9 @@ demo.kryptonlogic.com, 35-200-130-81.sslip.io {
         Permissions-Policy "camera=*, microphone=*, display-capture=*, geolocation=*"
     }
 
+    redir /control_room /control-room 308
+    redir /control_room/* /control-room/{uri} 308
+
     @static path /_next/static/*
     header @static {
         Cache-Control "public, max-age=31536000, immutable"
