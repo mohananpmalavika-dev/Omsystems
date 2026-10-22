@@ -798,6 +798,16 @@ export function DeviceManager() {
     setSaving(true);
     setError(undefined);
     try {
+      // Duplicate prevention: Check if camera/DVR at this IP already exists in this branch
+      const alreadyRegistered = cameras.filter(
+        (c: any) => c.ipAddress === ip || c.ip_address === ip || c.connectionSecretRef?.includes(ip)
+      );
+      if (alreadyRegistered.length > 0) {
+        closeDirectProbe();
+        setNotice(`Device at ${ip} is already registered in ${activeBranch?.name ?? "branch"} (${alreadyRegistered.map((c: any) => c.name).join(", ")}). Duplicate creation prevented.`);
+        return;
+      }
+
       if (isPrivateIpv4(ip)) {
         const gateway = gateways.find(isGatewayReady);
         if (!gateway) throw new Error("The selected branch scanner must be online to discover channels at this local IP address. Check Branch Gateway status, then retry.");
@@ -828,6 +838,13 @@ export function DeviceManager() {
         } else if (hostDiscoveries.length > 0) {
           setNotice(`The branch scanner found device at ${ip}. Review and approve it below.`);
         } else {
+          // Verify again before fallback provisioning
+          const existing = cameras.find((c: any) => c.ipAddress === ip || c.ip_address === ip);
+          if (existing) {
+            setNotice(`Device at ${ip} is already registered as '${existing.name}'. Duplicate addition prevented.`);
+            await refreshBranch(selectedBranch);
+            return;
+          }
           // If no new unapproved discovery was generated, provision directly into inventory
           await cameraInventoryApi.approveCamera(selectedBranch, {
             name: targetResult?.model || `Camera ${ip}`,

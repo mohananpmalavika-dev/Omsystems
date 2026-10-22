@@ -1844,6 +1844,20 @@ export async function buildApp(options?: {
       recorderChannel: parsed.recorderChannel,
       recorderSerialNumber: parsed.recorderSerialNumber,
     };
+    if (!parsed.discoveryId && parsed.ipAddress) {
+      const existingCameras = await store.listCamerasByBranch(request.currentUser, branchId, "device:configure").catch(() => []);
+      const channelNum = parsed.recorderChannel || parsed.channel;
+      const duplicate = existingCameras.find(
+        (c) => c.ipAddress === parsed.ipAddress && (c.channel === channelNum || (!c.channel && channelNum === 1))
+      );
+      if (duplicate) {
+        return reply.code(409).send({
+          error: "camera_already_registered",
+          message: `Camera at ${parsed.ipAddress} (Channel ${channelNum}) is already registered as '${duplicate.name}' in this branch.`,
+          cameraId: duplicate.id,
+        });
+      }
+    }
     const camera = parsed.discoveryId
       ? await store.approveCamera(branchId, approvalInput)
       : await store.createCameraFromManualRegistration(branchId, approvalInput);
