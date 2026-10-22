@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableDelayedExpansion
 echo ================================================================
-echo   Sentinel Grid Edge Agent - Start / Restart (Project Workspace)
+echo   Sentinel Grid Edge Agent - Start / Restart Service
 echo ================================================================
 echo.
 
@@ -12,37 +12,30 @@ if %errorLevel% neq 0 (
     exit /b
 )
 
-set "PROJECT_ROOT=%~dp0"
-set "AGENT_DIR=%PROJECT_ROOT%edge-agent"
+:: Detect Edge Agent installation directory (Client PC, Extracted Package, or Workspace)
+set "AGENT_DIR=C:\Program Files\Sentinel Grid\Edge Agent"
+set "AGENT_EXE=%AGENT_DIR%\edge-agent.exe"
+set "CONFIG_PATH=%AGENT_DIR%\config\edge-agent.env"
 
-:: Locate Edge Agent executable inside the project
-if exist "%AGENT_DIR%\release\edge-agent.exe" (
-    set "AGENT_EXE=%AGENT_DIR%\release\edge-agent.exe"
-) else if exist "%AGENT_DIR%\edge-agent.exe" (
-    set "AGENT_EXE=%AGENT_DIR%\edge-agent.exe"
-) else if exist "%PROJECT_ROOT%edge-agent.exe" (
-    set "AGENT_EXE=%PROJECT_ROOT%edge-agent.exe"
-) else (
-    echo [ERROR] Edge Agent executable not found inside project:
-    echo "%AGENT_DIR%\release\edge-agent.exe"
-    echo.
-    pause
-    exit /b 1
-)
-
-:: Locate configuration file inside the project
-if exist "%AGENT_DIR%\run-edge-agent.env" (
-    set "CONFIG_PATH=%AGENT_DIR%\run-edge-agent.env"
-) else if exist "%AGENT_DIR%\.env" (
-    set "CONFIG_PATH=%AGENT_DIR%\.env"
-) else if exist "%PROJECT_ROOT%local-edge-agent.env" (
-    set "CONFIG_PATH=%PROJECT_ROOT%local-edge-agent.env"
-) else if exist "%AGENT_DIR%\config\edge-agent.env" (
-    set "CONFIG_PATH=%AGENT_DIR%\config\edge-agent.env"
-) else (
-    echo [ERROR] No configuration (.env) file found inside %AGENT_DIR%
-    pause
-    exit /b 1
+if not exist "%AGENT_EXE%" (
+    if exist "%~dp0edge-agent.exe" (
+        set "AGENT_DIR=%~dp0"
+        set "AGENT_EXE=%~dp0edge-agent.exe"
+        if exist "%~dp0edge-agent.env" set "CONFIG_PATH=%~dp0edge-agent.env"
+        if exist "%~dp0config\edge-agent.env" set "CONFIG_PATH=%~dp0config\edge-agent.env"
+    ) else if exist "%~dp0edge-agent\release\edge-agent.exe" (
+        set "AGENT_DIR=%~dp0edge-agent"
+        set "AGENT_EXE=%~dp0edge-agent\release\edge-agent.exe"
+        if exist "%AGENT_DIR%\run-edge-agent.env" set "CONFIG_PATH=%AGENT_DIR%\run-edge-agent.env"
+        if exist "%AGENT_DIR%\config\edge-agent.env" set "CONFIG_PATH=%AGENT_DIR%\config\edge-agent.env"
+        if exist "%AGENT_DIR%\.env" set "CONFIG_PATH=%AGENT_DIR%\.env"
+    ) else (
+        echo [ERROR] Edge Agent executable not found at:
+        echo "C:\Program Files\Sentinel Grid\Edge Agent\edge-agent.exe"
+        echo.
+        pause
+        exit /b 1
+    )
 )
 
 echo [1/3] Terminating any stale agent processes...
@@ -52,10 +45,10 @@ if exist "%AGENT_DIR%\data\edge-agent.lock" (
     del /F /Q "%AGENT_DIR%\data\edge-agent.lock" >nul 2>&1
 )
 
-echo [2/3] Configuring directory permissions inside project...
-if not exist "%AGENT_DIR%\data" mkdir "%AGENT_DIR%\data"
-if not exist "%AGENT_DIR%\logs" mkdir "%AGENT_DIR%\logs"
-if not exist "%AGENT_DIR%\config" mkdir "%AGENT_DIR%\config"
+echo [2/3] Configuring directory permissions...
+if not exist "%AGENT_DIR%\data" mkdir "%AGENT_DIR%\data" >nul 2>&1
+if not exist "%AGENT_DIR%\logs" mkdir "%AGENT_DIR%\logs" >nul 2>&1
+if not exist "%AGENT_DIR%\config" mkdir "%AGENT_DIR%\config" >nul 2>&1
 icacls "%AGENT_DIR%\data" /grant Users:(OI)(CI)M /T /Q >nul 2>&1
 icacls "%AGENT_DIR%\logs" /grant Users:(OI)(CI)M /T /Q >nul 2>&1
 icacls "%AGENT_DIR%\config" /grant Users:(OI)(CI)R /T /Q >nul 2>&1
@@ -65,7 +58,7 @@ schtasks /Run /TN "Sentinel Grid Edge Agent" >nul 2>&1
 if %errorLevel% equ 0 (
     echo Successfully triggered Scheduled Task: Sentinel Grid Edge Agent
 ) else (
-    echo Starting edge-agent process directly from project...
+    echo Starting edge-agent process directly...
     start "" /D "%AGENT_DIR%" "%AGENT_EXE%" --run --config "%CONFIG_PATH%"
 )
 
