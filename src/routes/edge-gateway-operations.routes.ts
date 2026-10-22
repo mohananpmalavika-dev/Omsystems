@@ -363,6 +363,8 @@ export async function registerEdgeGatewayOperationsRoutes(
       cameraId: z.string().min(1).optional(),
       channel: z.number().int().positive().optional(),
       recorderId: z.string().min(1).optional(),
+      port: z.number().int().min(1).max(65535).optional(),
+      rtspPort: z.number().int().min(1).max(65535).optional(),
     }).safeParse(request.body);
     if (!parsedBody.success) {
       return reply.code(400).send({
@@ -405,6 +407,7 @@ export async function registerEdgeGatewayOperationsRoutes(
       type: "update-credentials",
       payload: { envelope, branchId, target: {
         ipAddress: body.cameraIp,
+        ...((body.port || body.rtspPort) ? { rtspPort: body.port || body.rtspPort } : {}),
         ...(body.cameraId ? { cameraId: body.cameraId } : {}),
         ...(body.channel ? { channel: body.channel } : {}),
         ...(body.recorderId ? { recorderId: body.recorderId } : {}),

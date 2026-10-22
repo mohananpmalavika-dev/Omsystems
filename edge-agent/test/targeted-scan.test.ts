@@ -42,6 +42,21 @@ describe("device-scoped scan jobs", () => {
     });
   });
 
+  it("preserves rtspPort in targeted device jobs", () => {
+    const target = targetFromScanJob({
+      scope: "device",
+      targetDiscoveryId: "discovery-2",
+      targetIpAddress: "192.168.1.45",
+      targetRtspPort: 8554,
+    });
+
+    expect(target).toEqual({
+      discoveryId: "discovery-2",
+      ipAddress: "192.168.1.45",
+      rtspPort: 8554,
+    });
+  });
+
   it("does not run broadcast discovery or expand RTSP scanning beyond a target", async () => {
     const raw = await readFile(new URL("../src/index.ts", import.meta.url), "utf8");
     const source = raw.replace(/\r\n/g, "\n");

@@ -806,6 +806,8 @@ export function DeviceManager() {
           cameraIp: ip,
           username,
           password: password || null,
+          port,
+          rtspPort: port,
         });
         const completed = await waitForCredentialCommand(command.commandId, 300_000);
         const discoveries = await cameraInventoryApi.listDiscovered(selectedBranch);
@@ -842,6 +844,8 @@ export function DeviceManager() {
             cameraIp: ip,
             username,
             password: password || null,
+            port,
+            rtspPort: port,
           });
         } catch {
           // If public key encryption fails or legacy gateway, proceed

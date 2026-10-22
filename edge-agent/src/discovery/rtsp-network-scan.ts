@@ -425,15 +425,25 @@ export async function discoverRtspDevices(
 
   // First reduce the subnet to hosts that expose a configured camera or
   // recorder port. Probing all configured ports concurrently avoids spending
-  // several seconds serially on every unused address in a /24.
+  const actualConnectTimeoutMs = options.restrictToHosts
+    ? Math.max(connectTimeoutMs, 2500)
+    : connectTimeoutMs;
   await runWithConcurrency(hosts, discoveryConcurrency, async (ip) => {
     const checks = await Promise.all(discoveryPorts.map(async (port) => ({
       port,
-      reachable: await tryTcpConnect(ip, port, connectTimeoutMs),
+      reachable: await tryTcpConnect(ip, port, actualConnectTimeoutMs),
     })));
     const openPorts = checks.filter((check) => check.reachable).map((check) => check.port);
     if (openPorts.length > 0) reachableHosts.push({ ip, ports: new Set(openPorts) });
   });
+  if (options.restrictToHosts && reachableHosts.length === 0 && hosts.length > 0) {
+    for (const targetHost of hosts) {
+      reachableHosts.push({
+        ip: targetHost,
+        ports: new Set(uniqueValidPorts([...rtspStreamingPorts, 80, 443, 8000, 8080])),
+      });
+    }
+  }
   logger.info("RTSP candidate scan completed", {
     addressesChecked: hosts.length,
     reachableHosts: reachableHosts.length,
@@ -583,8 +593,8 @@ export async function discoverRtspDevices(
                     username: cred.username,
                     password: cred.password,
                     maxChannels: Math.min(options.recorderMaxChannels ?? 64, knownChannelCount ?? 256),
-                    scanFullRange: knownChannelCount !== null,
-                    includeUnverifiedChannels: knownChannelCount !== null,
+                    scanFullRange: knownChannelCount !== null || options.restrictToHosts === true,
+                    includeUnverifiedChannels: knownChannelCount !== null || options.restrictToHosts === true,
                     probe: (candidateUri) => probeRtsp(candidateUri, ffprobePath, timeoutMs),
                   });
                   if (recorder.channels.length > 0) {

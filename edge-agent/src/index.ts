@@ -5,15 +5,15 @@ import { discoverMdnsDevices } from "./discovery/mdns-discovery.js";
 import { onvifEndpointRole, onvifServiceCandidates } from "./discovery/onvif-service-candidates.js";
 import { createDeviceFingerprint } from "./discovery/device-fingerprint.js";
 import { fingerprintHttpRecorder } from "./discovery/recorder-http-fingerprint.js";
-import { discoverRtspDevices, discoverRtspRecorderChannels, normalizeRtspDiscoveryCodec, recorderIdForHost, runWithConcurrency } from "./discovery/rtsp-network-scan.js";
+import { discoverRtspDevices, discoverRtspRecorderChannels, normalizeRtspDiscoveryCodec, recorderIdForHost, runWithConcurrency, type RtspRecorderChannel } from "./discovery/rtsp-network-scan.js";
 import { resolveNeighborMac } from "./discovery/network-neighbor.js";
-import type { VendorStreamFamily } from "./devices/vendor-stream-adapter.js";
+import type { VendorStreamFamily, VendorStreamCandidate } from "./devices/vendor-stream-adapter.js";
 import { fallbackCredentialsRequired, needsRecorderRtspFallback, rtspOnvifExclusions } from "./discovery/onvif-fallback-policy.js";
 import { scanCredentialResolver, targetFromScanJob, targetedOnvifEndpoint, type DeviceScanTarget } from "./discovery/targeted-scan.js";
 import { attachCredentials, OnvifClient } from "./devices/onvif-client.js";
 import { compatibilityNotes, normalizeVendor } from "./devices/compatibility-registry.js";
 import { GatewayClient, type DiscoveredCameraPayload } from "./registration/gateway-client.js";
-import { captureRtspRgbFrame, probeRtsp } from "./streaming/rtsp-probe.js";
+import { captureRtspRgbFrame, probeRtsp, type RtspProbeResult } from "./streaming/rtsp-probe.js";
 import { LocalStreamSecretStore } from "./streaming/secret-store.js";
 import { uptime } from "node:os";
 import { NetworkCounterSampler, NetworkPathTracker, probeInternetLink } from "./monitoring/internet-probe.js";
@@ -112,7 +112,7 @@ if (installEnvironmentFile && (
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.53\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.54\n");
   process.exit(0);
 }
 
@@ -1159,50 +1159,100 @@ async function scanBranch(options: {
         const endpointRole = onvifEndpointRole(endpoint);
         const isRecorder = Boolean(recorderFingerprint) || endpointRole === "recorder";
         const vendorFamily = identifyVendorFamily(...endpoint.scopes, ...endpoint.types);
-        const vendorFallback = await probeVendorStream({
-          host: endpoint.remoteAddress,
-          vendor: vendorFamily,
-          credentials,
-          probe: (uri) => probeRtsp(uri, config.FFPROBE_PATH, config.ONVIF_TIMEOUT_MS),
-        });
-        const streamVerified = Boolean(vendorFallback.candidate && vendorFallback.probe.reachable);
+        const candidatePorts = [
+          ...(options.target?.rtspPort ? [options.target.rtspPort] : []),
+          554, 8554, 8000, 37777, 5554,
+        ].filter((port, index, arr) => arr.indexOf(port) === index);
+
+        const familiesToTest: VendorStreamFamily[] = recorderFingerprint?.vendor
+          ? [recorderFingerprint.vendor]
+          : Boolean(options.target) || vendorFamily === "generic"
+            ? ["cp-plus", "hikvision", "dahua", "tvt", "generic"]
+            : [vendorFamily];
+
+        let vendorFallback: { candidate: VendorStreamCandidate | undefined; probe: RtspProbeResult | undefined } = {
+          candidate: undefined,
+          probe: undefined,
+        };
+        let activeVendorFamily: VendorStreamFamily = vendorFamily;
+
+        for (const fam of familiesToTest) {
+          const fallback = await probeVendorStream({
+            host: endpoint.remoteAddress,
+            vendor: fam,
+            credentials,
+            ports: candidatePorts,
+            preferredRole: "sub",
+            probe: (uri) => probeRtsp(uri, config.FFPROBE_PATH, Math.min(config.ONVIF_TIMEOUT_MS, 4000)),
+          });
+          vendorFallback = fallback;
+          if (fallback.candidate && fallback.probe?.reachable) {
+            activeVendorFamily = fam;
+            break;
+          }
+        }
+
+        const streamVerified = Boolean(vendorFallback.candidate && vendorFallback.probe?.reachable);
         const candidateUri = vendorFallback.candidate?.uri ?? "";
         const candidateVendorFamily: VendorStreamFamily = (/\/cam\/realmonitor/i.test(candidateUri)) ? "cp-plus"
           : (/\/Streaming\/Channels/i.test(candidateUri)) ? "hikvision"
           : (/\/ch\d+/i.test(candidateUri)) ? "tvt"
-          : vendorFamily;
+          : activeVendorFamily;
 
         const isRecorderCandidate = isRecorder
           || Boolean(recorderFingerprint)
           || Boolean(options.target)
           || /\bchannel=\d+|\/Streaming\/Channels\/|\/ch\d+\//i.test(candidateUri);
 
-        if (streamVerified && isRecorderCandidate) {
+        if ((streamVerified && isRecorderCandidate) || Boolean(options.target)) {
           const maxChannels = options.target
             ? Math.max(config.RECORDER_DISCOVERY_MAX_CHANNELS || 16, 16)
             : (config.RECORDER_DISCOVERY_MAX_CHANNELS || 16);
-          const recorderProbe = await discoverRtspRecorderChannels({
-            host: endpoint.remoteAddress,
-            ports: [554],
-            vendor: candidateVendorFamily,
-            username: credentials.username,
-            password: credentials.password,
-            maxChannels,
-            emptyBatchLimit: 2,
-            probe: (uri) => probeRtsp(uri, config.FFPROBE_PATH, config.ONVIF_TIMEOUT_MS),
-          });
+
+          const probeVendors: VendorStreamFamily[] = [candidateVendorFamily];
+          if (options.target) {
+            for (const extra of ["cp-plus", "hikvision", "tvt"] as VendorStreamFamily[]) {
+              if (!probeVendors.includes(extra)) probeVendors.push(extra);
+            }
+          }
+
+          let recorderProbe: { channels: RtspRecorderChannel[]; credentialsRequired: boolean } = {
+            channels: [],
+            credentialsRequired: false,
+          };
+          let finalVendor: VendorStreamFamily = candidateVendorFamily;
+
+          for (const pv of probeVendors) {
+            recorderProbe = await discoverRtspRecorderChannels({
+              host: endpoint.remoteAddress,
+              ports: candidatePorts,
+              vendor: pv,
+              username: credentials.username,
+              password: credentials.password,
+              maxChannels,
+              emptyBatchLimit: 2,
+              probe: (uri) => probeRtsp(uri, config.FFPROBE_PATH, Math.min(config.ONVIF_TIMEOUT_MS, 4000)),
+            });
+            if (recorderProbe.channels.length > 0) {
+              finalVendor = pv;
+              break;
+            }
+          }
 
           if (recorderProbe.channels.length > 0) {
-            const recorderVendorFamily = candidateVendorFamily === "cp-plus" ? "cp-plus"
-              : candidateVendorFamily === "hikvision" ? "hikvision"
+            const recorderVendorFamily = finalVendor === "cp-plus" ? "cp-plus"
+              : finalVendor === "hikvision" ? "hikvision"
               : "other";
-            const recorderManufacturer = candidateVendorFamily === "cp-plus" ? "CP PLUS"
-              : candidateVendorFamily === "hikvision" ? "Hikvision"
-              : candidateVendorFamily === "tvt" ? "TVT"
+            const recorderManufacturer = finalVendor === "cp-plus" ? "CP PLUS"
+              : finalVendor === "hikvision" ? "Hikvision"
+              : finalVendor === "tvt" ? "TVT"
               : (recorderFingerprint?.manufacturer || "Multi-channel DVR");
             const recorderModel = recorderFingerprint?.model || `${recorderManufacturer} DVR`;
             const recorderId = recorderIdForHost(endpoint.remoteAddress);
             const macAddress = await resolveNeighborMac(endpoint.remoteAddress);
+            const detectedRtspPort = recorderProbe.channels[0]?.uri
+              ? Number(new URL(recorderProbe.channels[0].uri).port || 554)
+              : (candidatePorts[0] || 554);
 
             await registerRecorder({
               id: recorderId,
@@ -1213,7 +1263,7 @@ async function scanBranch(options: {
               host: endpoint.remoteAddress,
               port: Number(parsedServiceUrl.port || 80),
               secure: false,
-              rtspPort: 554,
+              rtspPort: detectedRtspPort,
             });
 
             for (const ch of recorderProbe.channels) {
@@ -1905,10 +1955,15 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
       if (saved.stored !== 1) throw new Error("Central device-credential write was incomplete");
       // The database may still hold an older host login. Supply this command's
       // credentials directly to both ONVIF and RTSP verification.
-      getBranchCredentialProvider(credentialBranchId).invalidate();
+      const payloadTarget = (payload.target && typeof payload.target === "object") ? payload.target as Record<string, unknown> : {};
+      const targetRtspPort = typeof payloadTarget.rtspPort === "number" ? payloadTarget.rtspPort
+        : typeof payloadTarget.port === "number" ? payloadTarget.port : undefined;
       const discovered = await scanBranch({
         branchId: credentialBranchId,
-        target: { ipAddress: decrypted.scope.host },
+        target: {
+          ipAddress: decrypted.scope.host,
+          ...(targetRtspPort ? { rtspPort: targetRtspPort } : {}),
+        },
         targetCredentials: { username: decrypted.username, password: decrypted.password },
       });
       return { result: { scope: "single-camera", rediscovered: discovered } };

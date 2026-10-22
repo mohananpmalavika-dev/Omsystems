@@ -88,7 +88,7 @@ export async function probeVendorStream(input: {
 }) {
   let lastProbe: RtspProbeResult | undefined;
   const candidates = vendorRtspCandidates(input).sort((left, right) =>
-    Number(right.role === input.preferredRole) - Number(left.role === input.preferredRole)
+    Number(right.role === (input.preferredRole ?? "sub")) - Number(left.role === (input.preferredRole ?? "sub"))
   );
   for (const candidate of candidates) {
     let probe: RtspProbeResult;
@@ -109,51 +109,51 @@ function vendorPaths(vendor: VendorStreamFamily, channel: number): Array<{ path:
 
   const pathsByVendor: Record<VendorStreamFamily, Array<{ path: string; role: "main" | "sub" }>> = {
     hikvision: [
-      { path: `/Streaming/Channels/${channel}01`, role: "main" },
       { path: `/Streaming/Channels/${channel}02`, role: "sub" },
+      { path: `/Streaming/Channels/${channel}01`, role: "main" },
       { path: `/Streaming/Channels/${channel}`, role: "main" },
       { path: `/h264/ch${channel}/main/av_stream`, role: "main" },
       { path: `/h264/ch${channel}/sub/av_stream`, role: "sub" },
     ],
     dahua: [
-      { path: `/cam/realmonitor?channel=${channel}&subtype=0`, role: "main" },
       { path: `/cam/realmonitor?channel=${channel}&subtype=1`, role: "sub" },
+      { path: `/cam/realmonitor?channel=${channel}&subtype=0`, role: "main" },
       { path: `/live`, role: "main" },
     ],
     amcrest: [
-      { path: `/cam/realmonitor?channel=${channel}&subtype=0`, role: "main" },
       { path: `/cam/realmonitor?channel=${channel}&subtype=1`, role: "sub" },
+      { path: `/cam/realmonitor?channel=${channel}&subtype=0`, role: "main" },
       { path: `/live`, role: "main" },
     ],
     "cp-plus": [
-      { path: `/cam/realmonitor?channel=${channel}&subtype=0`, role: "main" },
       { path: `/cam/realmonitor?channel=${channel}&subtype=1`, role: "sub" },
+      { path: `/cam/realmonitor?channel=${channel}&subtype=0`, role: "main" },
     ],
     uniview: [
+      { path: `/unicast/c${channel}/s1/live`, role: "sub" },
+      { path: `/unicast/c${channel}/s0/live`, role: "main" },
       { path: `/media/video${channel}`, role: "main" },
       { path: `/media/video${channel + 1}`, role: "sub" },
-      { path: `/unicast/c${channel}/s0/live`, role: "main" },
-      { path: `/unicast/c${channel}/s1/live`, role: "sub" },
     ],
     axis: [
-      { path: `/axis-media/media.amp?camera=${channel}`, role: "main" },
       { path: `/axis-media/media.amp?camera=${channel}&videocodec=h264`, role: "sub" },
+      { path: `/axis-media/media.amp?camera=${channel}`, role: "main" },
       { path: `/axis-media/media.amp`, role: "main" },
     ],
     reolink: [
-      { path: `/h264Preview_${pad2}_main`, role: "main" },
       { path: `/h264Preview_${pad2}_sub`, role: "sub" },
+      { path: `/h264Preview_${pad2}_main`, role: "main" },
       { path: `/h265Preview_${pad2}_main`, role: "main" },
       { path: `/Preview_${pad2}_main`, role: "main" },
       { path: `/Preview_${pad2}_sub`, role: "sub" },
     ],
     foscam: [
-      { path: `/videoMain`, role: "main" },
       { path: `/videoSub`, role: "sub" },
-      { path: `/videoMain${channel}`, role: "main" },
+      { path: `/videoMain`, role: "main" },
       { path: `/videoSub${channel}`, role: "sub" },
-      { path: `/live/main`, role: "main" },
+      { path: `/videoMain${channel}`, role: "main" },
       { path: `/live/sub`, role: "sub" },
+      { path: `/live/main`, role: "main" },
     ],
     vivotek: [
       { path: `/live.sdp`, role: "main" },
@@ -162,8 +162,8 @@ function vendorPaths(vendor: VendorStreamFamily, channel: number): Array<{ path:
       { path: `/live/ch${channel}`, role: "main" },
     ],
     "tp-link": [
-      { path: `/stream1`, role: "main" },
       { path: `/stream2`, role: "sub" },
+      { path: `/stream1`, role: "main" },
       { path: `/ch${channel}/main/av_stream`, role: "main" },
     ],
     "d-link": [
@@ -173,33 +173,37 @@ function vendorPaths(vendor: VendorStreamFamily, channel: number): Array<{ path:
       { path: `/stream1`, role: "main" },
     ],
     ubiquiti: [
-      { path: `/s0`, role: "main" },
       { path: `/s1`, role: "sub" },
+      { path: `/s0`, role: "main" },
       { path: `/s2`, role: "sub" },
       { path: `/live/ch${channel}`, role: "main" },
       { path: `/stream${channel}`, role: "main" },
     ],
     hanwha: [
-      { path: `/profile${channel}/media.smp`, role: "main" },
       { path: `/profile${channel + 1}/media.smp`, role: "sub" },
+      { path: `/profile${channel}/media.smp`, role: "main" },
       { path: `/onvif/profile${channel}/media.smp`, role: "main" },
       { path: `/live/ch${channel}`, role: "main" },
     ],
     bosch: [
-      { path: `/rtsp_tunnel?line=${channel}`, role: "main" },
       { path: `/rtsp_tunnel?inst=${channel}`, role: "sub" },
+      { path: `/rtsp_tunnel?line=${channel}`, role: "main" },
     ],
     tvt: [
-      { path: `/ch${channel}/main/av_stream`, role: "main" },
       { path: `/ch${channel}/sub/av_stream`, role: "sub" },
+      { path: `/ch${channel}/main/av_stream`, role: "main" },
       { path: `/h264/ch${channel}/main/av_stream`, role: "main" },
     ],
     generic: [
-      { path: `/Streaming/Channels/${channel}01`, role: "main" },
+      { path: `/cam/realmonitor?channel=${channel}&subtype=1`, role: "sub" },
       { path: `/cam/realmonitor?channel=${channel}&subtype=0`, role: "main" },
-      { path: `/stream1`, role: "main" },
-      { path: `/stream2`, role: "sub" },
+      { path: `/Streaming/Channels/${channel}02`, role: "sub" },
+      { path: `/Streaming/Channels/${channel}01`, role: "main" },
+      { path: `/Streaming/Channels/${channel}`, role: "main" },
+      { path: `/ch${channel}/sub/av_stream`, role: "sub" },
       { path: `/ch${channel}/main/av_stream`, role: "main" },
+      { path: `/stream2`, role: "sub" },
+      { path: `/stream1`, role: "main" },
       { path: `/live/ch${channel}`, role: "main" },
       { path: `/live`, role: "main" },
       { path: `/video`, role: "main" },

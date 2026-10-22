@@ -4,6 +4,7 @@ export interface DeviceScanTarget {
   discoveryId?: string;
   ipAddress: string;
   onvifPort?: number;
+  rtspPort?: number;
 }
 
 export function scanCredentialResolver(
@@ -22,12 +23,14 @@ export function targetFromScanJob(job: {
   targetDiscoveryId?: string;
   targetIpAddress?: string;
   targetOnvifPort?: number;
+  targetRtspPort?: number;
 }): DeviceScanTarget | undefined {
   if (job.scope !== "device" || !job.targetIpAddress) return undefined;
   return {
     ...(job.targetDiscoveryId ? { discoveryId: job.targetDiscoveryId } : {}),
     ipAddress: job.targetIpAddress,
     ...(job.targetOnvifPort ? { onvifPort: job.targetOnvifPort } : {}),
+    ...(job.targetRtspPort ? { rtspPort: job.targetRtspPort } : {}),
   };
 }
 
