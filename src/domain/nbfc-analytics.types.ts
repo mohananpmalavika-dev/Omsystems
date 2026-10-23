@@ -152,6 +152,7 @@ export interface AnalyticsRule {
   tenantId: string;
   name: string;
   description?: string;
+  category?: string;
   enabled: boolean;
   state: RuleExecutionState;
   branchIds: string[]; // empty means all branches

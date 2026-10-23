@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
+import { MINIMUM_PERSONNEL_TEMPLATE_ID, validMinimumPersonnelCondition } from "../../packages/contracts/src/nbfc-rule-conditions.js";
 import type { NbfcRuleRepository } from "../analytics/nbfc-rule-repository.js";
 import type { NbfcRuleEngineService } from "../analytics/nbfc-rule-engine.service.js";
 import type { ControlPlaneStore } from "../control-plane-store.js";
@@ -243,6 +244,9 @@ export function registerNbfcAnalyticsRoutes(
       changeReason: z.string().default("Initial rule creation"),
     }).parse(request.body || {});
 
+    if (body.templateId === MINIMUM_PERSONNEL_TEMPLATE_ID && !validMinimumPersonnelCondition(body.condition)) {
+      return reply.code(400).send({ error: "invalid_minimum_personnel_condition", message: "Minimum Personnel requires active vault operations AND a person/staff count below an integer threshold of at least two." });
+    }
     if (body.state === "ACTIVE" && !(body.branchIds?.length || body.cameraIds?.length)) {
       return reply.code(400).send({
         error: "scoped_activation_required",
@@ -398,6 +402,9 @@ export function registerNbfcAnalyticsRoutes(
     const nextBranchIds = body.branchIds ?? existing.branchIds;
     const nextCameraIds = body.cameraIds ?? existing.cameraIds;
     const nextState = body.state ?? existing.state;
+    if (existing.templateId === MINIMUM_PERSONNEL_TEMPLATE_ID && body.condition && !validMinimumPersonnelCondition(body.condition)) {
+      return reply.code(400).send({ error: "invalid_minimum_personnel_condition", message: "Keep the active vault operation check and the minimum-personnel count together. Reopen the rule editor to restore its conditions." });
+    }
     if (nextState === "ACTIVE" && !(nextBranchIds.length || nextCameraIds.length)) {
       return reply.code(400).send({ error: "scoped_activation_required", message: "Active rules must target at least one branch or camera" });
     }

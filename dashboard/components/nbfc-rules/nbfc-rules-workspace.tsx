@@ -2,6 +2,7 @@
 
 import styles from "./nbfc-rules-workspace.module.css";
 import { initialRuleScope, resolveRuleScope, KEEP_RULE_SCOPE } from "./rule-builder-scope";
+import { MINIMUM_PERSONNEL_TEMPLATE_ID, editableRuleCondition, updateRuleCondition, minimumPersonnelBuilderCondition, describeRuleCondition } from "../../../packages/contracts/src/nbfc-rule-conditions";
 
 import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect, useRef, useMemo } from "react";
@@ -459,10 +460,8 @@ export function NbfcRulesWorkspace() {
     setEditingRule(null);
     setBuilderError(null);
     setSaveMessage(null);
-    const cond = tmpl.defaultCondition || {};
-    const editableCond = cond.metric
-      ? cond
-      : cond.conditions?.find((item: any) => item?.metric === "staff_count") || cond.conditions?.[0] || {};
+    const cond = tmpl.id === MINIMUM_PERSONNEL_TEMPLATE_ID ? minimumPersonnelBuilderCondition(tmpl.defaultCondition || {}) : tmpl.defaultCondition || {};
+    const editableCond = editableRuleCondition(cond);
     setBuilderForm({
       name: tmpl.name,
       description: tmpl.description,
@@ -498,10 +497,8 @@ export function NbfcRulesWorkspace() {
     setEditingRule(r);
     setBuilderError(null);
     setSaveMessage(null);
-    const cond = r.condition || {};
-    const editableCond = cond.metric
-      ? cond
-      : cond.conditions?.find((item: any) => item?.metric === "staff_count") || cond.conditions?.[0] || {};
+    const cond = r.templateId === MINIMUM_PERSONNEL_TEMPLATE_ID ? minimumPersonnelBuilderCondition(r.condition || {}) : r.condition || {};
+    const editableCond = editableRuleCondition(cond);
     setBuilderForm({
       name: r.name,
       description: r.description || "",
@@ -554,6 +551,10 @@ export function NbfcRulesWorkspace() {
     if (builderForm.actionNotifySoc) actions.push("NOTIFY_SOC");
     if (builderForm.actionNotifyBranch) actions.push("NOTIFY_BRANCH_MANAGER");
 
+    const sourceCondition = editingRule?.condition ?? templates.find(template => template.id === builderForm.templateId)?.defaultCondition;
+    const preservedCondition = builderForm.templateId === MINIMUM_PERSONNEL_TEMPLATE_ID
+      ? minimumPersonnelBuilderCondition(sourceCondition || {}) : sourceCondition;
+
     const payload = {
       name: builderForm.name,
       description: builderForm.description,
@@ -562,11 +563,11 @@ export function NbfcRulesWorkspace() {
       scopeType,
       zoneId: builderForm.zoneId || (editingRule ? null : undefined),
       detectorType: builderForm.detectorType,
-      condition: {
+      condition: updateRuleCondition(preservedCondition, {
         metric: builderForm.metric,
         operator: builderForm.operator,
         value: Number(builderForm.value) || builderForm.value,
-      },
+      }),
       durationMs: Number(builderForm.durationSeconds) * 1000,
       schedule: {
         type: builderForm.scheduleType,
@@ -1518,8 +1519,6 @@ export function NbfcRulesWorkspace() {
               </div>
             ) : (
               filteredRules.map((rule) => {
-                const cond = rule.condition || {};
-                const operatorDisplay = cond.operator?.replace(/_/g, " ").toLowerCase() || "greater than";
                 return (
                   <article
                     key={rule.id}
@@ -1566,7 +1565,7 @@ export function NbfcRulesWorkspace() {
                         </span>
                         <span className="flex items-center gap-1.5 font-mono text-[var(--ink)]">
                           <Zap className="w-3.5 h-3.5 text-amber-400" />
-                          {cond.metric || "metric"} {operatorDisplay} {String(cond.value ?? 0)}
+                          {describeRuleCondition(rule.condition || {})}
                           {rule.durationMs ? ` for ${rule.durationMs / 1000}s` : ""}
                         </span>
                         <span className="flex items-center gap-1.5">
@@ -2404,22 +2403,27 @@ export function NbfcRulesWorkspace() {
                 <h4 className="font-bold text-amber-400 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                   <Zap className="w-3.5 h-3.5" /> When Condition Triggers
                 </h4>
+                {builderForm.templateId === MINIMUM_PERSONNEL_TEMPLATE_ID && <p className="text-[var(--muted)] leading-relaxed">Applies only while vault operations are active. The active-operation check is retained when you save the personnel threshold.</p>}
 
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-[var(--muted)] mb-1">Metric</label>
+                    <label htmlFor="builder-metric" className="block text-[var(--muted)] mb-1">Metric</label>
                     <select
+                      id="builder-metric"
                       value={builderForm.metric}
                       onChange={(e) => setBuilderForm({ ...builderForm, metric: e.target.value })}
                       className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg p-2.5 text-[var(--ink)] focus:outline-none"
                     >
                       <option value="person_count">Person Count</option>
+                      <option value="staff_count">Staff Count</option>
+                      {builderForm.templateId !== MINIMUM_PERSONNEL_TEMPLATE_ID && <>
                       <option value="queue_length">Queue Length</option>
                       <option value="dwell_time_seconds">Loiter Dwell Time</option>
                       <option value="stationary_duration_seconds">Left Baggage Time</option>
                       <option value="tamper_detected">Camera Tamper</option>
                       <option value="recording_gap_seconds">Recording Gap</option>
                       <option value="line_crossing">Line Crossing</option>
+                      </>}
                     </select>
                   </div>
 
@@ -2427,6 +2431,7 @@ export function NbfcRulesWorkspace() {
                     <label className="block text-[var(--muted)] mb-1">Operator</label>
                     <select
                       value={builderForm.operator}
+                      disabled={builderForm.templateId === MINIMUM_PERSONNEL_TEMPLATE_ID}
                       onChange={(e) => setBuilderForm({ ...builderForm, operator: e.target.value })}
                       className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg p-2.5 text-[var(--ink)] focus:outline-none"
                     >
@@ -2440,9 +2445,12 @@ export function NbfcRulesWorkspace() {
                   </div>
 
                   <div>
-                    <label className="block text-[var(--muted)] mb-1">Threshold Value</label>
+                    <label htmlFor="builder-threshold" className="block text-[var(--muted)] mb-1">Threshold Value</label>
                     <input
+                      id="builder-threshold"
                       type="number"
+                      min={builderForm.templateId === MINIMUM_PERSONNEL_TEMPLATE_ID ? 2 : undefined}
+                      step={builderForm.templateId === MINIMUM_PERSONNEL_TEMPLATE_ID ? 1 : "any"}
                       value={builderForm.value}
                       onChange={(e) => setBuilderForm({ ...builderForm, value: Number(e.target.value) })}
                       className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg p-2.5 text-[var(--ink)] focus:outline-none"

@@ -39,6 +39,9 @@ export function eventDetectionTypes(event: AnalyticsEventInput): string[] {
   if (event.detectionType === "dual-control-verification" || event.detectionType === "dual-control-violation") {
     types.push("dual-control-verification", "dual-control-violation");
   }
+  if (["queue", "queue-length", "queue_length", "queue_length_exceeded", "customer-queue-length", "queue-depth"].includes(event.detectionType)) {
+    types.push("queue", "queue-length", "queue_length", "customer-queue-length");
+  }
   if (event.detectionType === "anpr" && Array.isArray(event.metadata?.matches)) {
     const hasAlertingMatch = event.metadata.matches.some((value) =>
       value !== null && typeof value === "object" && !Array.isArray(value) &&
@@ -78,6 +81,9 @@ export function analyticsAlertTitle(rule: AnalyticsRule, metadata?: Record<strin
     }
     return "Dual control violation detected";
   }
+  if (rule.detectionType === "queue" || rule.detectionType === "queue-length" || rule.detectionType === "queue_length") {
+    return "Customer Queue Length SLA Breached";
+  }
   if(rule.detectionType==="shutter-state")return metadata?.shutterState==="open"?"Shutter opened":"Shutter closed";
   if(rule.detectionType==="shutter-opened")return "Shutter opened";
   if(rule.detectionType==="shutter-closed")return "Shutter closed";
@@ -113,6 +119,16 @@ export function analyticsAlertDescription(rule: AnalyticsRule, metadata?: Record
     }
     return "Single person detected in vault area. Dual control policy requires minimum 2 authorized persons.";
   }
+  if (rule.detectionType === "queue" || rule.detectionType === "queue-length" || rule.detectionType === "queue_length") {
+    const queueLen = metadata?.queueLength ?? metadata?.currentQueueLength ?? metadata?.current_queue_length ?? metadata?.length ?? metadata?.personCount;
+    if (typeof queueLen === "number") {
+      return `Customer queue length (${queueLen}) exceeded service SLA threshold.`;
+    }
+    if (typeof metadata?.explanation === "string") {
+      return metadata.explanation;
+    }
+    return `Customer queue length SLA breached for rule "${rule.name}".`;
+  }
   return `Rule \"${rule.name}\" matched.`;
 }
 
@@ -143,6 +159,9 @@ function faceIdentity(metadata?: Record<string, unknown>) {
 
 function objectClassesMatch(rule: AnalyticsRule, event: AnalyticsEventInput) {
   if (rule.objectClasses.length === 0) return true;
+  if (["queue", "queue-length", "queue_length", "shutter-state", "shutter-opened", "shutter-closed", "dual-control-verification", "dual-control-violation"].includes(event.detectionType) && event.objects.length === 0) {
+    return true;
+  }
   return event.objects.some((object) =>
     rule.objectClasses.some((label) =>
       object.label.toLowerCase() === label.toLowerCase() && object.confidence >= rule.minConfidence,

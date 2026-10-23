@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import os from "node:os";
+import { MINIMUM_PERSONNEL_TEMPLATE_ID, validMinimumPersonnelCondition, minimumPersonnelTelemetryReady } from "../../packages/contracts/src/nbfc-rule-conditions.js";
 import type {
   ActionType,
   AnalyticsRule,
@@ -70,6 +71,14 @@ export class NbfcRuleEngineService {
     const nowMs = now.getTime();
     const entityKey = input.entityKey || input.cameraId || input.zoneId || "default-entity";
     const isShadow = rule.state === "SHADOW" || (rule as any).shadowMode === true;
+    const minimumPersonnel = rule.templateId === MINIMUM_PERSONNEL_TEMPLATE_ID;
+    const suppressed = (message: string): RuleEvaluationResult => ({
+      ruleId: rule.id, ruleName: rule.name, entityKey, triggered: false, isTriggered: false,
+      conditionMet: false, status: "SUPPRESSED", isShadow, alertRequired: false,
+      incidentRequired: false, evidenceSnapshotRequired: false, evidenceClipRequired: false,
+      message, actions: [], metricsSnapshot: input.metrics, durationPersistedMs: 0,
+    });
+    if (!Number.isFinite(nowMs)) return suppressed("Observation timestamp is invalid.");
 
     // 1. Check if rule is active
     if (!rule.enabled || rule.state === "INACTIVE" || rule.state === "SUPPRESSED") {
@@ -93,9 +102,26 @@ export class NbfcRuleEngineService {
       };
     }
 
+    let state = await this.repository.getRuntimeState(rule.id, entityKey);
+    if (minimumPersonnel && state && nowMs <= new Date(state.lastEvaluatedAt).getTime()) {
+      return suppressed("Repeated or older observations do not advance personnel confirmation.");
+    }
+    const resetMinimumConfirmation = async () => {
+      if (!state) return;
+      state.firstConditionMetAt = undefined;
+      state.currentStatus = "SUPPRESSED";
+      state.lastEvaluatedAt = now.toISOString();
+      await this.repository.saveRuntimeState(state);
+    };
+    if (minimumPersonnel && (!validMinimumPersonnelCondition(rule.condition) || !minimumPersonnelTelemetryReady(rule.condition, input.metrics))) {
+      await resetMinimumConfirmation();
+      return suppressed("Minimum Personnel requires an active-operation signal and a valid personnel count. Check the rule configuration and telemetry.");
+    }
+
     // 2. Schedule evaluation
     const effectiveSchedule = rule.schedule || ((rule as any).scheduleType ? { type: (rule as any).scheduleType } : { type: "24X7" });
     if (!this.isWithinSchedule(effectiveSchedule, now)) {
+      if (minimumPersonnel) await resetMinimumConfirmation();
       return {
         ruleId: rule.id,
         ruleName: rule.name,
@@ -120,7 +146,18 @@ export class NbfcRuleEngineService {
     const conditionMet = this.evaluateConditionGroup(rule.condition, input.metrics);
 
     // 4. Retrieve or initialize distributed runtime state
-    let state = await this.repository.getRuntimeState(rule.id, entityKey);
+    const runtimeMetrics = minimumPersonnel ? { ...input.metrics, __ruleVersion: rule.version } : input.metrics;
+    if (minimumPersonnel && state) {
+      if (state.currentMetrics?.__ruleVersion !== rule.version) {
+        state.firstConditionMetAt = undefined;
+        state.lastTriggeredAt = undefined;
+        state.activeAlertId = undefined;
+        state.currentStatus = "IDLE";
+      } else if (nowMs - new Date(state.lastEvaluatedAt).getTime() > 10_000) {
+        // A gap in observations is not evidence of a continuous shortfall.
+        state.firstConditionMetAt = undefined;
+      }
+    }
     if (!state) {
       state = {
         ruleId: rule.id,
@@ -128,7 +165,7 @@ export class NbfcRuleEngineService {
         currentStatus: "IDLE",
         lastEvaluatedAt: now.toISOString(),
         fencingToken: 1,
-        currentMetrics: input.metrics,
+        currentMetrics: runtimeMetrics,
       };
     }
 
@@ -151,7 +188,7 @@ export class NbfcRuleEngineService {
       if (durationPersistedMs < rule.durationMs) {
         state.currentStatus = "CONDITION_MET_PENDING_DURATION";
         state.lastEvaluatedAt = now.toISOString();
-        state.currentMetrics = input.metrics;
+        state.currentMetrics = runtimeMetrics;
         await this.repository.saveRuntimeState(state);
 
         return {
@@ -180,14 +217,14 @@ export class NbfcRuleEngineService {
         : 0;
 
       const inCooldown =
-        (state.currentStatus === "ACTIVE_ALERTING" || state.currentStatus === "COOLDOWN") &&
+        (minimumPersonnel ? Boolean(state.lastTriggeredAt) : state.currentStatus === "ACTIVE_ALERTING" || state.currentStatus === "COOLDOWN") &&
         nowMs - lastTriggeredMs < rule.cooldownMs;
 
       if (inCooldown) {
         // Still active within cooldown window: update metrics, do not trigger a fresh duplicate alert
         state.currentStatus = "COOLDOWN";
         state.lastEvaluatedAt = now.toISOString();
-        state.currentMetrics = input.metrics;
+        state.currentMetrics = runtimeMetrics;
         await this.repository.saveRuntimeState(state);
 
         return {
@@ -216,7 +253,7 @@ export class NbfcRuleEngineService {
       state.currentStatus = "ACTIVE_ALERTING";
       state.lastTriggeredAt = now.toISOString();
       state.lastEvaluatedAt = now.toISOString();
-      state.currentMetrics = input.metrics;
+      state.currentMetrics = runtimeMetrics;
       state.fencingToken += 1;
 
       if (!state.activeAlertId) {
@@ -241,12 +278,12 @@ export class NbfcRuleEngineService {
         isShadow,
         alertRequired,
         incidentRequired,
-        evidenceSnapshotRequired: rule.actions.includes("CAPTURE_SNAPSHOT"),
-        evidenceClipRequired: rule.actions.includes("CAPTURE_EVIDENCE_CLIP"),
+        evidenceSnapshotRequired: !isShadow && rule.actions.includes("CAPTURE_SNAPSHOT"),
+        evidenceClipRequired: !isShadow && rule.actions.includes("CAPTURE_EVIDENCE_CLIP"),
         message: isShadow
           ? `[SHADOW MODE] Rule '${rule.name}' condition triggered. No notifications emitted.`
           : `🚨 [${rule.severity}] Rule '${rule.name}' triggered on ${entityKey}.`,
-        actions: rule.actions,
+        actions: isShadow ? [] : rule.actions,
         metricsSnapshot: input.metrics,
         durationPersistedMs,
       };
@@ -255,13 +292,13 @@ export class NbfcRuleEngineService {
       const previouslyAlerting =
         state.currentStatus === "ACTIVE_ALERTING" ||
         state.currentStatus === "COOLDOWN" ||
-        state.currentStatus === "CONDITION_MET_PENDING_DURATION";
+        state.currentStatus === "CONDITION_MET_PENDING_DURATION" || Boolean(state.activeAlertId);
 
       state.currentStatus = previouslyAlerting ? "RESOLVED" : "IDLE";
       state.firstConditionMetAt = undefined;
       state.lastEvaluatedAt = now.toISOString();
       state.activeAlertId = undefined;
-      state.currentMetrics = input.metrics;
+      state.currentMetrics = runtimeMetrics;
       await this.repository.saveRuntimeState(state);
 
       return {
@@ -310,7 +347,7 @@ export class NbfcRuleEngineService {
     const logical = group.logical || "AND";
     const conditions = group.conditions || [];
 
-    if (conditions.length === 0) return true;
+    if (conditions.length === 0) return false;
 
     if (logical === "AND") {
       return conditions.every((c) => this.evaluateConditionGroup(c, metrics));
@@ -320,7 +357,73 @@ export class NbfcRuleEngineService {
       return !conditions.some((c) => this.evaluateConditionGroup(c, metrics));
     }
 
-    return true;
+    return false;
+  }
+
+  /**
+   * Normalizes and resolves metric values from telemetry payloads across
+   * snake_case, camelCase, nested queue arrays, and common operational aliases.
+   */
+  private resolveMetricValue(metrics: Record<string, any>, metricKey: string): any {
+    if (!metrics || typeof metrics !== "object") return undefined;
+    if (metrics[metricKey] !== undefined && metrics[metricKey] !== null) return metrics[metricKey];
+
+    const camelKey = metricKey.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+    if (metrics[camelKey] !== undefined && metrics[camelKey] !== null) return metrics[camelKey];
+
+    const snakeKey = metricKey.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+    if (metrics[snakeKey] !== undefined && metrics[snakeKey] !== null) return metrics[snakeKey];
+
+    if (metricKey === "queue_length" || metricKey === "queueLength") {
+      if (metrics.currentQueueLength !== undefined && metrics.currentQueueLength !== null) return metrics.currentQueueLength;
+      if (metrics.current_queue_length !== undefined && metrics.current_queue_length !== null) return metrics.current_queue_length;
+      if (metrics.queueDepth !== undefined && metrics.queueDepth !== null) return metrics.queueDepth;
+      if (metrics.queue_depth !== undefined && metrics.queue_depth !== null) return metrics.queue_depth;
+      if (metrics.length !== undefined && metrics.length !== null) return metrics.length;
+      if (Array.isArray(metrics.queues) && metrics.queues.length > 0) {
+        const lengths = metrics.queues.map((q: any) =>
+          Number(q?.currentQueueLength ?? q?.current_queue_length ?? q?.length ?? q?.queueLength ?? q?.queue_length ?? 0)
+        );
+        return Math.max(...lengths);
+      }
+      if (metrics.person_count !== undefined && metrics.person_count !== null) return metrics.person_count;
+      if (metrics.personCount !== undefined && metrics.personCount !== null) return metrics.personCount;
+      if (metrics.count !== undefined && metrics.count !== null) return metrics.count;
+    }
+
+    if (metricKey === "waiting_time_seconds" || metricKey === "waitingTimeSeconds") {
+      if (metrics.maxWaitTimeSeconds !== undefined && metrics.maxWaitTimeSeconds !== null) return metrics.maxWaitTimeSeconds;
+      if (metrics.max_wait_time_seconds !== undefined && metrics.max_wait_time_seconds !== null) return metrics.max_wait_time_seconds;
+      if (metrics.avgWaitTimeSeconds !== undefined && metrics.avgWaitTimeSeconds !== null) return metrics.avgWaitTimeSeconds;
+      if (metrics.avg_wait_time_seconds !== undefined && metrics.avg_wait_time_seconds !== null) return metrics.avg_wait_time_seconds;
+      if (metrics.waitTimeSeconds !== undefined && metrics.waitTimeSeconds !== null) return metrics.waitTimeSeconds;
+      if (metrics.wait_time_seconds !== undefined && metrics.wait_time_seconds !== null) return metrics.wait_time_seconds;
+      if (metrics.dwellSeconds !== undefined && metrics.dwellSeconds !== null) return metrics.dwellSeconds;
+      if (metrics.dwellTimeSeconds !== undefined && metrics.dwellTimeSeconds !== null) return metrics.dwellTimeSeconds;
+    }
+
+    if (metricKey === "person_count" || metricKey === "personCount") {
+      if (metrics.occupancy !== undefined && metrics.occupancy !== null) return metrics.occupancy;
+      if (metrics.count !== undefined && metrics.count !== null) return metrics.count;
+      if (metrics.peopleCount !== undefined && metrics.peopleCount !== null) return metrics.peopleCount;
+    }
+
+    if (metricKey === "customer_waiting_count") {
+      if (metrics.customerWaitingCount !== undefined && metrics.customerWaitingCount !== null) return metrics.customerWaitingCount;
+      if (metrics.queue_length !== undefined && metrics.queue_length !== null) return metrics.queue_length;
+      if (metrics.queueLength !== undefined && metrics.queueLength !== null) return metrics.queueLength;
+      if (metrics.currentQueueLength !== undefined && metrics.currentQueueLength !== null) return metrics.currentQueueLength;
+    }
+
+    if (metricKey === "staff_zone_count") {
+      if (metrics.staffZoneCount !== undefined && metrics.staffZoneCount !== null) return metrics.staffZoneCount;
+      if (metrics.staffCount !== undefined && metrics.staffCount !== null) return metrics.staffCount;
+      if (metrics.tellerCount !== undefined && metrics.tellerCount !== null) return metrics.tellerCount;
+      if (metrics.isCounterAttended === false) return 0;
+      if (metrics.isCounterAttended === true) return 1;
+    }
+
+    return undefined;
   }
 
   /**
@@ -330,8 +433,10 @@ export class NbfcRuleEngineService {
     cond: SingleCondition,
     metrics: Record<string, any>
   ): boolean {
-    const metricVal = metrics[cond.metric];
-    if (metricVal === undefined) return false;
+    const metricVal = this.resolveMetricValue(metrics, cond.metric);
+    if (metricVal === undefined || metricVal === null) return false;
+    if (["person_count", "staff_count"].includes(cond.metric) &&
+      (typeof metricVal !== "number" || !Number.isSafeInteger(metricVal) || metricVal < 0)) return false;
 
     const targetVal = cond.value;
 

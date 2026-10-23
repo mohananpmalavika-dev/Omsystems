@@ -60,6 +60,7 @@ export class NbfcRuleRepository {
       tenantId: input.tenantId || "00000000-0000-4000-8000-000000000000",
       name: input.name || "Untitled Rule",
       description: input.description || "",
+      category: input.category,
       enabled: input.enabled !== undefined ? input.enabled : true,
       state: input.state || "ACTIVE",
       branchIds: input.branchIds || [],
@@ -525,7 +526,7 @@ export class NbfcRuleRepository {
         if (res.rows.length > 0) {
           return res.rows
             .map(r => this.mapTemplateRow(r))
-            .filter((template) => !this.excludedTemplateIds.has(template.id));
+            .filter((template) => (category && category !== "ALL") || !this.excludedTemplateIds.has(template.id));
         }
       } catch (err) {
         console.warn("NbfcRuleRepository: Postgres listTemplates failed:", err);
@@ -536,7 +537,7 @@ export class NbfcRuleRepository {
     if (category && category !== "ALL") {
       templates = templates.filter(t => t.category === category);
     }
-    templates = templates.filter((template) => !this.excludedTemplateIds.has(template.id));
+    templates = (!category || category === "ALL") ? templates.filter((template) => !this.excludedTemplateIds.has(template.id)) : templates;
     return templates;
   }
 
@@ -550,18 +551,18 @@ export class NbfcRuleRepository {
         );
         if (res.rows[0]) {
           const template = this.mapTemplateRow(res.rows[0]);
-          return this.excludedTemplateIds.has(template.id) ? null : template;
+          return template;
         }
       } catch (err) {
         console.warn("NbfcRuleRepository: Postgres getTemplate failed:", err);
       }
     }
     const direct = this.inMemoryTemplates.get(id);
-    if (direct && !this.excludedTemplateIds.has(id)) return direct;
+    if (direct) return direct;
 
     const normalizedTarget = id.toLowerCase().replace(/^(tpl|tmpl)-?(\d+-)?/, "").replace(/[^a-z0-9]/g, "");
     for (const [key, tmpl] of this.inMemoryTemplates.entries()) {
-      if (this.excludedTemplateIds.has(key)) continue;
+      // Allow normalized target match across all templates
       const normKey = key.toLowerCase().replace(/^(tpl|tmpl)-?(\d+-)?/, "").replace(/[^a-z0-9]/g, "");
       if (normKey === normalizedTarget || normKey.includes(normalizedTarget) || normalizedTarget.includes(normKey)) {
         return tmpl;
@@ -649,6 +650,7 @@ export class NbfcRuleRepository {
       tenantId,
       name: name || template.name,
       description: template.description,
+      category: template.category,
       branchIds: branchIds || [],
       cameraIds: cameraIds || [],
       zoneId,
@@ -1988,7 +1990,7 @@ export class NbfcRuleRepository {
       },
     ];
 
-    const activeTemplates = defaultTemplates.filter((template) => !this.excludedTemplateIds.has(template.id));
+    const activeTemplates = defaultTemplates;
 
     for (const tmpl of activeTemplates) {
       this.inMemoryTemplates.set(tmpl.id, tmpl);
