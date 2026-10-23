@@ -96,7 +96,9 @@ export type AudioAlertType =
   | 'high_noise_threshold'
   | 'acoustic_spike'
   | 'scream_distress'
-  | 'clipping_distortion';
+  | 'clipping_distortion'
+  | 'glass_break'
+  | 'shutter_tamper_breach';
 
 export type AudioAlertSeverity = 'P1' | 'P2' | 'P3' | 'P4';
 export type AudioAlertStatus = 'detected' | 'acknowledged' | 'resolved' | 'false_positive';

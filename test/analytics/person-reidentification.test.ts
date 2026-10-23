@@ -536,6 +536,61 @@ describe('Multi-Camera Person Re-ID Fastify REST API Integration', () => {
     const statsBody = JSON.parse(statsRes.body);
     expect(statsBody.data.totalIdentities).toBe(1);
 
+    // 9. PUT /v1/analytics/reid/floorplan/:branchId/cameras (calibrate 2D camera coordinates)
+    const branchId = '00000000-0000-0000-0000-000000000001';
+    const putFloorRes = await app.inject({
+      method: 'PUT',
+      url: `/v1/analytics/reid/floorplan/${branchId}/cameras`,
+      headers: { 'x-tenant-id': 'tenant-api-01' },
+      payload: {
+        cameraId: 'cam-front-door',
+        positionX: 14.5,
+        positionY: 52.0,
+        zoneName: 'Main Entrance & Vestibule',
+        angleDegrees: 45,
+        fovDegrees: 80,
+      },
+    });
+    expect(putFloorRes.statusCode).toBe(200);
+    const putFloorBody = JSON.parse(putFloorRes.body);
+    expect(putFloorBody.success).toBe(true);
+    expect(putFloorBody.data.position_x).toBe(14.5);
+
+    // 10. GET /v1/analytics/reid/journey/:globalId/floorplan-trail
+    const trailRes = await app.inject({
+      method: 'GET',
+      url: `/v1/analytics/reid/journey/${encodeURIComponent(globalId)}/floorplan-trail`,
+      headers: { 'x-tenant-id': 'tenant-api-01' },
+    });
+    expect(trailRes.statusCode).toBe(200);
+    const trailBody = JSON.parse(trailRes.body);
+    expect(trailBody.success).toBe(true);
+    expect(trailBody.data.waypoints).toHaveLength(1);
+    expect(trailBody.data.waypoints[0].coordinates.x).toBe(14.5);
+    expect(trailBody.data.overallAppearance).toBeDefined();
+    expect(trailBody.data.overallAppearance.clothingDescription).toBeDefined();
+
+    // 11. POST /v1/analytics/reid/follow-target (One-Click Target Re-ID)
+    const followRes = await app.inject({
+      method: 'POST',
+      url: '/v1/analytics/reid/follow-target',
+      headers: { 'x-tenant-id': 'tenant-api-01' },
+      payload: {
+        branchId,
+        cameraId: 'cam-vault',
+        embedding: testVector,
+        confidence: 0.94,
+        boundingBox: { x: 30, y: 30, width: 50, height: 140 },
+      },
+    });
+    expect(followRes.statusCode).toBe(200);
+    const followBody = JSON.parse(followRes.body);
+    expect(followBody.success).toBe(true);
+    expect(followBody.data.globalId).toBe(globalId);
+    expect(followBody.data.matched).toBe(true);
+    expect(followBody.data.routeMap.waypoints.length).toBeGreaterThanOrEqual(2);
+    expect(followBody.data.actionSummary).toContain('Tracking Target');
+
     await app.close();
   });
 });

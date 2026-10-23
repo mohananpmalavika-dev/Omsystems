@@ -81,6 +81,23 @@ export interface ReidStats {
   averageConfidence: number;
 }
 
+export interface ReidCameraFloorPosition {
+  id: string;
+  tenant_id: string;
+  branch_id: string | null;
+  camera_id: string;
+  camera_name?: string;
+  location_type?: string;
+  position_x: number;
+  position_y: number;
+  floor_level: string;
+  zone_name?: string;
+  angle_degrees: number;
+  fov_degrees: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
 export class ReidRepository {
   // Volatile state is permitted only for isolated test execution. It must never
   // become a silent substitute for the control-plane database in production.
@@ -89,6 +106,7 @@ export class ReidRepository {
   private readonly memSightings: ReidCameraSighting[] = [];
   private readonly memTopology = new Map<string, ReidCameraTopologyRecord>();
   private readonly memProbes: ReidProbeRecord[] = [];
+  private readonly memCameraPositions = new Map<string, ReidCameraFloorPosition>();
 
   constructor(private readonly pool?: Pool) {
     this.volatileTestStore = process.env.NODE_ENV === 'test' && !pool;
@@ -853,6 +871,177 @@ export class ReidRepository {
       to_time: row.to_time ? new Date(row.to_time) : null,
       match_count: parseInt(row.match_count, 10) || 0,
       created_at: new Date(row.created_at),
+    };
+  }
+
+  /**
+   * Get 2D floor plan camera coordinates for a branch/floor
+   */
+  public async getCameraFloorPositions(
+    tenantId: string,
+    branchId?: string,
+    floorLevel: string = 'ground'
+  ): Promise<ReidCameraFloorPosition[]> {
+    this.assertProductionStorage();
+    if (this.pool) {
+      try {
+        let query = `
+          SELECT p.*, c.name as camera_name, c.location_type
+          FROM reid_camera_floor_positions p
+          LEFT JOIN cameras c ON p.camera_id = c.id
+          WHERE p.tenant_id = $1 AND p.floor_level = $2
+        `;
+        const values: any[] = [tenantId, floorLevel];
+        if (branchId) {
+          values.push(branchId);
+          query += ` AND p.branch_id = $3`;
+        }
+        query += ` ORDER BY p.created_at ASC;`;
+        const res = await this.pool.query(query, values);
+        return res.rows.map((r: any) => this.mapFloorPositionRow(r));
+      } catch (err) {
+        this.useTestStoreOrThrow(err);
+      }
+    }
+
+    return Array.from(this.memCameraPositions.values()).filter(
+      (p) =>
+        p.tenant_id === tenantId &&
+        p.floor_level === floorLevel &&
+        (!branchId || p.branch_id === branchId)
+    );
+  }
+
+  /**
+   * Save or update calibrated 2D floor plan coordinates for a camera
+   */
+  public async upsertCameraFloorPosition(
+    tenantId: string,
+    pos: {
+      branchId?: string | null;
+      cameraId: string;
+      positionX: number;
+      positionY: number;
+      floorLevel?: string;
+      zoneName?: string | null;
+      angleDegrees?: number;
+      fovDegrees?: number;
+    }
+  ): Promise<ReidCameraFloorPosition> {
+    this.assertProductionStorage();
+    const floorLevel = pos.floorLevel || 'ground';
+    const angleDegrees = pos.angleDegrees ?? 0;
+    const fovDegrees = pos.fovDegrees ?? 75;
+    const now = new Date();
+    const id = `pos-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+    if (this.pool) {
+      try {
+        const query = `
+          INSERT INTO reid_camera_floor_positions (
+            tenant_id, branch_id, camera_id, position_x, position_y,
+            floor_level, zone_name, angle_degrees, fov_degrees, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)
+          ON CONFLICT (tenant_id, camera_id, floor_level) DO UPDATE SET
+            branch_id = EXCLUDED.branch_id,
+            position_x = EXCLUDED.position_x,
+            position_y = EXCLUDED.position_y,
+            zone_name = EXCLUDED.zone_name,
+            angle_degrees = EXCLUDED.angle_degrees,
+            fov_degrees = EXCLUDED.fov_degrees,
+            updated_at = EXCLUDED.updated_at
+          RETURNING *;
+        `;
+        const res = await this.pool.query(query, [
+          tenantId,
+          pos.branchId || null,
+          pos.cameraId,
+          pos.positionX,
+          pos.positionY,
+          floorLevel,
+          pos.zoneName || null,
+          angleDegrees,
+          fovDegrees,
+          now,
+        ]);
+        return this.mapFloorPositionRow(res.rows[0]);
+      } catch (err) {
+        this.useTestStoreOrThrow(err);
+      }
+    }
+
+    const key = `${tenantId}:${pos.cameraId}:${floorLevel}`;
+    const record: ReidCameraFloorPosition = {
+      id,
+      tenant_id: tenantId,
+      branch_id: pos.branchId || null,
+      camera_id: pos.cameraId,
+      position_x: pos.positionX,
+      position_y: pos.positionY,
+      floor_level: floorLevel,
+      zone_name: pos.zoneName || undefined,
+      angle_degrees: angleDegrees,
+      fov_degrees: fovDegrees,
+      created_at: now,
+      updated_at: now,
+    };
+    this.memCameraPositions.set(key, record);
+    return record;
+  }
+
+  /**
+   * Get all registered cameras for a branch with their location types
+   */
+  public async getBranchCameras(
+    tenantId: string,
+    branchId?: string
+  ): Promise<Array<{ id: string; name: string; branchId: string; locationType?: string; status: string }>> {
+    this.assertProductionStorage();
+    if (this.pool) {
+      try {
+        let query = `
+          SELECT id, name, branch_id, location_type, status
+          FROM cameras
+          WHERE tenant_id = $1
+        `;
+        const values: any[] = [tenantId];
+        if (branchId) {
+          values.push(branchId);
+          query += ` AND branch_id = $2`;
+        }
+        query += ` ORDER BY name ASC;`;
+        const res = await this.pool.query(query, values);
+        return res.rows.map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          branchId: r.branch_id,
+          locationType: r.location_type || undefined,
+          status: r.status || 'online',
+        }));
+      } catch (err) {
+        this.useTestStoreOrThrow(err);
+      }
+    }
+
+    return [];
+  }
+
+  private mapFloorPositionRow(row: any): ReidCameraFloorPosition {
+    return {
+      id: row.id,
+      tenant_id: row.tenant_id,
+      branch_id: row.branch_id || null,
+      camera_id: row.camera_id,
+      camera_name: row.camera_name,
+      location_type: row.location_type,
+      position_x: parseFloat(row.position_x) || 0,
+      position_y: parseFloat(row.position_y) || 0,
+      floor_level: row.floor_level || 'ground',
+      zone_name: row.zone_name || undefined,
+      angle_degrees: parseFloat(row.angle_degrees) || 0,
+      fov_degrees: parseFloat(row.fov_degrees) || 75,
+      created_at: new Date(row.created_at),
+      updated_at: new Date(row.updated_at),
     };
   }
 }

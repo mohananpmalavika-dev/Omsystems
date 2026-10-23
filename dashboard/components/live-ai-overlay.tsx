@@ -26,6 +26,7 @@ export interface LiveAiOverlayProps {
     direction: "left" | "right" | "top" | "bottom";
     targetCameraName: string;
   };
+  onFollowTarget?: (target: BoundingBox) => void;
 }
 
 export function LiveAiOverlay({
@@ -37,6 +38,7 @@ export function LiveAiOverlay({
   showBoundingBoxes = true,
   showZones = true,
   handoverInfo,
+  onFollowTarget,
 }: LiveAiOverlayProps) {
   const filterId = useId();
 
@@ -416,6 +418,43 @@ export function LiveAiOverlay({
               >
                 {box.isViolation ? "⚠ " : ""}{box.label} · {Math.round(box.confidence * 100)}%
               </text>
+
+              {/* One-Click "Follow Target" Re-ID Tag */}
+              <g
+                transform={`translate(${Math.max(24, box.width * 0.9 + 2)}, 0)`}
+                className="cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onFollowTarget) {
+                    onFollowTarget(box);
+                  } else {
+                    window.location.href = `/analytics/reid?target=${encodeURIComponent(box.trackId || "detected-target")}`;
+                  }
+                }}
+              >
+                <rect
+                  x="0"
+                  y="0"
+                  width="18"
+                  height="4.2"
+                  rx="0.8"
+                  fill="#0284c7"
+                  stroke="#38bdf8"
+                  strokeWidth="0.3"
+                  vectorEffect="non-scaling-stroke"
+                />
+                <text
+                  x="9"
+                  y="3"
+                  textAnchor="middle"
+                  fill="#ffffff"
+                  fontSize="2.2"
+                  fontWeight="bold"
+                  fontFamily="sans-serif"
+                >
+                  🎯 FOLLOW
+                </text>
+              </g>
             </g>
           </g>
         );

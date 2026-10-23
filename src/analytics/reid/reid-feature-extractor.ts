@@ -351,4 +351,147 @@ export class ReidFeatureExtractor {
 
     return ReidFeatureExtractor.normalizeL2(embedding);
   }
+
+  /**
+   * Decode visual feature embedding into human-interpretable appearance attributes
+   * (clothing colors, body build silhouette, texture profile).
+   * Enables robust tracking even when facial features are occluded or turned away.
+   */
+  public analyzeAppearanceSignature(
+    embedding: number[],
+    boundingBox?: BoundingBox
+  ): AppearanceSignature {
+    // 1. Analyze Torso / Upper Body (bins 150 to 221)
+    const upperColor = this.decodeSegmentColor(embedding, 150);
+
+    // 2. Analyze Legs / Lower Body (bins 300 to 371)
+    const lowerColor = this.decodeSegmentColor(embedding, 300);
+
+    // 3. Body Structure & Aspect Ratio Analysis
+    const aspect = boundingBox && boundingBox.width > 0
+      ? boundingBox.height / boundingBox.width
+      : 2.4;
+
+    let silhouetteType: 'slender' | 'medium' | 'athletic' | 'broad' = 'medium';
+    if (aspect > 3.0) silhouetteType = 'slender';
+    else if (aspect >= 2.4) silhouetteType = 'athletic';
+    else if (aspect >= 1.9) silhouetteType = 'medium';
+    else silhouetteType = 'broad';
+
+    const clothingDescription = `${upperColor.colorName} upper body & ${lowerColor.colorName} lower body (${silhouetteType} build)`;
+
+    return {
+      upperBody: upperColor,
+      lowerBody: lowerColor,
+      bodyBuild: {
+        heightToWidthRatio: Math.round(aspect * 100) / 100,
+        silhouetteType,
+      },
+      clothingDescription,
+    };
+  }
+
+  private decodeSegmentColor(
+    embedding: number[],
+    baseOffset: number
+  ): { colorName: string; hexColor: string; confidence: number } {
+    if (!embedding || embedding.length < baseOffset + 32) {
+      return { colorName: 'Dark Casual', hexColor: '#334155', confidence: 0.5 };
+    }
+
+    // Accumulate left + right halves for hue bins (16 bins)
+    const hueBins = new Array<number>(16).fill(0);
+    for (let i = 0; i < 16; i++) {
+      hueBins[i] = (embedding[baseOffset + i] || 0) + (embedding[baseOffset + 40 + i] || 0);
+    }
+
+    // Accumulate saturation bins (8 bins)
+    const satBins = new Array<number>(8).fill(0);
+    for (let i = 0; i < 8; i++) {
+      satBins[i] = (embedding[baseOffset + 16 + i] || 0) + (embedding[baseOffset + 40 + 16 + i] || 0);
+    }
+
+    // Accumulate value bins (8 bins)
+    const valBins = new Array<number>(8).fill(0);
+    for (let i = 0; i < 8; i++) {
+      valBins[i] = (embedding[baseOffset + 24 + i] || 0) + (embedding[baseOffset + 40 + 24 + i] || 0);
+    }
+
+    let dominantHueBin = 0;
+    let maxHueVal = -1;
+    for (let i = 0; i < 16; i++) {
+      if (hueBins[i] > maxHueVal) {
+        maxHueVal = hueBins[i];
+        dominantHueBin = i;
+      }
+    }
+
+    let dominantSatBin = 0;
+    let maxSatVal = -1;
+    for (let i = 0; i < 8; i++) {
+      if (satBins[i] > maxSatVal) {
+        maxSatVal = satBins[i];
+        dominantSatBin = i;
+      }
+    }
+
+    let dominantValBin = 0;
+    let maxValVal = -1;
+    for (let i = 0; i < 8; i++) {
+      if (valBins[i] > maxValVal) {
+        maxValVal = valBins[i];
+        dominantValBin = i;
+      }
+    }
+
+    const hueDeg = Math.round((dominantHueBin + 0.5) * (360 / 16));
+    const satFrac = (dominantSatBin + 0.5) / 8;
+    const valFrac = (dominantValBin + 0.5) / 8;
+
+    // Resolve human-readable color label and hex representation
+    if (valFrac < 0.28) {
+      return { colorName: 'Black / Dark Charcoal', hexColor: '#1e293b', confidence: 0.88 };
+    }
+    if (satFrac < 0.22) {
+      if (valFrac > 0.72) return { colorName: 'White / Off-White', hexColor: '#f8fafc', confidence: 0.85 };
+      return { colorName: 'Grey / Heather', hexColor: '#64748b', confidence: 0.82 };
+    }
+
+    // Chromatic colors based on Hue
+    if (hueDeg >= 340 || hueDeg < 20) {
+      return { colorName: 'Red / Crimson', hexColor: '#dc2626', confidence: 0.86 };
+    } else if (hueDeg >= 20 && hueDeg < 48) {
+      return { colorName: 'Orange / Amber', hexColor: '#ea580c', confidence: 0.84 };
+    } else if (hueDeg >= 48 && hueDeg < 75) {
+      return { colorName: 'Yellow / Khaki', hexColor: '#eab308', confidence: 0.82 };
+    } else if (hueDeg >= 75 && hueDeg < 165) {
+      return { colorName: 'Olive / Green', hexColor: '#16a34a', confidence: 0.87 };
+    } else if (hueDeg >= 165 && hueDeg < 195) {
+      return { colorName: 'Cyan / Teal', hexColor: '#0891b2', confidence: 0.85 };
+    } else if (hueDeg >= 195 && hueDeg < 255) {
+      return { colorName: valFrac < 0.45 ? 'Navy Blue' : 'Royal Blue', hexColor: '#1e3a8a', confidence: 0.92 };
+    } else if (hueDeg >= 255 && hueDeg < 295) {
+      return { colorName: 'Purple / Violet', hexColor: '#7c3aed', confidence: 0.83 };
+    } else {
+      return { colorName: 'Magenta / Pink', hexColor: '#db2777', confidence: 0.82 };
+    }
+  }
+}
+
+export interface AppearanceSignature {
+  upperBody: {
+    colorName: string;
+    hexColor: string;
+    confidence: number;
+  };
+  lowerBody: {
+    colorName: string;
+    hexColor: string;
+    confidence: number;
+  };
+  bodyBuild: {
+    heightToWidthRatio: number;
+    silhouetteType: 'slender' | 'medium' | 'athletic' | 'broad';
+  };
+  clothingDescription: string;
 }

@@ -315,4 +315,130 @@ export async function registerReIdRoutes(
       return sendRouteError(request, reply, err, 500, 'Failed to get ReID statistics');
     }
   });
+
+  // 8. 2D Floor Plan Breadcrumb Route Map ("Follow This Target" Trail)
+  app.get('/v1/analytics/reid/journey/:globalId/floorplan-trail', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const tenantId = getTenantId(request);
+      const { globalId } = request.params as { globalId: string };
+      const query = z.object({
+        branchId: z.string().uuid().optional(),
+        floorLevel: z.string().default('ground'),
+      }).parse(request.query);
+
+      const trail = await reidService.getFloorPlanTrail(globalId, tenantId, query.branchId, query.floorLevel);
+      if (!trail) {
+        return reply.status(404).send({
+          success: false,
+          error: `Floor plan breadcrumb trail for target '${globalId}' not found`,
+        });
+      }
+
+      return reply.send({
+        success: true,
+        data: trail,
+      });
+    } catch (err: any) {
+      return sendRouteError(request, reply, err, 500, 'Failed to generate 2D floor plan route map');
+    }
+  });
+
+  // 9. Get Branch 2D Floor Plan & Camera Layout
+  app.get('/v1/analytics/reid/floorplan/:branchId', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const tenantId = getTenantId(request);
+      const { branchId } = request.params as { branchId: string };
+      const query = z.object({
+        floorLevel: z.string().default('ground'),
+      }).parse(request.query);
+
+      const plan = await reidService.getBranchFloorPlan(tenantId, branchId, query.floorLevel);
+      return reply.send({
+        success: true,
+        data: plan,
+      });
+    } catch (err: any) {
+      return sendRouteError(request, reply, err, 500, 'Failed to get branch floor plan');
+    }
+  });
+
+  // 10. Calibrate / Update Camera 2D Floor Coordinates
+  const cameraFloorPosSchema = z.object({
+    cameraId: z.string().min(1),
+    positionX: z.number().min(0).max(100),
+    positionY: z.number().min(0).max(100),
+    floorLevel: z.string().default('ground'),
+    zoneName: z.string().optional().nullable(),
+    angleDegrees: z.number().min(0).max(360).default(0),
+    fovDegrees: z.number().min(10).max(180).default(75),
+  });
+
+  app.put('/v1/analytics/reid/floorplan/:branchId/cameras', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const tenantId = getTenantId(request);
+      const { branchId } = request.params as { branchId: string };
+      const body = cameraFloorPosSchema.parse(request.body);
+
+      const updated = await reidService.updateCameraFloorPosition(tenantId, {
+        branchId,
+        cameraId: body.cameraId,
+        positionX: body.positionX,
+        positionY: body.positionY,
+        floorLevel: body.floorLevel,
+        zoneName: body.zoneName,
+        angleDegrees: body.angleDegrees,
+        fovDegrees: body.fovDegrees,
+      });
+
+      return reply.send({
+        success: true,
+        data: updated,
+      });
+    } catch (err: any) {
+      return sendRouteError(request, reply, err, 400, 'Failed to update camera floor position');
+    }
+  });
+
+  // 11. One-Click "Follow This Target" Re-ID Action
+  const followTargetSchema = z.object({
+    branchId: z.string().uuid().optional().nullable(),
+    cameraId: z.string().min(1),
+    cropBase64: z.string().optional(),
+    embedding: z.array(z.number()).length(512).optional(),
+    boundingBox: z.object({
+      x: z.number(),
+      y: z.number(),
+      width: z.number().positive(),
+      height: z.number().positive(),
+    }).optional(),
+    confidence: z.number().min(0).max(1).optional(),
+    snapshotUrl: z.string().optional(),
+    similarityThreshold: z.number().min(0.1).max(1.0).optional(),
+  });
+
+  app.post('/v1/analytics/reid/follow-target', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const tenantId = getTenantId(request);
+      const body = followTargetSchema.parse(request.body);
+
+      const result = await reidService.followTarget({
+        tenantId,
+        branchId: body.branchId || undefined,
+        cameraId: body.cameraId,
+        cropBase64: body.cropBase64,
+        embedding: body.embedding,
+        boundingBox: body.boundingBox,
+        confidence: body.confidence,
+        snapshotUrl: body.snapshotUrl,
+        similarityThreshold: body.similarityThreshold,
+      });
+
+      return reply.status(200).send({
+        success: true,
+        data: result,
+      });
+    } catch (err: any) {
+      return sendRouteError(request, reply, err, 400, err?.message || 'Failed to follow target');
+    }
+  });
 }

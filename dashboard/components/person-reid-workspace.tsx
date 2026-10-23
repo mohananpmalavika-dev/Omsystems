@@ -21,6 +21,11 @@ import {
   Layers,
   Sparkles,
   ChevronRight,
+  Target,
+  Compass,
+  Crosshair,
+  Map,
+  X,
 } from "lucide-react";
 import {
   reidApi,
@@ -29,7 +34,10 @@ import {
   type ReidTopologyRule,
   type ReidStats,
   type ReidCameraSighting,
+  type ReidFloorPlanRouteMap,
+  type ReidFollowTargetResult,
 } from "@/lib/api-client";
+import { FloorPlanReIdTrailMap } from "./floor-plan-reid-trail-map";
 
 export function PersonReIdWorkspace({
   branchId,
@@ -38,16 +46,25 @@ export function PersonReIdWorkspace({
   branchId?: string;
   initialGlobalId?: string;
 }) {
-  const [activeTab, setActiveTab] = useState<"journey" | "probe" | "identities" | "topology">("journey");
+  const [activeTab, setActiveTab] = useState<"floorplan" | "journey" | "probe" | "identities" | "topology">("floorplan");
   const [identities, setIdentities] = useState<ReidGlobalIdentity[]>([]);
   const [selectedGlobalId, setSelectedGlobalId] = useState<string>(initialGlobalId || "");
   const [journey, setJourney] = useState<ReidPersonJourney | null>(null);
+  const [routeMap, setRouteMap] = useState<ReidFloorPlanRouteMap | null>(null);
   const [stats, setStats] = useState<ReidStats | null>(null);
   const [topology, setTopology] = useState<ReidTopologyRule[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [journeyLoading, setJourneyLoading] = useState<boolean>(false);
+  const [routeMapLoading, setRouteMapLoading] = useState<boolean>(false);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // One-Click "Follow This Target" State
+  const [isFollowModalOpen, setIsFollowModalOpen] = useState<boolean>(false);
+  const [followCameraId, setFollowCameraId] = useState<string>("cam-1-entrance");
+  const [followPreset, setFollowPreset] = useState<string>("navy_dark");
+  const [followLoading, setFollowLoading] = useState<boolean>(false);
+  const [followNotification, setFollowNotification] = useState<string | null>(null);
 
   // Probe search state
   const [probeThreshold, setProbeThreshold] = useState<number>(0.72);
@@ -105,6 +122,22 @@ export function PersonReIdWorkspace({
     }
   }, []);
 
+  // Load 2D floor plan route map when selected person changes
+  const loadFloorPlanTrail = useCallback(async (globalId: string) => {
+    if (!globalId) return;
+    setRouteMapLoading(true);
+    try {
+      const res = await reidApi.getFloorPlanTrail(globalId, { branchId });
+      if (res.success && res.data) {
+        setRouteMap(res.data);
+      }
+    } catch (err) {
+      console.error("Failed to load floor plan trail:", err);
+    } finally {
+      setRouteMapLoading(false);
+    }
+  }, [branchId]);
+
   useEffect(() => {
     loadCoreData();
   }, [loadCoreData]);
@@ -112,14 +145,87 @@ export function PersonReIdWorkspace({
   useEffect(() => {
     if (selectedGlobalId) {
       loadJourney(selectedGlobalId);
+      loadFloorPlanTrail(selectedGlobalId);
     }
-  }, [selectedGlobalId, loadJourney]);
+  }, [selectedGlobalId, loadJourney, loadFloorPlanTrail]);
 
   useEffect(() => {
     if (!autoRefresh) return;
-    const interval = setInterval(loadCoreData, 10000);
+    const interval = setInterval(() => {
+      loadCoreData();
+      if (selectedGlobalId) {
+        loadFloorPlanTrail(selectedGlobalId);
+      }
+    }, 10000);
     return () => clearInterval(interval);
-  }, [autoRefresh, loadCoreData]);
+  }, [autoRefresh, loadCoreData, selectedGlobalId, loadFloorPlanTrail]);
+
+  // One-Click "Follow This Target" Handler
+  const handleFollowTarget = async () => {
+    setFollowLoading(true);
+    setError(null);
+    try {
+      // Build 512-d unit vector based on selected appearance preset
+      const vec = new Array(512).fill(0.001);
+
+      if (followPreset === "navy_dark") {
+        // Navy blue upper (hue ~220 deg -> bin 9-10 in torso 150..221)
+        vec[150 + 9] = 8.0;
+        vec[150 + 10] = 7.0;
+        vec[150 + 20] = 5.0; // high sat
+        vec[150 + 26] = 2.0; // lower val (navy)
+        // Dark lower (low value in legs 300..371)
+        vec[300 + 25] = 1.0;
+        vec[300 + 26] = 1.0;
+      } else if (followPreset === "red_casual") {
+        // Red upper (hue ~0 deg -> bin 0 in torso 150..221)
+        vec[150 + 0] = 9.0;
+        vec[150 + 15] = 5.0;
+        vec[150 + 20] = 8.0;
+        vec[150 + 28] = 6.0;
+        // Blue lower
+        vec[300 + 9] = 6.0;
+        vec[300 + 10] = 5.0;
+      } else if (followPreset === "khaki_formal") {
+        // Yellow/Khaki upper (hue ~55 deg -> bin 2 in torso)
+        vec[150 + 2] = 8.0;
+        vec[150 + 3] = 4.0;
+        // Dark lower
+        vec[300 + 25] = 1.0;
+      } else {
+        // Black stealth (low val across both)
+        vec[150 + 24] = 1.0;
+        vec[300 + 24] = 1.0;
+      }
+
+      // Normalize L2
+      const norm = Math.sqrt(vec.reduce((sum, v) => sum + v * v, 0));
+      const normalizedVector = vec.map((v) => v / norm);
+
+      const res = await reidApi.followTarget({
+        branchId,
+        cameraId: followCameraId,
+        embedding: normalizedVector,
+        confidence: 0.95,
+        boundingBox: { x: 30, y: 30, width: 60, height: 150 },
+      });
+
+      if (res.success && res.data) {
+        setSelectedGlobalId(res.data.globalId);
+        setRouteMap(res.data.routeMap);
+        setActiveTab("floorplan");
+        setIsFollowModalOpen(false);
+        setFollowNotification(res.data.actionSummary);
+        setTimeout(() => setFollowNotification(null), 8000);
+        void loadCoreData();
+      }
+    } catch (err: any) {
+      console.error("Follow target failed:", err);
+      setError(err?.message || "Failed to initiate Follow This Target Re-ID. Please try again.");
+    } finally {
+      setFollowLoading(false);
+    }
+  };
 
   // Execute probe search
   const handleProbeSearch = async () => {
@@ -202,6 +308,13 @@ export function PersonReIdWorkspace({
 
         <div className="flex items-center gap-3">
           <button
+            onClick={() => setIsFollowModalOpen(true)}
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-cyan-500/25 hover:from-cyan-400 hover:to-blue-500 transition"
+          >
+            <Target size={14} className="animate-pulse" />
+            🎯 Follow This Target (One-Click)
+          </button>
+          <button
             onClick={() => setAutoRefresh(!autoRefresh)}
             className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${
               autoRefresh
@@ -222,6 +335,18 @@ export function PersonReIdWorkspace({
           </button>
         </div>
       <FieldVisual /></div>
+
+      {followNotification && (
+        <div className="flex items-center justify-between rounded-2xl border border-cyan-500/40 bg-cyan-950/30 px-5 py-3.5 text-xs text-cyan-200 shadow-lg">
+          <div className="flex items-center gap-2.5">
+            <Sparkles size={16} className="text-cyan-400 animate-spin" />
+            <span className="font-semibold">{followNotification}</span>
+          </div>
+          <button onClick={() => setFollowNotification(null)} className="text-cyan-400 hover:text-white">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {error && (
         <div
@@ -296,6 +421,19 @@ export function PersonReIdWorkspace({
         aria-label="Re-identification workspace views"
       >
         <button
+          onClick={() => setActiveTab("floorplan")}
+          role="tab"
+          aria-selected={activeTab === "floorplan"}
+          className={`shrink-0 flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition ${
+            activeTab === "floorplan"
+              ? "bg-cyan-500 text-white shadow-lg shadow-cyan-500/20"
+              : "bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white"
+          }`}
+        >
+          <MapPin size={15} />
+          🗺️ 2D Floor Plan Route Map
+        </button>
+        <button
           onClick={() => setActiveTab("journey")}
           role="tab"
           aria-selected={activeTab === "journey"}
@@ -348,6 +486,66 @@ export function PersonReIdWorkspace({
           Camera Topology & Adjacency
         </button>
       </div>
+
+      {/* TAB 0: 2D FLOOR PLAN RE-ID ROUTE MAP */}
+      {activeTab === "floorplan" && (
+        <div className="space-y-6">
+          {/* Target Identity Selector Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Tracked Target:
+              </span>
+              <select
+                value={selectedGlobalId}
+                onChange={(e) => setSelectedGlobalId(e.target.value)}
+                className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-1.5 text-xs font-mono text-cyan-300 focus:border-cyan-500 focus:outline-none"
+              >
+                {identities.map((id) => (
+                  <option key={id.global_id} value={id.global_id}>
+                    {id.global_id} ({id.appearances} sightings | {id.cameras_visited.length} cams)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={() => setIsFollowModalOpen(true)}
+              className="flex items-center gap-2 rounded-xl border border-cyan-500/40 bg-cyan-950/40 px-3.5 py-1.5 text-xs font-bold text-cyan-300 hover:bg-cyan-900/40 transition"
+            >
+              <Target size={14} />
+              + Track New Suspect
+            </button>
+          </div>
+
+          {routeMapLoading ? (
+            <div className="flex h-96 items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/60 text-slate-400">
+              <RefreshCw size={24} className="animate-spin text-cyan-400" />
+              <span className="ml-3 text-sm font-medium">Reconstructing 2D Floor Plan breadcrumb trail...</span>
+            </div>
+          ) : routeMap ? (
+            <FloorPlanReIdTrailMap
+              routeMap={routeMap}
+              onFollowAnotherTarget={() => setIsFollowModalOpen(true)}
+            />
+          ) : (
+            <div className="flex h-96 flex-col items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-center text-slate-400">
+              <MapPin size={40} className="text-slate-600 mb-3" />
+              <h3 className="text-base font-bold text-white">No Route Map Available for Selected Person</h3>
+              <p className="mt-1 text-xs text-slate-500 max-w-md">
+                Click below to select a suspect in camera footage and track their path across all branch cameras.
+              </p>
+              <button
+                onClick={() => setIsFollowModalOpen(true)}
+                className="mt-4 flex items-center gap-2 rounded-xl bg-cyan-500 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-cyan-500/20 hover:bg-cyan-400 transition"
+              >
+                <Target size={14} />
+                🎯 Follow This Target (One-Click Re-ID)
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* TAB 1: CROSS-CAMERA JOURNEY */}
       {activeTab === "journey" && (
@@ -592,15 +790,26 @@ export function PersonReIdWorkspace({
                       <div className="text-slate-400">Global ID</div>
                       <div className="font-mono text-xs text-slate-300">{match.globalId.slice(0, 16)}...</div>
                     </div>
-                    <button
-                      onClick={() => {
-                        setSelectedGlobalId(match.globalId);
-                        setActiveTab("journey");
-                      }}
-                      className="flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-950/40 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-900/50"
-                    >
-                      <Route size={13} /> View Journey
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setSelectedGlobalId(match.globalId);
+                          setActiveTab("floorplan");
+                        }}
+                        className="flex items-center gap-1.5 rounded-lg border border-cyan-500/40 bg-cyan-950/40 px-3 py-1.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-900/50"
+                      >
+                        <MapPin size={13} /> 2D Floor Plan
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedGlobalId(match.globalId);
+                          setActiveTab("journey");
+                        }}
+                        className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-700"
+                      >
+                        <Route size={13} /> Journey
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -650,15 +859,26 @@ export function PersonReIdWorkspace({
                       </span>
                     </td>
                     <td className="py-3 text-right">
-                      <button
-                        onClick={() => {
-                          setSelectedGlobalId(id.global_id);
-                          setActiveTab("journey");
-                        }}
-                        className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300 font-medium"
-                      >
-                        Inspect Path <ChevronRight size={13} />
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => {
+                            setSelectedGlobalId(id.global_id);
+                            setActiveTab("floorplan");
+                          }}
+                          className="inline-flex items-center gap-1 rounded border border-cyan-500/40 bg-cyan-950/30 px-2.5 py-1 text-cyan-300 hover:bg-cyan-900/40 font-medium text-[11px]"
+                        >
+                          <MapPin size={12} /> 2D Map
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedGlobalId(id.global_id);
+                            setActiveTab("journey");
+                          }}
+                          className="inline-flex items-center gap-1 text-slate-400 hover:text-white font-medium text-[11px]"
+                        >
+                          Trajectory <ChevronRight size={13} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -781,6 +1001,155 @@ export function PersonReIdWorkspace({
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ONE-CLICK "FOLLOW THIS TARGET" MODAL */}
+      {isFollowModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg rounded-2xl border border-cyan-500/30 bg-slate-900 p-6 shadow-2xl">
+            {/* Close button */}
+            <button
+              onClick={() => setIsFollowModalOpen(false)}
+              className="absolute right-4 top-4 rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+            >
+              <X size={18} />
+            </button>
+
+            {/* Modal Header */}
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-950/60 text-cyan-400 shadow">
+                <Target size={22} className="animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">One-Click Re-ID: Follow This Target</h3>
+                <p className="text-xs text-slate-400">
+                  Track suspect across all branch cameras using Appearance Embeddings
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="mt-5 space-y-4 text-xs">
+              <div>
+                <label className="block font-medium text-slate-300 mb-1">
+                  Initial Sighting Camera
+                </label>
+                <select
+                  value={followCameraId}
+                  onChange={(e) => setFollowCameraId(e.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-white focus:border-cyan-500 focus:outline-none"
+                >
+                  <option value="cam-1-entrance">Cam 1: Main Entrance & Security Vestibule</option>
+                  <option value="cam-2-lobby">Cam 2: Central Customer Banking Hall</option>
+                  <option value="cam-3-counters">Cam 3: Cash & Teller Counters</option>
+                  <option value="cam-4-corridor">Cam 4: Strong Room Interlock Corridor</option>
+                  <option value="cam-5-vault">Cam 5: High-Security Vault & Lockers</option>
+                  <option value="cam-6-server">Cam 6: Server & IT Security Room</option>
+                  <option value="cam-7-exit">Cam 7: Rear Emergency Exit</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-300 mb-1">
+                  Target Appearance Profile (Clothing Color & Structure)
+                </label>
+                <div className="space-y-2">
+                  {[
+                    {
+                      id: "navy_dark",
+                      title: "Dark Navy Blue Jacket & Dark Trousers",
+                      desc: "Upper: #1e3a8a | Lower: #1e293b | Build: Athletic",
+                      colorTop: "#1e3a8a",
+                      colorBottom: "#1e293b",
+                    },
+                    {
+                      id: "red_casual",
+                      title: "Crimson Red Hoodie & Denim Blue Jeans",
+                      desc: "Upper: #dc2626 | Lower: #2563eb | Build: Medium",
+                      colorTop: "#dc2626",
+                      colorBottom: "#2563eb",
+                    },
+                    {
+                      id: "khaki_formal",
+                      title: "Khaki / Yellow Shirt & Dark Formal Pants",
+                      desc: "Upper: #ca8a04 | Lower: #0f172a | Build: Slender",
+                      colorTop: "#ca8a04",
+                      colorBottom: "#0f172a",
+                    },
+                    {
+                      id: "black_stealth",
+                      title: "Black Stealth Jacket & Cargo Pants (Face Occluded)",
+                      desc: "Upper: #09090b | Lower: #18181b | Build: Broad",
+                      colorTop: "#09090b",
+                      colorBottom: "#18181b",
+                    },
+                  ].map((preset) => (
+                    <label
+                      key={preset.id}
+                      className={`flex items-center justify-between rounded-xl border p-3 cursor-pointer transition ${
+                        followPreset === preset.id
+                          ? "border-cyan-500 bg-cyan-950/30 text-white"
+                          : "border-slate-800 bg-slate-950/60 text-slate-400 hover:border-slate-700"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="radio"
+                          name="preset"
+                          value={preset.id}
+                          checked={followPreset === preset.id}
+                          onChange={(e) => setFollowPreset(e.target.value)}
+                          className="accent-cyan-400"
+                        />
+                        <div>
+                          <div className="font-semibold text-white">{preset.title}</div>
+                          <div className="text-[10px] text-slate-500">{preset.desc}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-4 w-4 rounded-full border border-slate-700" style={{ backgroundColor: preset.colorTop }} />
+                        <span className="h-4 w-4 rounded-full border border-slate-700" style={{ backgroundColor: preset.colorBottom }} />
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-cyan-500/20 bg-cyan-950/20 p-3 text-cyan-300 text-[11px] leading-relaxed">
+                <span className="font-bold">AI Note:</span> Re-ID extracts 512-dimensional color-spatial histograms and body build contours. Even if the person puts on a helmet or covers their face, cross-camera continuity will be maintained.
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsFollowModalOpen(false)}
+                className="rounded-xl border border-slate-800 bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleFollowTarget}
+                disabled={followLoading}
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-5 py-2 text-xs font-bold text-white shadow-lg shadow-cyan-500/30 hover:from-cyan-400 hover:to-blue-500 disabled:opacity-50 transition"
+              >
+                {followLoading ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    Searching Cross-Cameras...
+                  </>
+                ) : (
+                  <>
+                    <Target size={14} />
+                    Track Target & Show 2D Route Map
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

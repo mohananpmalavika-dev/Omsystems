@@ -3172,6 +3172,33 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register person re-identification routes');
   }
 
+  // Register Autonomous Voice Talk-Down AI (Active Deterrent) routes
+  try {
+    const { registerAutonomousDeterrentRoutes } = await import("./routes/autonomous-deterrent.routes.js");
+    await registerAutonomousDeterrentRoutes(app, store);
+    app.log.info('Autonomous Voice Talk-Down AI (Active Deterrent) routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register autonomous voice deterrent routes');
+  }
+
+  // Register Smart Edge Mesh & Zero-Bandwidth (Bandwidth Killer) routes
+  try {
+    const { registerEdgeMeshRoutes } = await import("./routes/edge-mesh.routes.js");
+    await registerEdgeMeshRoutes(app, store);
+    app.log.info('Smart Edge Mesh & Zero-Bandwidth (Bandwidth Killer) routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register smart edge mesh routes');
+  }
+
+  // Register Acoustic AI (Audio Anomaly Detection & Camera Blind-Spot) routes
+  try {
+    const { registerAcousticAiRoutes } = await import("./routes/acoustic-ai.routes.js");
+    await registerAcousticAiRoutes(app, store);
+    app.log.info('Acoustic AI (Audio Anomaly Detection & Camera Blind-Spot) routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register acoustic ai routes');
+  }
+
   // Register Crowd Density & Queue Length Detection routes
   try {
     const { registerCrowdAnalyticsRoutes } = await import("./routes/crowd-analytics.routes.js");

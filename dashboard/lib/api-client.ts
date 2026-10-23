@@ -2458,7 +2458,165 @@ export const reidApi = {
     }),
   getStats: () =>
     fetchApi<{ success: boolean; data: ReidStats }>('/v1/analytics/reid/stats'),
+  getFloorPlanTrail: (globalId: string, params?: { branchId?: string; floorLevel?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.branchId) q.set('branchId', params.branchId);
+    if (params?.floorLevel) q.set('floorLevel', params.floorLevel);
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return fetchApi<{ success: boolean; data: ReidFloorPlanRouteMap }>(
+      `/v1/analytics/reid/journey/${encodeURIComponent(globalId)}/floorplan-trail${qs}`
+    );
+  },
+  getBranchFloorPlan: (branchId: string, params?: { floorLevel?: string }) => {
+    const q = params?.floorLevel ? `?floorLevel=${encodeURIComponent(params.floorLevel)}` : '';
+    return fetchApi<{
+      success: boolean;
+      data: {
+        branchId: string;
+        floorLevel: string;
+        cameras: Array<{
+          cameraId: string;
+          cameraName: string;
+          locationType?: string;
+          zoneName: string;
+          coordinates: { x: number; y: number };
+          angleDegrees: number;
+          fovDegrees: number;
+          status: string;
+        }>;
+      };
+    }>(`/v1/analytics/reid/floorplan/${encodeURIComponent(branchId)}${q}`);
+  },
+  updateCameraFloorPosition: (
+    branchId: string,
+    data: {
+      cameraId: string;
+      positionX: number;
+      positionY: number;
+      floorLevel?: string;
+      zoneName?: string | null;
+      angleDegrees?: number;
+      fovDegrees?: number;
+    }
+  ) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/analytics/reid/floorplan/${encodeURIComponent(branchId)}/cameras`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }
+    ),
+  followTarget: (data: {
+    branchId?: string | null;
+    cameraId: string;
+    cropBase64?: string;
+    embedding?: number[];
+    boundingBox?: { x: number; y: number; width: number; height: number };
+    confidence?: number;
+    snapshotUrl?: string;
+    similarityThreshold?: number;
+  }) =>
+    fetchApi<{
+      success: boolean;
+      data: ReidFollowTargetResult;
+    }>('/v1/analytics/reid/follow-target', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 };
+
+export interface ReidAppearanceSignature {
+  upperBody: {
+    colorName: string;
+    hexColor: string;
+    confidence: number;
+  };
+  lowerBody: {
+    colorName: string;
+    hexColor: string;
+    confidence: number;
+  };
+  bodyBuild: {
+    heightToWidthRatio: number;
+    silhouetteType: 'slender' | 'medium' | 'athletic' | 'broad';
+  };
+  clothingDescription: string;
+}
+
+export interface ReidBreadcrumbWaypoint {
+  stepIndex: number;
+  cameraId: string;
+  cameraName: string;
+  locationType?: string;
+  zoneName: string;
+  floorLevel: string;
+  coordinates: { x: number; y: number };
+  enteredAt: string;
+  exitedAt: string;
+  dwellSeconds: number;
+  transitFromPreviousSeconds?: number;
+  confidence: number;
+  qualityScore: number;
+  snapshotUrl: string | null;
+  boundingBox: { x: number; y: number; width: number; height: number };
+  appearance: ReidAppearanceSignature;
+  isCurrentLocation: boolean;
+}
+
+export interface ReidBreadcrumbSegment {
+  fromCameraId: string;
+  fromCameraName: string;
+  toCameraId: string;
+  toCameraName: string;
+  fromCoordinates: { x: number; y: number };
+  toCoordinates: { x: number; y: number };
+  transitDurationSeconds: number;
+  departedAt: string;
+  arrivedAt: string;
+  isPlausible: boolean;
+  distanceMeters?: number;
+  velocityMps?: number;
+}
+
+export interface ReidFloorPlanRouteMap {
+  globalId: string;
+  identity: ReidGlobalIdentity;
+  branchId?: string;
+  floorLevel: string;
+  totalSightings: number;
+  uniqueCamerasCount: number;
+  firstSeen: string;
+  lastSeen: string;
+  totalDwellSeconds: number;
+  journeySpanSeconds: number;
+  isLiveActive: boolean;
+  currentCameraId?: string;
+  currentCameraName?: string;
+  currentCoordinates?: { x: number; y: number };
+  overallAppearance: ReidAppearanceSignature;
+  waypoints: ReidBreadcrumbWaypoint[];
+  routeSegments: ReidBreadcrumbSegment[];
+  allBranchCameras: Array<{
+    cameraId: string;
+    cameraName: string;
+    locationType?: string;
+    zoneName: string;
+    coordinates: { x: number; y: number };
+    angleDegrees: number;
+    fovDegrees: number;
+    status: string;
+  }>;
+}
+
+export interface ReidFollowTargetResult {
+  globalId: string;
+  isNewIdentity: boolean;
+  matched: boolean;
+  similarity: number;
+  routeMap: ReidFloorPlanRouteMap;
+  appearance: ReidAppearanceSignature;
+  actionSummary: string;
+}
 
 export interface CrowdZone {
   id: string;
@@ -7186,6 +7344,490 @@ export const cameraRecoveryApi = {
     message: string;
     data: { queuedCount: number; cameraIds: string[]; commands: Array<{ id: string; cameraId: string; status: string }>; skipped: Array<{ cameraId: string; error: string; message: string }> };
   }>('/v1/operations/health/cameras/bring-online', { method: 'POST', body: JSON.stringify(target) }),
+};
+
+export interface DeterrentRuleItem {
+  id: string;
+  tenant_id: string;
+  branch_id?: string | null;
+  camera_id?: string | null;
+  name: string;
+  description?: string | null;
+  enabled: boolean;
+  zone_types: string[];
+  schedule_type: '24x7' | 'after_hours' | 'custom';
+  schedule_start_time: string;
+  schedule_end_time: string;
+  schedule_days_of_week: number[];
+  detection_types: string[];
+  primary_language: 'ml' | 'en' | 'hi' | 'bilingual_ml_en';
+  custom_warning_text?: string | null;
+  siren_enabled: boolean;
+  strobe_enabled: boolean;
+  cooldown_seconds: number;
+  escalation_enabled: boolean;
+  escalation_window_seconds: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeterrentLogItem {
+  id: string;
+  tenant_id: string;
+  branch_id?: string | null;
+  camera_id: string;
+  rule_id?: string | null;
+  alert_id?: string | null;
+  detection_type: string;
+  language: string;
+  speech_text: string;
+  actions_triggered: string[];
+  status: 'executed' | 'cooldown_suppressed' | 'preempted_by_operator' | 'device_offline' | 'failed';
+  escalation_level: number;
+  latency_ms: number;
+  created_at: string;
+  details?: Record<string, unknown>;
+}
+
+export interface DeterrentStatsItem {
+  totalInterventions: number;
+  successfulBroadcasts: number;
+  cooldownSuppressedCount: number;
+  preemptedByOperatorCount: number;
+  escalatedInterventions: number;
+  activeRulesCount: number;
+  estimatedBurglaryDeterrenceRatePercent: number;
+}
+
+export const deterrentApi = {
+  /** List configured active deterrent rules */
+  listRules: (params?: { branchId?: string; enabledOnly?: boolean }) => {
+    const qs = new URLSearchParams();
+    if (params?.branchId) qs.set('branchId', params.branchId);
+    if (params?.enabledOnly) qs.set('enabledOnly', 'true');
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return fetchApi<{ success: boolean; count: number; data: DeterrentRuleItem[] }>(
+      `/v1/deterrent/rules${query}`
+    );
+  },
+
+  /** Create a new active deterrent policy */
+  createRule: (rule: Partial<DeterrentRuleItem>) =>
+    fetchApi<{ success: boolean; data: DeterrentRuleItem }>('/v1/deterrent/rules', {
+      method: 'POST',
+      body: JSON.stringify(rule),
+    }),
+
+  /** Update an existing active deterrent policy */
+  updateRule: (id: string, updates: Partial<DeterrentRuleItem>) =>
+    fetchApi<{ success: boolean; data: DeterrentRuleItem }>(`/v1/deterrent/rules/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    }),
+
+  /** Delete a rule */
+  deleteRule: (id: string) =>
+    fetchApi<{ success: boolean }>(`/v1/deterrent/rules/${id}`, {
+      method: 'DELETE',
+    }),
+
+  /** Evaluate detection or trigger active deterrent */
+  evaluate: (params: { cameraId: string; branchId?: string; detectionType?: string; zoneType?: string }) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        triggered: boolean;
+        status: string;
+        escalationLevel: number;
+        speechText?: string;
+        language?: string;
+        actionsTriggered: string[];
+        latencyMs: number;
+        reason?: string;
+        logId?: string;
+        cooldownRemainingSeconds?: number;
+      };
+    }>('/v1/deterrent/evaluate', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+
+  /** Test voice talk-down announcement on camera speaker */
+  testBroadcast: (params: {
+    cameraId: string;
+    language?: 'ml' | 'en' | 'hi' | 'bilingual_ml_en';
+    customText?: string;
+    includeStrobe?: boolean;
+    includeSiren?: boolean;
+    escalated?: boolean;
+  }) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        success: boolean;
+        speechText: string;
+        language: string;
+        actions: string[];
+        latencyMs: number;
+        logId: string;
+      };
+    }>('/v1/deterrent/test-broadcast', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+
+  /** Fetch paginated deterrence logs */
+  listLogs: (params?: { branchId?: string; cameraId?: string; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.branchId) qs.set('branchId', params.branchId);
+    if (params?.cameraId) qs.set('cameraId', params.cameraId);
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.offset) qs.set('offset', String(params.offset));
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return fetchApi<{ success: boolean; total: number; data: DeterrentLogItem[] }>(
+      `/v1/deterrent/logs${query}`
+    );
+  },
+
+  /** Get operational stats (e.g. 80%+ deterrence rate) */
+  getStats: () =>
+    fetchApi<{ success: boolean; data: DeterrentStatsItem }>('/v1/deterrent/stats'),
+
+  /** Get direct audio preview URL */
+  getAudioPreviewUrl: (language: string = 'ml', escalated: boolean = false) =>
+    `${API_BASE}/v1/deterrent/audio-preview?language=${language}&escalated=${escalated ? 'true' : 'false'}`,
+};
+
+export interface EdgeBandwidthPolicyItem {
+  id: string;
+  tenant_id: string;
+  branch_id?: string | null;
+  camera_id?: string | null;
+  name: string;
+  enabled: boolean;
+  quiescent_fps: number;
+  quiescent_resolution: string;
+  quiescent_bitrate_kbps: number;
+  burst_fps: number;
+  burst_resolution: string;
+  burst_bitrate_kbps: number;
+  burst_duration_seconds: number;
+  pre_buffer_seconds: number;
+  trigger_alert_types: string[];
+  monthly_data_quota_mb: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EdgeMeshNodeItem {
+  id: string;
+  tenant_id: string;
+  branch_id: string;
+  node_id: string;
+  role: 'PRIMARY_GATEWAY' | 'SECONDARY_MESH_PEER' | 'LTE_FAILOVER_HOTSPOT';
+  status: 'ONLINE' | 'OFFLINE_ISOLATED' | 'MESH_FAILOVER' | 'SYNCING';
+  ip_address?: string | null;
+  local_storage_total_bytes: number;
+  local_storage_used_bytes: number;
+  local_cache_items_queued: number;
+  wan_connection_type: 'FIBER_BROADBAND' | '4G_5G_CELLULAR' | 'VSAT' | 'MESH_PEER';
+  mesh_peers: Array<{ peerId: string; ip: string; pingMs: number }>;
+  anti_jamming_active: boolean;
+  last_heartbeat_at: string;
+}
+
+export interface ActiveStreamStateItem {
+  cameraId: string;
+  branchId?: string;
+  currentMode: 'QUIESCENT_1FPS' | 'BURST_4K' | 'OFFLINE_CACHED' | 'OPERATOR_OVERRIDE';
+  currentFps: number;
+  currentBitrateKbps: number;
+  currentResolution: string;
+  isBurstActive: boolean;
+  burstRemainingSeconds: number;
+  triggerAlertId?: string;
+  triggerAlertType?: string;
+  bytesStreamedQuiescent: number;
+  bytesStreamedBurst: number;
+  unoptimizedBytesHypothetical: number;
+  bandwidthSavingsPct: number;
+}
+
+export interface BandwidthSummaryStatsItem {
+  totalMonitoredCameras: number;
+  quiescentCamerasCount: number;
+  activeBurstCamerasCount: number;
+  offlineIsolatedNodesCount: number;
+  averageDataSavingsPercentage: number;
+  quiescentDataGbToday: number;
+  burstDataGbToday: number;
+  totalDataStreamedGbToday: number;
+  unoptimizedDataHypotheticalGbToday: number;
+  dataSavedGbToday: number;
+  estimatedMonthlyCostSavingsInr: number;
+}
+
+export const edgeMeshApi = {
+  /** List configured zero-bandwidth policies */
+  listPolicies: (params?: { branchId?: string; enabledOnly?: boolean }) => {
+    const qs = new URLSearchParams();
+    if (params?.branchId) qs.set('branchId', params.branchId);
+    if (params?.enabledOnly) qs.set('enabledOnly', 'true');
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return fetchApi<{ success: boolean; count: number; data: EdgeBandwidthPolicyItem[] }>(
+      `/v1/edge-mesh/policies${query}`
+    );
+  },
+
+  /** Create a new zero-bandwidth policy */
+  createPolicy: (policy: Partial<EdgeBandwidthPolicyItem>) =>
+    fetchApi<{ success: boolean; data: EdgeBandwidthPolicyItem }>('/v1/edge-mesh/policies', {
+      method: 'POST',
+      body: JSON.stringify(policy),
+    }),
+
+  /** Get live stream state for a camera (quiescent 1 FPS vs 4K burst) */
+  getStreamState: (cameraId: string, branchId?: string) => {
+    const qs = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+    return fetchApi<{ success: boolean; data: ActiveStreamStateItem }>(
+      `/v1/edge-mesh/stream-state/${encodeURIComponent(cameraId)}${qs}`
+    );
+  },
+
+  /** Trigger AI 4K burst on a camera */
+  triggerBurst: (params: { cameraId: string; branchId?: string; alertType?: string; alertId?: string }) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        state: ActiveStreamStateItem;
+        policy: EdgeBandwidthPolicyItem;
+        burstActivated: boolean;
+      };
+    }>('/v1/edge-mesh/trigger-burst', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+
+  /** Toggle operator live override */
+  setOperatorOverride: (cameraId: string, enableOverride: boolean) =>
+    fetchApi<{ success: boolean; data: ActiveStreamStateItem }>('/v1/edge-mesh/operator-override', {
+      method: 'POST',
+      body: JSON.stringify({ cameraId, enableOverride }),
+    }),
+
+  /** List edge mesh appliance nodes */
+  listNodes: (branchId?: string) => {
+    const qs = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+    return fetchApi<{ success: boolean; count: number; data: EdgeMeshNodeItem[] }>(
+      `/v1/edge-mesh/nodes${qs}`
+    );
+  },
+
+  /** Simulate WAN cable cut / cellular jammer */
+  simulateWanIsolation: (branchId: string, reason?: string) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        node: EdgeMeshNodeItem;
+        antiJammingActive: boolean;
+        localRecordingActive: boolean;
+        localAiAnalyticsActive: boolean;
+        message: string;
+      };
+    }>('/v1/edge-mesh/simulate-wan-isolation', {
+      method: 'POST',
+      body: JSON.stringify({ branchId, reason }),
+    }),
+
+  /** Simulate WAN link restoration & store-and-forward replay */
+  simulateWanRestoration: (branchId: string) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        node: EdgeMeshNodeItem;
+        syncedItemsCount: number;
+        bytesSynced: number;
+        gapsHealedCount: number;
+        duplicateFramesPrevented: number;
+        syncDurationMs: number;
+        message: string;
+      };
+    }>('/v1/edge-mesh/simulate-wan-restoration', {
+      method: 'POST',
+      body: JSON.stringify({ branchId }),
+    }),
+
+  /** Get bandwidth savings stats (70%+ savings and INR amounts) */
+  getBandwidthStats: (branchId?: string) => {
+    const qs = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+    return fetchApi<{ success: boolean; data: BandwidthSummaryStatsItem }>(
+      `/v1/edge-mesh/bandwidth-stats${qs}`
+    );
+  },
+};
+
+export interface AcousticRuleItem {
+  id: string;
+  tenant_id: string;
+  branch_id?: string | null;
+  camera_id?: string | null;
+  name: string;
+  description?: string | null;
+  enabled: boolean;
+  enabled_signatures: string[];
+  min_confidence: number;
+  glass_sensitivity: number;
+  scream_sensitivity: number;
+  gunshot_sensitivity: number;
+  shutter_sensitivity: number;
+  blind_spot_auto_ptz: boolean;
+  cross_camera_alert: boolean;
+  cooldown_seconds: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AcousticBlindSpotItem {
+  id: string;
+  tenant_id: string;
+  branch_id?: string | null;
+  camera_id: string;
+  zone_name: string;
+  sector_type: string;
+  azimuth_angle_deg: number;
+  estimated_distance_m: number;
+  target_ptz_camera_id?: string | null;
+  target_ptz_preset_id?: number | null;
+  target_ptz_pan_tilt?: { pan: number; tilt: number; zoom: number };
+  is_active: boolean;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AcousticAnomalyEventItem {
+  id: string;
+  tenant_id: string;
+  branch_id?: string | null;
+  camera_id: string;
+  rule_id?: string | null;
+  signature: 'glass_break' | 'screaming_aggression' | 'gunshot_blast' | 'shutter_tamper_breach' | 'acoustic_spike';
+  severity: 'P1' | 'P2' | 'P3' | 'P4';
+  confidence: number;
+  is_blind_spot: boolean;
+  blind_spot_sector?: string | null;
+  triangulated_azimuth_deg?: number | null;
+  ptz_slew_triggered: boolean;
+  ptz_target_camera_id?: string | null;
+  ptz_preset_recalled?: number | null;
+  cross_alerted_camera_ids: string[];
+  peak_dbfs: number;
+  rms_dbfs: number;
+  crest_factor_db: number;
+  snr_db: number;
+  spectral_centroid_hz: number;
+  zero_crossing_rate: number;
+  attack_time_ms: number;
+  decay_time_ms: number;
+  waveform: number[];
+  status: 'detected' | 'acknowledged' | 'verified_threat' | 'false_positive';
+  details: Record<string, any>;
+  notes?: string | null;
+  acknowledged_by?: string | null;
+  acknowledged_at?: string | null;
+  detected_at: string;
+  created_at: string;
+}
+
+export interface AcousticFleetStatsItem {
+  totalEvents24h: number;
+  activeThreatCount: number;
+  blindSpotEventCount: number;
+  ptzSlewCommandsTriggered: number;
+  signatureCounts: Record<string, number>;
+  averageConfidence: number;
+  averageNoiseFloorDbFS: number;
+}
+
+export const acousticAiApi = {
+  listRules: (params?: { branchId?: string; cameraId?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.branchId) qs.set('branchId', params.branchId);
+    if (params?.cameraId) qs.set('cameraId', params.cameraId);
+    return fetchApi<{ success: boolean; count: number; data: AcousticRuleItem[] }>(
+      `/v1/acoustic-ai/rules?${qs.toString()}`
+    );
+  },
+
+  createRule: (data: Partial<AcousticRuleItem>) =>
+    fetchApi<{ success: boolean; data: AcousticRuleItem }>('/v1/acoustic-ai/rules', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  listBlindSpots: (cameraId?: string) => {
+    const qs = cameraId ? `?cameraId=${encodeURIComponent(cameraId)}` : '';
+    return fetchApi<{ success: boolean; count: number; data: AcousticBlindSpotItem[] }>(
+      `/v1/acoustic-ai/blind-spots${qs}`
+    );
+  },
+
+  createBlindSpot: (data: Partial<AcousticBlindSpotItem>) =>
+    fetchApi<{ success: boolean; data: AcousticBlindSpotItem }>('/v1/acoustic-ai/blind-spots', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  listEvents: (params?: {
+    branchId?: string;
+    cameraId?: string;
+    signature?: string;
+    blindSpotOnly?: boolean;
+    status?: string;
+    limit?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.branchId) qs.set('branchId', params.branchId);
+    if (params?.cameraId) qs.set('cameraId', params.cameraId);
+    if (params?.signature) qs.set('signature', params.signature);
+    if (params?.blindSpotOnly) qs.set('blindSpotOnly', 'true');
+    if (params?.status) qs.set('status', params.status);
+    if (params?.limit) qs.set('limit', String(params.limit));
+    return fetchApi<{ success: boolean; count: number; data: AcousticAnomalyEventItem[] }>(
+      `/v1/acoustic-ai/events?${qs.toString()}`
+    );
+  },
+
+  acknowledgeEvent: (id: string, notes?: string) =>
+    fetchApi<{ success: boolean; data: AcousticAnomalyEventItem }>(
+      `/v1/acoustic-ai/events/${encodeURIComponent(id)}/acknowledge`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ notes }),
+      }
+    ),
+
+  simulateEvent: (data: {
+    cameraId: string;
+    branchId?: string;
+    signature: 'glass_break' | 'screaming_aggression' | 'gunshot_blast' | 'shutter_tamper_breach';
+    visualTargetInFov?: boolean;
+    azimuthDeg?: number;
+  }) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        event: AcousticAnomalyEventItem;
+        classification: any;
+        blindSpotResult: any;
+      };
+    }>('/v1/acoustic-ai/simulate-event', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getFleetStats: () =>
+    fetchApi<{ success: boolean; data: AcousticFleetStatsItem }>('/v1/acoustic-ai/stats'),
 };
 
 export { ApiError };
