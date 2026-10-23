@@ -207,6 +207,7 @@ export const navigation: NavGroup[] = [
       { label: "Storage & Disks", href: "/operations/storage", icon: HardDrive },
       { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },
       { label: "Hardware Asset Registry", href: "/maintenance/assets", icon: Library },
+      { label: "Edge Gateway Fleet", href: "/operations/edge-agents", icon: Server },
       { label: "Camera Location Map", href: "/maintenance/camera-map", icon: Globe2 },
       { label: "Maintenance Work Orders", href: "/maintenance/workorders", icon: ClipboardCheck },
     ],
@@ -216,6 +217,7 @@ export const navigation: NavGroup[] = [
     icon: FileText,
     items: [
       { label: "Report studio", href: "/reports", icon: FileText },
+      { label: "Edge Agent & Camera Connectivity", href: "/reports/edge-connectivity", icon: Network },
       { label: "Live person count", href: "/reports/live-person-count", icon: BarChart3 },
       { label: "Management overview", href: "/reports/mis", icon: FileSpreadsheet },
       { label: "Date-wise reports", href: "/reports/mis?groupBy=date", icon: CalendarClock },

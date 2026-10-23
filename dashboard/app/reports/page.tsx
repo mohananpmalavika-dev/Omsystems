@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { CalendarClock, CheckCircle2, Download, LoaderCircle, Play, RefreshCw, Trash2, FileText, BarChart3, ArrowRight } from "lucide-react";
+import { CalendarClock, CheckCircle2, Download, LoaderCircle, Play, RefreshCw, Trash2, FileText, BarChart3, ArrowRight, Network } from "lucide-react";
 import { ReportPagination } from "@/components/reports/report-pagination";
 import { AppLayout } from "@/components/app-layout";
 import { WorkflowNav } from "@/components/workflow-nav";
@@ -147,7 +147,7 @@ export default function ReportsPage(){
   return <AppLayout><main className="content reports-page p-6 space-y-6 max-w-[1500px] mx-auto">
     <header className="workflow-heading report-studio-heading">
       <div><p className="workflow-kicker">REPORT STUDIO / ASSURANCE</p><h1>Make insight.<br/><em>Deliver clarity.</em></h1><p>Choose a story, set its scope, then build your report.</p></div>
-      <div className="workflow-heading-actions"><Link href="/reports/live-person-count" className="btn-secondary"><BarChart3 size={16}/>Live person count</Link><Link href="/reports/mis" className="btn-secondary"><BarChart3 size={16}/>Explore MIS analytics<ArrowRight size={14}/></Link><button className="workflow-icon-button" aria-label="Refresh report data" onClick={()=>void load()}><RefreshCw size={18}/></button></div>
+      <div className="workflow-heading-actions"><Link href="/reports/edge-connectivity" className="btn-secondary"><Network size={16}/>Edge & Camera Connectivity</Link><Link href="/reports/live-person-count" className="btn-secondary"><BarChart3 size={16}/>Live person count</Link><Link href="/reports/mis" className="btn-secondary"><BarChart3 size={16}/>Explore MIS analytics<ArrowRight size={14}/></Link><button className="workflow-icon-button" aria-label="Refresh report data" onClick={()=>void load()}><RefreshCw size={18}/></button></div>
     </header>
     <WorkflowNav label="Report workspace" value={workspace} onChange={setWorkspace} items={[{id:"compose",label:"Compose"},{id:"schedules",label:"Schedules",count:schedules.length},{id:"history",label:"Run history",count:runs.length}]} />
     {message&&<div className="card py-3 text-sm" role="status">{message}</div>}
