@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { selectFaceIdentity } from "../../packages/contracts/src/face-match-policy.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { activeFaceRegistryMatches, localIdentityState } from "../analytics/identity-registry.js";
@@ -577,9 +578,9 @@ export function registerSecureAreaAuthorizationRoutes(app: FastifyInstance, stor
     if (store) {
       try {
         const matches = await activeFaceRegistryMatches(store, tenantId, body.embedding, {
-          minSimilarity: 0.82,
+          minSimilarity: 0.77,
         });
-        const topMatch = matches[0];
+        const topMatch = selectFaceIdentity(matches,row=>row.personId,row=>row.similarity);
         if (topMatch) {
           resolvedFacePersonId = topMatch.personId;
           matchSimilarity = topMatch.similarity;

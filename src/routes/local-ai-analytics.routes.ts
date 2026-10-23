@@ -10,6 +10,7 @@ import { z } from "zod";
 import { localVisionEngineService } from "../ai/services/local-vision-engine.service.js";
 import { localAnprService } from "../ai/services/local-anpr.service.js";
 import { localFaceMatcherService } from "../ai/services/local-face-matcher.service.js";
+import { validFaceVector } from "../../packages/contracts/src/face-match-policy.js";
 import { localIncidentSummaryService } from "../ai/services/local-incident-summary.service.js";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { Action } from "../domain/models.js";
@@ -57,7 +58,7 @@ const anprRecognizeSchema = z.object({
 const faceMatchSchema = z.object({
   cameraId: z.string().min(1),
   branchId: z.string().min(1),
-  embeddingVector: z.array(z.number().finite()).length(512),
+  embeddingVector: z.array(z.number().finite()).length(512).refine(validFaceVector,'Face embedding must be normalized'),
   minThreshold: z.number().min(0.5).max(0.99).optional(),
 });
 
@@ -65,7 +66,7 @@ const faceEnrollSchema = z.object({
   personId: z.string().min(1),
   name: z.string().min(1),
   watchlistType: z.enum(["WANTED", "BLACK_LIST", "VIP", "STAFF", "SUSPECT"]),
-  embeddingVector: z.array(z.number().finite()).length(512),
+  embeddingVector: z.array(z.number().finite()).length(512).refine(validFaceVector,'Face embedding must be normalized'),
   notes: z.string().optional(),
 });
 
@@ -183,12 +184,14 @@ export async function registerLocalAiAnalyticsRoutes(app: FastifyInstance, store
    * POST /v1/ai/face/enroll
    */
   app.post("/v1/ai/face/enroll", async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!ephemeralFaceMatcherEnabled()) return reply.code(409).send({error:'governed_face_enrollment_required',message:'Enroll identities in a tenant face watchlist. Process-local identities cannot be used for production recognition.'});
     const body = faceEnrollSchema.parse(request.body);
     if (!store || !request.currentUser || !(await store.listAccessibleNodes(request.currentUser, "face:enrol", "company")).length) {
       return reply.code(403).send({ error: "forbidden" });
     }
     localFaceMatcherService.enrollFace({
       ...body,
+      tenantId: request.currentUser.tenantId,
       enrolledAt: new Date(),
     } as any);
     return reply.status(201).send({

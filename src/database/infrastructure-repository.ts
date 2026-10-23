@@ -804,6 +804,7 @@ export class InfrastructureRepository {
       `${this.userSelect(true)}
        LEFT JOIN tenants t ON t.id=u.tenant_id
        WHERE u.status = 'active'
+         AND u.active = true
          AND (
            (u.preferences->'faceVerification'->>'data') IS NOT NULL
            OR (u.preferences->'faceVerification'->'templates') IS NOT NULL

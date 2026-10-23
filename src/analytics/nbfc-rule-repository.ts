@@ -81,6 +81,7 @@ export class NbfcRuleRepository {
       createdAt: now,
       updatedBy: input.createdBy || "system-admin",
       updatedAt: now,
+      metadata: input.metadata || {},
       triggersToday: 0,
       falsePositivesToday: 0,
     };
@@ -260,7 +261,7 @@ export class NbfcRuleRepository {
             branch_ids = $5, camera_ids = $6, zone_id = $7, detector_type = $8,
             condition = $9, duration_ms = $10, schedule = $11, severity = $12,
             cooldown_ms = $13, actions = $14, version = $15, updated_by = $16,
-            updated_at = $17
+            updated_at = $17, scope_type = $19
            WHERE id = $18::uuid`,
           [
             updated.name, updated.description, updated.enabled, updated.state,
@@ -268,7 +269,7 @@ export class NbfcRuleRepository {
             updated.zoneId || null, updated.detectorType, JSON.stringify(updated.condition),
             updated.durationMs, JSON.stringify(updated.schedule), updated.severity,
             updated.cooldownMs, JSON.stringify(updated.actions), updated.version,
-            updated.updatedBy, updated.updatedAt, updated.id,
+            updated.updatedBy, updated.updatedAt, updated.id, updated.scopeType,
           ]
         );
 
@@ -668,6 +669,7 @@ export class NbfcRuleRepository {
           && template.metadata.defaultOpeningDays.every((day) => typeof day === "number" && Number.isInteger(day) && day >= 0 && day <= 6)
           ? template.metadata.defaultOpeningDays as number[] : [1, 2, 3, 4, 5, 6],
       } : { type: template.suggestedSchedule },
+      metadata: { ...template.metadata, ...((optionsOrTenantId as any)?.metadata || {}) },
       createdBy,
     }, `Created from template: ${template.name}`);
   }
@@ -745,20 +747,24 @@ export class NbfcRuleRepository {
     localDate: string;
     cameraId: string;
     personCount: number;
+    requiredStaff?: number;
+    openingTrigger?: string;
     occurredAt: string;
     sourceEventId?: string | undefined;
     snapshotReference?: string | undefined;
     clipReference?: string | undefined;
     personBoundingBox?: { x: number; y: number; width: number; height: number } | undefined;
   }): Promise<{ state: RuntimeRuleState; claimed: boolean }> {
+    const required = input.requiredStaff ?? 2;
+    const passed = input.personCount >= required;
     const entityKey = `branch-opening-day:${input.branchId}:${input.localDate}`;
     const state: RuntimeRuleState = {
       ruleId: input.ruleId,
       entityKey,
-      currentStatus: input.personCount >= 2 ? "RESOLVED" : "ACTIVE_ALERTING",
+      currentStatus: passed ? "RESOLVED" : "ACTIVE_ALERTING",
       firstConditionMetAt: input.occurredAt,
       lastEvaluatedAt: input.occurredAt,
-      lastTriggeredAt: input.personCount < 2 ? input.occurredAt : undefined,
+      lastTriggeredAt: !passed ? input.occurredAt : undefined,
       fencingToken: 1,
       currentMetrics: {
         branchId: input.branchId,
@@ -766,10 +772,12 @@ export class NbfcRuleRepository {
         cameraId: input.cameraId,
         sourceEventId: input.sourceEventId,
         personCount: input.personCount,
+        requiredStaff: required,
+        openingTrigger: input.openingTrigger,
         snapshotReference: input.snapshotReference,
         clipReference: input.clipReference,
         personBoundingBox: input.personBoundingBox,
-        outcome: input.personCount >= 2 ? "SUCCESS" : "FAILED",
+        outcome: passed ? "SUCCESS" : "FAILED",
         alertEmitted: false,
       },
     };
@@ -797,6 +805,34 @@ export class NbfcRuleRepository {
     if (existing) return { state: existing, claimed: false };
     this.inMemoryStates.set(key, state);
     return { state, claimed: true };
+  }
+
+  /** Record when the shutter, grill, or door has been opened for a branch on its local opening day. */
+  async recordBranchShutterOpened(ruleId: string, branchId: string, localDate: string, occurredAt: string, cameraId?: string): Promise<void> {
+    const entityKey = `branch-shutter-opened:${branchId}:${localDate}`;
+    const state: RuntimeRuleState = {
+      ruleId,
+      entityKey,
+      currentStatus: "RESOLVED",
+      firstConditionMetAt: occurredAt,
+      lastEvaluatedAt: occurredAt,
+      fencingToken: 1,
+      currentMetrics: {
+        branchId,
+        localDate,
+        cameraId,
+        shutterOpened: true,
+        openedAt: occurredAt,
+      },
+    };
+    await this.saveRuntimeState(state);
+  }
+
+  /** Check if the shutter, grill, or door was confirmed opened today for the branch. */
+  async isBranchShutterOpen(ruleId: string, branchId: string, localDate: string): Promise<boolean> {
+    const entityKey = `branch-shutter-opened:${branchId}:${localDate}`;
+    const state = await this.getRuntimeState(ruleId, entityKey);
+    return state?.currentMetrics?.shutterOpened === true;
   }
 
   async getBranchOpeningCheck(ruleId: string, branchId: string, localDate: string): Promise<RuntimeRuleState | null> {
@@ -1778,7 +1814,7 @@ export class NbfcRuleRepository {
         id: "tmpl-27-opening-staff-count",
         name: "Branch Opening Two-Person Enforcement",
         category: "CASH_OPERATIONS",
-        description: "Checks the first person observation during the branch opening window: two people together pass; fewer than two fail immediately, once per local day.",
+        description: "Enforces two-person dual-custody verification when branch shutter, grill, or entrance door opens: two people together pass; fewer than two people opening or entering fails immediately, once per local day.",
         detectorType: "person",
         defaultCondition: { metric: "staff_count", operator: "LESS_THAN", value: 2 },
         defaultDurationMs: 0,
@@ -1787,7 +1823,7 @@ export class NbfcRuleRepository {
         defaultActions: ["CREATE_ALERT", "CREATE_INCIDENT", "CAPTURE_SNAPSHOT", "CAPTURE_EVIDENCE_CLIP", "NOTIFY_SOC", "NOTIFY_BRANCH_MANAGER"],
         recommendedZoneTypes: ["ENTRANCE", "CUSTOMER_AREA"],
         suggestedSchedule: "BRANCH_OPENING",
-        metadata: { requiredOpeningStaff: 2, defaultOpeningStart: "08:00", defaultOpeningEnd: "11:00", defaultOpeningTimezone: "Asia/Kolkata", defaultOpeningDays: [1, 2, 3, 4, 5, 6], defaultOpeningEnabled: true, enforcementMode: "ALERT_EVIDENCE_AND_INCIDENT" },
+        metadata: { requiredOpeningStaff: 2, requireShutterOrDoorOpen: true, defaultOpeningStart: "08:00", defaultOpeningEnd: "11:00", defaultOpeningTimezone: "Asia/Kolkata", defaultOpeningDays: [1, 2, 3, 4, 5, 6], defaultOpeningEnabled: true, enforcementMode: "ALERT_EVIDENCE_AND_INCIDENT" },
       },
       {
         id: "tmpl-28-branch-closing-check",

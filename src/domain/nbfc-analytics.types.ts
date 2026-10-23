@@ -178,6 +178,7 @@ export interface AnalyticsRule {
   lastTriggeredAt?: string;
   triggersToday?: number;
   falsePositivesToday?: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface RuleVersion {

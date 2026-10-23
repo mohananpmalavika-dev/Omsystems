@@ -3,7 +3,8 @@
  * Face Recognition, ANPR, Behavior Analysis, Protected Objects
  */
 
-import { randomUUID, createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { FACE_MATCH_MINIMUM, FACE_MATCH_MARGIN, validFaceVector, selectFaceIdentity } from "../../packages/contracts/src/face-match-policy.js";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
@@ -12,10 +13,12 @@ import { activeCamera } from "../database/active-resource.js";
 import {
   localIdentityState,
   activeFaceRegistryMatches,
+  calculateCosineSimilarity,
   recordFaceRegistryMatches,
   recordFaceMatchReview,
 } from "../analytics/identity-registry.js";
 import { createAfterHoursAuthorizationAlert } from "../security/secure-area-after-hours.service.js";
+import { extractVerifiedFace, FaceModelUnavailableError, type VerifiedFaceEmbedding } from '../security/face-embedding-provider.js';
 
 // Type guard to check if store has pool access
 function hasPool(store: ControlPlaneStore): store is ControlPlaneStore & { db: any } {
@@ -479,8 +482,8 @@ const facePersonSchema = z.object({
   gender: z.enum(["male", "female", "other", "unknown"]).optional(),
   notes: z.string().optional(),
   metadata: z.record(z.unknown()).default({}),
-  images: z.array(z.string()).optional(),
-  embedding: z.array(z.number()).optional(),
+  images: z.array(z.string().max(2_800_000)).min(1).max(7).optional(),
+  embedding: z.array(z.number().finite()).length(512).refine(validFaceVector,'Face embedding must be a normalized 512-value vector').optional(),
 });
 
 const anprWatchlistSchema = z.object({
@@ -744,7 +747,7 @@ export async function registerAnalyticsPhase2Routes(
       const persons = await store.db.query(
         `SELECT p.id, p.external_id, p.full_name, p.date_of_birth, p.gender,
                 p.notes, p.enrolled_at, p.last_seen_at, p.match_count,
-                COUNT(e.id) as embedding_count
+                COUNT(e.id) FILTER (WHERE COALESCE(e.metadata->>'model', '') <> 'facenet-512' AND COALESCE(e.metadata->>'requiresReenrollment', 'false') <> 'true') as embedding_count
          FROM face_watchlist_persons p
          LEFT JOIN face_embeddings e ON e.person_id = p.id
          WHERE p.tenant_id = $1 AND p.watchlist_id = $2 AND p.archived_at IS NULL
@@ -775,20 +778,29 @@ export async function registerAnalyticsPhase2Routes(
       if (!parsedBody.success) return invalidInput(reply, parsedBody.error);
       const body = parsedBody.data;
 
+      const captures:VerifiedFaceEmbedding[]=[];
+      if (body.images?.length) {
+        try {for(const image of body.images)captures.push(await extractVerifiedFace(image));}
+        catch(error){return reply.code(error instanceof FaceModelUnavailableError?503:422).send({error:'face_enrollment_unavailable',message:error instanceof Error?error.message:'Use clear photos showing one person.'});}
+        if(captures.some(capture=>calculateCosineSimilarity(captures[0]!.vector,capture.vector)<.65))return reply.code(422).send({error:'multiple_enrollment_identities',message:'All enrollment photos must show the same person.'});
+        body.embedding=captures[0]!.vector;
+      }
+
       if (!hasPool(store)) {
         const state = localState(store);
         const watchlist = state.faceWatchlists.find((item) =>
           item.id === watchlistId && item.tenantId === request.currentUser.tenantId && !item.archivedAt
         );
         if (!watchlist) return reply.code(404).send({ error: "face_watchlist_not_found" });
-        const embCount = (body.embedding ? 1 : 0) + (body.images?.length ?? 0);
+        const vectors=captures.length?captures.map(capture=>capture.vector):body.embedding?[body.embedding]:[];
+        const embCount = vectors.length;
         const person = {
           id: randomUUID(), tenantId: request.currentUser.tenantId, watchlistId,
           externalId: body.externalId, fullName: body.fullName,
           dateOfBirth: body.dateOfBirth, gender: body.gender,
-          notes: body.notes, metadata: body.metadata,
+          notes: body.notes, metadata: { ...body.metadata, modelId: captures[0]?.modelId, source: captures.length ? 'local-arcface' : 'provided-embedding' },
           embedding: body.embedding ?? null,
-          embeddings: body.embedding ? [body.embedding] : [],
+          embeddings: vectors,
           enrolledBy: request.currentUser.id, enrolledAt: new Date().toISOString(),
           lastSeenAt: null, matchCount: 0, embeddingCount: embCount,
         };
@@ -801,88 +813,38 @@ export async function registerAnalyticsPhase2Routes(
         return reply.code(201).send({ data: person });
       }
 
-      const result = await store.db.query(
-        `INSERT INTO face_watchlist_persons
-          (tenant_id, watchlist_id, external_id, full_name, date_of_birth,
-           gender, notes, metadata, enrolled_by)
-         SELECT $1, w.id, $3, $4, $5, $6, $7, $8, $9
-         FROM face_watchlists w
-         WHERE w.id = $2 AND w.tenant_id = $1 AND w.archived_at IS NULL
-         RETURNING id, full_name, enrolled_at`,
-        [
-          request.currentUser.tenantId,
-          watchlistId,
-          body.externalId,
-          body.fullName,
-          body.dateOfBirth,
-          body.gender,
-          body.notes,
-          body.metadata,
-          request.currentUser.id,
-        ],
-      );
-      if (!result.rows[0]) return reply.code(404).send({ error: "face_watchlist_not_found" });
-
+      const vectors = captures.length ? captures.map(capture => capture.vector) : body.embedding ? [body.embedding] : [];
+      let result;
+      try {
+        // One PostgreSQL statement commits the person and every sample atomically.
+        result = await store.db.query(
+          `WITH enrolled AS (
+            INSERT INTO face_watchlist_persons
+              (tenant_id, watchlist_id, external_id, full_name, date_of_birth, gender, notes, metadata, enrolled_by)
+            SELECT $1, w.id, $3, $4, $5, $6, $7, $8, $9 FROM face_watchlists w
+            WHERE w.id = $2 AND w.tenant_id = $1 AND w.archived_at IS NULL
+            RETURNING id, full_name, enrolled_at
+          ), saved AS (
+            INSERT INTO face_embeddings (tenant_id, person_id, embedding, quality_score, metadata)
+            SELECT $1, enrolled.id, (sample->>'vector')::vector,
+              (sample->>'quality')::numeric, sample->'metadata'
+            FROM enrolled CROSS JOIN jsonb_array_elements($10::jsonb) sample
+            RETURNING id
+          ) SELECT enrolled.*, (SELECT COUNT(*) FROM saved)::integer AS embedding_count FROM enrolled`,
+          [request.currentUser.tenantId, watchlistId, body.externalId, body.fullName,
+            body.dateOfBirth, body.gender, body.notes, body.metadata, request.currentUser.id,
+            JSON.stringify(vectors.map((vector,index) => ({vector:`[${vector.join(',')}]`,
+              quality:captures[index]?.quality ?? null,
+              metadata:{source:captures.length?'local-arcface':'provided-embedding',modelId:captures[index]?.modelId,dimension:vector.length},
+            })))],
+        );
+      } catch(error) {
+        request.log.error({err:error}, 'Face enrollment storage failed');
+        return reply.code(503).send({error:'face_embedding_storage_failed',message:'Face enrollment could not be saved. Please retry after the registry is available.'});
+      }
+      if (!result.rows[0]) return reply.code(404).send({error:'face_watchlist_not_found'});
       const personId = result.rows[0].id;
-      let savedEmbeddings = 0;
-
-      // Process and store face embeddings
-      const embeddingsToStore: number[][] = [];
-      if (body.embedding && Array.isArray(body.embedding) && body.embedding.length > 0) {
-        embeddingsToStore.push(body.embedding);
-      }
-      if (body.images && Array.isArray(body.images)) {
-        for (const img of body.images) {
-          // Deterministic normalized 512-dim facial feature extraction
-          const hash = createHash("sha256").update(img).digest();
-          const vec = new Array(512).fill(0).map((_, idx) => {
-            const byte = hash[idx % hash.length] ?? 0;
-            return ((byte - 128) / 128) * 0.1;
-          });
-          const norm = Math.sqrt(vec.reduce((sum, v) => sum + v * v, 0)) || 1;
-          embeddingsToStore.push(vec.map((v) => v / norm));
-        }
-      }
-
-      for (const emb of embeddingsToStore) {
-        try {
-          const vectorStr = `[${emb.join(",")}]`;
-          await store.db.query(
-            `INSERT INTO face_embeddings 
-              (tenant_id, person_id, embedding, quality_score, metadata)
-             VALUES ($1, $2, $3, $4, $5)`,
-            [
-              request.currentUser.tenantId,
-              personId,
-              vectorStr,
-              0.95,
-              JSON.stringify({ model: "facenet-512", dimension: emb.length }),
-            ],
-          );
-          savedEmbeddings++;
-        } catch {
-          // Fallback to bytea representation if pgvector extension is not active
-          try {
-            const buf = Buffer.from(new Float32Array(emb).buffer);
-            await store.db.query(
-              `INSERT INTO face_embeddings 
-                (tenant_id, person_id, embedding, quality_score, metadata)
-               VALUES ($1, $2, $3, $4, $5)`,
-              [
-                request.currentUser.tenantId,
-                personId,
-                buf,
-                0.95,
-                JSON.stringify({ model: "facenet-512", format: "bytea" }),
-              ],
-            );
-            savedEmbeddings++;
-          } catch {
-            // Ignore vector storage failure if database table lacks column
-          }
-        }
-      }
-
+      const savedEmbeddings = Number(result.rows[0].embedding_count);
       await store.writeAudit({
         tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
         action: "face.identity_enrolled", resourceNodeId: null, outcome: "success",
@@ -1010,7 +972,7 @@ export async function registerAnalyticsPhase2Routes(
     const parsed = z
       .object({
         cameraId: z.string().trim().min(1).max(200).optional(),
-        embedding: z.array(z.number().finite()).length(512),
+        embedding: z.array(z.number().finite()).length(512).refine(validFaceVector,'Face embedding must be normalized'),
         minSimilarity: z.coerce.number().min(0.5).max(1).default(0.80),
         watchlistIds: z.array(z.string().uuid()).optional(),
         limit: z.coerce.number().int().min(1).max(50).default(10),
@@ -1035,12 +997,13 @@ export async function registerAnalyticsPhase2Routes(
       request.currentUser.tenantId,
       body.embedding,
       {
-        minSimilarity: body.minSimilarity,
+        minSimilarity: Math.max(0,Math.min(body.minSimilarity,FACE_MATCH_MINIMUM)-FACE_MATCH_MARGIN),
         watchlistIds: body.watchlistIds,
-        limit: body.limit,
+        limit: Math.max(2,body.limit),
       },
     );
 
+    const identity = selectFaceIdentity(matches,row=>row.personId,row=>row.similarity,body.minSimilarity);
     await store.writeAudit({
       tenantId: request.currentUser.tenantId,
       actorUserId: request.currentUser.id,
@@ -1057,9 +1020,10 @@ export async function registerAnalyticsPhase2Routes(
 
     return reply.send({
       data: {
-        matched: matches.length > 0,
-        bestMatch: matches[0] ?? null,
-        matches,
+        matched: Boolean(identity),
+        bestMatch: identity,
+        needsReview: !identity && matches.length > 0,
+        matches: matches.slice(0,body.limit),
       },
     });
   });

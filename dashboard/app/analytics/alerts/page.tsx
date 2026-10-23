@@ -2,6 +2,8 @@
 import { ReportPagination } from "@/components/reports/report-pagination";
 import { downloadReportCsv } from "@/lib/report-export";
 import { downloadAlertPhotoReport } from "@/lib/alert-photo-export";
+import { Button } from "@/components/ui/button";
+import controlStyles from "./alert-report-controls.module.css";
 import { reportDayBounds, reportLocalDate } from "../../../../packages/contracts/src/report-hierarchy";
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
@@ -39,6 +41,7 @@ import {
   X,
   FileSpreadsheet,
   FileDown,
+  FileText,
 } from "lucide-react";
 import type { AnalyticsAlert, AnalyticsAlertsAggregateSummary } from "@/lib/types";
 import {
@@ -493,21 +496,15 @@ export default function AiAlertsIncidentHubPage() {
 
   return (
     <div className="content p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
-        <section className="card flex flex-wrap items-end gap-3" aria-label="Report date range">
-          <div className="w-full flex flex-wrap items-center gap-2 border-b border-slate-500/20 pb-3 mb-1">
-            <button className="btn-primary" disabled={loading || !filteredAlerts.length || !!exporting} onClick={()=>void handlePhotoExport('xlsx')}><FileSpreadsheet size={16}/>Excel with photos</button>
-            <button className="btn-secondary" disabled={loading || !filteredAlerts.length || !!exporting} onClick={()=>void handlePhotoExport('pdf')}><FileDown size={16}/>PDF with photos</button>
-            <span className="text-xs text-slate-500">All {filteredAlerts.length} filtered alerts · captured photos embedded where available</span>
-            {exporting && <><span className="inline-flex items-center gap-2 text-xs" role="status"><Loader2 size={15} className="animate-spin"/>Preparing {exporting==='xlsx'?'Excel':'PDF'} and evidence photos…</span><button className="btn-secondary" onClick={()=>exportController.current?.abort()}>Cancel export</button></>}
-            {exportMessage && <p className={`w-full text-sm ${exportMessage.kind==='error'?'text-rose-500':'text-emerald-600'}`} role={exportMessage.kind==='error'?'alert':'status'}>{exportMessage.text}</p>}
+        <section className={`card ${controlStyles.period}`} aria-label="Report date range">
+          <label className={controlStyles.dateField}>From date (IST)<input aria-label="Report start date" type="date" className="input" value={startDay} onChange={event => setStartDay(event.target.value)}/></label>
+          <label className={controlStyles.dateField}>To date (IST)<input aria-label="Report end date" type="date" className="input" value={endDay} min={startDay} onChange={event => setEndDay(event.target.value)}/></label>
+          <div className={controlStyles.actions}>
+            <Button className={controlStyles.actionButton} onClick={() => { try { setPeriod(reportDayBounds(startDay,endDay)); setDateFilter('all'); setPage(1); } catch(cause) { setError(cause instanceof Error ? cause.message : 'Select valid dates'); } }}>Generate report</Button>
+            <Button variant="outline" className={controlStyles.actionButton} onClick={() => { const today = reportLocalDate(new Date()); setStartDay(today); setEndDay(today); setPeriod(reportDayBounds(today,today)); setDateFilter('all'); }}>Today</Button>
+            <Button variant="outline" className={controlStyles.actionButton} onClick={() => {setPeriod({});setStartDay('');setEndDay('');setDateFilter('all');}}>All dates</Button>
           </div>
-          <label className="text-xs">From date (IST)<input aria-label="Report start date" type="date" className="input block mt-1" value={startDay} onChange={event => setStartDay(event.target.value)}/></label>
-          <label className="text-xs">To date (IST)<input aria-label="Report end date" type="date" className="input block mt-1" value={endDay} min={startDay} onChange={event => setEndDay(event.target.value)}/></label>
-          <button className="btn-primary" onClick={() => { try { setPeriod(reportDayBounds(startDay,endDay)); setDateFilter('all'); setPage(1); } catch(cause) { setError(cause instanceof Error ? cause.message : 'Select valid dates'); } }}>Generate report</button>
-          <button className="btn-secondary" onClick={() => { const today = reportLocalDate(new Date()); setStartDay(today); setEndDay(today); setPeriod(reportDayBounds(today,today)); setDateFilter('all'); }}>Today</button>
-          <button className="btn-secondary" onClick={() => {setPeriod({});setStartDay('');setEndDay('');setDateFilter('all');}}>All dates</button>
-          <button className="btn-secondary" disabled={loading || !filteredAlerts.length} onClick={() => downloadReportCsv(filteredAlerts.map(alert => ({Zone:normalizeZone(alert),Region:normalizeRegion(alert),Area:normalizeArea(alert),Branch:normalizeBranch(alert),Camera:alert.cameraName || alert.cameraId,Alert:alert.title,Severity:alert.severity,Status:alert.status,DateIST:normalizeAlertDate(alert),FirstDetected:alert.firstDetectedAt,LastDetected:alert.lastDetectedAt,Incident:alert.incidentNumber || alert.incidentId || ''})), 'alerts-report.csv')}>Export all filtered rows</button>
-          <span className="text-xs text-slate-500">{period.from ? `${reportLocalDate(period.from)} to ${reportLocalDate(period.to!)} · IST` : 'All recorded dates · IST'}</span>
+          <span className={controlStyles.periodScope}>{period.from ? `${reportLocalDate(period.from)} to ${reportLocalDate(period.to!)} · IST` : 'All recorded dates · IST'}</span>
         </section>
         <PageHero
           eyebrow="Vision AI Operations"
@@ -909,6 +906,16 @@ export default function AiAlertsIncidentHubPage() {
                 False Alarms
               </button>
             </div>
+          </div>
+          <div className={controlStyles.downloads} role="group" aria-label="Download filtered alert report">
+            <div className={controlStyles.actions}>
+              <Button className={controlStyles.actionButton} disabled={loading || !filteredAlerts.length || !!exporting} onClick={()=>void handlePhotoExport('xlsx')}><FileSpreadsheet size={16}/>Excel with photos</Button>
+              <Button variant="outline" className={controlStyles.actionButton} disabled={loading || !filteredAlerts.length || !!exporting} onClick={()=>void handlePhotoExport('pdf')}><FileDown size={16}/>PDF with photos</Button>
+              <Button variant="outline" className={controlStyles.actionButton} disabled={loading || !filteredAlerts.length} onClick={() => downloadReportCsv(filteredAlerts.map(alert => ({Zone:normalizeZone(alert),Region:normalizeRegion(alert),Area:normalizeArea(alert),Branch:normalizeBranch(alert),Camera:alert.cameraName || alert.cameraId,Alert:alert.title,Severity:alert.severity,Status:alert.status,DateIST:normalizeAlertDate(alert),FirstDetected:alert.firstDetectedAt,LastDetected:alert.lastDetectedAt,Incident:alert.incidentNumber || alert.incidentId || ''})), 'alerts-report.csv')}><FileText size={16}/>CSV (data only)</Button>
+            </div>
+            <span className={controlStyles.scope}>All {filteredAlerts.length} filtered alerts · captured photos embedded where available</span>
+            {exporting && <div className={controlStyles.feedback}><span className={controlStyles.progress} role="status"><Loader2 size={15} className="animate-spin"/>Preparing {exporting==='xlsx'?'Excel':'PDF'} and evidence photos…</span><Button variant="outline" className={controlStyles.actionButton} onClick={()=>exportController.current?.abort()}>Cancel export</Button></div>}
+            {exportMessage && <p className={`${controlStyles.message} ${exportMessage.kind==='error'?controlStyles.error:controlStyles.success}`} role={exportMessage.kind==='error'?'alert':'status'}>{exportMessage.text}</p>}
           </div>
         </div>
 

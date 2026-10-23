@@ -24,7 +24,8 @@ import {
   invalidateTokenFromMemory,
   updateUserPreferencesInMemory,
 } from "../middleware/auth.middleware.js";
-import { verifyEmployeeFace, identifyUserByFace } from "../security/employee-face-verification.service.js";
+import { verifyEmployeeFace, identifyUserByFace, modelBackedFaceProfile, PRODUCTION_FACE_MATCH_THRESHOLD } from "../security/employee-face-verification.service.js";
+import { FaceModelUnavailableError } from '../security/face-embedding-provider.js';
 
 const forgotPasswordOtpSchema = z.object({
   email: z.string().email(),
@@ -260,8 +261,10 @@ export async function registerAuthRoutes(
 
       let faceVerificationScore: number | undefined;
       if (body.faceScan) {
-        const faceVerification = await verifyEmployeeFace(body.faceScan, user.preferences);
+        const faceVerification = await verifyEmployeeFace(body.faceScan, user.preferences,{requireModelBacked:true});
         faceVerificationScore = faceVerification.score;
+        if(faceVerification.reason==='reenrollment_required')return reply.code(403).send({error:'facial_profile_upgrade_required',message:'Your face profile must be re-enrolled using the face recognition model. Sign in with your password or contact an administrator.'});
+        if(faceVerification.reason==='model_unavailable')return reply.code(503).send({error:'face_model_unavailable',message:'Face recognition is temporarily unavailable. Use password sign-in.'});
 
         if (!faceVerification.enrolled) {
           return reply.code(403).send({
@@ -389,11 +392,6 @@ export async function registerAuthRoutes(
           ? await store.findUsersWithFaceTemplates(body.tenantSlug)
           : [];
 
-        // If tenantSlug was provided but yielded 0 candidates, fall back to checking across tenants
-        if ((!candidateUsers || candidateUsers.length === 0) && body.tenantSlug && typeof store.findUsersWithFaceTemplates === "function") {
-          candidateUsers = await store.findUsersWithFaceTemplates();
-        }
-
         if (!candidateUsers || candidateUsers.length === 0) {
           return reply.code(404).send({
             error: "no_enrolled_faces",
@@ -402,12 +400,12 @@ export async function registerAuthRoutes(
         }
 
         // Run 1-to-N biometric matching against enrolled profiles
-        const match = await identifyUserByFace(body.faceScan, candidateUsers);
+        if(!candidateUsers.some(user=>modelBackedFaceProfile(user.preferences)))return reply.code(403).send({error:'facial_profile_upgrade_required',message:'Face profiles need model-backed re-enrollment. Sign in with your username and password and update your face enrollment.'});
+        const match = await identifyUserByFace(body.faceScan, candidateUsers,{requireModelBacked:true});
         request.log.info(
           {
             candidateCount: candidateUsers.length,
-            candidateNames: candidateUsers.map((u: any) => u.username),
-            matchedUser: match?.user?.username,
+            matched: Boolean(match),
             score: match?.score,
           },
           `[FaceLogin] Evaluation complete: ${match ? `Matched ${match.user.username} (score: ${match.score})` : "No match found"}`
@@ -417,11 +415,11 @@ export async function registerAuthRoutes(
           // Enhanced diagnostic information for troubleshooting
           return reply.code(401).send({
             error: "face_not_recognized",
-            message: "Face not recognized. Please ensure good lighting and face the camera directly. If this persists, try re-enrolling your face.",
+            message: "No unambiguous face match was found. Sign in with your username and password, or retry with a clear frontal scan.",
             debug: {
               candidatesChecked: candidateUsers.length,
-              threshold: 0.70,
-              hint: "Your match score was below the required threshold of 0.70"
+              threshold: PRODUCTION_FACE_MATCH_THRESHOLD,
+              hint: "The scan must meet the match threshold and be clearly distinguishable from other enrolled users."
             }
           });
         }
@@ -511,107 +509,25 @@ export async function registerAuthRoutes(
         if (error instanceof z.ZodError) {
           return reply.code(400).send({ error: "invalid_request", details: error.flatten() });
         }
+        if(error instanceof FaceModelUnavailableError)return reply.code(503).send({error:'face_model_unavailable',message:error.message});
         app.log.error({ err: error }, "Unhandled error in /v1/auth/face-login");
         return reply.code(500).send({ error: "internal_error" });
       }
     },
   );
 
-  // Face Login Diagnostic Endpoint - Test face match score without logging in
-  app.post(
-    "/v1/auth/face-login-test",
-    { config: { noAuth: true } },
-    async (request, reply) => {
-      try {
-        const body = z.object({
-          faceScan: z.string().min(1),
-          username: z.string().min(1),
-          tenantSlug: z.string().optional(),
-        }).parse(request.body);
-
-        // Find specific user
-        const user = await store.findUserByUsername(body.username, body.tenantSlug);
-        if (!user) {
-          return reply.code(404).send({
-            error: "user_not_found",
-            message: "User not found"
-          });
-        }
-
-        // Check if user has face template
-        const preferencesObject = typeof user.preferences === "string"
-          ? JSON.parse(user.preferences)
-          : user.preferences;
-
-        const fv = preferencesObject?.faceVerification;
-        const hasTemplate = Boolean(
-          fv?.data ||
-          (Array.isArray(fv?.templates) && fv.templates.length > 0)
-        );
-        
-        if (!hasTemplate) {
-          return reply.code(404).send({
-            error: "no_template",
-            message: "User has no enrolled face template"
-          });
-        }
-
-        // Test against this user only
-        const match = await identifyUserByFace(body.faceScan, [user]);
-        
-        // If match is null, it could be no face detected OR score too low
-        if (!match) {
-          // Try to create a template to validate if face is detectable
-          const { validateFacePresence, createEmployeeFaceTemplate } = await import("../security/employee-face-verification.service.js");
-          let faceDetected = false;
-          let faceQualityMessage = "";
-          
-          try {
-            const testTemplate = await createEmployeeFaceTemplate(body.faceScan);
-            if (testTemplate) {
-              const presence = validateFacePresence(Buffer.from(testTemplate.data, "base64"));
-              faceDetected = presence.hasFace;
-              if (!faceDetected) {
-                faceQualityMessage = presence.reason || "Poor image quality";
-              }
-            }
-          } catch (error: any) {
-            faceDetected = false;
-            faceQualityMessage = error?.message || "Could not process image";
-          }
-
-          return reply.send({
-            username: body.username,
-            hasTemplate: true,
-            matched: false,
-            score: 0,
-            threshold: 0.70,
-            faceDetected,
-            message: !faceDetected
-              ? `✗ Face quality issue: ${faceQualityMessage}. Ensure good lighting, face is clearly visible, and camera is working.`
-              : `✗ Face detected but no match. Score below threshold of 0.70. Try: 1) Better lighting, 2) Face camera directly, 3) Remove glasses/hat, 4) Re-enroll your face.`
-          });
-        }
-        
-        return reply.send({
-          username: body.username,
-          hasTemplate: true,
-          matched: true,
-          score: match.score,
-          threshold: 0.70,
-          faceDetected: true,
-          message: `✓ Match successful! Score: ${match.score.toFixed(3)} (threshold: 0.70)`
-        });
-
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          return reply.code(400).send({ error: "invalid_request", details: error.flatten() });
-        }
-        app.log.error({ err: error }, "Error in /v1/auth/face-login-test");
-        return reply.code(500).send({ error: "internal_error" });
-      }
-    }
-  );
+  // Diagnostics use the same model-backed verification as login, and require
+  // an authenticated employee or administrator rather than a public identity oracle.
+  app.post('/v1/auth/face-login-test', {config:{noAuth:false}}, async(request,reply)=>{
+    if(!request.currentUser)return reply.code(401).send({error:'unauthorized'});
+    const body=z.object({faceScan:z.string().min(1).max(2_800_000),username:z.string().min(1),tenantSlug:z.string().optional()}).parse(request.body);
+    const user=await store.findUserByUsername(body.username,body.tenantSlug);
+    if(!user || user.tenantId!==request.currentUser.tenantId)return reply.code(404).send({error:'user_not_found'});
+    if(user.id!==request.currentUser.id && !['super_admin','global_admin'].includes(request.currentUser.role ?? ''))return reply.code(403).send({error:'forbidden'});
+    const result=await verifyEmployeeFace(body.faceScan,user.preferences,{requireModelBacked:true});
+    if(result.reason==='model_unavailable')return reply.code(503).send({error:'face_model_unavailable'});
+    return {matched:result.matched,score:result.score,reason:result.reason,threshold:PRODUCTION_FACE_MATCH_THRESHOLD};
+  });
 
   // Refresh token endpoint (no authentication required)
   app.post(

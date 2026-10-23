@@ -175,7 +175,7 @@ function normalizeBox(x: number, y: number, width: number, height: number, frame
 }
 
 function nonMaximumSuppression(candidates: InferenceObject[], threshold: number): InferenceObject[] {
-  const ordered = [...candidates].sort((a, b) => b.confidence - a.confidence);
+  const ordered = [...candidates].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
   const kept: InferenceObject[] = [];
   while (ordered.length > 0) {
     const best = ordered.shift()!;
@@ -206,8 +206,8 @@ function lpdPriors(width: number, height: number) {
   const priors: Array<{ x: number; y: number; width: number; height: number }> = [];
   for (let level = 0; level < featureMaps.length; level += 1) {
     const [rows, columns] = featureMaps[level]!;
-    for (let row = 0; row < rows; row += 1) {
-      for (let column = 0; column < columns; column += 1) {
+    for (let row = 0; row < (rows ?? 0); row += 1) {
+      for (let column = 0; column < (columns ?? 0); column += 1) {
         for (const minSize of minSizes[level]!) {
           priors.push({
             x: (column + 0.5) * steps[level]! / width,

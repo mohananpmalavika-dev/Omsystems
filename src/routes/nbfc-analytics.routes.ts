@@ -182,7 +182,7 @@ export function registerNbfcAnalyticsRoutes(
 
     const updated = await repository.updateRule(rule.id, {
       name: "Branch Opening Two-Person Enforcement",
-      description: "Checks the first person observation during the branch opening window: two people together pass; fewer than two fail immediately, once per local day.",
+      description: "Enforces two-person dual-custody verification when branch shutter, grill, or entrance door opens: two people together pass; fewer than two people opening or entering fails immediately, once per local day.",
       enabled: policy.enabled,
       state: policy.enabled ? "ACTIVE" : "INACTIVE",
       branchIds: [branchId],
@@ -266,6 +266,7 @@ export function registerNbfcAnalyticsRoutes(
       cooldownMs: body.cooldownMs,
       actions: body.actions as any,
       state: body.state as any,
+      enabled: body.state === "ACTIVE" || body.state === "SHADOW",
       templateId: body.templateId,
       createdBy: userId,
     }, body.changeReason);
@@ -404,7 +405,13 @@ export function registerNbfcAnalyticsRoutes(
 
     const updated = await repository.updateRule(
       params.id,
-      body as any,
+      {
+        ...body,
+        enabled: body.enabled ?? (nextState === "ACTIVE" || nextState === "SHADOW"
+          ? (body.state !== undefined ? true : existing.enabled)
+          : nextState === "INACTIVE" ? false : existing.enabled),
+        scopeType: nextCameraIds.length ? "CAMERA" : nextBranchIds.length ? "BRANCH" : "GLOBAL",
+      } as any,
       body.changeReason,
       userId
     );

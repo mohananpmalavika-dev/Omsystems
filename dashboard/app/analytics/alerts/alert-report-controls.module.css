@@ -1,0 +1,107 @@
+.period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.dateField {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dateField input {
+  box-sizing: border-box;
+  min-width: 158px;
+  height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.actionButton {
+  min-height: 40px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.actionButton svg {
+  flex-shrink: 0;
+}
+
+.periodScope, .scope, .progress {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.periodScope {
+  margin-left: auto;
+  align-self: center;
+}
+
+.downloads {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(200px, 1fr);
+  align-items: center;
+  gap: 12px 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.scope {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.feedback {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.message {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.success { color: var(--green, #059669); }
+.error { color: var(--red, #dc2626); }
+
+@media (max-width: 900px) {
+  .downloads { grid-template-columns: minmax(0, 1fr); }
+  .scope { text-align: left; }
+  .periodScope { flex-basis: 100%; margin-left: 0; }
+}
+
+@media (max-width: 480px) {
+  .dateField { flex: 1 1 140px; min-width: 0; }
+  .dateField input { width: 100%; min-width: 0; }
+  .actions { width: 100%; }
+  .actionButton { flex: 1 1 auto; }
+}

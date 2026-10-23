@@ -1,4 +1,7 @@
 import sharp from "sharp";
+import { selectFaceIdentity } from "../../packages/contracts/src/face-match-policy.js";
+import { validFaceVector } from "../../packages/contracts/src/face-match-policy.js";
+import { extractVerifiedFace, FaceModelUnavailableError } from './face-embedding-provider.js';
 
 const TEMPLATE_SIZE = 48;
 const MAX_IMAGE_BYTES = 2_000_000;
@@ -18,12 +21,37 @@ export interface EmployeeFaceProfile {
   enrolledAt: string;
   method: "multi-pose-normalized-face-template";
 }
+export interface ModelBackedFaceProfile {
+  version:3;
+  method:'arcface-512-v1';
+  modelId:string;
+  templates:number[][];
+  enrolledAt:string;
+}
+
+export function modelBackedFaceProfile(preferences:unknown):ModelBackedFaceProfile|null {
+  try {
+    const input=typeof preferences==='string'?JSON.parse(preferences):preferences;
+    const profile=input?.faceVerification;
+    return profile?.version===3 && profile.method==='arcface-512-v1' && typeof profile.modelId==='string' && profile.modelId && Array.isArray(profile.templates) && profile.templates.length>0 && profile.templates.every((row:unknown)=>Array.isArray(row)&&validFaceVector(row)) ? profile : null;
+  } catch {return null;}
+}
+const embeddingSimilarity=(a:number[],b:number[])=>Math.max(0,Math.min(1,a.reduce((sum,value,index)=>sum+value*b[index]!,0)));
+
+export async function createModelBackedFaceProfile(images:string[]):Promise<ModelBackedFaceProfile>{
+  const captures:Awaited<ReturnType<typeof extractVerifiedFace>>[]=[];
+  for(const image of [...new Set(images)].slice(0,7))captures.push(await extractVerifiedFace(image));
+  if(!captures.length)throw new Error('At least one clear face portrait is required.');
+  const first=captures[0]!;
+  if(captures.some(capture=>capture.modelId!==first.modelId || embeddingSimilarity(first.vector,capture.vector)<.65))throw new Error('Enrollment photos must show the same person. Capture one person at a time.');
+  return {version:3,method:'arcface-512-v1',modelId:first.modelId,templates:captures.map(capture=>capture.vector),enrolledAt:new Date().toISOString()};
+}
 
 export interface FaceVerificationResult {
   enrolled: boolean;
   matched: boolean;
   score: number;
-  reason?: "not_enrolled" | "invalid_image" | "mismatch";
+  reason?: "not_enrolled" | "invalid_image" | "mismatch" | "reenrollment_required" | "model_unavailable";
 }
 
 function decodeImageDataUrl(value: string): Buffer {
@@ -407,20 +435,27 @@ export async function createEmployeeFaceProfile(imageDataUrls: string[]): Promis
   return { version: 2, templates, enrolledAt: new Date().toISOString(), method: "multi-pose-normalized-face-template" };
 }
 
-/**
- * Production match threshold calibrated for real-world webcam conditions:
- * - Genuine user faces with head tilt, lighting variation, and webcam noise score 0.85 - 1.00.
- * - Non-face objects, empty rooms, chairs, torso/shirts, and different persons score <= 0.52.
- * Setting threshold to 0.70 ensures robust false-positive rejection while providing high genuine acceptance.
- */
-export const PRODUCTION_FACE_MATCH_THRESHOLD = 0.70;
-export const STRICT_FACE_MATCH_THRESHOLD = 0.85;
+// Legacy image-template scores are not calibrated identity probabilities.
+// Use the existing conservative threshold; never relax it for face-only login.
+export const PRODUCTION_FACE_MATCH_THRESHOLD = MIN_MATCH_SCORE;
+export const STRICT_FACE_MATCH_THRESHOLD = MIN_MATCH_SCORE;
+export const FACE_LOGIN_MINIMUM_MARGIN = 0.08;
 
 export async function verifyEmployeeFace(
   imageDataUrl: string,
   preferences: unknown,
-  options?: { threshold?: number },
+  options?: { threshold?: number; requireModelBacked?:boolean },
 ): Promise<FaceVerificationResult> {
+  const profile=modelBackedFaceProfile(preferences);
+  if(profile){
+    try {
+      const capture=await extractVerifiedFace(imageDataUrl);
+      if(capture.modelId!==profile.modelId)return {enrolled:true,matched:false,score:0,reason:'reenrollment_required'};
+      const score=Math.max(...profile.templates.map(template=>embeddingSimilarity(template,capture.vector)));
+      const matched=score>=Math.max(PRODUCTION_FACE_MATCH_THRESHOLD,options?.threshold ?? PRODUCTION_FACE_MATCH_THRESHOLD);
+      return {enrolled:true,matched,score,...(matched?{}:{reason:'mismatch' as const})};
+    }catch(error){return {enrolled:true,matched:false,score:0,reason:error instanceof FaceModelUnavailableError?'model_unavailable':'invalid_image'};}
+  }
   const preferencesObject = typeof preferences === "string"
     ? (() => {
         try {
@@ -439,6 +474,7 @@ export async function verifyEmployeeFace(
   if (enrolledTemplates.length === 0) {
     return { enrolled: false, matched: false, score: 0, reason: "not_enrolled" };
   }
+  if(options?.requireModelBacked)return {enrolled:true,matched:false,score:0,reason:'reenrollment_required'};
 
   try {
     const liveTemplate = await normalizeImage(imageDataUrl);
@@ -450,7 +486,8 @@ export async function verifyEmployeeFace(
     const score = Math.max(...enrolledTemplates.map((template) =>
       calculateSimilarity(Buffer.from(template.data, "base64"), liveTemplate),
     ));
-    const threshold = options?.threshold ?? PRODUCTION_FACE_MATCH_THRESHOLD;
+    const threshold = Math.max(PRODUCTION_FACE_MATCH_THRESHOLD,options?.threshold ?? PRODUCTION_FACE_MATCH_THRESHOLD);
+    if (!Number.isFinite(threshold) || threshold > 1) return { enrolled:true,matched:false,score:0,reason:'mismatch' };
     const matched = score >= threshold;
 
     return {
@@ -464,10 +501,10 @@ export async function verifyEmployeeFace(
   }
 }
 
-export function faceTemplatePreferences(template: EmployeeFaceTemplate | EmployeeFaceProfile): Record<string, unknown> {
+export function faceTemplatePreferences(template: EmployeeFaceTemplate | EmployeeFaceProfile | ModelBackedFaceProfile): Record<string, unknown> {
   return {
     faceVerification: {
-      ...(template.version === 2
+      ...(template.version !== 1
         ? template
         : { ...template, enrolledAt: new Date().toISOString(), method: "normalized-face-template" }),
     },
@@ -541,10 +578,22 @@ async function generateMultiScaleTemplates(imageDataUrl: string): Promise<Buffer
 export async function identifyUserByFace(
   imageDataUrl: string,
   candidateUsers: any[],
-  options?: { threshold?: number },
+  options?: { threshold?: number; requireModelBacked?:boolean },
 ): Promise<{ user: any; score: number } | null> {
   if (!Array.isArray(candidateUsers) || candidateUsers.length === 0) {
     return null;
+  }
+  if(options?.requireModelBacked || candidateUsers.some(user=>modelBackedFaceProfile(user.preferences))){
+    const eligible=candidateUsers.filter(user=>user?.id && user.active!==false && (!user.status || user.status==='active') && modelBackedFaceProfile(user.preferences));
+    if(!eligible.length)return null;
+    let capture;
+    try {capture=await extractVerifiedFace(imageDataUrl);}catch(error){if(error instanceof FaceModelUnavailableError)throw error;return null;}
+    const candidates=eligible.flatMap(user=>{
+      const profile=modelBackedFaceProfile(user.preferences)!;
+      if(profile.modelId!==capture.modelId)return [];
+      return [{user,score:Math.max(...profile.templates.map(template=>embeddingSimilarity(template,capture.vector)))}];
+    });
+    return selectFaceIdentity(candidates,row=>`${row.user.tenantId || ''}:${row.user.id}`,row=>row.score,Math.max(PRODUCTION_FACE_MATCH_THRESHOLD,options?.threshold ?? PRODUCTION_FACE_MATCH_THRESHOLD),FACE_LOGIN_MINIMUM_MARGIN);
   }
 
   let candidateTemplates: Buffer[];
@@ -564,10 +613,11 @@ export async function identifyUserByFace(
     return null;
   }
 
-  const threshold = options?.threshold ?? PRODUCTION_FACE_MATCH_THRESHOLD;
-  let bestMatch: { user: any; score: number } | null = null;
+  const threshold = Math.max(PRODUCTION_FACE_MATCH_THRESHOLD,options?.threshold ?? PRODUCTION_FACE_MATCH_THRESHOLD);
+  const candidates: Array<{user:any;score:number}> = [];
 
   for (const user of candidateUsers) {
+    if (!user?.id || user.active === false || (user.status && user.status !== 'active')) continue;
     const preferencesObject = typeof user.preferences === "string"
       ? (() => {
           try {
@@ -597,15 +647,13 @@ export async function identifyUserByFace(
         }
       }
 
-      if (peakScore >= threshold && (!bestMatch || peakScore > bestMatch.score)) {
-        bestMatch = { user, score: peakScore };
-      }
+      candidates.push({user,score:peakScore});
     } catch {
       continue;
     }
   }
 
-  return bestMatch;
+  return selectFaceIdentity(candidates,row=>`${row.user.tenantId || ''}:${row.user.id}`,row=>row.score,threshold,FACE_LOGIN_MINIMUM_MARGIN);
 }
 
 

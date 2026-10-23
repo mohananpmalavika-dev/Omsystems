@@ -75,6 +75,7 @@ export class FaceEmbeddingService {
         {
           executionProviders: this.config.executionProviders as any,
           graphOptimizationLevel: 'all',
+          intraOpNumThreads: 2,
           enableCpuMemArena: true,
           enableMemPattern: true,
         },
@@ -171,7 +172,7 @@ export class FaceEmbeddingService {
 
     for (let i = 0; i < batchSize; i++) {
       const embedding = await this.extractEmbedding(
-        alignedFaces[i],
+        alignedFaces[i]!,
         qualities?.[i],
         poses?.[i],
       );
@@ -198,7 +199,7 @@ export class FaceEmbeddingService {
 
     const normalized = new Float32Array(vector.length);
     for (let i = 0; i < vector.length; i++) {
-      normalized[i] = vector[i] / norm;
+      normalized[i] = vector[i]! / norm;
     }
 
     return normalized;
@@ -226,7 +227,7 @@ export class FaceEmbeddingService {
 
     let dotProduct = 0;
     for (let i = 0; i < a.length; i++) {
-      dotProduct += a[i] * b[i];
+      dotProduct += a[i]! * b[i]!;
     }
 
     return dotProduct;

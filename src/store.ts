@@ -1230,10 +1230,10 @@ export class MemoryStore {
     return undefined;
   }
 
-  async findUsersWithFaceTemplates(_tenantSlug?: string) {
+  async findUsersWithFaceTemplates(tenantSlug?: string) {
     const list: any[] = [];
     for (const user of this.users.values()) {
-      if (user.status !== "active") continue;
+      if (user.status !== "active" || (tenantSlug && user.tenantId !== tenantSlug)) continue;
       const prefs = typeof user.preferences === "string" ? (() => { try { return JSON.parse(user.preferences); } catch { return null; } })() : user.preferences;
       const fv = prefs?.faceVerification;
       const hasTemplate = Boolean(

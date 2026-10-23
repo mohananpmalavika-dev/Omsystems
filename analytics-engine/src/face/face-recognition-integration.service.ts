@@ -8,6 +8,7 @@ import type { Pool } from "pg";
 import type { FaceRecognitionService } from "./face-recognition.service.js";
 import type { FaceSearchService } from "./face-search.service.js";
 import type { FaceRecognitionGovernanceService } from "../../../src/banking/governance/face-recognition-governance.service.js";
+import { FACE_MATCH_MINIMUM, FACE_MATCH_MARGIN, validFaceVector, selectFaceIdentity } from "../../../packages/contracts/src/face-match-policy.js";
 
 export interface FaceDetectionInput {
   tenantId: string;
@@ -58,7 +59,7 @@ export interface FaceRecognitionResult {
 
 /**
  * Face Recognition Integration Service
- * 
+ *
  * Responsibilities:
  * 1. Temporal confirmation tracking across frames
  * 2. Watchlist matching with governance validation
@@ -71,11 +72,11 @@ export class FaceRecognitionIntegrationService {
   private readonly temporalTracks = new Map<string, TemporalConfirmation>();
   private readonly TEMPORAL_WINDOW_MS = 10000; // 10 second window (increased from 5s)
   private readonly CLEANUP_INTERVAL_MS = 60000; // Cleanup every minute
-  
+
   // Alert cooldown tracking to prevent spam
   private readonly ALERT_COOLDOWN_MS = 300000; // 5 minutes cooldown
   private readonly alertCooldowns = new Map<string, number>(); // personId -> lastAlertTime
-  
+
   constructor(
     private readonly db: Pool,
     private readonly recognitionService: FaceRecognitionService,
@@ -83,7 +84,7 @@ export class FaceRecognitionIntegrationService {
     private readonly governanceService: FaceRecognitionGovernanceService,
   ) {
     // Start periodic cleanup of stale temporal tracks
-    setInterval(() => this.cleanupStaleTracks(), this.CLEANUP_INTERVAL_MS);
+    setInterval(() => this.cleanupStaleTracks(), this.CLEANUP_INTERVAL_MS).unref();
   }
 
   /**
@@ -91,8 +92,8 @@ export class FaceRecognitionIntegrationService {
    * Implements full BFSI compliance workflow with temporal confirmation
    */
   async processFaceDetection(input: FaceDetectionInput): Promise<FaceRecognitionResult> {
-    const trackKey = `${input.cameraId}:${input.faceId}`;
-    
+    const trackKey = `${input.tenantId}:${input.cameraId}:${input.faceId}`;
+
     // Get or create temporal confirmation track
     let track = this.temporalTracks.get(trackKey);
     if (!track) {
@@ -109,19 +110,13 @@ export class FaceRecognitionIntegrationService {
       this.temporalTracks.set(trackKey, track);
     }
 
-    // Update temporal track
-    track.lastSeen = input.timestamp;
-    track.observations.push({
-      timestamp: input.timestamp,
-      confidence: input.confidence,
-      liveness: input.liveness,
-    });
-    track.observationCount = track.observations.length;
+    const resetTrack = () => { track!.observations=[];track!.observationCount=0;track!.confirmed=false;track!.personId=null; };
 
     // Raw image bytes are not an aligned face embedding. Require the upstream
     // recognition pipeline to supply a verified embedding; fail closed here.
     const embedding = input.embedding;
-    if (!embedding) {
+    if (!embedding || !validFaceVector(Array.from(embedding))) {
+      resetTrack();
       return {
         matched: false,
         needsReview: false,
@@ -135,10 +130,11 @@ export class FaceRecognitionIntegrationService {
       tenantId: input.tenantId,
       embedding,
       threshold: 0.60, // Review threshold
-      limit: 10,
+      limit: 50,
     });
 
     if (candidates.length === 0) {
+      resetTrack();
       return {
         matched: false,
         needsReview: false,
@@ -148,14 +144,11 @@ export class FaceRecognitionIntegrationService {
     }
 
     const bestMatch = candidates[0];
-    track.personId = bestMatch.personId;
-    
-    // Update observation with similarity
-    track.observations[track.observations.length - 1]!.similarity = bestMatch.bestSimilarity;
 
     // Get watchlist configuration for thresholds
-    const watchlist = await this.getWatchlistConfig(bestMatch.watchlistId);
+    const watchlist = await this.getWatchlistConfig(bestMatch.watchlistId,input.tenantId);
     if (!watchlist) {
+      resetTrack();
       return {
         matched: false,
         needsReview: false,
@@ -164,13 +157,33 @@ export class FaceRecognitionIntegrationService {
       };
     }
 
-    const matchThreshold = watchlist.match_threshold || 0.70;
-    const reviewThreshold = watchlist.review_threshold || 0.65; // Raised from 0.60
-    const temporalFramesRequired = watchlist.temporal_confirmation_frames || 5; // Raised from 3
+    const matchThreshold = Math.max(FACE_MATCH_MINIMUM,Number(watchlist.match_threshold ?? FACE_MATCH_MINIMUM));
+    const reviewThreshold = Number(watchlist.review_threshold ?? 0.65);
+    const temporalFramesRequired = Math.max(2,Number(watchlist.temporal_confirmation_frames ?? 3));
+    const margin = Math.max(FACE_MATCH_MARGIN,Number(watchlist.minimum_margin ?? FACE_MATCH_MARGIN));
+    const minimumQuality = Number(watchlist.minimum_quality ?? 0.55);
 
     // Determine if match is definitive or needs review
-    const isDefinitiveMatch = bestMatch.bestSimilarity >= matchThreshold;
-    const needsReview = bestMatch.bestSimilarity >= reviewThreshold && bestMatch.bestSimilarity < matchThreshold;
+    const chosen = selectFaceIdentity(candidates,row=>row.personId,row=>row.bestSimilarity,matchThreshold,margin);
+    const qualityAccepted = Number.isFinite(input.quality) && input.quality! >= minimumQuality;
+    const isDefinitiveMatch = Boolean(chosen) && qualityAccepted;
+    const needsReview = !isDefinitiveMatch && bestMatch.bestSimilarity >= reviewThreshold;
+    if (!isDefinitiveMatch) {
+      resetTrack();
+      return {matched:false,needsReview,alertGenerated:false,temporalConfirmation:track};
+    }
+    const windowMs = Math.max(1,Number(watchlist.temporal_window_seconds ?? 2))*1000;
+    const timestamp = input.timestamp.getTime();
+    if (!Number.isFinite(timestamp)) {resetTrack();return {matched:false,needsReview:false,alertGenerated:false};}
+    if (track.observationCount > 0 && timestamp <= track.lastSeen.getTime()) return {matched:false,needsReview:true,alertGenerated:false};
+    if (track.personId !== bestMatch.personId) resetTrack();
+    track.personId = bestMatch.personId;
+    track.observations=track.observations.filter(item=>timestamp-item.timestamp.getTime()>=0 && timestamp-item.timestamp.getTime()<=windowMs);
+    const previous=track.observations.at(-1)?.timestamp.getTime();
+    if (previous !== undefined && timestamp <= previous) return {matched:false,needsReview:true,alertGenerated:false};
+    track.observations.push({timestamp:input.timestamp,confidence:input.confidence,similarity:bestMatch.bestSimilarity,liveness:input.liveness});
+    track.lastSeen=input.timestamp;
+    track.observationCount=track.observations.length;
 
     // Check temporal confirmation
     const hasTemporalConfirmation = track.observationCount >= temporalFramesRequired;
@@ -179,14 +192,10 @@ export class FaceRecognitionIntegrationService {
     // If not enough observations, don't trigger alert yet
     if (!hasTemporalConfirmation) {
       return {
-        matched: isDefinitiveMatch,
-        personId: bestMatch.personId,
-        personName: bestMatch.displayName,
-        watchlistId: bestMatch.watchlistId,
-        watchlistName: bestMatch.watchlistName,
+        matched: false,
         similarity: bestMatch.bestSimilarity,
-        confidence: bestMatch.supportingEmbeddings,
-        needsReview,
+        confidence: bestMatch.bestSimilarity,
+        needsReview: true,
         alertGenerated: false,
         temporalConfirmation: track,
       };
@@ -196,30 +205,10 @@ export class FaceRecognitionIntegrationService {
     const personKey = `${input.tenantId}:${bestMatch.personId}`;
     const lastAlert = this.alertCooldowns.get(personKey);
     const now = Date.now();
-    
-    if (lastAlert && (now - lastAlert) < this.ALERT_COOLDOWN_MS) {
-      // Person was alerted recently - suppress alert but maintain tracking
-      return {
-        matched: isDefinitiveMatch,
-        personId: bestMatch.personId,
-        personName: bestMatch.displayName,
-        watchlistId: bestMatch.watchlistId,
-        watchlistName: bestMatch.watchlistName,
-        similarity: bestMatch.bestSimilarity,
-        confidence: bestMatch.supportingEmbeddings,
-        needsReview: false,
-        alertGenerated: false, // Suppressed due to cooldown
-        temporalConfirmation: track,
-        governanceResult: {
-          accepted: false,
-          reason: `Alert cooldown active (${Math.round((this.ALERT_COOLDOWN_MS - (now - lastAlert)) / 60000)} minutes remaining)`,
-        },
-      };
-    }
-    
+
     // Temporal confirmation achieved - validate with governance
     const branchId = input.branchId || await this.getCameraBranchId(input.cameraId, input.tenantId);
-    
+
     const governanceValidation = this.governanceService.validateBiometricObservation({
       cameraId: input.cameraId,
       branchId: branchId || "default",
@@ -247,20 +236,30 @@ export class FaceRecognitionIntegrationService {
     });
 
     if (!governanceValidation.accepted) {
+      resetTrack();
+      return {matched:false,needsReview:true,alertGenerated:false,temporalConfirmation:track,governanceResult:governanceValidation};
+    }
+
+    if (lastAlert && (now - lastAlert) < this.ALERT_COOLDOWN_MS) {
+      // Person was alerted recently - suppress alert but maintain tracking
       return {
-        matched: isDefinitiveMatch,
+        matched: true,
         personId: bestMatch.personId,
         personName: bestMatch.displayName,
         watchlistId: bestMatch.watchlistId,
         watchlistName: bestMatch.watchlistName,
         similarity: bestMatch.bestSimilarity,
-        confidence: bestMatch.supportingEmbeddings,
-        needsReview,
-        alertGenerated: false,
+        confidence: bestMatch.bestSimilarity,
+        needsReview: false,
+        alertGenerated: false, // Suppressed due to cooldown
         temporalConfirmation: track,
-        governanceResult: governanceValidation,
+        governanceResult: {
+          accepted: false,
+          reason: `Alert cooldown active (${Math.round((this.ALERT_COOLDOWN_MS - (now - lastAlert)) / 60000)} minutes remaining)`,
+        },
       };
     }
+
 
     // Create face recognition event
     const eventId = await this.createRecognitionEvent({
@@ -275,8 +274,8 @@ export class FaceRecognitionIntegrationService {
     });
 
     // Determine if human review is required
-    const requiresHumanReview = watchlist.alert_severity === "P1" || 
-                                watchlist.alert_severity === "P2" || 
+    const requiresHumanReview = watchlist.alert_severity === "P1" ||
+                                watchlist.alert_severity === "P2" ||
                                 needsReview;
 
     if (requiresHumanReview) {
@@ -292,7 +291,7 @@ export class FaceRecognitionIntegrationService {
 
     // Alert should be generated
     const alertGenerated = track.confirmed && governanceValidation.accepted;
-    
+
     // Record cooldown timestamp if alert was generated
     if (alertGenerated) {
       this.alertCooldowns.set(personKey, now);
@@ -305,7 +304,7 @@ export class FaceRecognitionIntegrationService {
       watchlistId: bestMatch.watchlistId,
       watchlistName: bestMatch.watchlistName,
       similarity: bestMatch.bestSimilarity,
-      confidence: bestMatch.supportingEmbeddings,
+      confidence: bestMatch.bestSimilarity,
       needsReview: requiresHumanReview,
       alertGenerated,
       temporalConfirmation: track,
@@ -316,11 +315,11 @@ export class FaceRecognitionIntegrationService {
   /**
    * Get watchlist configuration
    */
-  private async getWatchlistConfig(watchlistId: string): Promise<any> {
+  private async getWatchlistConfig(watchlistId: string,tenantId:string): Promise<any> {
     try {
       const result = await this.db.query(
-        `SELECT * FROM face_watchlists WHERE id = $1 AND archived_at IS NULL`,
-        [watchlistId]
+        `SELECT * FROM face_watchlists WHERE id = $1 AND tenant_id = $2 AND enabled = true AND archived_at IS NULL`,
+        [watchlistId,tenantId]
       );
       return result.rows[0] || null;
     } catch (err) {
@@ -381,7 +380,7 @@ export class FaceRecognitionIntegrationService {
     // Update person last_seen_at and match_count
     await this.db.query(
       `
-      UPDATE face_watchlist_persons 
+      UPDATE face_watchlist_persons
       SET last_seen_at = $1, match_count = match_count + 1
       WHERE id = $2
       `,
@@ -460,7 +459,7 @@ export class FaceRecognitionIntegrationService {
         this.temporalTracks.delete(key);
       }
     }
-    
+
     // Cleanup expired cooldowns (after 2x cooldown period)
     for (const [key, timestamp] of this.alertCooldowns.entries()) {
       if (now - timestamp > this.ALERT_COOLDOWN_MS * 2) {

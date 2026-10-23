@@ -1,3 +1,4 @@
+import { selectFaceIdentity, FACE_MATCH_MINIMUM } from "../../../packages/contracts/src/face-match-policy.js";
 /**
  * Face Detection and Recognition (Phase 2)
  * Detects faces and optionally matches against watchlists
@@ -73,7 +74,7 @@ export class FaceDetector extends BaseDetector {
     this.config = {
       detectionConfidence: config.detectionConfidence ?? 0.65,
       recognitionEnabled: config.recognitionEnabled ?? true,
-      recognitionThreshold: config.recognitionThreshold ?? 0.6,
+      recognitionThreshold: Math.max(FACE_MATCH_MINIMUM,config.recognitionThreshold ?? FACE_MATCH_MINIMUM),
       landmarksEnabled: config.landmarksEnabled ?? true,
       ageGenderEnabled: config.ageGenderEnabled ?? false,
       maskDetectionEnabled: config.maskDetectionEnabled ?? false,
@@ -215,24 +216,26 @@ export class FaceDetector extends BaseDetector {
         const candidates = await (this.recognitionModel as any).searchPersons({
           tenantId,
           embedding: embeddingVector,
-          limit: 1,
+          limit: 50,
         });
 
-        if (candidates.length > 0 && candidates[0].bestSimilarity >= this.config.recognitionThreshold) {
-          const candidate = candidates[0];
+        const candidate = selectFaceIdentity(candidates as Array<{personId:string;watchlistId:string;displayName:string;bestSimilarity:number;supportingEmbeddings:number;meanTopKSimilarity:number}>,row=>row.personId,row=>row.bestSimilarity,this.config.recognitionThreshold);
+        if (candidate) {
           return {
             watchlistId: candidate.watchlistId,
             personId: candidate.personId,
             personName: candidate.displayName,
             similarity: candidate.bestSimilarity,
             metadata: {
-              confidence: candidate.supportingEmbeddings,
+              confidence: candidate.bestSimilarity,
               meanSimilarity: candidate.meanTopKSimilarity,
             },
           };
         }
+        return null;
       } catch (error) {
         console.error('Face search service error:', error);
+        return null;
       }
     }
 
@@ -240,28 +243,9 @@ export class FaceDetector extends BaseDetector {
     const watchlist = this.watchlists.get(tenantId);
     if (!watchlist) return null;
 
-    let bestMatch: WatchlistMatch | null = null;
-    let bestSimilarity = 0;
-
-    for (const person of watchlist) {
-      const similarity = this.calculateCosineSimilarity(
-        embedding,
-        person.embedding,
-      );
-
-      if (
-        similarity > this.config.recognitionThreshold &&
-        similarity > bestSimilarity
-      ) {
-        bestSimilarity = similarity;
-        bestMatch = {
-          watchlistId: "default",
-          personId: person.id,
-          personName: "Known Person", // Fallback name
-          similarity,
-        };
-      }
-    }
+    const candidates = watchlist.map(person=>({watchlistId:'default',personId:person.id,personName:'Known Person',
+      similarity:this.calculateCosineSimilarity(embedding,person.embedding)}));
+    const bestMatch = selectFaceIdentity(candidates,row=>row.personId,row=>row.similarity,this.config.recognitionThreshold);
 
     return bestMatch;
   }
@@ -270,8 +254,8 @@ export class FaceDetector extends BaseDetector {
    * Calculate cosine similarity between two embeddings
    */
   private calculateCosineSimilarity(a: number[], b: number[]): number {
-    if (a.length !== b.length) {
-      throw new Error("Embeddings must have the same dimension");
+    if (a.length !== b.length || ![128,512].includes(a.length) || [...a,...b].some(value=>!Number.isFinite(value))) {
+      return 0;
     }
 
     let dotProduct = 0;
@@ -284,8 +268,8 @@ export class FaceDetector extends BaseDetector {
       normB += b[i]! * b[i]!;
     }
 
-    const similarity = dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-    return similarity;
+    const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+    return denominator > 0 ? Math.max(0,Math.min(1,dotProduct / denominator)) : 0;
   }
 
   /**
@@ -407,6 +391,7 @@ export class FaceDetector extends BaseDetector {
         }));
       } catch (error) {
         console.error('Face search service error:', error);
+        return null;
       }
     }
 

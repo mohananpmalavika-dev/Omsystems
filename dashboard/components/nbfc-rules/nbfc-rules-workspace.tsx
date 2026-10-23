@@ -1,5 +1,8 @@
 "use client";
 
+import styles from "./nbfc-rules-workspace.module.css";
+import { initialRuleScope, resolveRuleScope, KEEP_RULE_SCOPE } from "./rule-builder-scope";
+
 import { FieldVisual } from "@/components/field-visual";
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
@@ -189,7 +192,8 @@ async function aiFetch<T = any>(url: string, options: RequestInit = {}): Promise
   });
 
   if (!res.ok) {
-    throw new Error(`AI API error: ${res.status} ${res.statusText}`);
+    const error = await res.json().catch(() => null);
+    throw new Error(error?.message || error?.issues?.map((issue: { message: string }) => issue.message).join("; ") || error?.error || `AI API error: ${res.status} ${res.statusText}`);
   }
   if (res.status === 204) {
     return undefined as unknown as T;
@@ -221,6 +225,11 @@ export function NbfcRulesWorkspace() {
   // Modals & Drawers
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<RuleItem | null>(null);
+  const [isSavingRule, setIsSavingRule] = useState(false);
+  const [builderError, setBuilderError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const savingRuleRef = useRef(false);
+  const branchTargetRef = useRef<HTMLSelectElement>(null);
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [testRuleTarget, setTestRuleTarget] = useState<RuleItem | null>(null);
   const [testResults, setTestResults] = useState<any>(null);
@@ -413,11 +422,12 @@ export function NbfcRulesWorkspace() {
   // Open rule builder for creation
   const handleOpenCreateRule = () => {
     setEditingRule(null);
+    setBuilderError(null);
+    setSaveMessage(null);
     setBuilderForm({
       name: "",
       description: "",
-      branchId: "ALL",
-      cameraId: "ALL",
+      ...initialRuleScope(null, selectedBranch, selectedCamera),
       zoneId: "",
       detectorType: "person",
       metric: "person_count",
@@ -447,6 +457,8 @@ export function NbfcRulesWorkspace() {
   // Open rule builder with template defaults
   const handleCreateFromTemplate = (tmpl: TemplateItem) => {
     setEditingRule(null);
+    setBuilderError(null);
+    setSaveMessage(null);
     const cond = tmpl.defaultCondition || {};
     const editableCond = cond.metric
       ? cond
@@ -454,8 +466,7 @@ export function NbfcRulesWorkspace() {
     setBuilderForm({
       name: tmpl.name,
       description: tmpl.description,
-      branchId: "ALL",
-      cameraId: "ALL",
+      ...initialRuleScope(null, selectedBranch, selectedCamera),
       zoneId: "",
       detectorType: tmpl.detectorType,
       metric: editableCond.metric || "person_count",
@@ -485,6 +496,8 @@ export function NbfcRulesWorkspace() {
   // Open rule builder for edit
   const handleEditRule = (r: RuleItem) => {
     setEditingRule(r);
+    setBuilderError(null);
+    setSaveMessage(null);
     const cond = r.condition || {};
     const editableCond = cond.metric
       ? cond
@@ -492,8 +505,7 @@ export function NbfcRulesWorkspace() {
     setBuilderForm({
       name: r.name,
       description: r.description || "",
-      branchId: r.branchIds?.[0] || "ALL",
-      cameraId: r.cameraIds?.[0] || "ALL",
+      ...initialRuleScope(r, selectedBranch, selectedCamera),
       zoneId: r.zoneId || "",
       detectorType: r.detectorType,
       metric: editableCond.metric || "person_count",
@@ -523,6 +535,15 @@ export function NbfcRulesWorkspace() {
   // Save rule handler
   const handleSaveRule = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingRuleRef.current) return;
+    setBuilderError(null);
+    const { branchIds, cameraIds, scopeType } = resolveRuleScope(builderForm.branchId, builderForm.cameraId, editingRule);
+    if (builderForm.state === "ACTIVE" && scopeType === "GLOBAL") {
+      setBuilderError("Select a branch or camera before applying a live rule. To save a global policy, choose Shadow Mode.");
+      branchTargetRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      branchTargetRef.current?.focus({ preventScroll: true });
+      return;
+    }
     const actions: string[] = [];
     if (builderForm.actionAlert) actions.push("CREATE_ALERT");
     if (builderForm.actionIncident) actions.push("CREATE_INCIDENT");
@@ -533,17 +554,13 @@ export function NbfcRulesWorkspace() {
     if (builderForm.actionNotifySoc) actions.push("NOTIFY_SOC");
     if (builderForm.actionNotifyBranch) actions.push("NOTIFY_BRANCH_MANAGER");
 
-    const branchIds = builderForm.branchId === "ALL" ? [] : [builderForm.branchId];
-    const cameraIds = builderForm.cameraId === "ALL" ? [] : [builderForm.cameraId];
-    const scopeType = cameraIds.length > 0 ? "CAMERA" : branchIds.length > 0 ? "BRANCH" : "GLOBAL";
-
     const payload = {
       name: builderForm.name,
       description: builderForm.description,
       branchIds,
       cameraIds,
       scopeType,
-      zoneId: builderForm.zoneId || undefined,
+      zoneId: builderForm.zoneId || (editingRule ? null : undefined),
       detectorType: builderForm.detectorType,
       condition: {
         metric: builderForm.metric,
@@ -566,10 +583,13 @@ export function NbfcRulesWorkspace() {
       cooldownMs: Number(builderForm.cooldownSeconds) * 1000,
       actions,
       state: builderForm.state,
+      enabled: true,
       templateId: builderForm.templateId || undefined,
       changeReason: editingRule ? `Admin tuned parameters (${builderForm.metric} ${builderForm.operator} ${builderForm.value})` : "Initial creation",
     };
 
+    savingRuleRef.current = true;
+    setIsSavingRule(true);
     try {
       if (editingRule) {
         const res = await aiFetch(`/api/ai/rules/${editingRule.id}`, {
@@ -585,8 +605,12 @@ export function NbfcRulesWorkspace() {
         setRules((prev) => [res, ...prev]);
       }
       setIsBuilderOpen(false);
+      setSaveMessage(builderForm.state === "ACTIVE" ? "Rule saved and applied to the selected scope." : "Rule saved in shadow mode.");
     } catch (err) {
-      console.error("Save rule error:", err);
+      setBuilderError(err instanceof Error ? err.message : "Unable to save the rule. Please try again.");
+    } finally {
+      savingRuleRef.current = false;
+      setIsSavingRule(false);
     }
   };
 
@@ -1171,33 +1195,33 @@ export function NbfcRulesWorkspace() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#0b0f19] text-gray-100 p-6 space-y-6">
+    <div className={styles.workspace}>
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-gray-800 workspace-heading">
+      <div className={`workspace-heading ${styles.header}`}>
         <div>
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400">
               <ShieldAlert className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-3">
+              <h1 className={styles.headerTitle}>
                 AI Rules & Automation
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">
+                <span className={styles.headerBadge}>
                   NBFC Surveillance Core
                 </span>
               </h1>
-              <p className="text-sm text-gray-400 mt-0.5">
+              <p className="text-sm text-[var(--muted)] mt-0.5">
                 No-code visual rule engine, zone perimeter designer, and {templates.length} configured banking security templates
               </p>
             </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+        <div className={styles.headerActions}>
           <button
             onClick={handleEnableAllRules}
             disabled={loading || isEnablingAll || (selectedBranch === "ALL" && selectedCamera === "ALL")}
-            className="flex items-center gap-2 px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg shadow-lg shadow-emerald-900/30 transition text-sm disabled:opacity-50"
+            className="flex items-center gap-2 px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-[#ffffff] font-medium rounded-lg shadow-lg shadow-emerald-900/30 transition text-sm disabled:opacity-50"
             title="Select a branch or camera, then apply the template set to that scope"
           >
             <ShieldCheck className={`w-4 h-4 ${isEnablingAll ? "animate-spin" : ""}`} />
@@ -1206,14 +1230,15 @@ export function NbfcRulesWorkspace() {
           <button
             onClick={fetchData}
             disabled={loading}
-            className="p-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-700 transition"
+            className="p-2.5 bg-[var(--surface-soft)] hover:bg-[var(--surface-strong)] text-[var(--ink)] rounded-lg border border-[var(--line)] transition"
             title="Refresh All"
+            aria-label="Refresh rules"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </button>
           <button
             onClick={handleOpenCreateRule}
-            className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white font-medium rounded-lg shadow-lg shadow-red-900/30 transition text-sm"
+            className={styles.primaryButton}
           >
             <Plus className="w-4 h-4" />
             Create AI Rule
@@ -1228,8 +1253,10 @@ export function NbfcRulesWorkspace() {
         </div>
       )}
 
+      {saveMessage && <div role="status" className={styles.saveSuccess}>{saveMessage}</div>}
+
       {/* Navigation Sub-Tabs */}
-      <div className="flex items-center gap-2 border-b border-gray-800 overflow-x-auto pb-1 text-sm font-medium">
+      <div className={styles.tabs} aria-label="Rules workspace views">
         {[
           { id: "overview", label: "Overview & Analytics", icon: LayoutDashboard },
           { id: "rules", label: `AI Rules (${filteredRules.length})`, icon: SlidersHorizontal },
@@ -1244,11 +1271,8 @@ export function NbfcRulesWorkspace() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as TabType)}
-              className={`flex items-center gap-2 px-4 py-3 rounded-t-lg transition whitespace-nowrap border-b-2 ${
-                isActive
-                  ? "border-red-500 text-red-400 bg-red-500/5"
-                  : "border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-800/40"
-              }`}
+              className={styles.tab}
+              aria-pressed={isActive}
             >
               <Icon className="w-4 h-4" />
               {tab.label}
@@ -1262,39 +1286,39 @@ export function NbfcRulesWorkspace() {
         <div className="space-y-6">
           {/* Stat Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-              <div className="flex items-center justify-between text-gray-400 text-xs">
+            <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-4">
+              <div className="flex items-center justify-between text-[var(--muted)] text-xs">
                 <span>Fleet Branches</span>
                 <Building2 className="w-4 h-4 text-blue-400" />
               </div>
-              <p className="text-2xl font-bold text-white mt-2">{stats?.totalBranches ?? branches.length}</p>
+              <p className="text-2xl font-bold text-[var(--ink)] mt-2">{stats?.totalBranches ?? branches.length}</p>
               <p className="text-xs text-green-400 mt-1 flex items-center gap-1">
                 <span>100% Monitored</span>
               </p>
             </div>
 
-            <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-              <div className="flex items-center justify-between text-gray-400 text-xs">
+            <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-4">
+              <div className="flex items-center justify-between text-[var(--muted)] text-xs">
                 <span>Active AI Cameras</span>
                 <Camera className="w-4 h-4 text-emerald-400" />
               </div>
-              <p className="text-2xl font-bold text-white mt-2">{stats?.totalAiCameras ?? cameras.length}</p>
-              <p className="text-xs text-gray-400 mt-1">Edge inference live</p>
+              <p className="text-2xl font-bold text-[var(--ink)] mt-2">{stats?.totalAiCameras ?? cameras.length}</p>
+              <p className="text-xs text-[var(--muted)] mt-1">Edge inference live</p>
             </div>
 
-            <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-              <div className="flex items-center justify-between text-gray-400 text-xs">
+            <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-4">
+              <div className="flex items-center justify-between text-[var(--muted)] text-xs">
                 <span>Active Rules Configured</span>
                 <Sliders className="w-4 h-4 text-purple-400" />
               </div>
-              <p className="text-2xl font-bold text-white mt-2">{rules.length}</p>
+              <p className="text-2xl font-bold text-[var(--ink)] mt-2">{rules.length}</p>
               <p className="text-xs text-purple-400 mt-1">
                 {rules.filter((r) => r.state === "ACTIVE").length} active, {rules.filter((r) => r.state === "SHADOW").length} shadow
               </p>
             </div>
 
-            <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-              <div className="flex items-center justify-between text-gray-400 text-xs">
+            <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-4">
+              <div className="flex items-center justify-between text-[var(--muted)] text-xs">
                 <span>Today's Critical Alerts</span>
                 <AlertOctagon className="w-4 h-4 text-red-400" />
               </div>
@@ -1308,9 +1332,9 @@ export function NbfcRulesWorkspace() {
           {/* NBFC Operations Dashboards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Locker & Vault Security */}
-            <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-5 space-y-4">
-              <div className="flex items-center justify-between border-b border-gray-800 pb-3">
-                <div className="flex items-center gap-2 text-white font-semibold">
+            <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-5 space-y-4">
+              <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
+                <div className="flex items-center gap-2 text-[var(--ink)] font-semibold">
                   <ShieldCheck className="w-5 h-5 text-red-400" />
                   <span>Locker / Strong Room AI Security</span>
                 </div>
@@ -1320,34 +1344,34 @@ export function NbfcRulesWorkspace() {
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="bg-gray-800/40 p-3 rounded-lg">
-                  <span className="text-xs text-gray-400">Current Occupancy</span>
-                  <p className="text-lg font-bold text-white mt-1">{stats?.lockerSecurity?.activeLockerSessions ?? 0} Vault Zones</p>
+                <div className="bg-[var(--surface-soft)] p-3 rounded-lg">
+                  <span className="text-xs text-[var(--muted)]">Current Occupancy</span>
+                  <p className="text-lg font-bold text-[var(--ink)] mt-1">{stats?.lockerSecurity?.activeLockerSessions ?? 0} Vault Zones</p>
                 </div>
-                <div className="bg-gray-800/40 p-3 rounded-lg">
-                  <span className="text-xs text-gray-400">Today's Locker Visits</span>
-                  <p className="text-lg font-bold text-white mt-1">{stats?.lockerSecurity?.todayLockerEntries ?? 0} Sessions</p>
+                <div className="bg-[var(--surface-soft)] p-3 rounded-lg">
+                  <span className="text-xs text-[var(--muted)]">Today's Locker Visits</span>
+                  <p className="text-lg font-bold text-[var(--ink)] mt-1">{stats?.lockerSecurity?.todayLockerEntries ?? 0} Sessions</p>
                 </div>
-                <div className="bg-gray-800/40 p-3 rounded-lg">
-                  <span className="text-xs text-gray-400">Occupancy Violations (&gt;2)</span>
+                <div className="bg-[var(--surface-soft)] p-3 rounded-lg">
+                  <span className="text-xs text-[var(--muted)]">Occupancy Violations (&gt;2)</span>
                   <p className="text-lg font-bold text-red-400 mt-1">{stats?.nbfcMetrics?.lockerViolations ?? 0} Intercepted</p>
                 </div>
-                <div className="bg-gray-800/40 p-3 rounded-lg">
-                  <span className="text-xs text-gray-400">Dual-Control Compliance</span>
+                <div className="bg-[var(--surface-soft)] p-3 rounded-lg">
+                  <span className="text-xs text-[var(--muted)]">Dual-Control Compliance</span>
                   <p className="text-lg font-bold text-emerald-400 mt-1">{stats?.lockerSecurity?.dualControlCompliantPercent ?? 0}% Staffed</p>
                 </div>
               </div>
 
-              <div className="text-xs text-gray-400 bg-gray-800/20 p-3 rounded-lg border border-gray-800 flex items-center justify-between">
+              <div className="text-xs text-[var(--muted)] bg-[var(--surface-soft)] p-3 rounded-lg border border-[var(--line)] flex items-center justify-between">
                 <span>After-hours Motion Status: <strong className="text-emerald-400">{stats?.nbfcMetrics?.afterHoursPersons ? `${stats.nbfcMetrics.afterHoursPersons} Detected` : "ARMED (0 Detections)"}</strong></span>
-                <span>Last Verified Segment: <strong className="text-gray-200">2s ago</strong></span>
+                <span>Last Verified Segment: <strong className="text-[var(--ink)]">2s ago</strong></span>
               </div>
             </div>
 
             {/* Cash Counter Operations */}
-            <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-5 space-y-4">
-              <div className="flex items-center justify-between border-b border-gray-800 pb-3">
-                <div className="flex items-center gap-2 text-white font-semibold">
+            <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-5 space-y-4">
+              <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
+                <div className="flex items-center gap-2 text-[var(--ink)] font-semibold">
                   <Users className="w-5 h-5 text-blue-400" />
                   <span>Cash Counter & Queue Efficiency</span>
                 </div>
@@ -1357,30 +1381,30 @@ export function NbfcRulesWorkspace() {
               </div>
 
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="bg-gray-800/40 p-3 rounded-lg">
-                  <span className="text-xs text-gray-400">Active Counters</span>
-                  <p className="text-lg font-bold text-white mt-1">{stats?.cashCounterAnalytics?.activeCounters ?? 0} Operating</p>
+                <div className="bg-[var(--surface-soft)] p-3 rounded-lg">
+                  <span className="text-xs text-[var(--muted)]">Active Counters</span>
+                  <p className="text-lg font-bold text-[var(--ink)] mt-1">{stats?.cashCounterAnalytics?.activeCounters ?? 0} Operating</p>
                 </div>
-                <div className="bg-gray-800/40 p-3 rounded-lg">
-                  <span className="text-xs text-gray-400">Unattended Alerts (&gt;2m)</span>
+                <div className="bg-[var(--surface-soft)] p-3 rounded-lg">
+                  <span className="text-xs text-[var(--muted)]">Unattended Alerts (&gt;2m)</span>
                   <p className="text-lg font-bold text-yellow-400 mt-1">{stats?.cashCounterAnalytics?.unattendedCounters ?? 0} Alerts</p>
                 </div>
-                <div className="bg-gray-800/40 p-3 rounded-lg">
-                  <span className="text-xs text-gray-400">Average Wait Time</span>
+                <div className="bg-[var(--surface-soft)] p-3 rounded-lg">
+                  <span className="text-xs text-[var(--muted)]">Average Wait Time</span>
                   <p className="text-lg font-bold text-emerald-400 mt-1">
                     {stats?.cashCounterAnalytics?.averageWaitSeconds
                       ? `${Math.floor(stats.cashCounterAnalytics.averageWaitSeconds / 60)}m ${stats.cashCounterAnalytics.averageWaitSeconds % 60}s`
                       : "0m 0s"}
                   </p>
                 </div>
-                <div className="bg-gray-800/40 p-3 rounded-lg">
-                  <span className="text-xs text-gray-400">Customers Served Today</span>
-                  <p className="text-lg font-bold text-white mt-1">{stats?.cashCounterAnalytics?.totalCustomersServedToday ?? 0}</p>
+                <div className="bg-[var(--surface-soft)] p-3 rounded-lg">
+                  <span className="text-xs text-[var(--muted)]">Customers Served Today</span>
+                  <p className="text-lg font-bold text-[var(--ink)] mt-1">{stats?.cashCounterAnalytics?.totalCustomersServedToday ?? 0}</p>
                 </div>
               </div>
 
-              <div className="text-xs text-gray-400 bg-gray-800/20 p-3 rounded-lg border border-gray-800 flex items-center justify-between">
-                <span>Queue SLA Limit: <strong className="text-gray-200">&lt; 8 Persons</strong></span>
+              <div className="text-xs text-[var(--muted)] bg-[var(--surface-soft)] p-3 rounded-lg border border-[var(--line)] flex items-center justify-between">
+                <span>Queue SLA Limit: <strong className="text-[var(--ink)]">&lt; 8 Persons</strong></span>
                 <span>Max Peak Wait: <strong className="text-yellow-400">{stats?.cashCounterAnalytics?.maxWaitSeconds ? `${Math.floor(stats.cashCounterAnalytics.maxWaitSeconds / 60)}m ${stats.cashCounterAnalytics.maxWaitSeconds % 60}s` : "Nominal"}</strong></span>
               </div>
             </div>
@@ -1392,40 +1416,47 @@ export function NbfcRulesWorkspace() {
       {activeTab === "rules" && (
         <div className="space-y-4">
           {/* Filters Bar */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 bg-gray-900/60 p-4 rounded-xl border border-gray-800 text-xs">
-            <div className="relative">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
-              <input
-                type="text"
-                placeholder="Search rule name or description..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-red-500"
-              />
-            </div>
+          <div className={styles.filters}>
+            <label className={styles.filterField}>
+              <span>Search rules</span>
+              <div className={styles.searchField}>
+                <Search aria-hidden="true" className="w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Rule name or description"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className={styles.searchInput}
+                />
+              </div>
+            </label>
 
-            <div>
+            <label className={styles.filterField}>
+              <span>Branch</span>
               <select
+                aria-label="Branch"
                 value={selectedBranch}
-                onChange={(e) => setSelectedBranch(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-red-500"
+                onChange={(e) => { setSelectedBranch(e.target.value); setSelectedCamera("ALL"); }}
+                className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg px-3 py-2 text-[var(--ink)] focus:outline-none focus:border-[var(--blue)]"
               >
-                <option value="ALL">Branch: All Branches ({branches.length})</option>
+                <option value="ALL">All branches ({branches.length})</option>
                 {branches.map((b) => (
                   <option key={b.id} value={b.id || b.name}>
                     {b.name}
                   </option>
                 ))}
               </select>
-            </div>
+            </label>
 
-            <div>
+            <label className={styles.filterField}>
+              <span>Camera</span>
               <select
+                aria-label="Camera"
                 value={selectedCamera}
                 onChange={(e) => setSelectedCamera(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-red-500"
+                className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg px-3 py-2 text-[var(--ink)] focus:outline-none focus:border-[var(--blue)]"
               >
-                <option value="ALL">Camera: All Cameras ({cameras.length})</option>
+                <option value="ALL">All cameras ({cameras.length})</option>
                 {cameras
                   .filter((c) => selectedBranch === "ALL" || !c.branchId || c.branchId === selectedBranch)
                   .map((c) => (
@@ -1434,15 +1465,17 @@ export function NbfcRulesWorkspace() {
                     </option>
                   ))}
               </select>
-            </div>
+            </label>
 
-            <div>
+            <label className={styles.filterField}>
+              <span>Detector</span>
               <select
+                aria-label="Detector"
                 value={selectedType}
                 onChange={(e) => setSelectedType(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-red-500"
+                className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg px-3 py-2 text-[var(--ink)] focus:outline-none focus:border-[var(--blue)]"
               >
-                <option value="ALL">Detector: All Types</option>
+                <option value="ALL">All detector types</option>
                 <option value="person">Person Detection</option>
                 <option value="crowd-density">Crowd Density</option>
                 <option value="queue">Queue SLA</option>
@@ -1451,32 +1484,34 @@ export function NbfcRulesWorkspace() {
                 <option value="camera-tamper">Camera Tamper</option>
                 <option value="recording">Recording Continuity</option>
               </select>
-            </div>
+            </label>
 
-            <div>
+            <label className={styles.filterField}>
+              <span>Status</span>
               <select
+                aria-label="Status"
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-red-500"
+                className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg px-3 py-2 text-[var(--ink)] focus:outline-none focus:border-[var(--blue)]"
               >
-                <option value="ALL">Status: All Statuses</option>
-                <option value="ACTIVE">● Active</option>
-                <option value="SHADOW">◐ Shadow Mode</option>
-                <option value="INACTIVE">○ Inactive</option>
+                <option value="ALL">All statuses</option>
+                <option value="ACTIVE">Active</option>
+                <option value="SHADOW">Shadow mode</option>
+                <option value="INACTIVE">Inactive</option>
               </select>
-            </div>
+            </label>
           </div>
 
           {/* Rules Cards List */}
-          <div className="space-y-3">
+          <div className={styles.ruleList}>
             {filteredRules.length === 0 ? (
-              <div className="text-center py-12 bg-gray-900/40 border border-gray-800 rounded-xl text-gray-400">
-                <SlidersHorizontal className="w-10 h-10 mx-auto text-gray-600 mb-3" />
-                <p className="text-base font-medium text-gray-300">No matching AI rules found</p>
-                <p className="text-xs text-gray-500 mt-1">Try clearing your filters or create a rule from the configured templates.</p>
+              <div className="text-center py-12 bg-[var(--surface)] border border-[var(--line)] rounded-xl text-[var(--muted)]">
+                <SlidersHorizontal className="w-10 h-10 mx-auto text-[var(--muted)] mb-3" />
+                <p className="text-base font-medium text-[var(--ink)]">No matching AI rules found</p>
+                <p className="text-xs text-[var(--muted)] mt-1">Try clearing your filters or create a rule from the configured templates.</p>
                 <button
                   onClick={handleOpenCreateRule}
-                  className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-medium"
+                  className="mt-4 px-4 py-2 bg-[#3c6df5] hover:bg-[#2853ca] text-[#ffffff] rounded-lg text-xs font-medium"
                 >
                   Create Rule Now
                 </button>
@@ -1486,12 +1521,13 @@ export function NbfcRulesWorkspace() {
                 const cond = rule.condition || {};
                 const operatorDisplay = cond.operator?.replace(/_/g, " ").toLowerCase() || "greater than";
                 return (
-                  <div
+                  <article
                     key={rule.id}
-                    className="bg-gray-900/70 border border-gray-800 hover:border-gray-700 transition rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+                    aria-label={rule.name}
+                    className={styles.ruleCard}
                   >
-                    <div className="space-y-1.5 flex-1">
-                      <div className="flex items-center gap-3">
+                    <div className={styles.ruleContent}>
+                      <div className={styles.ruleHeading}>
                         <span
                           className={`w-2.5 h-2.5 rounded-full ${
                             rule.state === "ACTIVE"
@@ -1502,15 +1538,10 @@ export function NbfcRulesWorkspace() {
                           }`}
                           title={`State: ${rule.state}`}
                         />
-                        <h3 className="text-base font-bold text-white tracking-wide">{rule.name}</h3>
+                        <h3 className={styles.ruleTitle}>{rule.name}</h3>
                         <span
-                          className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${
-                            rule.severity === "CRITICAL"
-                              ? "bg-red-500/10 text-red-400 border-red-500/30"
-                              : rule.severity === "HIGH"
-                              ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                              : "bg-blue-500/10 text-blue-400 border-blue-500/30"
-                          }`}
+                          className={styles.severity}
+                          data-severity={rule.severity}
                         >
                           {rule.severity}
                         </span>
@@ -1519,37 +1550,37 @@ export function NbfcRulesWorkspace() {
                             SHADOW MODE
                           </span>
                         )}
-                        <span className="text-xs text-gray-500">v{rule.version}</span>
+                        <span className={styles.version}>v{rule.version}</span>
                       </div>
 
-                      <p className="text-xs text-gray-400">{rule.description || "No description provided."}</p>
+                      <p className={styles.ruleDescription}>{rule.description || "No description provided."}</p>
 
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-400 pt-1">
-                        <span className="flex items-center gap-1.5">
-                          <Building2 className="w-3.5 h-3.5 text-gray-500" />
-                          {rule.branchIds?.length ? rule.branchIds.join(", ") : "All Branches"}
+                      <div className={styles.ruleMetadata}>
+                        <span className="flex items-center gap-1.5" title={rule.branchIds?.join(", ")}>
+                          <Building2 className="w-3.5 h-3.5 text-[var(--muted)]" />
+                          {rule.branchIds?.length ? rule.branchIds.map(id => branches.find(branch => branch.id === id)?.name ?? "Assigned branch").join(", ") : "All Branches"}
                         </span>
-                        <span className="flex items-center gap-1.5">
-                          <Camera className="w-3.5 h-3.5 text-gray-500" />
-                          {rule.cameraIds?.length ? rule.cameraIds.join(", ") : "All Cameras"}
+                        <span className="flex items-center gap-1.5" title={rule.cameraIds?.join(", ")}>
+                          <Camera className="w-3.5 h-3.5 text-[var(--muted)]" />
+                          {rule.cameraIds?.length ? rule.cameraIds.map(id => cameras.find(camera => camera.id === id)?.name ?? "Assigned camera").join(", ") : "All Cameras"}
                         </span>
-                        <span className="flex items-center gap-1.5 font-mono text-gray-300">
+                        <span className="flex items-center gap-1.5 font-mono text-[var(--ink)]">
                           <Zap className="w-3.5 h-3.5 text-amber-400" />
                           {cond.metric || "metric"} {operatorDisplay} {String(cond.value ?? 0)}
                           {rule.durationMs ? ` for ${rule.durationMs / 1000}s` : ""}
                         </span>
                         <span className="flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5 text-gray-500" />
-                          {rule.schedule?.type?.replace("_", " ") || "24X7"}
+                          <Clock className="w-3.5 h-3.5 text-[var(--muted)]" />
+                          {rule.schedule?.type?.replace(/_/g, " ") || "24X7"}
                         </span>
                       </div>
                     </div>
 
                     {/* Actions Toolbar */}
-                    <div className="flex items-center gap-2 self-end md:self-center">
+                    <div className={styles.ruleActions}>
                       <button
                         onClick={() => handleRunTest(rule)}
-                        className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700 text-xs font-medium transition"
+                        className={styles.actionButton}
                         title="Review recorded alerts for this rule's historical scope"
                       >
                         Test Rule
@@ -1557,11 +1588,9 @@ export function NbfcRulesWorkspace() {
 
                       <button
                         onClick={() => handleToggleShadow(rule)}
-                        className={`px-2.5 py-1.5 rounded border text-xs font-medium transition ${
-                          rule.state === "SHADOW"
-                            ? "bg-purple-500/20 text-purple-300 border-purple-500/30"
-                            : "bg-gray-800 hover:bg-gray-700 text-gray-300 border-gray-700"
-                        }`}
+                        className={styles.actionButton}
+                        data-variant={rule.state === "SHADOW" ? "shadow" : undefined}
+                        aria-pressed={rule.state === "SHADOW"}
                         title="Toggle Shadow Mode"
                       >
                         {rule.state === "SHADOW" ? "Promote to Live" : "Shadow Mode"}
@@ -1569,43 +1598,48 @@ export function NbfcRulesWorkspace() {
 
                       <button
                         onClick={() => handleToggleRule(rule)}
-                        className={`px-2.5 py-1.5 rounded border text-xs font-medium transition ${
-                          rule.enabled
-                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                            : "bg-gray-800 text-gray-500 border-gray-700"
-                        }`}
+                        className={styles.actionButton}
+                        data-variant={rule.enabled ? "active" : "inactive"}
+                        aria-pressed={rule.enabled}
+                        aria-label={`${rule.enabled ? "Disable" : "Enable"} ${rule.name}`}
                       >
                         {rule.enabled ? "Active" : "Disabled"}
                       </button>
 
-                      <button
-                        onClick={() => handleEditRule(rule)}
-                        className="p-1.5 hover:bg-gray-800 text-gray-400 hover:text-white rounded"
-                        title="Edit Configuration"
-                      >
-                        <Sliders className="w-4 h-4" />
-                      </button>
+                      <div className={styles.iconActions}>
+                        <button
+                          onClick={() => handleEditRule(rule)}
+                          className={styles.iconButton}
+                          aria-label={`Edit ${rule.name}`}
+                          title="Edit Configuration"
+                        >
+                          <Sliders className="w-4 h-4" />
+                        </button>
 
-                      <button
-                        onClick={() => {
-                          setFeedbackRuleTarget(rule);
-                          setIsFeedbackModalOpen(true);
-                        }}
-                        className="p-1.5 hover:bg-gray-800 text-gray-400 hover:text-amber-400 rounded"
-                        title="Report False Positive Feedback"
-                      >
-                        <HelpCircle className="w-4 h-4" />
-                      </button>
+                        <button
+                          onClick={() => {
+                            setFeedbackRuleTarget(rule);
+                            setIsFeedbackModalOpen(true);
+                          }}
+                          className={styles.iconButton}
+                          aria-label={`Report feedback for ${rule.name}`}
+                          title="Report False Positive Feedback"
+                        >
+                          <HelpCircle className="w-4 h-4" />
+                        </button>
 
-                      <button
-                        onClick={() => handleDeleteRule(rule)}
-                        className="p-1.5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 rounded"
-                        title="Delete Rule"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                        <button
+                          onClick={() => handleDeleteRule(rule)}
+                          className={styles.iconButton}
+                          data-variant="danger"
+                          aria-label={`Delete ${rule.name}`}
+                          title="Delete Rule"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  </article>
                 );
               })
             )}
@@ -1616,16 +1650,16 @@ export function NbfcRulesWorkspace() {
       {/* TAB 3: ZONE DESIGNER & MANAGER */}
       {activeTab === "zones" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-gray-900/60 border border-gray-800 rounded-xl p-5 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800 pb-3">
+          <div className="lg:col-span-2 bg-[var(--surface)] border border-[var(--line)] rounded-xl p-5 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] pb-3">
               <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <h3 className="text-base font-bold text-[var(--ink)] flex items-center gap-2">
                   <span>Visual Zone & Virtual Tripwire Designer</span>
                   <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-500/20 text-blue-300 border border-blue-500/30">
                     {zoneMode === "TRIPWIRE" ? "VIRTUAL TRIPWIRE" : "POLYGON ZONE"}
                   </span>
                 </h3>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-[var(--muted)] mt-0.5">
                   {zoneMode === "TRIPWIRE"
                     ? "Click 2 points to establish virtual tripwire line & directional ingress boundary."
                     : "Click on the video canvas to draw polygon vertices (min 3 points)."}
@@ -1634,7 +1668,7 @@ export function NbfcRulesWorkspace() {
 
               {/* Mode Toggle & Presets */}
               <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center bg-gray-950 p-1 rounded-lg border border-gray-800">
+                <div className="flex items-center bg-[var(--surface-strong)] p-1 rounded-lg border border-[var(--line)]">
                   <button
                     onClick={() => {
                       setZoneMode("POLYGON");
@@ -1642,8 +1676,8 @@ export function NbfcRulesWorkspace() {
                     }}
                     className={`px-3 py-1 text-xs rounded font-medium transition ${
                       zoneMode === "POLYGON"
-                        ? "bg-red-600 text-white shadow"
-                        : "text-gray-400 hover:text-white"
+                        ? "bg-red-600 text-[#ffffff] shadow"
+                        : "text-[var(--muted)] hover:text-[var(--ink)]"
                     }`}
                   >
                     Polygon Zone
@@ -1655,8 +1689,8 @@ export function NbfcRulesWorkspace() {
                     }}
                     className={`px-3 py-1 text-xs rounded font-medium transition ${
                       zoneMode === "TRIPWIRE"
-                        ? "bg-amber-600 text-white shadow"
-                        : "text-gray-400 hover:text-white"
+                        ? "bg-amber-600 text-[#ffffff] shadow"
+                        : "text-[var(--muted)] hover:text-[var(--ink)]"
                     }`}
                   >
                     Virtual Tripwire
@@ -1672,7 +1706,7 @@ export function NbfcRulesWorkspace() {
                       ctx?.clearRect(0, 0, canvas.width, canvas.height);
                     }
                   }}
-                  className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded border border-gray-700"
+                  className="px-3 py-1.5 bg-[var(--surface-soft)] hover:bg-[var(--surface-strong)] text-[var(--ink)] text-xs rounded border border-[var(--line)]"
                 >
                   Clear Canvas
                 </button>
@@ -1680,24 +1714,24 @@ export function NbfcRulesWorkspace() {
             </div>
 
             {/* Quick Presets & Tripwire Direction Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-gray-950/60 rounded-lg border border-gray-800 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-[var(--surface-strong)] rounded-lg border border-[var(--line)] text-xs">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-gray-400 font-semibold uppercase text-[10px] tracking-wider mr-1">Quick Presets:</span>
+                <span className="text-[var(--muted)] font-semibold uppercase text-[10px] tracking-wider mr-1">Quick Presets:</span>
                 <button
                   onClick={applyPresetVault}
-                  className="px-2.5 py-1 bg-gray-800 hover:bg-amber-600/30 hover:border-amber-500/50 text-amber-300 border border-gray-700 rounded text-xs transition"
+                  className="px-2.5 py-1 bg-[var(--surface-soft)] hover:bg-amber-600/30 hover:border-amber-500/50 text-amber-300 border border-[var(--line)] rounded text-xs transition"
                 >
                   🔒 Vault
                 </button>
                 <button
                   onClick={applyPresetCounter}
-                  className="px-2.5 py-1 bg-gray-800 hover:bg-blue-600/30 hover:border-blue-500/50 text-blue-300 border border-gray-700 rounded text-xs transition"
+                  className="px-2.5 py-1 bg-[var(--surface-soft)] hover:bg-blue-600/30 hover:border-blue-500/50 text-blue-300 border border-[var(--line)] rounded text-xs transition"
                 >
                   💵 Counter
                 </button>
                 <button
                   onClick={applyPresetTripwire}
-                  className="px-2.5 py-1 bg-gray-800 hover:bg-emerald-600/30 hover:border-emerald-500/50 text-emerald-300 border border-gray-700 rounded text-xs transition"
+                  className="px-2.5 py-1 bg-[var(--surface-soft)] hover:bg-emerald-600/30 hover:border-emerald-500/50 text-emerald-300 border border-[var(--line)] rounded text-xs transition"
                 >
                   ⚡ Door
                 </button>
@@ -1707,7 +1741,7 @@ export function NbfcRulesWorkspace() {
                     type: "QUEUE_AREA",
                     polygon: [{ x: 0.1, y: 0.3 }, { x: 0.4, y: 0.3 }, { x: 0.4, y: 0.9 }, { x: 0.1, y: 0.9 }],
                   })}
-                  className="px-2.5 py-1 bg-gray-800 hover:bg-purple-600/30 hover:border-purple-500/50 text-purple-300 border border-gray-700 rounded text-xs transition"
+                  className="px-2.5 py-1 bg-[var(--surface-soft)] hover:bg-purple-600/30 hover:border-purple-500/50 text-purple-300 border border-[var(--line)] rounded text-xs transition"
                 >
                   👥 Queue
                 </button>
@@ -1717,7 +1751,7 @@ export function NbfcRulesWorkspace() {
                     type: "ATM_AREA",
                     polygon: [{ x: 0.6, y: 0.2 }, { x: 0.9, y: 0.2 }, { x: 0.9, y: 0.7 }, { x: 0.6, y: 0.7 }],
                   })}
-                  className="px-2.5 py-1 bg-gray-800 hover:bg-cyan-600/30 hover:border-cyan-500/50 text-cyan-300 border border-gray-700 rounded text-xs transition"
+                  className="px-2.5 py-1 bg-[var(--surface-soft)] hover:bg-cyan-600/30 hover:border-cyan-500/50 text-cyan-300 border border-[var(--line)] rounded text-xs transition"
                 >
                   🏧 ATM
                 </button>
@@ -1727,7 +1761,7 @@ export function NbfcRulesWorkspace() {
                     type: "RESTRICTED_AREA",
                     polygon: [{ x: 0.05, y: 0.05 }, { x: 0.3, y: 0.05 }, { x: 0.3, y: 0.3 }, { x: 0.05, y: 0.3 }],
                   })}
-                  className="px-2.5 py-1 bg-gray-800 hover:bg-red-600/30 hover:border-red-500/50 text-red-300 border border-gray-700 rounded text-xs transition"
+                  className="px-2.5 py-1 bg-[var(--surface-soft)] hover:bg-red-600/30 hover:border-red-500/50 text-red-300 border border-[var(--line)] rounded text-xs transition"
                 >
                   ⚠️ Restricted
                 </button>
@@ -1735,7 +1769,7 @@ export function NbfcRulesWorkspace() {
 
               {zoneMode === "TRIPWIRE" && (
                 <div className="flex items-center gap-1.5">
-                  <span className="text-gray-400 text-[10px] uppercase font-semibold">Direction:</span>
+                  <span className="text-[var(--muted)] text-[10px] uppercase font-semibold">Direction:</span>
                   {(["A_TO_B", "B_TO_A", "BIDIRECTIONAL"] as const).map((dir) => (
                     <button
                       key={dir}
@@ -1743,7 +1777,7 @@ export function NbfcRulesWorkspace() {
                       className={`px-2 py-0.5 rounded text-[11px] font-mono border transition ${
                         tripwireDirection === dir
                           ? "bg-amber-500/20 text-amber-300 border-amber-500"
-                          : "bg-gray-900 text-gray-400 border-gray-800 hover:text-white"
+                          : "bg-[var(--surface)] text-[var(--muted)] border-[var(--line)] hover:text-[var(--ink)]"
                       }`}
                     >
                       {dir === "A_TO_B" ? "A ➔ B" : dir === "B_TO_A" ? "B ➔ A" : "A ⇄ B"}
@@ -1754,12 +1788,12 @@ export function NbfcRulesWorkspace() {
             </div>
 
             {/* Drawing Controls */}
-            <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-gray-950/40 rounded-lg border border-gray-800/50">
+            <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-[var(--surface-strong)] rounded-lg border border-[var(--line)]">
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleUndo}
                   disabled={undoStack.length === 0}
-                  className="px-2 py-1 bg-gray-800 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed text-gray-300 text-xs rounded border border-gray-700 transition flex items-center gap-1"
+                  className="px-2 py-1 bg-[var(--surface-soft)] hover:bg-[var(--surface-strong)] disabled:opacity-30 disabled:cursor-not-allowed text-[var(--ink)] text-xs rounded border border-[var(--line)] transition flex items-center gap-1"
                   title="Undo (Ctrl+Z)"
                 >
                   ↶ Undo
@@ -1767,27 +1801,27 @@ export function NbfcRulesWorkspace() {
                 <button
                   onClick={handleRedo}
                   disabled={redoStack.length === 0}
-                  className="px-2 py-1 bg-gray-800 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed text-gray-300 text-xs rounded border border-gray-700 transition flex items-center gap-1"
+                  className="px-2 py-1 bg-[var(--surface-soft)] hover:bg-[var(--surface-strong)] disabled:opacity-30 disabled:cursor-not-allowed text-[var(--ink)] text-xs rounded border border-[var(--line)] transition flex items-center gap-1"
                   title="Redo (Ctrl+Y)"
                 >
                   ↷ Redo
                 </button>
-                <div className="h-4 w-px bg-gray-700" />
-                <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer hover:text-gray-300">
+                <div className="h-4 w-px bg-[var(--surface-strong)]" />
+                <label className="flex items-center gap-1.5 text-xs text-[var(--muted)] cursor-pointer hover:text-[var(--ink)]">
                   <input
                     type="checkbox"
                     checked={snapToGrid}
                     onChange={(e) => setSnapToGrid(e.target.checked)}
-                    className="rounded bg-gray-800 border-gray-700 text-red-600 focus:ring-0"
+                    className="rounded bg-[var(--surface-soft)] border-[var(--line)] text-red-600 focus:ring-0"
                   />
                   Snap to Grid (5%)
                 </label>
-                <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer hover:text-gray-300">
+                <label className="flex items-center gap-1.5 text-xs text-[var(--muted)] cursor-pointer hover:text-[var(--ink)]">
                   <input
                     type="checkbox"
                     checked={showMeasurements}
                     onChange={(e) => setShowMeasurements(e.target.checked)}
-                    className="rounded bg-gray-800 border-gray-700 text-red-600 focus:ring-0"
+                    className="rounded bg-[var(--surface-soft)] border-[var(--line)] text-red-600 focus:ring-0"
                   />
                   Show Measurements
                 </label>
@@ -1836,7 +1870,7 @@ export function NbfcRulesWorkspace() {
             )}
 
             {/* Canvas Container */}
-            <div className="relative aspect-video bg-black rounded-xl overflow-hidden border border-gray-800 shadow-inner flex items-center justify-center">
+            <div className="relative aspect-video bg-black rounded-xl overflow-hidden border border-[var(--line)] shadow-inner flex items-center justify-center">
               <canvas
                 ref={canvasRef}
                 width={800}
@@ -1845,18 +1879,18 @@ export function NbfcRulesWorkspace() {
                 className="w-full h-full cursor-crosshair"
               />
               {drawnPoints.length === 0 && !loadingSnapshot && (
-                <div className="absolute pointer-events-none text-center text-gray-500 text-xs max-w-md">
-                  <p className="font-semibold text-gray-400">
+                <div className="absolute pointer-events-none text-center text-[var(--muted)] text-xs max-w-md">
+                  <p className="font-semibold text-[var(--muted)]">
                     {zoneMode === "TRIPWIRE" 
                       ? "Click 2 points to draw Tripwire Line (A → B)" 
                       : "Click anywhere to plot polygon vertices (min 3 points)"}
                   </p>
-                  <p className="text-[10px] text-gray-600 mt-1">
+                  <p className="text-[10px] text-[var(--muted)] mt-1">
                     {zoneMode === "TRIPWIRE" 
                       ? "Direction arrow shows trigger orientation" 
                       : "Click near first point (green) to close polygon"}
                   </p>
-                  <div className="mt-2 flex items-center justify-center gap-3 text-[10px] text-gray-600">
+                  <div className="mt-2 flex items-center justify-center gap-3 text-[10px] text-[var(--muted)]">
                     <span>ESC: Cancel</span>
                     <span>Ctrl+Z: Undo</span>
                     <span>Enter: Complete</span>
@@ -1868,8 +1902,8 @@ export function NbfcRulesWorkspace() {
 
             {/* Drawing stats & save */}
             <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
-              <div className="flex items-center gap-3 text-xs text-gray-400">
-                <span>Vertices: <strong className="text-white">{drawnPoints.length}</strong></span>
+              <div className="flex items-center gap-3 text-xs text-[var(--muted)]">
+                <span>Vertices: <strong className="text-[var(--ink)]">{drawnPoints.length}</strong></span>
                 {zoneMode === "POLYGON" && drawnPoints.length >= 3 && validationErrors.length === 0 && (
                   <>
                     <span className="text-emerald-400 flex items-center gap-1">
@@ -1903,7 +1937,7 @@ export function NbfcRulesWorkspace() {
               <button
                 onClick={handleSaveZone}
                 disabled={zoneMode === "TRIPWIRE" ? drawnPoints.length < 2 : drawnPoints.length < 3 || validationErrors.length > 0}
-                className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-gray-800 disabled:text-gray-600 disabled:cursor-not-allowed text-white rounded-lg text-xs font-semibold shadow transition"
+                className="px-4 py-2 bg-[#3c6df5] hover:bg-[#2853ca] disabled:bg-[var(--surface-soft)] disabled:text-[var(--muted)] disabled:cursor-not-allowed text-[#ffffff] rounded-lg text-xs font-semibold shadow transition"
               >
                 {editingZoneId ? "Update Zone" : `Save ${zoneMode === "TRIPWIRE" ? "Tripwire" : "Zone"}`}
               </button>
@@ -1912,15 +1946,15 @@ export function NbfcRulesWorkspace() {
 
           {/* Zone Settings & Existing Zones List */}
           <div className="space-y-6">
-            <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-5 space-y-4">
-              <h3 className="text-sm font-bold text-white">Zone Properties</h3>
+            <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-5 space-y-4">
+              <h3 className="text-sm font-bold text-[var(--ink)]">Zone Properties</h3>
               <div className="space-y-3 text-xs">
                 <div>
-                  <label className="block text-gray-400 mb-1">Target Camera</label>
+                  <label className="block text-[var(--muted)] mb-1">Target Camera</label>
                   <select
                     value={zoneCameraId}
                     onChange={(e) => setZoneCameraId(e.target.value)}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-white focus:outline-none"
+                    className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg p-2 text-[var(--ink)] focus:outline-none"
                   >
                     {cameras.length === 0 ? (
                       <option value="">No cameras enrolled</option>
@@ -1935,21 +1969,21 @@ export function NbfcRulesWorkspace() {
                 </div>
 
                 <div>
-                  <label className="block text-gray-400 mb-1">Zone Label Name</label>
+                  <label className="block text-[var(--muted)] mb-1">Zone Label Name</label>
                   <input
                     type="text"
                     value={zoneName}
                     onChange={(e) => setZoneName(e.target.value)}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-white focus:outline-none"
+                    className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg p-2 text-[var(--ink)] focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-gray-400 mb-1">NBFC Zone Classification</label>
+                  <label className="block text-[var(--muted)] mb-1">NBFC Zone Classification</label>
                   <select
                     value={zoneType}
                     onChange={(e) => setZoneType(e.target.value)}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-white focus:outline-none"
+                    className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg p-2 text-[var(--ink)] focus:outline-none"
                   >
                     <option value="LOCKER">Locker / Strong Room</option>
                     <option value="CASH_COUNTER">Cash Counter Tray</option>
@@ -1967,34 +2001,34 @@ export function NbfcRulesWorkspace() {
             </div>
 
             {/* Existing Zones List */}
-            <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-5 space-y-3">
-              <h3 className="text-sm font-bold text-white">Configured Zones ({zones.length})</h3>
+            <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-5 space-y-3">
+              <h3 className="text-sm font-bold text-[var(--ink)]">Configured Zones ({zones.length})</h3>
               <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                 {zones.length === 0 ? (
-                  <p className="text-xs text-gray-500">No zones saved yet for this branch.</p>
+                  <p className="text-xs text-[var(--muted)]">No zones saved yet for this branch.</p>
                 ) : (
                   zones.map((z) => (
                     <div
                       key={z.id}
-                      className="bg-gray-800/50 p-2.5 rounded-lg border border-gray-700/60 flex items-center justify-between text-xs"
+                      className="bg-[var(--surface-soft)] p-2.5 rounded-lg border border-[var(--line)] flex items-center justify-between text-xs"
                     >
                       <div>
-                        <p className="font-semibold text-gray-200">{z.name}</p>
-                        <p className="text-[10px] text-gray-400">
+                        <p className="font-semibold text-[var(--ink)]">{z.name}</p>
+                        <p className="text-[10px] text-[var(--muted)]">
                           {z.type} • {z.polygon?.length || 0} pts • {cameras.find(c => c.id === z.cameraId)?.name || z.cameraId}
                         </p>
                       </div>
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => handleEditZone(z)}
-                          className="text-gray-500 hover:text-blue-400 p-1"
+                          className="text-[var(--muted)] hover:text-blue-400 p-1"
                           title="Edit Zone"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleDuplicateZone(z)}
-                          className="text-gray-500 hover:text-emerald-400 p-1"
+                          className="text-[var(--muted)] hover:text-emerald-400 p-1"
                           title="Duplicate Zone"
                         >
                           <Copy className="w-3.5 h-3.5" />
@@ -2006,7 +2040,7 @@ export function NbfcRulesWorkspace() {
                               setZones((prev) => prev.filter((item) => item.id !== z.id));
                             }
                           }}
-                          className="text-gray-500 hover:text-red-400 p-1"
+                          className="text-[var(--muted)] hover:text-red-400 p-1"
                           title="Delete Zone"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -2026,8 +2060,8 @@ export function NbfcRulesWorkspace() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold text-white">{templates.length} Configured NBFC Surveillance Templates</h2>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <h2 className="text-lg font-bold text-[var(--ink)]">{templates.length} Configured NBFC Surveillance Templates</h2>
+              <p className="text-xs text-[var(--muted)] mt-0.5">
                 Standard banking & gold loan branch rules ready for 1-click instantiation and threshold tuning.
               </p>
             </div>
@@ -2037,11 +2071,11 @@ export function NbfcRulesWorkspace() {
             {templates.map((tmpl) => (
               <div
                 key={tmpl.id}
-                className="bg-gray-900/70 border border-gray-800 hover:border-gray-700 transition rounded-xl p-4 flex flex-col justify-between space-y-3"
+                className="bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--line)] transition rounded-xl p-4 flex flex-col justify-between space-y-3"
               >
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-gray-800 text-gray-300 border border-gray-700">
+                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-[var(--surface-soft)] text-[var(--ink)] border border-[var(--line)]">
                       {tmpl.category.replace("_", " ")}
                     </span>
                     <span
@@ -2057,27 +2091,27 @@ export function NbfcRulesWorkspace() {
                     </span>
                   </div>
 
-                  <h4 className="text-sm font-bold text-white">{tmpl.name}</h4>
-                  <p className="text-xs text-gray-400 line-clamp-2">{tmpl.description}</p>
+                  <h4 className="text-sm font-bold text-[var(--ink)]">{tmpl.name}</h4>
+                  <p className="text-xs text-[var(--muted)] line-clamp-2">{tmpl.description}</p>
                 </div>
 
-                <div className="space-y-2 pt-2 border-t border-gray-800 text-xs text-gray-400">
+                <div className="space-y-2 pt-2 border-t border-[var(--line)] text-xs text-[var(--muted)]">
                   <div className="flex justify-between">
                     <span>Detector:</span>
-                    <strong className="text-gray-300">{tmpl.detectorType}</strong>
+                    <strong className="text-[var(--ink)]">{tmpl.detectorType}</strong>
                   </div>
                   <div className="flex justify-between">
                     <span>Default Duration:</span>
-                    <strong className="text-gray-300">{tmpl.defaultDurationMs / 1000}s</strong>
+                    <strong className="text-[var(--ink)]">{tmpl.defaultDurationMs / 1000}s</strong>
                   </div>
                   <div className="flex justify-between">
                     <span>Schedule:</span>
-                    <strong className="text-gray-300">{tmpl.suggestedSchedule}</strong>
+                    <strong className="text-[var(--ink)]">{tmpl.suggestedSchedule}</strong>
                   </div>
 
                   <button
                     onClick={() => handleCreateFromTemplate(tmpl)}
-                    className="w-full mt-2 flex items-center justify-center gap-1.5 py-2 bg-gray-800 hover:bg-red-600 hover:text-white text-gray-300 rounded-lg font-medium transition text-xs"
+                    className="w-full mt-2 flex items-center justify-center gap-1.5 py-2 bg-[var(--surface-soft)] hover:bg-red-600 hover:text-[#ffffff] text-[var(--ink)] rounded-lg font-medium transition text-xs"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     Create from Template
@@ -2093,14 +2127,14 @@ export function NbfcRulesWorkspace() {
       {activeTab === "health" && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-              <span className="text-xs text-gray-400">Total Stream Capacity</span>
-              <p className="text-2xl font-bold text-white mt-1">
+            <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-4">
+              <span className="text-xs text-[var(--muted)]">Total Stream Capacity</span>
+              <p className="text-2xl font-bold text-[var(--ink)] mt-1">
                 {(capacity?.totalStreamsCapacity ?? 0) > 0
                   ? `${capacity.totalStreamsCapacity} Channels`
                   : "Unavailable"}
               </p>
-              <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden mt-3">
+              <div className="w-full bg-[var(--surface-soft)] h-2 rounded-full overflow-hidden mt-3">
                 <div
                   className="bg-emerald-500 h-full transition-all duration-500"
                   style={{
@@ -2120,7 +2154,7 @@ export function NbfcRulesWorkspace() {
                   }}
                 />
               </div>
-              <p className="text-[11px] text-gray-400 mt-2">
+              <p className="text-[11px] text-[var(--muted)] mt-2">
                 {(capacity?.totalStreamsCapacity ?? 0) > 0
                   ? `${capacity?.activeStreams ?? stats?.totalAiCameras ?? 0} active, ${capacity?.reservedStreams ?? 0} reserved, ${Math.max(
                       0,
@@ -2132,51 +2166,51 @@ export function NbfcRulesWorkspace() {
               </p>
             </div>
 
-            <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-              <span className="text-xs text-gray-400">CPU Ingestion Utilization</span>
-              <p className="text-2xl font-bold text-white mt-1">
+            <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-4">
+              <span className="text-xs text-[var(--muted)]">CPU Ingestion Utilization</span>
+              <p className="text-2xl font-bold text-[var(--ink)] mt-1">
                 {capacity?.cpuUsagePercent !== undefined ? `${capacity.cpuUsagePercent}%` : "Unavailable"}
               </p>
-              <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden mt-3">
+              <div className="w-full bg-[var(--surface-soft)] h-2 rounded-full overflow-hidden mt-3">
                 <div
                   className="bg-blue-500 h-full transition-all duration-500"
                   style={{ width: `${Math.min(100, Math.max(0, capacity?.cpuUsagePercent ?? 0))}%` }}
                 />
               </div>
-              <p className="text-[11px] text-gray-400 mt-2">
+              <p className="text-[11px] text-[var(--muted)] mt-2">
                 {capacity?.cpuUsagePercent === undefined ? "Telemetry unavailable" : capacity.cpuUsagePercent > 80 ? "Elevated workload" : "Normal workload"}
               </p>
             </div>
 
-            <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-              <span className="text-xs text-gray-400">Memory & Hardware Allocation</span>
-              <p className="text-2xl font-bold text-white mt-1">
+            <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-4">
+              <span className="text-xs text-[var(--muted)]">Memory & Hardware Allocation</span>
+              <p className="text-2xl font-bold text-[var(--ink)] mt-1">
                 {capacity?.gpuMemoryUsagePercent !== undefined ? `${capacity.gpuMemoryUsagePercent}%` : "Unavailable"}
               </p>
-              <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden mt-3">
+              <div className="w-full bg-[var(--surface-soft)] h-2 rounded-full overflow-hidden mt-3">
                 <div
                   className="bg-purple-500 h-full transition-all duration-500"
                   style={{ width: `${Math.min(100, Math.max(0, capacity?.gpuMemoryUsagePercent ?? 0))}%` }}
                 />
               </div>
-              <p className="text-[11px] text-gray-400 mt-2">
+              <p className="text-[11px] text-[var(--muted)] mt-2">
                 {capacity?.gpuNodeId ? `Node: ${capacity.gpuNodeId}` : "Telemetry unavailable"}
               </p>
             </div>
           </div>
 
           {/* Model Registry Table */}
-          <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-5 space-y-4">
+          <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-5 space-y-4">
             <div>
-              <h3 className="text-base font-bold text-white">Authoritative AI Model Registry</h3>
-              <p className="text-xs text-gray-400 mt-0.5">
+              <h3 className="text-base font-bold text-[var(--ink)]">Authoritative AI Model Registry</h3>
+              <p className="text-xs text-[var(--muted)] mt-0.5">
                 Real-world benchmark validation status across certified hardware. Zero synthetic or faked confidence values.
               </p>
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-gray-300">
-                <thead className="bg-gray-800/60 text-gray-400 uppercase text-[10px] tracking-wider border-b border-gray-700">
+              <table className="w-full text-left text-xs text-[var(--ink)]">
+                <thead className="bg-[var(--surface-soft)] text-[var(--muted)] uppercase text-[10px] tracking-wider border-b border-[var(--line)]">
                   <tr>
                     <th className="py-2.5 px-3">Detector</th>
                     <th className="py-2.5 px-3">Model & Version</th>
@@ -2189,8 +2223,8 @@ export function NbfcRulesWorkspace() {
                 </thead>
                 <tbody className="divide-y divide-gray-800/60">
                   {models.map((m, idx) => (
-                    <tr key={idx} className="hover:bg-gray-800/30">
-                      <td className="py-3 px-3 font-semibold text-white capitalize">{m.detector}</td>
+                    <tr key={idx} className="hover:bg-[var(--surface-soft)]">
+                      <td className="py-3 px-3 font-semibold text-[var(--ink)] capitalize">{m.detector}</td>
                       <td className="py-3 px-3">{m.model}</td>
                       <td className="py-3 px-3">
                         <span
@@ -2207,7 +2241,7 @@ export function NbfcRulesWorkspace() {
                           {m.status.replace("_", " ")}
                         </span>
                       </td>
-                      <td className="py-3 px-3 text-gray-400">{m.runtime}</td>
+                      <td className="py-3 px-3 text-[var(--muted)]">{m.runtime}</td>
                       <td className="py-3 px-3">{m.actualFps} / {m.targetFps}</td>
                       <td className="py-3 px-3">{m.latencyMs} ms</td>
                       <td className="py-3 px-3">
@@ -2229,27 +2263,27 @@ export function NbfcRulesWorkspace() {
       {/* TAB 6: DETECTION HISTORY & SIMULATION TEST */}
       {activeTab === "history" && (
         <div className="space-y-6">
-          <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-5 space-y-4">
-            <h3 className="text-base font-bold text-white">Historical Alert Review</h3>
-            <p className="text-xs text-gray-400">
+          <div className="bg-[var(--surface)] border border-[var(--line)] rounded-xl p-5 space-y-4">
+            <h3 className="text-base font-bold text-[var(--ink)]">Historical Alert Review</h3>
+            <p className="text-xs text-[var(--muted)]">
               Select any configured rule to test against recorded historical video frames. This estimates real-world trigger frequency and potential false alarm rates before promoting a rule to live alerting.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
               {rules.length === 0 ? (
-                <div className="col-span-3 text-center py-8 text-gray-500 text-xs bg-gray-800/20 rounded-lg border border-dashed border-gray-800">
+                <div className="col-span-3 text-center py-8 text-[var(--muted)] text-xs bg-[var(--surface-soft)] rounded-lg border border-dashed border-[var(--line)]">
                   No active rules configured yet. Create a scoped rule or instantiate one from templates above to review recorded alerts.
                 </div>
               ) : (
                 rules.map((r) => (
-                  <div key={r.id} className="bg-gray-800/40 p-3 rounded-lg border border-gray-700/60 flex justify-between items-center text-xs">
+                  <div key={r.id} className="bg-[var(--surface-soft)] p-3 rounded-lg border border-[var(--line)] flex justify-between items-center text-xs">
                     <div>
-                      <p className="font-semibold text-white">{r.name}</p>
-                      <p className="text-gray-400">{r.detectorType} • v{r.version}</p>
+                      <p className="font-semibold text-[var(--ink)]">{r.name}</p>
+                      <p className="text-[var(--muted)]">{r.detectorType} • v{r.version}</p>
                     </div>
                     <button
                       onClick={() => handleRunTest(r)}
-                      className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded font-medium transition"
+                      className="px-3 py-1.5 bg-[#3c6df5] hover:bg-[#2853ca] text-[#ffffff] rounded font-medium transition"
                     >
                       Review Alerts
                     </button>
@@ -2264,45 +2298,52 @@ export function NbfcRulesWorkspace() {
       {/* VISUAL RULE BUILDER MODAL / DRAWER */}
       {isBuilderOpen && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl p-6 space-y-6">
-            <div className="flex items-center justify-between border-b border-gray-800 pb-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="rule-builder-title" className="bg-[var(--surface)] border border-[var(--line)] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl p-6 space-y-6">
+            <div className="flex items-center justify-between border-b border-[var(--line)] pb-4">
               <div>
-                <h3 className="text-lg font-bold text-white">
+                <h3 id="rule-builder-title" className="text-lg font-bold text-[var(--ink)]">
                   {editingRule ? `Edit Rule: ${editingRule.name}` : "Create AI Surveillance Rule"}
                 </h3>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-[var(--muted)] mt-0.5">
                   Configure real-time detection thresholds, duration, schedules, and response matrix
                 </p>
               </div>
-              <button onClick={() => setIsBuilderOpen(false)} className="text-gray-400 hover:text-white">
+              <button aria-label="Close rule editor" disabled={isSavingRule} onClick={() => setIsBuilderOpen(false)} className="text-[var(--muted)] hover:text-[var(--ink)]">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSaveRule} className="space-y-4 text-xs">
+              <fieldset disabled={isSavingRule} className="space-y-4">
               {/* Name & Scope */}
-              <div className="space-y-3 bg-gray-800/40 p-4 rounded-xl border border-gray-700/60">
-                <h4 className="font-bold text-gray-200 uppercase tracking-wider text-[11px]">Rule Identity & Scope</h4>
+              <div className="space-y-3 bg-[var(--surface-soft)] p-4 rounded-xl border border-[var(--line)]">
+                <h4 className="font-bold text-[var(--ink)] uppercase tracking-wider text-[11px]">Rule Identity & Scope</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-gray-400 mb-1">Rule Name</label>
+                    <label htmlFor="builder-rule-name" className="block text-[var(--muted)] mb-1">Rule Name</label>
                     <input
+                      id="builder-rule-name"
                       type="text"
                       required
                       value={builderForm.name}
                       onChange={(e) => setBuilderForm({ ...builderForm, name: e.target.value })}
                       placeholder="e.g. Locker Maximum Occupancy"
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-red-500"
+                      className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg p-2.5 text-[var(--ink)] focus:outline-none focus:border-[var(--blue)]"
                     />
                   </div>
                   <div>
-                    <label className="block text-gray-400 mb-1">Branch Target</label>
+                    <label htmlFor="builder-branch" className="block text-[var(--muted)] mb-1">Branch Target</label>
                     <select
+                      id="builder-branch"
+                      ref={branchTargetRef}
+                      aria-describedby="builder-scope-help"
                       value={builderForm.branchId}
-                      onChange={(e) => setBuilderForm({ ...builderForm, branchId: e.target.value })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-red-500"
+                      onChange={(e) => { setBuilderError(null); setBuilderForm({ ...builderForm, branchId: e.target.value, cameraId: "ALL", zoneId: "" }); }}
+                      className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg p-2.5 text-[var(--ink)] focus:outline-none focus:border-[var(--blue)]"
                     >
-                      <option value="ALL">All Branches (Global Fleet Policy)</option>
+                      <option value="ALL">No specific branch (global shadow policy)</option>
+                      {builderForm.branchId === KEEP_RULE_SCOPE && <option value={KEEP_RULE_SCOPE}>Keep existing branches ({editingRule?.branchIds.length})</option>}
+                      {builderForm.branchId !== "ALL" && builderForm.branchId !== KEEP_RULE_SCOPE && !branches.some(branch => branch.id === builderForm.branchId) && <option value={builderForm.branchId}>Current branch: {builderForm.branchId}</option>}
                       {branches.map((b) => (
                         <option key={b.id} value={b.id}>
                           {b.name} {b.code ? `(${b.code})` : ""}
@@ -2314,17 +2355,21 @@ export function NbfcRulesWorkspace() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-gray-400 mb-1">Camera Stream</label>
+                    <label htmlFor="builder-camera" className="block text-[var(--muted)] mb-1">Camera Stream</label>
                     <select
+                      id="builder-camera"
                       value={builderForm.cameraId}
-                      onChange={(e) => setBuilderForm({ ...builderForm, cameraId: e.target.value })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-red-500"
+                      onChange={(e) => { setBuilderError(null); setBuilderForm({ ...builderForm, cameraId: e.target.value, zoneId: "" }); }}
+                      className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg p-2.5 text-[var(--ink)] focus:outline-none focus:border-[var(--blue)]"
                     >
-                      <option value="ALL">All Cameras (Fleet-Wide Application)</option>
+                      <option value="ALL">{builderForm.branchId === "ALL" ? "No specific camera (global shadow policy)" : "All cameras in the selected branch"}</option>
+                      {builderForm.cameraId === KEEP_RULE_SCOPE && <option value={KEEP_RULE_SCOPE}>Keep existing cameras ({editingRule?.cameraIds.length})</option>}
+                      {builderForm.cameraId !== "ALL" && builderForm.cameraId !== KEEP_RULE_SCOPE && !cameras.some(camera => camera.id === builderForm.cameraId) && <option value={builderForm.cameraId}>Current camera: {builderForm.cameraId}</option>}
                       {cameras
                         .filter(
                           (c) =>
                             builderForm.branchId === "ALL" ||
+                            builderForm.branchId === KEEP_RULE_SCOPE ||
                             !builderForm.branchId ||
                             !c.branchId ||
                             c.branchId === builderForm.branchId
@@ -2338,34 +2383,35 @@ export function NbfcRulesWorkspace() {
                   </div>
 
                   <div>
-                    <label className="block text-gray-400 mb-1">Zone Perimeter (Optional)</label>
+                    <label className="block text-[var(--muted)] mb-1">Zone Perimeter (Optional)</label>
                     <select
                       value={builderForm.zoneId}
                       onChange={(e) => setBuilderForm({ ...builderForm, zoneId: e.target.value })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-red-500"
+                      className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg p-2.5 text-[var(--ink)] focus:outline-none focus:border-[var(--blue)]"
                     >
                       <option value="">Full Frame / All Zones</option>
-                      {zones.map((z) => (
+                      {zones.filter(z => (builderForm.cameraId === "ALL" || builderForm.cameraId === KEEP_RULE_SCOPE || z.cameraId === builderForm.cameraId) && (builderForm.branchId === "ALL" || builderForm.branchId === KEEP_RULE_SCOPE || z.branchId === builderForm.branchId)).map((z) => (
                         <option key={z.id} value={z.id}>{z.name} ({z.type})</option>
                       ))}
                     </select>
                   </div>
                 </div>
+                <p id="builder-scope-help" className="text-[var(--muted)] leading-relaxed">Live rules require a branch or camera target. The current page selection is used for new rules and global policies. Existing rule targets are preserved.</p>
               </div>
 
               {/* WHEN Condition */}
-              <div className="space-y-3 bg-gray-800/40 p-4 rounded-xl border border-gray-700/60">
+              <div className="space-y-3 bg-[var(--surface-soft)] p-4 rounded-xl border border-[var(--line)]">
                 <h4 className="font-bold text-amber-400 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                   <Zap className="w-3.5 h-3.5" /> When Condition Triggers
                 </h4>
 
                 <div className="grid grid-cols-3 gap-3">
                   <div>
-                    <label className="block text-gray-400 mb-1">Metric</label>
+                    <label className="block text-[var(--muted)] mb-1">Metric</label>
                     <select
                       value={builderForm.metric}
                       onChange={(e) => setBuilderForm({ ...builderForm, metric: e.target.value })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white focus:outline-none"
+                      className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg p-2.5 text-[var(--ink)] focus:outline-none"
                     >
                       <option value="person_count">Person Count</option>
                       <option value="queue_length">Queue Length</option>
@@ -2378,11 +2424,11 @@ export function NbfcRulesWorkspace() {
                   </div>
 
                   <div>
-                    <label className="block text-gray-400 mb-1">Operator</label>
+                    <label className="block text-[var(--muted)] mb-1">Operator</label>
                     <select
                       value={builderForm.operator}
                       onChange={(e) => setBuilderForm({ ...builderForm, operator: e.target.value })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white focus:outline-none"
+                      className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg p-2.5 text-[var(--ink)] focus:outline-none"
                     >
                       <option value="GREATER_THAN">&gt; Greater Than</option>
                       <option value="GREATER_THAN_OR_EQUAL">&ge; Greater or Equal</option>
@@ -2394,51 +2440,51 @@ export function NbfcRulesWorkspace() {
                   </div>
 
                   <div>
-                    <label className="block text-gray-400 mb-1">Threshold Value</label>
+                    <label className="block text-[var(--muted)] mb-1">Threshold Value</label>
                     <input
                       type="number"
                       value={builderForm.value}
                       onChange={(e) => setBuilderForm({ ...builderForm, value: Number(e.target.value) })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white focus:outline-none"
+                      className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg p-2.5 text-[var(--ink)] focus:outline-none"
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 pt-1">
                   <div>
-                    <label className="block text-gray-400 mb-1">Persistence Required (Seconds)</label>
+                    <label className="block text-[var(--muted)] mb-1">Persistence Required (Seconds)</label>
                     <input
                       type="number"
                       min={0}
                       value={builderForm.durationSeconds}
                       onChange={(e) => setBuilderForm({ ...builderForm, durationSeconds: Number(e.target.value) })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white focus:outline-none"
+                      className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg p-2.5 text-[var(--ink)] focus:outline-none"
                     />
-                    <span className="text-[10px] text-gray-500 mt-1 block">e.g. 5 sec confirms sustained event</span>
+                    <span className="text-[10px] text-[var(--muted)] mt-1 block">e.g. 5 sec confirms sustained event</span>
                   </div>
 
                   <div>
-                    <label className="block text-gray-400 mb-1">Alert Cooldown (Seconds)</label>
+                    <label className="block text-[var(--muted)] mb-1">Alert Cooldown (Seconds)</label>
                     <input
                       type="number"
                       min={10}
                       value={builderForm.cooldownSeconds}
                       onChange={(e) => setBuilderForm({ ...builderForm, cooldownSeconds: Number(e.target.value) })}
-                      className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white focus:outline-none"
+                      className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg p-2.5 text-[var(--ink)] focus:outline-none"
                     />
-                    <span className="text-[10px] text-gray-500 mt-1 block">Prevents frame-by-frame alert storms</span>
+                    <span className="text-[10px] text-[var(--muted)] mt-1 block">Prevents frame-by-frame alert storms</span>
                   </div>
                 </div>
               </div>
 
               {/* Schedule & Severity */}
-              <div className="grid grid-cols-2 gap-3 bg-gray-800/40 p-4 rounded-xl border border-gray-700/60">
+              <div className="grid grid-cols-2 gap-3 bg-[var(--surface-soft)] p-4 rounded-xl border border-[var(--line)]">
                 <div>
-                  <label className="block text-gray-400 mb-1">Operating Schedule</label>
+                  <label className="block text-[var(--muted)] mb-1">Operating Schedule</label>
                   <select
                     value={builderForm.scheduleType}
                     onChange={(e) => setBuilderForm({ ...builderForm, scheduleType: e.target.value })}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white focus:outline-none"
+                    className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg p-2.5 text-[var(--ink)] focus:outline-none"
                   >
                     <option value="BUSINESS_HOURS">Business Hours (08:30 – 17:30)</option>
                     <option value="AFTER_HOURS">After Hours (19:00 – 08:00)</option>
@@ -2449,45 +2495,45 @@ export function NbfcRulesWorkspace() {
                   </select>
                   {["BRANCH_OPENING", "BRANCH_CLOSING", "CUSTOM"].includes(builderForm.scheduleType) && (
                     <div className="mt-2 grid grid-cols-2 gap-2">
-                      <label className="text-[10px] text-gray-500">
+                      <label className="text-[10px] text-[var(--muted)]">
                         Start time
-                        <input type="time" required value={builderForm.scheduleStart} onChange={(e) => setBuilderForm({ ...builderForm, scheduleStart: e.target.value })} className="mt-1 w-full rounded-lg border border-gray-700 bg-gray-800 p-2 text-white" />
+                        <input type="time" required value={builderForm.scheduleStart} onChange={(e) => setBuilderForm({ ...builderForm, scheduleStart: e.target.value })} className="mt-1 w-full rounded-lg border border-[var(--line)] bg-[var(--surface-soft)] p-2 text-[var(--ink)]" />
                       </label>
-                      <label className="text-[10px] text-gray-500">
+                      <label className="text-[10px] text-[var(--muted)]">
                         End time
-                        <input type="time" required value={builderForm.scheduleEnd} onChange={(e) => setBuilderForm({ ...builderForm, scheduleEnd: e.target.value })} className="mt-1 w-full rounded-lg border border-gray-700 bg-gray-800 p-2 text-white" />
+                        <input type="time" required value={builderForm.scheduleEnd} onChange={(e) => setBuilderForm({ ...builderForm, scheduleEnd: e.target.value })} className="mt-1 w-full rounded-lg border border-[var(--line)] bg-[var(--surface-soft)] p-2 text-[var(--ink)]" />
                       </label>
-                      <span className="col-span-2 text-[10px] text-gray-500">Monday–Saturday · {builderForm.scheduleTimezone}</span>
+                      <span className="col-span-2 text-[10px] text-[var(--muted)]">Monday–Saturday · {builderForm.scheduleTimezone}</span>
                     </div>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-gray-400 mb-1">Severity Level</label>
+                  <label className="block text-[var(--muted)] mb-1">Severity Level</label>
                   <select
                     value={builderForm.severity}
                     onChange={(e) => setBuilderForm({ ...builderForm, severity: e.target.value as any })}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white focus:outline-none font-bold"
+                    className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg p-2.5 text-[var(--ink)] focus:outline-none font-bold"
                   >
                     <option value="CRITICAL" className="text-red-400">CRITICAL</option>
                     <option value="HIGH" className="text-amber-400">HIGH</option>
                     <option value="MEDIUM" className="text-blue-400">MEDIUM</option>
-                    <option value="LOW" className="text-gray-400">LOW</option>
-                    <option value="INFO" className="text-gray-500">INFO</option>
+                    <option value="LOW" className="text-[var(--muted)]">LOW</option>
+                    <option value="INFO" className="text-[var(--muted)]">INFO</option>
                   </select>
                 </div>
               </div>
 
               {/* Actions Matrix */}
-              <div className="space-y-3 bg-gray-800/40 p-4 rounded-xl border border-gray-700/60">
-                <h4 className="font-bold text-gray-200 uppercase tracking-wider text-[11px]">Response Actions Matrix</h4>
-                <div className="grid grid-cols-2 gap-2 text-gray-300">
+              <div className="space-y-3 bg-[var(--surface-soft)] p-4 rounded-xl border border-[var(--line)]">
+                <h4 className="font-bold text-[var(--ink)] uppercase tracking-wider text-[11px]">Response Actions Matrix</h4>
+                <div className="grid grid-cols-2 gap-2 text-[var(--ink)]">
                   <label className="flex items-center gap-2">
                     <input
                       type="checkbox"
                       checked={builderForm.actionAlert}
                       onChange={(e) => setBuilderForm({ ...builderForm, actionAlert: e.target.checked })}
-                      className="rounded bg-gray-800 border-gray-700 text-red-600 focus:ring-0"
+                      className="rounded bg-[var(--surface-soft)] border-[var(--line)] text-red-600 focus:ring-0"
                     />
                     Create Alert in Operations Center
                   </label>
@@ -2497,7 +2543,7 @@ export function NbfcRulesWorkspace() {
                       type="checkbox"
                       checked={builderForm.actionIncident}
                       onChange={(e) => setBuilderForm({ ...builderForm, actionIncident: e.target.checked })}
-                      className="rounded bg-gray-800 border-gray-700 text-red-600 focus:ring-0"
+                      className="rounded bg-[var(--surface-soft)] border-[var(--line)] text-red-600 focus:ring-0"
                     />
                     Create Formal Security Incident
                   </label>
@@ -2507,7 +2553,7 @@ export function NbfcRulesWorkspace() {
                       type="checkbox"
                       checked={builderForm.actionSnapshot}
                       onChange={(e) => setBuilderForm({ ...builderForm, actionSnapshot: e.target.checked })}
-                      className="rounded bg-gray-800 border-gray-700 text-red-600 focus:ring-0"
+                      className="rounded bg-[var(--surface-soft)] border-[var(--line)] text-red-600 focus:ring-0"
                     />
                     Capture Forensic Snapshot
                   </label>
@@ -2517,7 +2563,7 @@ export function NbfcRulesWorkspace() {
                       type="checkbox"
                       checked={builderForm.actionClip}
                       onChange={(e) => setBuilderForm({ ...builderForm, actionClip: e.target.checked })}
-                      className="rounded bg-gray-800 border-gray-700 text-red-600 focus:ring-0"
+                      className="rounded bg-[var(--surface-soft)] border-[var(--line)] text-red-600 focus:ring-0"
                     />
                     Capture Evidence Clip (10s Pre / 30s Post)
                   </label>
@@ -2527,7 +2573,7 @@ export function NbfcRulesWorkspace() {
                       type="checkbox"
                       checked={builderForm.actionNotifySoc}
                       onChange={(e) => setBuilderForm({ ...builderForm, actionNotifySoc: e.target.checked })}
-                      className="rounded bg-gray-800 border-gray-700 text-red-600 focus:ring-0"
+                      className="rounded bg-[var(--surface-soft)] border-[var(--line)] text-red-600 focus:ring-0"
                     />
                     Notify Central SOC Operators
                   </label>
@@ -2537,7 +2583,7 @@ export function NbfcRulesWorkspace() {
                       type="checkbox"
                       checked={builderForm.actionNotifyBranch}
                       onChange={(e) => setBuilderForm({ ...builderForm, actionNotifyBranch: e.target.checked })}
-                      className="rounded bg-gray-800 border-gray-700 text-red-600 focus:ring-0"
+                      className="rounded bg-[var(--surface-soft)] border-[var(--line)] text-red-600 focus:ring-0"
                     />
                     Notify Branch Manager
                   </label>
@@ -2545,10 +2591,10 @@ export function NbfcRulesWorkspace() {
               </div>
 
               {/* Mode Toggle */}
-              <div className="flex items-center justify-between p-3 bg-gray-800/30 rounded-lg border border-gray-800">
+              <div className="flex items-center justify-between p-3 bg-[var(--surface-soft)] rounded-lg border border-[var(--line)]">
                 <div>
-                  <span className="font-semibold text-white">Execution Mode</span>
-                  <p className="text-[11px] text-gray-400">
+                  <span className="font-semibold text-[var(--ink)]">Execution Mode</span>
+                  <p className="text-[11px] text-[var(--muted)]">
                     Shadow mode logs and tracks detections without dispatching active external notifications.
                   </p>
                 </div>
@@ -2561,26 +2607,29 @@ export function NbfcRulesWorkspace() {
                       : "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
                   }`}
                 >
-                  {builderForm.state === "SHADOW" ? "◐ Shadow Mode" : "● Active Live"}
+                  {builderForm.state === "SHADOW" ? "Shadow Mode" : "Active Live"}
                 </button>
               </div>
 
               {/* Form Actions */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-800">
+              {builderError && <div role="alert" className={styles.saveError}>{builderError}</div>}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-[var(--line)]">
                 <button
                   type="button"
                   onClick={() => setIsBuilderOpen(false)}
-                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg font-medium"
+                  className="px-4 py-2 bg-[var(--surface-soft)] hover:bg-[var(--surface-strong)] text-[var(--ink)] rounded-lg font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-bold shadow-lg shadow-red-900/40"
+                  disabled={isSavingRule}
+                  className={styles.primaryButton}
                 >
-                  Save & Apply Rule
+                  {isSavingRule ? "Saving & Applying..." : "Save & Apply Rule"}
                 </button>
               </div>
+              </fieldset>
             </form>
           </div>
         </div>
@@ -2589,13 +2638,13 @@ export function NbfcRulesWorkspace() {
       {/* HISTORICAL ALERT REVIEW MODAL */}
       {isTestModalOpen && testRuleTarget && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-lg shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+          <div className="bg-[var(--surface)] border border-[var(--line)] rounded-2xl w-full max-w-lg shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
               <div>
-                <h3 className="text-base font-bold text-white">Historical Alert Review</h3>
-                <p className="text-xs text-gray-400 mt-0.5">{testRuleTarget.name}</p>
+                <h3 className="text-base font-bold text-[var(--ink)]">Historical Alert Review</h3>
+                <p className="text-xs text-[var(--muted)] mt-0.5">{testRuleTarget.name}</p>
               </div>
-              <button onClick={() => setIsTestModalOpen(false)} className="text-gray-400 hover:text-white">
+              <button onClick={() => setIsTestModalOpen(false)} className="text-[var(--muted)] hover:text-[var(--ink)]">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -2603,34 +2652,34 @@ export function NbfcRulesWorkspace() {
             {isTesting ? (
               <div className="text-center py-8 space-y-2">
                 <RefreshCw className="w-6 h-6 animate-spin mx-auto text-red-500" />
-                <p className="text-xs text-gray-400">Reviewing recorded alerts from the last 7 days...</p>
+                <p className="text-xs text-[var(--muted)]">Reviewing recorded alerts from the last 7 days...</p>
               </div>
             ) : testResults ? (
               <div className="space-y-4 text-xs">
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-gray-800/40 p-3 rounded-lg text-center">
-                    <span className="text-gray-400">Recorded Alerts</span>
-                    <p className="text-xl font-bold text-white mt-1">{testResults.triggerCount}</p>
+                  <div className="bg-[var(--surface-soft)] p-3 rounded-lg text-center">
+                    <span className="text-[var(--muted)]">Recorded Alerts</span>
+                    <p className="text-xl font-bold text-[var(--ink)] mt-1">{testResults.triggerCount}</p>
                   </div>
-                  <div className="bg-gray-800/40 p-3 rounded-lg text-center">
-                    <span className="text-gray-400">Duration</span>
+                  <div className="bg-[var(--surface-soft)] p-3 rounded-lg text-center">
+                    <span className="text-[var(--muted)]">Duration</span>
                     <p className="text-xl font-bold text-amber-400 mt-1">{testResults.longestEventSeconds ? `${testResults.longestEventSeconds}s` : "Unavailable"}</p>
                   </div>
-                  <div className="bg-gray-800/40 p-3 rounded-lg text-center">
-                    <span className="text-gray-400">False positives</span>
+                  <div className="bg-[var(--surface-soft)] p-3 rounded-lg text-center">
+                    <span className="text-[var(--muted)]">False positives</span>
                     <p className="text-xl font-bold text-blue-400 mt-1">Not calculated</p>
                   </div>
                 </div>
 
-                <div className="bg-gray-800/20 p-3 rounded-lg border border-gray-800 space-y-1">
-                  <p className="font-semibold text-gray-300">Recorded Alert Summary</p>
-                  <p className="text-gray-400">{testResults.details?.notes || "No recorded alert data is available."}</p>
-                  <p className="text-[11px] text-gray-500">Average event duration: {testResults.details?.averageDurationSec ?? "Unavailable"}</p>
+                <div className="bg-[var(--surface-soft)] p-3 rounded-lg border border-[var(--line)] space-y-1">
+                  <p className="font-semibold text-[var(--ink)]">Recorded Alert Summary</p>
+                  <p className="text-[var(--muted)]">{testResults.details?.notes || "No recorded alert data is available."}</p>
+                  <p className="text-[11px] text-[var(--muted)]">Average event duration: {testResults.details?.averageDurationSec ?? "Unavailable"}</p>
                 </div>
 
                 <button
                   onClick={() => setIsTestModalOpen(false)}
-                  className="w-full py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-medium"
+                  className="w-full py-2 bg-[var(--surface-soft)] hover:bg-[var(--surface-strong)] text-[var(--ink)] rounded-lg font-medium"
                 >
                   Close Results
                 </button>
@@ -2643,21 +2692,21 @@ export function NbfcRulesWorkspace() {
       {/* FALSE POSITIVE FEEDBACK MODAL */}
       {isFeedbackModalOpen && feedbackRuleTarget && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
-              <h3 className="text-base font-bold text-white">Report False Positive</h3>
-              <button onClick={() => setIsFeedbackModalOpen(false)} className="text-gray-400 hover:text-white">
+          <div className="bg-[var(--surface)] border border-[var(--line)] rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[var(--line)] pb-3">
+              <h3 className="text-base font-bold text-[var(--ink)]">Report False Positive</h3>
+              <button onClick={() => setIsFeedbackModalOpen(false)} className="text-[var(--muted)] hover:text-[var(--ink)]">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleSubmitFeedback} className="space-y-3 text-xs">
               <div>
-                <label className="block text-gray-400 mb-1">Primary Noise Reason</label>
+                <label className="block text-[var(--muted)] mb-1">Primary Noise Reason</label>
                 <select
                   value={feedbackReason}
                   onChange={(e) => setFeedbackReason(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white focus:outline-none"
+                  className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg p-2.5 text-[var(--ink)] focus:outline-none"
                 >
                   <option value="reflection">Glass reflection / Sunlight glare</option>
                   <option value="poster_or_image">Person image on poster / cardboard cutout</option>
@@ -2670,13 +2719,13 @@ export function NbfcRulesWorkspace() {
               </div>
 
               <div>
-                <label className="block text-gray-400 mb-1">Operator Notes</label>
+                <label className="block text-[var(--muted)] mb-1">Operator Notes</label>
                 <textarea
                   rows={3}
                   value={feedbackComment}
                   onChange={(e) => setFeedbackComment(e.target.value)}
                   placeholder="Describe what occurred and suggested tuning..."
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white focus:outline-none"
+                  className="w-full bg-[var(--surface-soft)] border border-[var(--line)] rounded-lg p-2.5 text-[var(--ink)] focus:outline-none"
                 />
               </div>
 
@@ -2684,13 +2733,13 @@ export function NbfcRulesWorkspace() {
                 <button
                   type="button"
                   onClick={() => setIsFeedbackModalOpen(false)}
-                  className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded"
+                  className="px-3 py-1.5 bg-[var(--surface-soft)] hover:bg-[var(--surface-strong)] text-[var(--ink)] rounded"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 bg-red-600 hover:bg-red-500 text-white font-semibold rounded"
+                  className="px-4 py-1.5 bg-[#3c6df5] hover:bg-[#2853ca] text-[#ffffff] font-semibold rounded"
                 >
                   Submit Calibration Report
                 </button>

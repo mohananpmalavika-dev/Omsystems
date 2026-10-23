@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { registerAuthRoutes } from "../src/routes/auth.routes.js";
 import { hashPassword } from "../src/security/password.js";
 import {
-  createEmployeeFaceTemplate,
+  createModelBackedFaceProfile,
   faceTemplatePreferences,
 } from "../src/security/employee-face-verification.service.js";
 
@@ -20,6 +20,15 @@ const employeeImage = await pngData(
 const otherPersonImage = await pngData(
   '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="400"><rect width="320" height="400" fill="#203040"/><rect x="30" y="30" width="260" height="340" fill="#d0d0d0"/><path d="M30 30 L290 370 M290 30 L30 370" stroke="#b00000" stroke-width="34"/></svg>',
 );
+
+// The route test supplies deterministic model output; image-model inference is tested separately.
+vi.mock('../src/security/face-embedding-provider.js', async (original) => ({
+  ...await original<typeof import('../src/security/face-embedding-provider.js')>(),
+  extractVerifiedFace: vi.fn(async (image: string) => ({
+    vector: Array.from({length:512}, (_,index) => index === (image === employeeImage ? 0 : 1) ? 1 : 0),
+    modelId: 'test-arcface', quality: .99,
+  })),
+}));
 
 async function buildApp(facePreferences: Record<string, unknown>) {
   const passwordHash = await hashPassword("Correct Horse Battery");
@@ -59,7 +68,7 @@ async function buildApp(facePreferences: Record<string, unknown>) {
 
 describe("employee facial login", () => {
   it("issues a session only when the live scan matches enrollment", async () => {
-    const template = await createEmployeeFaceTemplate(employeeImage);
+    const template = await createModelBackedFaceProfile([employeeImage]);
     const { app, createUserSession } = await buildApp(faceTemplatePreferences(template));
 
     const match = await app.inject({

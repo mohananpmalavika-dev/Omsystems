@@ -5,6 +5,7 @@
 
 import type { Pool } from 'pg';
 import type { FaceSearchCandidate, PersonCandidate } from './face.types.js';
+import { validFaceVector } from '../../../packages/contracts/src/face-match-policy.js';
 
 export interface FaceSearchConfig {
   searchLimit: number;
@@ -18,6 +19,7 @@ export interface FaceSearchQuery {
   watchlistIds?: string[];
   limit?: number;
   threshold?: number;
+  distinctPersons?: boolean;
 }
 
 export class FaceSearchService {
@@ -40,11 +42,12 @@ export class FaceSearchService {
    */
   async searchSimilarFaces(query: FaceSearchQuery): Promise<FaceSearchCandidate[]> {
     const limit = query.limit ?? this.config.searchLimit;
+    if (!validFaceVector(Array.from(query.embedding))) throw new Error('Face search requires a normalized 512-value embedding');
     
     // Convert Float32Array to PostgreSQL vector format
     const embeddingVector = this.formatVectorForPostgres(query.embedding);
 
-    const sql = `
+    const baseSql = `
       SELECT
         fe.id AS embedding_id,
         fe.person_id,
@@ -62,15 +65,22 @@ export class FaceSearchService {
       WHERE fe.tenant_id = $2
         AND fp.tenant_id = $2
         AND fw.tenant_id = $2
+        AND fw.archived_at IS NULL
+        AND COALESCE(fe.metadata->>'model', '') <> 'facenet-512'
+        AND COALESCE(fe.metadata->>'requiresReenrollment', 'false') <> 'true'
         ${!this.config.includeDisabled ? 'AND fp.archived_at IS NULL' : ''}
         ${!this.config.includeDisabled ? 'AND fw.enabled = TRUE' : ''}
         ${query.watchlistIds ? 'AND fw.id = ANY($4::uuid[])' : ''}
         ${this.config.respectValidity ? `
           AND (fp.enrolled_at IS NULL OR fp.enrolled_at <= NOW())
         ` : ''}
-      ORDER BY fe.embedding <=> $1::vector
-      LIMIT $3
     `;
+    // Apply the limit to distinct people before retrieving their supporting
+    // samples. Many images of one person must not hide a close runner-up.
+    const sql = query.distinctPersons ? `WITH matches AS (${baseSql})
+      SELECT * FROM matches WHERE person_id IN (
+        SELECT person_id FROM matches GROUP BY person_id ORDER BY MAX(similarity) DESC LIMIT $3
+      ) ORDER BY similarity DESC` : `${baseSql} ORDER BY similarity DESC LIMIT $3`;
 
     const params: any[] = [embeddingVector, query.tenantId, limit];
     if (query.watchlistIds) {
@@ -100,7 +110,7 @@ export class FaceSearchService {
    * Groups multiple embeddings per person and returns best/mean scores
    */
   async searchPersons(query: FaceSearchQuery): Promise<PersonCandidate[]> {
-    const embeddingMatches = await this.searchSimilarFaces(query);
+    const embeddingMatches = await this.searchSimilarFaces({...query,limit:Math.max(2,query.limit ?? this.config.searchLimit),distinctPersons:true});
 
     if (embeddingMatches.length === 0) {
       return [];

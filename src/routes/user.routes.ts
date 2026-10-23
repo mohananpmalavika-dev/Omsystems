@@ -1,3 +1,4 @@
+import { FaceModelUnavailableError } from '../security/face-embedding-provider.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import type {
@@ -7,8 +8,7 @@ import type {
 } from "../control-plane-store.js";
 import { hashPassword, verifyPassword } from "../security/password.js";
 import {
-  createEmployeeFaceTemplate,
-  createEmployeeFaceProfile,
+  createModelBackedFaceProfile,
   faceTemplatePreferences,
 } from "../security/employee-face-verification.service.js";
 import {
@@ -333,14 +333,12 @@ export async function registerUserRoutes(
     if (body.facePhotoBase64 || body.facePhotosBase64) {
       try {
         biometricPreferences = faceTemplatePreferences(
-          body.facePhotosBase64
-            ? await createEmployeeFaceProfile(body.facePhotosBase64)
-            : await createEmployeeFaceTemplate(body.facePhotoBase64!),
+          await createModelBackedFaceProfile(body.facePhotosBase64 ?? [body.facePhotoBase64!]),
         );
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : "Unable to process employee face photo";
-        return reply.code(400).send({
-          error: "invalid_face_photo",
+        return reply.code(error instanceof FaceModelUnavailableError ? 503 : 400).send({
+          error: error instanceof FaceModelUnavailableError ? "face_model_unavailable" : "invalid_face_photo",
           message: errorMsg.includes("visual detail")
             ? "Unable to extract facial biometric features from this image. Please upload a clear frontal face portrait, or remove the photo to enroll the employee without facial biometrics."
             : errorMsg,
@@ -444,15 +442,13 @@ export async function registerUserRoutes(
           profilePhotoUrl: body.facePhotosBase64?.[0] ?? body.facePhotoBase64,
           preferences: {
             ...(body.preferences ?? {}),
-            ...faceTemplatePreferences(body.facePhotosBase64
-              ? await createEmployeeFaceProfile(body.facePhotosBase64)
-              : await createEmployeeFaceTemplate(body.facePhotoBase64!),
+            ...faceTemplatePreferences(await createModelBackedFaceProfile(body.facePhotosBase64 ?? [body.facePhotoBase64!]),
             ),
           },
         };
       } catch (error) {
-        return reply.code(400).send({
-          error: "invalid_face_photo",
+        return reply.code(error instanceof FaceModelUnavailableError ? 503 : 400).send({
+          error: error instanceof FaceModelUnavailableError ? "face_model_unavailable" : "invalid_face_photo",
           message: error instanceof Error ? error.message : "Unable to process employee face photo",
         });
       }

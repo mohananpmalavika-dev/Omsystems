@@ -73,6 +73,9 @@ export function analyticsAlertTitle(rule: AnalyticsRule, metadata?: Record<strin
     return "Person Detected after office hour";
   }
   if (rule.detectionType === "dual-control-verification" || rule.detectionType === "dual-control-violation") {
+    if (metadata?.violation === "BRANCH_OPENING_MINIMUM_STAFF") {
+      return "Branch Opening Dual-Control Violation";
+    }
     return "Dual control violation detected";
   }
   if(rule.detectionType==="shutter-state")return metadata?.shutterState==="open"?"Shutter opened":"Shutter closed";
@@ -102,7 +105,14 @@ export function analyticsAlertDescription(rule: AnalyticsRule, metadata?: Record
       : "A known identity was recognised by this camera.";
   }
   if (rule.detectionType === "unknown-person") return "An unrecognised face was detected in this configured camera area.";
-  if (rule.detectionType === "dual-control-verification" || rule.detectionType === "dual-control-violation") return "Single person detected in vault area. Dual control policy requires minimum 2 authorized persons.";
+  if (rule.detectionType === "dual-control-verification" || rule.detectionType === "dual-control-violation") {
+    if (metadata?.violation === "BRANCH_OPENING_MINIMUM_STAFF") {
+      const count = metadata.staffCount ?? 1;
+      const required = metadata.requiredStaff ?? 2;
+      return `Branch opening dual-custody enforcement failure: ${count} person(s) opened/entered the branch during opening window when minimum ${required} authorized persons are required.`;
+    }
+    return "Single person detected in vault area. Dual control policy requires minimum 2 authorized persons.";
+  }
   return `Rule \"${rule.name}\" matched.`;
 }
 

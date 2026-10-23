@@ -16,7 +16,10 @@ export interface FaceAlignmentConfig {
  * Canonical landmark positions for 112x112 ArcFace alignment
  * These are the standard positions used in ArcFace training
  */
-const ARCFACE_DST_LANDMARKS_112 = [
+type LandmarkPoint = [number, number];
+type AffineMatrix = [[number, number, number], [number, number, number], [number, number, number]];
+
+const ARCFACE_DST_LANDMARKS_112: LandmarkPoint[] = [
   [38.2946, 51.6963], // Left eye
   [73.5318, 51.5014], // Right eye
   [56.0252, 71.7366], // Nose
@@ -80,7 +83,7 @@ export class FaceAlignmentService {
     landmarks: FaceLandmarks,
     width: number,
     height: number,
-  ): number[][] {
+  ): LandmarkPoint[] {
     return [
       [landmarks.leftEye.x * width, landmarks.leftEye.y * height],
       [landmarks.rightEye.x * width, landmarks.rightEye.y * height],
@@ -93,7 +96,7 @@ export class FaceAlignmentService {
   /**
    * Get canonical landmark positions
    */
-  private getCanonicalLandmarks(): number[][] {
+  private getCanonicalLandmarks(): LandmarkPoint[] {
     const size = this.config.outputSize;
     if (size === 112) {
       return ARCFACE_DST_LANDMARKS_112;
@@ -109,48 +112,46 @@ export class FaceAlignmentService {
    * Uses least squares to find optimal scale, rotation, and translation
    */
   private estimateSimilarityTransform(
-    src: number[][],
-    dst: number[][],
+    src: LandmarkPoint[],
+    dst: LandmarkPoint[],
   ): {
     scale: number;
     rotation: number;
     tx: number;
     ty: number;
-    matrix: number[][];
+    matrix: AffineMatrix;
   } {
     // Calculate centroids
     const srcCentroid = this.calculateCentroid(src);
     const dstCentroid = this.calculateCentroid(dst);
 
     // Center the points
-    const srcCentered = src.map(([x, y]) => [
+    const srcCentered: LandmarkPoint[] = src.map(([x, y]) => [
       x - srcCentroid[0],
       y - srcCentroid[1],
     ]);
-    const dstCentered = dst.map(([x, y]) => [
+    const dstCentered: LandmarkPoint[] = dst.map(([x, y]) => [
       x - dstCentroid[0],
       y - dstCentroid[1],
     ]);
 
-    // Calculate scale
-    const srcNorm = Math.sqrt(
-      srcCentered.reduce((sum, [x, y]) => sum + x * x + y * y, 0),
-    );
-    const dstNorm = Math.sqrt(
-      dstCentered.reduce((sum, [x, y]) => sum + x * x + y * y, 0),
-    );
-    const scale = dstNorm / srcNorm;
+    const srcVariance = srcCentered.reduce((sum, [x, y]) => sum + x * x + y * y, 0);
+    if (!Number.isFinite(srcVariance) || srcVariance < 1e-6) {
+      throw new Error('Face landmarks are degenerate');
+    }
 
     // Calculate rotation
     let num = 0;
     let den = 0;
     for (let i = 0; i < srcCentered.length; i++) {
-      const [sx, sy] = srcCentered[i];
-      const [dx, dy] = dstCentered[i];
+      const [sx, sy] = srcCentered[i]!;
+      const [dx, dy] = dstCentered[i]!;
       num += sx * dy - sy * dx;
       den += sx * dx + sy * dy;
     }
     const rotation = Math.atan2(num, den);
+    const scale = Math.hypot(num, den) / srcVariance;
+    if (!Number.isFinite(scale) || scale < 1e-6) throw new Error('Invalid face transform');
 
     // Calculate translation
     const cos = Math.cos(rotation);
@@ -161,7 +162,7 @@ export class FaceAlignmentService {
     // Build transformation matrix [a, b, tx; -b, a, ty]
     const a = scale * cos;
     const b = scale * sin;
-    const matrix = [
+    const matrix: AffineMatrix = [
       [a, -b, tx],
       [b, a, ty],
       [0, 0, 1],
@@ -173,7 +174,7 @@ export class FaceAlignmentService {
   /**
    * Calculate centroid of points
    */
-  private calculateCentroid(points: number[][]): [number, number] {
+  private calculateCentroid(points: LandmarkPoint[]): [number, number] {
     const n = points.length;
     const sumX = points.reduce((sum, [x]) => sum + x, 0);
     const sumY = points.reduce((sum, [, y]) => sum + y, 0);
@@ -185,91 +186,45 @@ export class FaceAlignmentService {
    */
   private async applyTransform(
     imageData: Buffer,
-    transform: { matrix: number[][] },
+    transform: { matrix: AffineMatrix },
     sourceWidth: number,
     sourceHeight: number,
   ): Promise<Buffer> {
     const outputSize = this.config.outputSize;
 
-    // Use sharp for efficient image transformation
-    // Note: Sharp's affine transform uses a different convention
-    // We need to convert our matrix to Sharp's format
     const [a, b, tx] = transform.matrix[0];
     const [c, d, ty] = transform.matrix[1];
-
-    try {
-      const aligned = await sharp(imageData)
-        .resize(sourceWidth, sourceHeight, { fit: 'fill' })
-        .affine(
-          [a, b, c, d],
-          {
-            background: { r: 0, g: 0, b: 0, alpha: 1 },
-            interpolator: sharp.interpolators.bicubic,
-          },
-        )
-        .extract({
-          left: Math.max(0, Math.floor(tx)),
-          top: Math.max(0, Math.floor(ty)),
-          width: outputSize,
-          height: outputSize,
-        })
-        .resize(outputSize, outputSize, { fit: 'fill' })
-        .raw()
-        .toBuffer();
-
-      return aligned;
-    } catch (error) {
-      console.error('Face alignment transform failed:', error);
-      
-      // Fallback: simple crop and resize
-      const bbox = this.estimateCropFromLandmarks(transform, sourceWidth, sourceHeight);
-      return this.simpleCropAndResize(imageData, bbox, sourceWidth, sourceHeight);
+    const determinant = a * d - b * c;
+    if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-12) {
+      throw new Error('Invalid face alignment transform');
     }
-  }
-
-  /**
-   * Fallback: simple crop and resize without full affine transform
-   */
-  private async simpleCropAndResize(
-    imageData: Buffer,
-    bbox: { left: number; top: number; width: number; height: number },
-    sourceWidth: number,
-    sourceHeight: number,
-  ): Promise<Buffer> {
-    const outputSize = this.config.outputSize;
-
-    return sharp(imageData)
-      .resize(sourceWidth, sourceHeight, { fit: 'fill' })
-      .extract({
-        left: Math.max(0, Math.floor(bbox.left)),
-        top: Math.max(0, Math.floor(bbox.top)),
-        width: Math.min(sourceWidth - bbox.left, Math.floor(bbox.width)),
-        height: Math.min(sourceHeight - bbox.top, Math.floor(bbox.height)),
-      })
-      .resize(outputSize, outputSize, {
-        fit: 'fill',
-        kernel: sharp.kernel.lanczos3,
-      })
-      .raw()
-      .toBuffer();
-  }
-
-  /**
-   * Estimate crop region from transform
-   */
-  private estimateCropFromLandmarks(
-    transform: { matrix: number[][] },
-    width: number,
-    height: number,
-  ): { left: number; top: number; width: number; height: number } {
-    // Use transform to estimate where the aligned face should be cropped from
-    // This is a simplified fallback
-    return {
-      left: Math.max(0, transform.matrix[0][2]),
-      top: Math.max(0, transform.matrix[1][2]),
-      width: this.config.outputSize,
-      height: this.config.outputSize,
-    };
+    const { data, info } = await sharp(imageData)
+      .removeAlpha().toColourspace('srgb').raw().toBuffer({ resolveWithObject: true });
+    if (info.width !== sourceWidth || info.height !== sourceHeight || info.channels !== 3) {
+      throw new Error('Face alignment image dimensions do not match landmarks');
+    }
+    const output = Buffer.alloc(outputSize * outputSize * 3);
+    // Map each canonical pixel back to the original image, including translation.
+    for (let y = 0; y < outputSize; y++) {
+      for (let x = 0; x < outputSize; x++) {
+        const sx = (d * (x - tx) - b * (y - ty)) / determinant;
+        const sy = (-c * (x - tx) + a * (y - ty)) / determinant;
+        const ix = Math.floor(sx), iy = Math.floor(sy);
+        const fx = sx - ix, fy = sy - iy;
+        for (let channel = 0; channel < 3; channel++) {
+          let value = 0;
+          for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
+            const px = ix + dx, py = iy + dy;
+            if (px >= 0 && py >= 0 && px < sourceWidth && py < sourceHeight) {
+              value += data[(py * sourceWidth + px) * 3 + channel]! *
+                (dx ? fx : 1 - fx) * (dy ? fy : 1 - fy);
+            }
+          }
+          output[(y * outputSize + x) * 3 + channel] = Math.round(value);
+        }
+      }
+    }
+    return output;
   }
 
   /**
@@ -284,9 +239,9 @@ export class FaceAlignmentService {
     // Convert RGB interleaved to CHW (channel-first) format
     // Normalize to [-1, 1] range (standard for ArcFace)
     for (let i = 0; i < pixels; i++) {
-      const r = imageBuffer[i * 3] / 255.0;
-      const g = imageBuffer[i * 3 + 1] / 255.0;
-      const b = imageBuffer[i * 3 + 2] / 255.0;
+      const r = imageBuffer[i * 3]! / 255.0;
+      const g = imageBuffer[i * 3 + 1]! / 255.0;
+      const b = imageBuffer[i * 3 + 2]! / 255.0;
 
       // Normalize to [-1, 1] and arrange as CHW
       tensor[i] = (r - 0.5) / 0.5; // R channel

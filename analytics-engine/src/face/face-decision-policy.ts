@@ -9,6 +9,7 @@ import type {
   FaceQualityResult,
   WatchlistThresholdConfig,
 } from './face.types.js';
+import { FACE_MATCH_MINIMUM, FACE_MATCH_MARGIN } from '../../../packages/contracts/src/face-match-policy.js';
 
 export interface DecisionPolicyConfig {
   defaultMatchThreshold: number;
@@ -24,9 +25,9 @@ export class FaceDecisionPolicy {
 
   constructor(config?: Partial<DecisionPolicyConfig>) {
     this.config = {
-      defaultMatchThreshold: 0.70,
+      defaultMatchThreshold: FACE_MATCH_MINIMUM,
       defaultReviewThreshold: 0.60,
-      defaultMinimumMargin: 0.05,
+      defaultMinimumMargin: FACE_MATCH_MARGIN,
       defaultMinimumQuality: 0.55,
       enableSecondBestMargin: true,
       enableQualityGating: true,
@@ -44,6 +45,15 @@ export class FaceDecisionPolicy {
   ): RecognitionDecision {
     // Use watchlist-specific config or defaults
     const thresholds = this.getThresholds(watchlistConfig);
+    thresholds.matchThreshold = Math.max(FACE_MATCH_MINIMUM,thresholds.matchThreshold);
+    thresholds.minimumMargin = Math.max(FACE_MATCH_MARGIN,thresholds.minimumMargin);
+    const persons = new Map<string,PersonCandidate>();
+    for (const candidate of candidates) {
+      if (!candidate.personId || !Number.isFinite(candidate.bestSimilarity) || candidate.bestSimilarity < 0 || candidate.bestSimilarity > 1) continue;
+      const previous = persons.get(candidate.personId);
+      if (!previous || candidate.bestSimilarity > previous.bestSimilarity) persons.set(candidate.personId,candidate);
+    }
+    candidates = [...persons.values()].sort((a,b)=>b.bestSimilarity-a.bestSimilarity);
 
     // Check quality first
     if (this.config.enableQualityGating && quality) {
@@ -75,7 +85,7 @@ export class FaceDecisionPolicy {
     // Decision: MATCH
     if (
       best.bestSimilarity >= thresholds.matchThreshold &&
-      (!this.config.enableSecondBestMargin || margin >= thresholds.minimumMargin)
+      margin >= thresholds.minimumMargin
     ) {
       return {
         status: 'MATCH',
@@ -167,7 +177,7 @@ export class FaceDecisionPolicy {
     watchlistConfig?: WatchlistThresholdConfig,
   ): WatchlistThresholdConfig {
     if (watchlistConfig) {
-      return watchlistConfig;
+      return {...watchlistConfig};
     }
 
     return {

@@ -6,11 +6,13 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { FACE_MATCH_MARGIN, FACE_MATCH_MINIMUM, selectFaceIdentity } from "../../../packages/contracts/src/face-match-policy.js";
 import type { FaceMatchResult, FaceMatchCandidate } from "../domain/local-ai.types.js";
 import { activeFaceRegistryMatches } from "../../analytics/identity-registry.js";
 import type { ControlPlaneStore } from "../../control-plane-store.js";
 
 export interface WatchlistFaceRecord {
+  tenantId?: string;
   personId: string;
   name: string;
   watchlistType: "WANTED" | "BLACK_LIST" | "VIP" | "STAFF" | "SUSPECT";
@@ -24,11 +26,11 @@ export class LocalFaceMatcherService {
 
   enrollFace(record: WatchlistFaceRecord) {
     this.assertEmbedding(record.embeddingVector);
-    this.watchlist.set(record.personId, record);
+    this.watchlist.set(`${record.tenantId || ""}:${record.personId}`, {...record,embeddingVector:[...record.embeddingVector]});
   }
 
-  removeFace(personId: string) {
-    this.watchlist.delete(personId);
+  removeFace(personId: string, tenantId?: string) {
+    this.watchlist.delete(`${tenantId || ""}:${personId}`);
   }
 
   /**
@@ -49,52 +51,30 @@ export class LocalFaceMatcherService {
     const inputVec = options.embeddingVector;
     this.assertEmbedding(inputVec);
 
-    let bestMatch: FaceMatchCandidate | undefined;
-    let highestSimilarity = 0;
-
-    // First check persistent governed registry if store and tenantId provided
+    const candidates: FaceMatchCandidate[] = [];
     if (options.store && options.tenantId) {
-      try {
-        const matches = await activeFaceRegistryMatches(options.store, options.tenantId, inputVec, {
-          minSimilarity: threshold,
-          limit: 1,
-        });
-        if (matches.length > 0) {
-          const top = matches[0]!;
-          bestMatch = {
-            personId: top.personId,
-            name: top.personName,
-            watchlistType: (top.listType?.toUpperCase() as any) ?? "SUSPECT",
-            similarity: top.similarity,
-            watchlistId: top.watchlistId,
-            notes: top.metadata ? JSON.stringify(top.metadata) : undefined,
-          };
-          highestSimilarity = top.similarity;
-        }
-      } catch (err) {
-        console.warn("Face registry search encountered error, checking in-memory records:", err);
-      }
+      const matches = await activeFaceRegistryMatches(options.store, options.tenantId, inputVec, {
+        minSimilarity: Math.max(0,Math.min(threshold,FACE_MATCH_MINIMUM)-FACE_MATCH_MARGIN), limit: 50,
+      });
+      for (const top of matches) candidates.push({
+        personId:top.personId,name:top.personName,
+        watchlistType:(top.listType?.toUpperCase() as FaceMatchCandidate['watchlistType']) || 'SUSPECT',
+        similarity:top.similarity,watchlistId:top.watchlistId,
+        notes:top.metadata ? JSON.stringify(top.metadata) : undefined,
+      });
     }
-
-    // Also check in-memory records
-    if (!bestMatch) {
+    // Production requests use the governed registry only. Never replace an
+    // empty/failed/disabled registry result with a process-global identity.
+    if (!options.store) {
       for (const record of this.watchlist.values()) {
-        const sim = this.calculateCosineSimilarity(inputVec, record.embeddingVector);
-        if (sim > highestSimilarity) {
-          highestSimilarity = sim;
-          if (sim >= threshold) {
-            bestMatch = {
-              personId: record.personId,
-              name: record.name,
-              watchlistType: record.watchlistType,
-              similarity: Number(sim.toFixed(4)),
-              watchlistId: `wl-${record.watchlistType.toLowerCase()}`,
-              notes: record.notes,
-            };
-          }
-        }
+        if (record.tenantId !== options.tenantId) continue;
+        candidates.push({personId:record.personId,name:record.name,watchlistType:record.watchlistType,
+          similarity:this.calculateCosineSimilarity(inputVec,record.embeddingVector),
+          watchlistId:`wl-${record.watchlistType.toLowerCase()}`,notes:record.notes});
       }
     }
+    const bestMatch = selectFaceIdentity(candidates,row=>row.personId,row=>row.similarity,threshold) || undefined;
+    const highestSimilarity = candidates.reduce((best,row)=>Math.max(best,row.similarity),0);
 
     return {
       id: `fmatch-${randomUUID()}`,

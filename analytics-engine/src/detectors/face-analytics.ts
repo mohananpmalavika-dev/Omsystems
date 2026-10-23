@@ -1,3 +1,4 @@
+import { selectFaceIdentity, FACE_MATCH_MINIMUM } from "../../../packages/contracts/src/face-match-policy.js";
 /**
  * Face Analytics Module
  * Comprehensive face detection, recognition, watchlist matching, and demographic analysis
@@ -112,9 +113,9 @@ export class FaceAnalyticsDetector extends BaseDetector {
   
   // Configuration
   private readonly MIN_FACE_SIZE = 0.03;  // 3% of frame
-  private readonly RECOGNITION_THRESHOLD = 0.6;  // Cosine similarity
-  private readonly VIP_THRESHOLD = 0.7;
-  private readonly BLACKLIST_THRESHOLD = 0.65;
+  private readonly RECOGNITION_THRESHOLD = FACE_MATCH_MINIMUM;  // Cosine similarity
+  private readonly VIP_THRESHOLD = FACE_MATCH_MINIMUM;
+  private readonly BLACKLIST_THRESHOLD = FACE_MATCH_MINIMUM;
   private readonly MIN_CONFIDENCE = 0.7;
   private readonly MATCH_COOLDOWN_MS = 5000;  // 5 seconds between same matches
 
@@ -290,17 +291,9 @@ export class FaceAnalyticsDetector extends BaseDetector {
       if (!face.embedding) continue;
 
       // Find best match in database
-      let bestMatch: { personId: string; similarity: number } | null = null;
-      let bestSimilarity = 0;
-
-      for (const [personId, embedding] of this.faceDatabase.embeddings.entries()) {
-        const similarity = this.cosineSimilarity(face.embedding, embedding);
-        
-        if (similarity > bestSimilarity) {
-          bestSimilarity = similarity;
-          bestMatch = { personId, similarity };
-        }
-      }
+      const candidates = [...this.faceDatabase.embeddings].map(([personId,embedding])=>({personId,similarity:this.cosineSimilarity(face.embedding!,embedding)}));
+      const bestMatch = selectFaceIdentity(candidates,row=>row.personId,row=>row.similarity,this.RECOGNITION_THRESHOLD);
+      const bestSimilarity = bestMatch?.similarity ?? 0;
 
       // Check if match meets threshold
       if (bestMatch && bestSimilarity >= this.RECOGNITION_THRESHOLD) {
@@ -596,7 +589,7 @@ export class FaceAnalyticsDetector extends BaseDetector {
   // ============================================================================
 
   private cosineSimilarity(a: number[], b: number[]): number {
-    if (a.length !== b.length) return 0;
+    if (a.length !== b.length || ![128,512].includes(a.length) || [...a,...b].some(value=>!Number.isFinite(value))) return 0;
     
     let dotProduct = 0;
     let normA = 0;
@@ -608,7 +601,8 @@ export class FaceAnalyticsDetector extends BaseDetector {
       normB += b[i] * b[i];
     }
     
-    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+    const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+    return denominator > 0 ? Math.max(0,Math.min(1,dotProduct / denominator)) : 0;
   }
 
   private normalizeVector(vector: number[]): number[] {
@@ -774,16 +768,9 @@ export class FaceAnalyticsDetector extends BaseDetector {
    * Match a face embedding against database
    */
   matchFace(embedding: number[], threshold = this.RECOGNITION_THRESHOLD): FaceMatch | null {
-    let bestMatch: { personId: string; similarity: number } | null = null;
-    let bestSimilarity = 0;
-
-    for (const [personId, storedEmbedding] of this.faceDatabase.embeddings.entries()) {
-      const similarity = this.cosineSimilarity(embedding, storedEmbedding);
-      if (similarity > bestSimilarity && similarity >= threshold) {
-        bestSimilarity = similarity;
-        bestMatch = { personId, similarity };
-      }
-    }
+    const candidates = [...this.faceDatabase.embeddings].map(([personId,stored])=>({personId,similarity:this.cosineSimilarity(embedding,stored)}));
+    const bestMatch = selectFaceIdentity(candidates,row=>row.personId,row=>row.similarity,threshold);
+    const bestSimilarity = bestMatch?.similarity ?? 0;
 
     if (!bestMatch) return null;
 

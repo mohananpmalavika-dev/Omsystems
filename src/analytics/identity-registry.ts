@@ -1,4 +1,5 @@
 import type { ControlPlaneStore } from "../control-plane-store.js";
+import { validFaceVector } from "../../packages/contracts/src/face-match-policy.js";
 
 export type LocalIdentityState = {
   faceWatchlists: any[];
@@ -178,8 +179,8 @@ export type RecordFaceReviewParams = {
 };
 
 export function calculateCosineSimilarity(vecA: readonly number[], vecB: readonly number[]): number {
-  if (!vecA || !vecB || vecA.length === 0 || vecB.length === 0) return 0;
-  const len = Math.min(vecA.length, vecB.length);
+  if (!vecA || !vecB || vecA.length !== 512 || vecB.length !== 512 || vecA.some(value=>!Number.isFinite(value)) || vecB.some(value=>!Number.isFinite(value))) return 0;
+  const len = vecA.length;
   let dotProduct = 0;
   let normA = 0;
   let normB = 0;
@@ -204,6 +205,7 @@ export async function activeFaceRegistryMatches(
   options: FaceMatchQueryOptions = {},
 ): Promise<FaceRegistryMatch[]> {
   const minSimilarity = options.minSimilarity ?? 0.80;
+  if (!validFaceVector(embeddingVector) || !Number.isFinite(minSimilarity) || minSimilarity < 0 || minSimilarity > 1) return [];
   const limit = Math.max(1, Math.min(options.limit ?? 10, 50));
   const watchlistIdFilter = options.watchlistIds?.filter(Boolean);
 
@@ -219,6 +221,7 @@ export async function activeFaceRegistryMatches(
 
     for (const person of state.facePersons) {
       if (person.tenantId !== tenantId || person.archivedAt) continue;
+      if (person.metadata?.model === 'facenet-512' || person.metadata?.requiresReenrollment === true) continue;
       const watchlist = watchlists.get(String(person.watchlistId));
       if (!watchlist) continue;
       if (watchlistIdFilter && watchlistIdFilter.length > 0 && !watchlistIdFilter.includes(String(person.watchlistId))) {
@@ -239,6 +242,7 @@ export async function activeFaceRegistryMatches(
 
       let bestSim = 0;
       for (const candidate of candidateEmbeddings) {
+        if (!validFaceVector(candidate)) continue;
         const sim = calculateCosineSimilarity(embeddingVector, candidate);
         if (sim > bestSim) bestSim = sim;
       }
@@ -276,7 +280,7 @@ export async function activeFaceRegistryMatches(
     params.push(limit);
 
     const result = await store.db.query(
-      `SELECT e.id::text AS embedding_id,
+      `SELECT * FROM (SELECT DISTINCT ON (p.id) e.id::text AS embedding_id,
               p.id::text AS person_id,
               p.full_name AS person_name,
               p.external_id,
@@ -297,9 +301,12 @@ export async function activeFaceRegistryMatches(
          AND p.archived_at IS NULL
          AND w.archived_at IS NULL
          AND w.enabled = true
+         AND COALESCE(e.metadata->>'model', '') <> 'facenet-512'
+         AND COALESCE(e.metadata->>'requiresReenrollment', 'false') <> 'true'
          AND (1 - (e.embedding <=> $1::vector)) >= $3
          ${watchlistClause}
-       ORDER BY e.embedding <=> $1::vector ASC
+       ORDER BY p.id, e.embedding <=> $1::vector ASC) AS person_candidates
+       ORDER BY similarity DESC
        LIMIT $${params.length}`,
       params,
     );
@@ -319,8 +326,8 @@ export async function activeFaceRegistryMatches(
       metadata: typeof row.metadata === "object" && row.metadata !== null ? row.metadata as Record<string, unknown> : {},
     }));
   } catch (error) {
-    // If pgvector operator fails (e.g. extension not active in standard postgres fallback), fallback gracefully
-    console.warn("PostgreSQL pgvector query error, falling back to in-memory matching:", error instanceof Error ? error.message : error);
+    // An unavailable registry must not produce an identity match.
+    console.warn("Face registry query unavailable; returning no matches:", error instanceof Error ? error.message : error);
     return [];
   }
 }
