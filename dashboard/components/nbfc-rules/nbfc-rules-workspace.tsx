@@ -2403,7 +2403,7 @@ export function NbfcRulesWorkspace() {
                 <h4 className="font-bold text-amber-400 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
                   <Zap className="w-3.5 h-3.5" /> When Condition Triggers
                 </h4>
-                {builderForm.templateId === MINIMUM_PERSONNEL_TEMPLATE_ID && <p className="text-[var(--muted)] leading-relaxed">Applies only while vault operations are active. The active-operation check is retained when you save the personnel threshold.</p>}
+                {builderForm.templateId === MINIMUM_PERSONNEL_TEMPLATE_ID && <p className="text-[var(--muted)] leading-relaxed">Applies only while vault operations are active. The active-operation check is retained when you save. Person Count measures visible people; Staff Count requires verified staff-count telemetry.</p>}
 
                 <div className="grid grid-cols-3 gap-3">
                   <div>

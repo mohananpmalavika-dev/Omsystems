@@ -662,3 +662,35 @@ html[data-theme] .app-shell.wall-window-shell .experience-surface .operations-st
   color: #aebed3;
   text-align: center;
 }
+
+/* Auto Eye-Care Mode & Ergonomic Vision Health for Continuous Monitoring */
+.camera-grid.eye-care-subdued {
+  transition: filter 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.camera-grid.eye-care-subdued .camera-tile {
+  border-color: rgba(255, 255, 255, 0.05) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4) !important;
+}
+.camera-grid.eye-care-subdued .camera-meta {
+  background: rgba(10, 18, 30, 0.94) !important;
+  border-top-color: rgba(255, 255, 255, 0.04) !important;
+}
+.camera-grid.eye-care-subdued .camera-meta strong,
+.camera-grid.eye-care-subdued .camera-meta span {
+  color: #94a3b8 !important;
+}
+.camera-grid.eye-care-subdued .camera-ai-overlay {
+  background: rgba(8, 16, 28, 0.88) !important;
+  border-color: rgba(148, 163, 184, 0.3) !important;
+}
+/* Anti-flicker alarm mode: transforms blinding strobes into calm ambient breathing pulses */
+.camera-grid.eye-care-anti-flicker .animate-bounce,
+.camera-grid.eye-care-anti-flicker .animate-ping,
+.camera-grid.eye-care-anti-flicker .animate-pulse {
+  animation: eyeCareGentlePulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+}
+@keyframes eyeCareGentlePulse {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.4)); }
+  50% { opacity: 0.6; filter: none; }
+}
+

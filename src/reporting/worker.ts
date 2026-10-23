@@ -116,9 +116,16 @@ export async function buildDailyOperationalReport(store:ControlPlaneStore,user:N
     return { zone: h?.zone ?? '', region: h?.region ?? '', area: h?.area ?? '', organizationPath: h?.path.join(' / ') ?? '' };
   };
   const telemetry=await store.listLatestOperationalTelemetry(user.tenantId,branches.map((item)=>item.id));const projections=[];
+  const telemetryByBranch = new Map<string, typeof telemetry>();
+  for (const item of telemetry) {
+    if (!item.branchId) continue;
+    const items = telemetryByBranch.get(item.branchId) ?? [];
+    items.push(item);
+    telemetryByBranch.set(item.branchId, items);
+  }
   const branchInputs=await Promise.all(branches.map(async(branch)=>{const cameras=await store.listCamerasByBranch(user,branch.id,"live:view");const policy=await store.getOperationalHealthPolicy(user.tenantId,branch.id)??await store.getOperationalHealthPolicy(user.tenantId)??defaultOperationalHealthPolicy;return{branch,cameras,policy};}));
   const retentionInputs=await loadBatchedRetentionInputs(store,branchInputs.flatMap(({cameras,policy})=>cameras.map((camera)=>({cameraId:camera.id,policyRetentionDays:policy.retentionDays,maxRecordingGapSeconds:policy.maxRecordingGapSeconds}))),Date.parse(to));
-  for(const {branch,cameras,policy} of branchInputs){const retentions=cameras.map((camera)=>{const input=retentionInputs.get(camera.id);return verifyContinuousRetention(camera.id,input?.segments??[],{...policy,retentionDays:input?.configuredDays??policy.retentionDays},Date.parse(to));});projections.push(projectBranchHealth({branch,cameras,telemetry:telemetry.filter((item)=>item.branchId===branch.id),retentions,policy,now:Date.parse(to),region:regionByBranch.get(branch.id)}));}
+  for(const {branch,cameras,policy} of branchInputs){const retentions=cameras.map((camera)=>{const input=retentionInputs.get(camera.id);return verifyContinuousRetention(camera.id,input?.segments??[],{...policy,retentionDays:input?.configuredDays??policy.retentionDays},Date.parse(to));});projections.push(projectBranchHealth({branch,cameras,telemetry:telemetryByBranch.get(branch.id)??[],retentions,policy,now:Date.parse(to),region:regionByBranch.get(branch.id)}));}
   const selected=filters.deviceStatus?projections.filter((item)=>item.healthStatus===filters.deviceStatus):projections;
   const scopeCameras = selected.flatMap(branch => branch.cameras.map(camera => camera.id));
   const alertsInScope = [];

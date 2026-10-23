@@ -141,7 +141,7 @@ export function AcousticAiWorkspace() {
     try {
       setSavingRule(true);
       const res = await acousticAiApi.createRule({
-        cameraId: newRuleCamera,
+        camera_id: newRuleCamera,
         name: newRuleName,
         glass_sensitivity: glassSens / 100,
         scream_sensitivity: screamSens / 100,

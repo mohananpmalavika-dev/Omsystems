@@ -21,7 +21,22 @@ export class OperationalReportRepository {
   async createArtifact(input: Omit<OperationalReportArtifact, "id" | "createdAt">) { const result = await this.pool.query(`INSERT INTO operational_report_artifacts (id,tenant_id,run_id,format,filename,storage_path,content_type,size_bytes,checksum_sha256,expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (run_id,format) DO UPDATE SET filename=EXCLUDED.filename,storage_path=EXCLUDED.storage_path,content_type=EXCLUDED.content_type,size_bytes=EXCLUDED.size_bytes,checksum_sha256=EXCLUDED.checksum_sha256,expires_at=EXCLUDED.expires_at,created_at=now() RETURNING *`, [randomUUID(), input.tenantId, input.runId, input.format, input.filename, input.storagePath, input.contentType, input.sizeBytes, input.checksumSha256, input.expiresAt]); return mapArtifact(result.rows[0]); }
   async listArtifacts(tenantId: string, runId: string) { const result = await this.pool.query("SELECT * FROM operational_report_artifacts WHERE tenant_id=$1 AND run_id=$2 ORDER BY format", [tenantId, runId]); return result.rows.map(mapArtifact); }
   async getArtifact(id: string, tenantId: string) { const result = await this.pool.query("SELECT * FROM operational_report_artifacts WHERE id=$1 AND tenant_id=$2", [id, tenantId]); return result.rows[0] ? mapArtifact(result.rows[0]) : undefined; }
-  async enqueueDeliveries(input: Array<{ tenantId: string; runId: string; recipient: string }>) { const result: OperationalReportDelivery[] = []; for (const item of input) { const row = await this.pool.query(`INSERT INTO operational_report_deliveries (id,tenant_id,run_id,recipient) VALUES ($1,$2,$3,$4) ON CONFLICT (run_id,recipient) DO UPDATE SET run_id=EXCLUDED.run_id RETURNING *`, [randomUUID(), item.tenantId, item.runId, item.recipient]); result.push(mapDelivery(row.rows[0])); } return result; }
+  async enqueueDeliveries(input: Array<{ tenantId: string; runId: string; recipient: string }>) {
+    if (!input.length) return [];
+    const key = (item: { runId: string; recipient: string }) => JSON.stringify([item.runId, item.recipient]);
+    const unique = [...new Map(input.map(item => [key(item), item])).values()];
+    const result = await this.pool.query(
+      `INSERT INTO operational_report_deliveries (id,tenant_id,run_id,recipient)
+       SELECT * FROM unnest($1::uuid[], $2::uuid[], $3::uuid[], $4::text[])
+       ON CONFLICT (run_id,recipient) DO UPDATE SET run_id=EXCLUDED.run_id RETURNING *`,
+      [unique.map(() => randomUUID()), unique.map(item => item.tenantId), unique.map(item => item.runId), unique.map(item => item.recipient)],
+    );
+    const deliveries = new Map(result.rows.map(row => {
+      const delivery = mapDelivery(row);
+      return [key(delivery), delivery];
+    }));
+    return input.map(item => deliveries.get(key(item))!);
+  }
   async claimDeliveries(now: string, limit: number) { const result = await this.pool.query(`WITH candidates AS (SELECT id FROM operational_report_deliveries WHERE ((status IN ('queued','failed') AND next_attempt_at <= $1) OR (status='processing' AND lease_until < $1)) AND attempts < 5 ORDER BY next_attempt_at FOR UPDATE SKIP LOCKED LIMIT $2) UPDATE operational_report_deliveries delivery SET status='processing',attempts=attempts+1,lease_until=$1::timestamptz + interval '2 minutes',updated_at=now() FROM candidates WHERE delivery.id=candidates.id RETURNING delivery.*`, [now, limit]); return result.rows.map(mapDelivery); }
   async completeDelivery(id: string, result: Parameters<ControlPlaneStore["completeOperationalReportDelivery"]>[1]) { const row = await this.pool.query(`UPDATE operational_report_deliveries SET status=$2,provider_id=COALESCE($3,provider_id),error=$4,next_attempt_at=COALESCE($5,next_attempt_at),lease_until=NULL,delivered_at=CASE WHEN $2='delivered' THEN now() ELSE delivered_at END,updated_at=now() WHERE id=$1 RETURNING *`, [id,result.status,result.providerId ?? null,result.error ?? null,result.nextAttemptAt ?? null]); return row.rows[0] ? mapDelivery(row.rows[0]) : undefined; }
   async listDeliveries(tenantId: string, runId: string) { const result = await this.pool.query("SELECT * FROM operational_report_deliveries WHERE tenant_id=$1 AND run_id=$2 ORDER BY created_at", [tenantId,runId]); return result.rows.map(mapDelivery); }

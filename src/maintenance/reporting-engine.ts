@@ -169,20 +169,28 @@ export class ReportingEngine {
     periodEnd: Date,
     filters?: any
   ): Promise<any> {
-    const visits = await this.store.listMaintenanceVisits(tenantId);
-    const schedules = await this.store.listMaintenanceSchedules(tenantId);
+    const [visits, allSchedules] = await Promise.all([
+      this.store.listMaintenanceVisits(tenantId, { startDate: periodStart, endDate: periodEnd, branchNodeId: filters?.branchNodeId }),
+      this.store.listMaintenanceSchedules(tenantId),
+    ]);
+    const schedules = allSchedules.filter(schedule =>
+      (!filters?.branchNodeId || schedule.branchNodeId === filters.branchNodeId) &&
+      (!filters?.assetId || schedule.assetId === filters.assetId));
+    const scheduleIds = new Set(schedules.map(schedule => schedule.id));
 
     // Filter by period
     const periodVisits = visits.filter(v => {
       const visitDate = new Date(v.dueAt);
-      return visitDate >= periodStart && visitDate <= periodEnd;
+      return visitDate >= periodStart && visitDate <= periodEnd
+        && (!filters?.branchNodeId || v.branchNodeId === filters.branchNodeId || scheduleIds.has(v.scheduleId))
+        && (!filters?.assetId || scheduleIds.has(v.scheduleId));
     });
 
     // Calculate compliance
     const scheduledVisits = periodVisits.length;
     const completedVisits = periodVisits.filter(v => v.status === 'completed').length;
     const overdueVisits = periodVisits.filter(v => 
-      v.status !== 'completed' && new Date(v.dueAt) < new Date()
+      !['completed', 'cancelled'].includes(v.status) && new Date(v.dueAt) < new Date()
     ).length;
 
     // Group by branch if available
@@ -211,7 +219,7 @@ export class ReportingEngine {
     periodEnd: Date,
     filters?: any
   ): Promise<any> {
-    const workOrders = await this.store.listWorkOrders(tenantId);
+    const workOrders = await this.reportWorkOrders(tenantId, periodStart, periodEnd, filters);
 
     // Filter by period
     const periodWorkOrders = workOrders.filter(wo => {
@@ -226,12 +234,12 @@ export class ReportingEngine {
 
     // Calculate average resolution time
     const closedWithSla = periodWorkOrders.filter(
-      wo => wo.status === 'closed' && wo.slaDueAt && wo.updatedAt
+      wo => wo.status === 'closed' && (wo.resolvedAt || wo.updatedAt)
     );
     const avgResolutionHours = closedWithSla.length > 0
       ? closedWithSla.reduce((sum, wo) => {
           const created = new Date(wo.createdAt).getTime();
-          const closed = new Date(wo.updatedAt).getTime();
+          const closed = new Date(wo.resolvedAt || wo.updatedAt).getTime();
           return sum + ((closed - created) / (1000 * 60 * 60));
         }, 0) / closedWithSla.length
       : 0;
@@ -245,7 +253,7 @@ export class ReportingEngine {
     };
 
     // Calculate total cost
-    const totalCost = periodWorkOrders.reduce((sum, wo) => sum + (wo.cost || 0), 0);
+    const totalCost = periodWorkOrders.reduce((sum, wo) => sum + Number(wo.cost || 0), 0);
 
     return {
       period: { start: periodStart, end: periodEnd },
@@ -271,7 +279,7 @@ export class ReportingEngine {
     filters?: any
   ): Promise<any> {
     const contracts = await this.store.listAmcContracts(tenantId, filters?.vendorId);
-    const workOrders = await this.store.listWorkOrders(tenantId);
+    const workOrders = await this.reportWorkOrders(tenantId, periodStart, periodEnd, filters);
 
     // Active contracts during period
     const activeContracts = contracts.filter(c => {
@@ -283,13 +291,14 @@ export class ReportingEngine {
     // Work orders covered by AMC
     const amcWorkOrders = workOrders.filter(wo => {
       const created = new Date(wo.createdAt);
-      return created >= periodStart && created <= periodEnd && wo.vendorId;
+      return created >= periodStart && created <= periodEnd && activeContracts.some(contract =>
+        contract.vendorId === wo.vendorId && new Date(contract.startDate) <= created && Date.parse(contract.endDate) + (/^\d{4}-\d{2}-\d{2}$/.test(contract.endDate) ? 86_400_000 : 0) > created.getTime());
     });
 
     // Calculate response time compliance
     const onTimeSla = amcWorkOrders.filter(wo => {
-      if (!wo.slaDueAt || !wo.updatedAt || wo.status !== 'closed') return false;
-      return new Date(wo.updatedAt) <= new Date(wo.slaDueAt);
+      if (!wo.slaDueAt || !(wo.resolvedAt || wo.updatedAt) || wo.status !== 'closed') return false;
+      return new Date(wo.resolvedAt || wo.updatedAt) <= new Date(wo.slaDueAt);
     }).length;
 
     const slaCompliance = amcWorkOrders.length > 0
@@ -297,7 +306,7 @@ export class ReportingEngine {
       : 100;
 
     // Calculate total AMC cost
-    const totalAmcCost = activeContracts.reduce((sum, c) => sum + (c.cost || 0), 0);
+    const totalAmcCost = activeContracts.reduce((sum, c) => sum + Number(c.cost || 0), 0);
 
     return {
       period: { start: periodStart, end: periodEnd },
@@ -322,8 +331,8 @@ export class ReportingEngine {
     periodEnd: Date,
     filters?: any
   ): Promise<any> {
-    const vendors = await this.store.listMaintenanceVendors(tenantId);
-    const workOrders = await this.store.listWorkOrders(tenantId);
+    const vendors = (await this.store.listMaintenanceVendors(tenantId)).filter(vendor => !filters?.vendorId || vendor.id === filters.vendorId);
+    const workOrders = await this.reportWorkOrders(tenantId, periodStart, periodEnd, filters);
 
     const vendorPerformance = vendors.map(vendor => {
       const vendorWorkOrders = workOrders.filter(wo => {
@@ -333,8 +342,8 @@ export class ReportingEngine {
 
       const completed = vendorWorkOrders.filter(wo => wo.status === 'closed').length;
       const onTime = vendorWorkOrders.filter(wo => {
-        if (!wo.slaDueAt || !wo.updatedAt || wo.status !== 'closed') return false;
-        return new Date(wo.updatedAt) <= new Date(wo.slaDueAt);
+        if (!wo.slaDueAt || !(wo.resolvedAt || wo.updatedAt) || wo.status !== 'closed') return false;
+        return new Date(wo.resolvedAt || wo.updatedAt) <= new Date(wo.slaDueAt);
       }).length;
 
       const avgResolutionTime = completed > 0
@@ -342,12 +351,12 @@ export class ReportingEngine {
             .filter(wo => wo.status === 'closed')
             .reduce((sum, wo) => {
               const created = new Date(wo.createdAt).getTime();
-              const closed = new Date(wo.updatedAt).getTime();
+              const closed = new Date(wo.resolvedAt || wo.updatedAt).getTime();
               return sum + ((closed - created) / (1000 * 60 * 60));
             }, 0) / completed
         : 0;
 
-      const totalCost = vendorWorkOrders.reduce((sum, wo) => sum + (wo.cost || 0), 0);
+      const totalCost = vendorWorkOrders.reduce((sum, wo) => sum + Number(wo.cost || 0), 0);
 
       return {
         vendor,
@@ -380,7 +389,7 @@ export class ReportingEngine {
     periodEnd: Date,
     filters?: any
   ): Promise<any> {
-    const workOrders = await this.store.listWorkOrders(tenantId);
+    const workOrders = await this.reportWorkOrders(tenantId, periodStart, periodEnd, filters);
 
     const periodWorkOrders = workOrders.filter(wo => {
       const created = new Date(wo.createdAt);
@@ -393,8 +402,8 @@ export class ReportingEngine {
 
     const withSla = periodWorkOrders.filter(wo => wo.slaDueAt);
     const closed = withSla.filter(wo => wo.status === 'closed');
-    const onTime = closed.filter(wo => new Date(wo.updatedAt) <= new Date(wo.slaDueAt!));
-    const closedLate = closed.filter(wo => new Date(wo.updatedAt) > new Date(wo.slaDueAt!));
+    const onTime = closed.filter(wo => new Date(wo.resolvedAt || wo.updatedAt) <= new Date(wo.slaDueAt!));
+    const closedLate = closed.filter(wo => new Date(wo.resolvedAt || wo.updatedAt) > new Date(wo.slaDueAt!));
     const openBreaches = withSla.filter(wo =>
       wo.status !== 'closed' && new Date(wo.slaDueAt!) < new Date()
     );
@@ -436,9 +445,9 @@ export class ReportingEngine {
     const healthSummary = await this.store.getHealthCheckSummary(tenantId);
 
     // Get alerts during period
-    const alerts = await this.store.listPredictiveAlerts(tenantId);
+    const alerts = await this.reportPredictiveAlerts(tenantId, periodStart, periodEnd, filters);
     const periodAlerts = alerts.filter(a => {
-      const detected = new Date(a.detectedAt || Date.now());
+      const detected = new Date(a.detectedAt);
       return detected >= periodStart && detected <= periodEnd;
     });
 
@@ -469,7 +478,7 @@ export class ReportingEngine {
     periodEnd: Date,
     filters?: any
   ): Promise<any> {
-    const workOrders = await this.store.listWorkOrders(tenantId);
+    const workOrders = await this.reportWorkOrders(tenantId, periodStart, periodEnd, filters);
     const contracts = await this.store.listAmcContracts(tenantId);
     const assets = await this.store.listMaintenanceAssets(tenantId);
 
@@ -479,12 +488,18 @@ export class ReportingEngine {
     });
 
     // Calculate corrective maintenance costs
-    const correctiveCost = periodWorkOrders.reduce((sum, wo) => sum + (wo.cost || 0), 0);
+    const correctiveCost = periodWorkOrders.reduce((sum, wo) => sum + Number(wo.cost || 0), 0);
 
     // Calculate AMC costs (pro-rated for period)
     const amcCost = contracts
-      .filter(c => c.status === 'active')
-      .reduce((sum, c) => sum + (c.cost || 0), 0);
+      .filter(c => !filters?.vendorId || c.vendorId === filters.vendorId)
+      .reduce((sum, contract) => {
+        const start = Date.parse(contract.startDate);
+        const end = Date.parse(contract.endDate);
+        const day = 86_400_000;
+        const overlap = Math.max(0, Math.min(end + day, periodEnd.getTime()) - Math.max(start, periodStart.getTime()));
+        return sum + Number(contract.cost || 0) * overlap / Math.max(day, end - start + day);
+      }, 0);
 
     // Cost by asset category
     const costByCategory = this.calculateCostByCategory(periodWorkOrders, assets);
@@ -514,14 +529,15 @@ export class ReportingEngine {
     periodEnd: Date,
     filters?: any
   ): Promise<any> {
-    const cameras = await this.store.listCameras(tenantId);
-    const telemetry = await this.store.listLatestOperationalTelemetry(tenantId);
+    const cameras = (await this.store.listCameras(tenantId)).filter(camera => !filters?.branchNodeId || camera.branchId === filters.branchNodeId);
+    const telemetry = (await this.store.listLatestOperationalTelemetry(tenantId, filters?.branchNodeId ? [filters.branchNodeId] : undefined))
+      .filter(item => (!filters?.branchNodeId || item.branchId === filters.branchNodeId) && (!filters?.assetId || item.deviceId === filters.assetId));
     const totalStorageBytes = telemetry.reduce((sum: number, t: any) => sum + (Number(t?.metrics?.usedBytes) || 0), 0);
     const dailyIngestBytes = telemetry.reduce((sum: number, t: any) => sum + (Number(t?.metrics?.dailyIngestBytes) || 0), 0);
 
     const hasSufficientData = telemetry.length > 0 && dailyIngestBytes > 0;
-    const currentGb = Math.round(totalStorageBytes / (1024 * 1024 * 1024));
-    const dailyGb = Math.round(dailyIngestBytes / (1024 * 1024 * 1024));
+    const currentGb = totalStorageBytes / (1024 * 1024 * 1024);
+    const dailyGb = dailyIngestBytes / (1024 * 1024 * 1024);
 
     return {
       period: { start: periodStart, end: periodEnd },
@@ -552,7 +568,7 @@ export class ReportingEngine {
     periodEnd: Date,
     filters?: any
   ): Promise<any> {
-    const alerts = await this.store.listPredictiveAlerts(tenantId);
+    const alerts = await this.reportPredictiveAlerts(tenantId, periodStart, periodEnd, filters);
 
     const highRisk = alerts.filter(a => a.score > 0.8);
     const mediumRisk = alerts.filter(a => a.score > 0.5 && a.score <= 0.8);
@@ -735,36 +751,61 @@ export class ReportingEngine {
   // Helper Methods
   // ============================================================================
 
+  private async reportWorkOrders(tenantId: string, start: Date, end: Date, filters?: ReportConfig['filters']) {
+    const orders = await this.store.listWorkOrders(tenantId, undefined, { ...filters, from: start.toISOString(), to: end.toISOString() });
+    return orders.filter(order => new Date(order.createdAt) >= start && new Date(order.createdAt) <= end
+      && (!filters?.branchNodeId || order.branchNodeId === filters.branchNodeId)
+      && (!filters?.assetId || order.assetId === filters.assetId)
+      && (!filters?.vendorId || order.vendorId === filters.vendorId)
+      && (!filters?.severity || order.severity === filters.severity));
+  }
+
+  private async reportPredictiveAlerts(tenantId: string, start: Date, end: Date, filters?: ReportConfig['filters']) {
+    const alerts = await this.store.listPredictiveAlerts(tenantId);
+    const assets = filters?.branchNodeId || filters?.vendorId ? await this.store.listMaintenanceAssets(tenantId) : [];
+    const assetIds = new Set(assets.filter(asset => (!filters?.branchNodeId || asset.branchNodeId === filters.branchNodeId)
+      && (!filters?.vendorId || asset.vendorId === filters.vendorId)).map(asset => asset.id));
+    return alerts.filter(alert => new Date(alert.detectedAt) >= start && new Date(alert.detectedAt) <= end
+      && (!filters?.assetId || alert.assetId === filters.assetId)
+      && (!(filters?.branchNodeId || filters?.vendorId) || assetIds.has(alert.assetId))
+      && (!filters?.severity || alert.severity === filters.severity));
+  }
+
   private groupByBranch(visits: any[], schedules: any[]): any {
-    // Group visits by branch from schedules
-    return {};
+    const branchBySchedule = new Map(schedules.map(schedule => [schedule.id, schedule.branchNodeId]));
+    const byBranch: Record<string, { scheduled: number; completed: number; overdue: number }> = {};
+    for (const visit of visits) {
+      const branchId = visit.branchNodeId || branchBySchedule.get(visit.scheduleId) || 'unassigned';
+      const row = byBranch[branchId] ??= { scheduled: 0, completed: 0, overdue: 0 };
+      row.scheduled++;
+      if (visit.status === 'completed') row.completed++;
+      else if (visit.status !== 'cancelled' && new Date(visit.dueAt) < new Date()) row.overdue++;
+    }
+    return byBranch;
   }
 
   private calculateSlaForSeverity(workOrders: any[], severity: string): any {
     const filtered = workOrders.filter(wo => wo.severity === severity && wo.slaDueAt);
     const closed = filtered.filter(wo => wo.status === 'closed');
-    const onTime = closed.filter(wo => new Date(wo.updatedAt) <= new Date(wo.slaDueAt));
+    const openBreaches = filtered.filter(wo => wo.status !== 'closed' && new Date(wo.slaDueAt) < new Date());
+    const evaluated = closed.length + openBreaches.length;
+    const onTime = closed.filter(wo => new Date(wo.resolvedAt || wo.updatedAt) <= new Date(wo.slaDueAt));
     
     return {
       total: filtered.length,
       onTime: onTime.length,
-      compliance: closed.length > 0 ? (onTime.length / closed.length) * 100 : 100,
+      compliance: evaluated > 0 ? (onTime.length / evaluated) * 100 : 100,
     };
   }
 
   private calculateCostByCategory(workOrders: any[], assets: any[]): any {
-    const categories = ['camera', 'recorder', 'storage', 'network', 'power', 'accessory'];
-    
-    return categories.reduce((acc, category) => {
-      const categoryAssets = assets.filter(a => a.category === category);
-      const categoryWorkOrders = workOrders.filter(wo => 
-        categoryAssets.some(a => a.id === wo.assetId)
-      );
-      const cost = categoryWorkOrders.reduce((sum, wo) => sum + (wo.cost || 0), 0);
-      
-      acc[category] = cost;
-      return acc;
-    }, {} as Record<string, number>);
+    const costs: Record<string, number> = { camera: 0, recorder: 0, storage: 0, network: 0, power: 0, accessory: 0 };
+    const categoryByAsset = new Map(assets.map(asset => [asset.id, asset.category]));
+    for (const order of workOrders) {
+      const category = categoryByAsset.get(order.assetId);
+      if (category && category in costs) costs[category]! += Number(order.cost || 0);
+    }
+    return costs;
   }
 
   private calculateCostTrend(
@@ -772,30 +813,20 @@ export class ReportingEngine {
     periodStart: Date,
     periodEnd: Date
   ): any[] {
-    const months: any[] = [];
-    const current = new Date(periodStart);
-    
+    const buckets = new Map<string, { month: string; cost: number; workOrders: number }>();
+    const current = new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth(), 1));
     while (current <= periodEnd) {
-      const monthStart = new Date(current);
-      const monthEnd = new Date(current.getFullYear(), current.getMonth() + 1, 0);
-      
-      const monthWorkOrders = workOrders.filter(wo => {
-        const created = new Date(wo.createdAt);
-        return created >= monthStart && created <= monthEnd;
-      });
-      
-      const cost = monthWorkOrders.reduce((sum, wo) => sum + (wo.cost || 0), 0);
-      
-      months.push({
-        month: `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`,
-        cost,
-        workOrders: monthWorkOrders.length,
-      });
-      
-      current.setMonth(current.getMonth() + 1);
+      const month = current.toISOString().slice(0, 7);
+      buckets.set(month, { month, cost: 0, workOrders: 0 });
+      current.setUTCMonth(current.getUTCMonth() + 1);
     }
-    
-    return months;
+    for (const order of workOrders) {
+      const created = new Date(order.createdAt);
+      if (created < periodStart || created > periodEnd || !Number.isFinite(created.getTime())) continue;
+      const bucket = buckets.get(created.toISOString().slice(0, 7));
+      if (bucket) { bucket.cost += Number(order.cost || 0); bucket.workOrders++; }
+    }
+    return [...buckets.values()];
   }
 }
 

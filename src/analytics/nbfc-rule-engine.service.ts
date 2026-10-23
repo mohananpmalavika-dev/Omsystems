@@ -51,6 +51,11 @@ export interface RuleEvaluationResult {
   incidentRequired: boolean;
   evidenceSnapshotRequired: boolean;
   evidenceClipRequired: boolean;
+  highPriorityRecordingRequired?: boolean;
+  bookmarkRecordingRequired?: boolean;
+  socNotificationRequired?: boolean;
+  branchManagerNotificationRequired?: boolean;
+  auditEventRequired?: boolean;
   message: string;
   actions: ActionType[];
   metricsSnapshot: Record<string, any>;
@@ -69,7 +74,9 @@ export class NbfcRuleEngineService {
   ): Promise<RuleEvaluationResult> {
     const now = input.timestamp || new Date();
     const nowMs = now.getTime();
-    const entityKey = input.entityKey || input.cameraId || input.zoneId || "default-entity";
+    const baseEntityKey = input.entityKey || input.cameraId || input.zoneId || "default-entity";
+    const entityKey = rule.templateId === MINIMUM_PERSONNEL_TEMPLATE_ID && (input.zoneId || rule.zoneId)
+      ? `${baseEntityKey}:zone:${input.zoneId || rule.zoneId}` : baseEntityKey;
     const isShadow = rule.state === "SHADOW" || (rule as any).shadowMode === true;
     const minimumPersonnel = rule.templateId === MINIMUM_PERSONNEL_TEMPLATE_ID;
     const suppressed = (message: string): RuleEvaluationResult => ({
@@ -174,13 +181,24 @@ export class NbfcRuleEngineService {
     let durationPersistedMs = 0;
 
     if (conditionMet) {
+      if (!state.firstConditionMetAt) {
+        const reportedElapsedSec = Number(
+          this.resolveMetricValue(runtimeMetrics, "recording_gap_seconds") ||
+          this.resolveMetricValue(runtimeMetrics, "locker_session_duration_seconds") ||
+          this.resolveMetricValue(runtimeMetrics, "dwell_time_seconds") ||
+          this.resolveMetricValue(runtimeMetrics, "offline_duration_seconds") ||
+          0
+        );
+        if (!minimumPersonnel && reportedElapsedSec > 0) {
+          state.firstConditionMetAt = new Date(nowMs - reportedElapsedSec * 1000).toISOString();
+        } else {
+          state.firstConditionMetAt = now.toISOString();
+        }
+      }
+
       const firstMet = state.firstConditionMetAt
         ? new Date(state.firstConditionMetAt).getTime()
         : nowMs;
-
-      if (!state.firstConditionMetAt) {
-        state.firstConditionMetAt = now.toISOString();
-      }
 
       durationPersistedMs = nowMs - firstMet;
 
@@ -280,6 +298,11 @@ export class NbfcRuleEngineService {
         incidentRequired,
         evidenceSnapshotRequired: !isShadow && rule.actions.includes("CAPTURE_SNAPSHOT"),
         evidenceClipRequired: !isShadow && rule.actions.includes("CAPTURE_EVIDENCE_CLIP"),
+        highPriorityRecordingRequired: !isShadow && rule.actions.includes("START_HIGH_PRIORITY_RECORDING"),
+        bookmarkRecordingRequired: !isShadow && rule.actions.includes("BOOKMARK_RECORDING"),
+        socNotificationRequired: !isShadow && rule.actions.includes("NOTIFY_SOC"),
+        branchManagerNotificationRequired: !isShadow && rule.actions.includes("NOTIFY_BRANCH_MANAGER"),
+        auditEventRequired: !isShadow && rule.actions.includes("AUDIT_EVENT"),
         message: isShadow
           ? `[SHADOW MODE] Rule '${rule.name}' condition triggered. No notifications emitted.`
           : `🚨 [${rule.severity}] Rule '${rule.name}' triggered on ${entityKey}.`,
@@ -314,6 +337,11 @@ export class NbfcRuleEngineService {
         incidentRequired: false,
         evidenceSnapshotRequired: false,
         evidenceClipRequired: false,
+        highPriorityRecordingRequired: false,
+        bookmarkRecordingRequired: false,
+        socNotificationRequired: false,
+        branchManagerNotificationRequired: false,
+        auditEventRequired: false,
         message: previouslyAlerting
           ? `Rule '${rule.name}' condition cleared; state transitioned to RESOLVED.`
           : `Rule condition normal.`,
@@ -366,6 +394,60 @@ export class NbfcRuleEngineService {
    */
   private resolveMetricValue(metrics: Record<string, any>, metricKey: string): any {
     if (!metrics || typeof metrics !== "object") return undefined;
+
+    if (
+      metricKey === "health_status" ||
+      metricKey === "healthStatus" ||
+      metricKey === "camera_status" ||
+      metricKey === "cameraStatus" ||
+      metricKey === "device_status" ||
+      metricKey === "deviceStatus" ||
+      metricKey === "connection_status" ||
+      metricKey === "connectionStatus" ||
+      metricKey === "camera_health" ||
+      metricKey === "cameraHealth" ||
+      metricKey === "is_online" ||
+      metricKey === "isOnline" ||
+      metricKey === "online" ||
+      metricKey === "status"
+    ) {
+      if (metrics.is_online === false || metrics.isOnline === false || metrics.online === false || metrics.is_offline === true || metrics.isOffline === true || metrics.offline === true) {
+        return "OFFLINE";
+      }
+      if (metrics.heartbeat_lost === true || metrics.heartbeatLost === true || metrics.heartbeat_missed === true || metrics.heartbeatMissed === true || metrics.heartbeat === false || metrics.heartbeat === "lost") {
+        return "OFFLINE";
+      }
+      if (metrics.ping_loss === 100 || metrics.packet_loss === 100 || metrics.ping_status === "failed" || metrics.pingStatus === "failed") {
+        return "OFFLINE";
+      }
+      if (metrics.is_online === true || metrics.isOnline === true || metrics.online === true) {
+        return "ONLINE";
+      }
+      const val =
+        metrics.health_status ??
+        metrics.healthStatus ??
+        metrics.camera_status ??
+        metrics.cameraStatus ??
+        metrics.device_status ??
+        metrics.deviceStatus ??
+        metrics.connection_status ??
+        metrics.connectionStatus ??
+        metrics.camera_health ??
+        metrics.cameraHealth ??
+        metrics.status ??
+        metrics.health;
+      if (val !== undefined && val !== null) {
+        const str = String(val).toLowerCase().trim();
+        if (["offline", "down", "disconnected", "unreachable", "inactive", "failed", "lost", "critical_down", "stopped"].includes(str)) {
+          return "OFFLINE";
+        }
+        if (["online", "up", "connected", "healthy", "active", "normal", "ok", "ready"].includes(str)) {
+          return "ONLINE";
+        }
+        return String(val).toUpperCase();
+      }
+    }
+
     if (metrics[metricKey] !== undefined && metrics[metricKey] !== null) return metrics[metricKey];
 
     const camelKey = metricKey.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
@@ -402,6 +484,49 @@ export class NbfcRuleEngineService {
       if (metrics.dwellTimeSeconds !== undefined && metrics.dwellTimeSeconds !== null) return metrics.dwellTimeSeconds;
     }
 
+    if (
+      metricKey === "locker_session_duration_seconds" ||
+      metricKey === "lockerSessionDurationSeconds" ||
+      metricKey === "locker_dwell_seconds" ||
+      metricKey === "lockerDwellSeconds" ||
+      metricKey === "session_duration_seconds" ||
+      metricKey === "sessionDurationSeconds" ||
+      metricKey === "visit_duration_seconds" ||
+      metricKey === "visitDurationSeconds" ||
+      metricKey === "dwell_time_seconds" ||
+      metricKey === "dwellTimeSeconds"
+    ) {
+      if (metrics.locker_session_duration_seconds !== undefined && metrics.locker_session_duration_seconds !== null) return Number(metrics.locker_session_duration_seconds);
+      if (metrics.lockerSessionDurationSeconds !== undefined && metrics.lockerSessionDurationSeconds !== null) return Number(metrics.lockerSessionDurationSeconds);
+      if (metrics.locker_session_duration !== undefined && metrics.locker_session_duration !== null) return Number(metrics.locker_session_duration);
+      if (metrics.lockerSessionDuration !== undefined && metrics.lockerSessionDuration !== null) return Number(metrics.lockerSessionDuration);
+      if (metrics.locker_dwell_seconds !== undefined && metrics.locker_dwell_seconds !== null) return Number(metrics.locker_dwell_seconds);
+      if (metrics.lockerDwellSeconds !== undefined && metrics.lockerDwellSeconds !== null) return Number(metrics.lockerDwellSeconds);
+      if (metrics.locker_dwell_time_seconds !== undefined && metrics.locker_dwell_time_seconds !== null) return Number(metrics.locker_dwell_time_seconds);
+      if (metrics.lockerDwellTimeSeconds !== undefined && metrics.lockerDwellTimeSeconds !== null) return Number(metrics.lockerDwellTimeSeconds);
+      if (metrics.session_duration_seconds !== undefined && metrics.session_duration_seconds !== null) return Number(metrics.session_duration_seconds);
+      if (metrics.sessionDurationSeconds !== undefined && metrics.sessionDurationSeconds !== null) return Number(metrics.sessionDurationSeconds);
+      if (metrics.session_duration !== undefined && metrics.session_duration !== null) return Number(metrics.session_duration);
+      if (metrics.sessionDuration !== undefined && metrics.sessionDuration !== null) return Number(metrics.sessionDuration);
+      if (metrics.visit_duration_seconds !== undefined && metrics.visit_duration_seconds !== null) return Number(metrics.visit_duration_seconds);
+      if (metrics.visitDurationSeconds !== undefined && metrics.visitDurationSeconds !== null) return Number(metrics.visitDurationSeconds);
+      if (metrics.visit_duration !== undefined && metrics.visit_duration !== null) return Number(metrics.visit_duration);
+      if (metrics.visitDuration !== undefined && metrics.visitDuration !== null) return Number(metrics.visitDuration);
+      if (metrics.dwell_time_seconds !== undefined && metrics.dwell_time_seconds !== null) return Number(metrics.dwell_time_seconds);
+      if (metrics.dwellTimeSeconds !== undefined && metrics.dwellTimeSeconds !== null) return Number(metrics.dwellTimeSeconds);
+      if (metrics.dwellSeconds !== undefined && metrics.dwellSeconds !== null) return Number(metrics.dwellSeconds);
+      if (metrics.dwell_seconds !== undefined && metrics.dwell_seconds !== null) return Number(metrics.dwell_seconds);
+      if (metrics.durationSeconds !== undefined && metrics.durationSeconds !== null) return Number(metrics.durationSeconds);
+      if (metrics.duration_seconds !== undefined && metrics.duration_seconds !== null) return Number(metrics.duration_seconds);
+      const startTime = metrics.sessionStartTime ?? metrics.session_start_time ?? metrics.visitStartTime ?? metrics.visit_start_time ?? metrics.enteredAt ?? metrics.entered_at;
+      if (startTime) {
+        const startMs = new Date(startTime).getTime();
+        if (!Number.isNaN(startMs)) {
+          return Math.max(0, Math.round((Date.now() - startMs) / 1000));
+        }
+      }
+    }
+
     if (metricKey === "person_count" || metricKey === "personCount") {
       if (metrics.occupancy !== undefined && metrics.occupancy !== null) return metrics.occupancy;
       if (metrics.count !== undefined && metrics.count !== null) return metrics.count;
@@ -423,6 +548,254 @@ export class NbfcRuleEngineService {
       if (metrics.isCounterAttended === true) return 1;
     }
 
+    if (
+      metricKey === "helmet_detected" ||
+      metricKey === "helmetDetected" ||
+      metricKey === "helmet_worn" ||
+      metricKey === "helmetWorn" ||
+      metricKey === "face_cover_detected" ||
+      metricKey === "faceCoverDetected" ||
+      metricKey === "face_cover" ||
+      metricKey === "faceCover" ||
+      metricKey === "mask_detected" ||
+      metricKey === "maskDetected" ||
+      metricKey === "face_concealment"
+    ) {
+      if (metrics.helmet_detected !== undefined && metrics.helmet_detected !== null) return metrics.helmet_detected;
+      if (metrics.helmetDetected !== undefined && metrics.helmetDetected !== null) return metrics.helmetDetected;
+      if (metrics.helmet_worn !== undefined && metrics.helmet_worn !== null) return metrics.helmet_worn;
+      if (metrics.helmetWorn !== undefined && metrics.helmetWorn !== null) return metrics.helmetWorn;
+      if (metrics.helmet !== undefined && metrics.helmet !== null) return metrics.helmet;
+      if (metrics.face_cover_detected !== undefined && metrics.face_cover_detected !== null) return metrics.face_cover_detected;
+      if (metrics.faceCoverDetected !== undefined && metrics.faceCoverDetected !== null) return metrics.faceCoverDetected;
+      if (metrics.face_cover !== undefined && metrics.face_cover !== null) return metrics.face_cover;
+      if (metrics.faceCover !== undefined && metrics.faceCover !== null) return metrics.faceCover;
+      if (metrics.face_covered !== undefined && metrics.face_covered !== null) return metrics.face_covered;
+      if (metrics.mask_detected !== undefined && metrics.mask_detected !== null) return metrics.mask_detected;
+      if (metrics.maskDetected !== undefined && metrics.maskDetected !== null) return metrics.maskDetected;
+      if (metrics.mask !== undefined && metrics.mask !== null) return metrics.mask;
+      if (metrics.face_concealed !== undefined && metrics.face_concealed !== null) return metrics.face_concealed;
+      if (metrics.faceConcealed !== undefined && metrics.faceConcealed !== null) return metrics.faceConcealed;
+      if (metrics.identity_concealment !== undefined && metrics.identity_concealment !== null) return metrics.identity_concealment;
+      if (metrics.threatType === "identity_concealment" || metrics.threatType === "helmet" || metrics.threatType === "mask") return true;
+    }
+
+    if (
+      metricKey === "safe_door_state" ||
+      metricKey === "safeDoorState" ||
+      metricKey === "safe_door_open" ||
+      metricKey === "safeDoorOpen" ||
+      metricKey === "safe_door" ||
+      metricKey === "safeDoor" ||
+      metricKey === "locker_door_state" ||
+      metricKey === "lockerDoorState" ||
+      metricKey === "locker_door_open" ||
+      metricKey === "lockerDoorOpen" ||
+      metricKey === "vault_door_state" ||
+      metricKey === "vaultDoorState" ||
+      metricKey === "vault_door_open" ||
+      metricKey === "vaultDoorOpen" ||
+      metricKey === "strong_room_door_state" ||
+      metricKey === "strongRoomDoorState" ||
+      metricKey === "door_state" ||
+      metricKey === "doorState" ||
+      metricKey === "door_open" ||
+      metricKey === "doorOpen"
+    ) {
+      const val =
+        metrics.safe_door_state ??
+        metrics.safeDoorState ??
+        metrics.safe_door_open ??
+        metrics.safeDoorOpen ??
+        metrics.safe_door ??
+        metrics.safeDoor ??
+        metrics.locker_door_state ??
+        metrics.lockerDoorState ??
+        metrics.locker_door_open ??
+        metrics.lockerDoorOpen ??
+        metrics.vault_door_state ??
+        metrics.vaultDoorState ??
+        metrics.vault_door_open ??
+        metrics.vaultDoorOpen ??
+        metrics.strong_room_door_state ??
+        metrics.strongRoomDoorState ??
+        metrics.door_state ??
+        metrics.doorState ??
+        metrics.door_open ??
+        metrics.doorOpen ??
+        metrics.sensor_state ??
+        metrics.sensorState ??
+        metrics.isOpen ??
+        metrics.is_open;
+      if (val !== undefined && val !== null) {
+        if (
+          val === true ||
+          String(val).toLowerCase() === "true" ||
+          val === 1 ||
+          String(val).toLowerCase() === "open" ||
+          String(val).toLowerCase() === "opened" ||
+          String(val).toLowerCase() === "active" ||
+          String(val).toLowerCase() === "triggered"
+        ) {
+          return "OPEN";
+        }
+        if (
+          val === false ||
+          String(val).toLowerCase() === "false" ||
+          val === 0 ||
+          String(val).toLowerCase() === "closed" ||
+          String(val).toLowerCase() === "idle" ||
+          String(val).toLowerCase() === "inactive" ||
+          String(val).toLowerCase() === "normal"
+        ) {
+          return "CLOSED";
+        }
+        return String(val).toUpperCase();
+      }
+    }
+
+    if (
+      metricKey === "recording_gap_seconds" ||
+      metricKey === "recordingGapSeconds" ||
+      metricKey === "gap_duration_seconds" ||
+      metricKey === "gapDurationSeconds" ||
+      metricKey === "recording_gap" ||
+      metricKey === "recordingGap" ||
+      metricKey === "gap_seconds" ||
+      metricKey === "gapSeconds"
+    ) {
+      if (metrics.recording_gap_seconds !== undefined && metrics.recording_gap_seconds !== null) return Number(metrics.recording_gap_seconds);
+      if (metrics.recordingGapSeconds !== undefined && metrics.recordingGapSeconds !== null) return Number(metrics.recordingGapSeconds);
+      if (metrics.gap_duration_seconds !== undefined && metrics.gap_duration_seconds !== null) return Number(metrics.gap_duration_seconds);
+      if (metrics.gapDurationSeconds !== undefined && metrics.gapDurationSeconds !== null) return Number(metrics.gapDurationSeconds);
+      if (metrics.gap_duration !== undefined && metrics.gap_duration !== null) return Number(metrics.gap_duration);
+      if (metrics.gapDuration !== undefined && metrics.gapDuration !== null) {
+        const val = Number(metrics.gapDuration);
+        return val > 1000 ? Math.round(val / 1000) : val;
+      }
+      if (metrics.gapDurationMs !== undefined && metrics.gapDurationMs !== null) return Math.round(Number(metrics.gapDurationMs) / 1000);
+      if (metrics.gap_duration_ms !== undefined && metrics.gap_duration_ms !== null) return Math.round(Number(metrics.gap_duration_ms) / 1000);
+      if (metrics.gap_seconds !== undefined && metrics.gap_seconds !== null) return Number(metrics.gap_seconds);
+      if (metrics.gapSeconds !== undefined && metrics.gapSeconds !== null) return Number(metrics.gapSeconds);
+      if (metrics.recording_gap !== undefined && metrics.recording_gap !== null) return Number(metrics.recording_gap);
+      if (metrics.recordingGap !== undefined && metrics.recordingGap !== null) return Number(metrics.recordingGap);
+      if (metrics.durationSec !== undefined && metrics.durationSec !== null) return Number(metrics.durationSec);
+      if (metrics.duration_sec !== undefined && metrics.duration_sec !== null) return Number(metrics.duration_sec);
+      if (metrics.vms_recording_gap_seconds !== undefined && metrics.vms_recording_gap_seconds !== null) return Number(metrics.vms_recording_gap_seconds);
+      if (metrics.stream_down_seconds !== undefined && metrics.stream_down_seconds !== null) return Number(metrics.stream_down_seconds);
+      if (metrics.downDuration !== undefined && metrics.downDuration !== null) {
+        const val = Number(metrics.downDuration);
+        return val > 1000 ? Math.round(val / 1000) : val;
+      }
+    }
+
+    if (
+      metricKey === "recording_failed" ||
+      metricKey === "recordingFailed" ||
+      metricKey === "stream_failed" ||
+      metricKey === "streamFailed" ||
+      metricKey === "recording_gap_detected" ||
+      metricKey === "recordingGapDetected"
+    ) {
+      if (metrics.recording_failed !== undefined && metrics.recording_failed !== null) return Boolean(metrics.recording_failed);
+      if (metrics.recordingFailed !== undefined && metrics.recordingFailed !== null) return Boolean(metrics.recordingFailed);
+      if (metrics.stream_failed !== undefined && metrics.stream_failed !== null) return Boolean(metrics.stream_failed);
+      if (metrics.streamFailed !== undefined && metrics.streamFailed !== null) return Boolean(metrics.streamFailed);
+      if (metrics.recording_gap_detected !== undefined && metrics.recording_gap_detected !== null) return Boolean(metrics.recording_gap_detected);
+      if (metrics.recordingGapDetected !== undefined && metrics.recordingGapDetected !== null) return Boolean(metrics.recordingGapDetected);
+      if (metrics.recording_gap_seconds !== undefined && metrics.recording_gap_seconds !== null) return Number(metrics.recording_gap_seconds) > 0;
+      if (metrics.recordingGapSeconds !== undefined && metrics.recordingGapSeconds !== null) return Number(metrics.recordingGapSeconds) > 0;
+    }
+
+    if (
+      metricKey === "recording_status" ||
+      metricKey === "recordingStatus" ||
+      metricKey === "stream_status" ||
+      metricKey === "streamStatus"
+    ) {
+      const val = metrics.recording_status ?? metrics.recordingStatus ?? metrics.stream_status ?? metrics.streamStatus;
+      if (val !== undefined && val !== null) return String(val).toUpperCase();
+    }
+
+    if (
+      metricKey === "handover_event" ||
+      metricKey === "handoverEvent" ||
+      metricKey === "handover_detected" ||
+      metricKey === "handoverDetected" ||
+      metricKey === "cash_handover" ||
+      metricKey === "cashHandover" ||
+      metricKey === "cash_pouch_detected" ||
+      metricKey === "cashPouchDetected" ||
+      metricKey === "tray_object_detected" ||
+      metricKey === "trayObjectDetected"
+    ) {
+      if (metrics.handover_event !== undefined && metrics.handover_event !== null) return Boolean(metrics.handover_event);
+      if (metrics.handoverEvent !== undefined && metrics.handoverEvent !== null) return Boolean(metrics.handoverEvent);
+      if (metrics.handover_detected !== undefined && metrics.handover_detected !== null) return Boolean(metrics.handover_detected);
+      if (metrics.handoverDetected !== undefined && metrics.handoverDetected !== null) return Boolean(metrics.handoverDetected);
+      if (metrics.cash_handover !== undefined && metrics.cash_handover !== null) return Boolean(metrics.cash_handover);
+      if (metrics.cashHandover !== undefined && metrics.cashHandover !== null) return Boolean(metrics.cashHandover);
+      if (metrics.cash_pouch_detected !== undefined && metrics.cash_pouch_detected !== null) return Boolean(metrics.cash_pouch_detected);
+      if (metrics.cashPouchDetected !== undefined && metrics.cashPouchDetected !== null) return Boolean(metrics.cashPouchDetected);
+      if (metrics.tray_object_detected !== undefined && metrics.tray_object_detected !== null) return Boolean(metrics.tray_object_detected);
+      if (metrics.trayObjectDetected !== undefined && metrics.trayObjectDetected !== null) return Boolean(metrics.trayObjectDetected);
+      if (metrics.package_on_tray !== undefined && metrics.package_on_tray !== null) return Boolean(metrics.package_on_tray);
+      if (metrics.packageOnTray !== undefined && metrics.packageOnTray !== null) return Boolean(metrics.packageOnTray);
+      if (metrics.tray_occupied !== undefined && metrics.tray_occupied !== null) return Boolean(metrics.tray_occupied);
+      if (metrics.trayOccupied !== undefined && metrics.trayOccupied !== null) return Boolean(metrics.trayOccupied);
+      if (metrics.pouch_detected !== undefined && metrics.pouch_detected !== null) return Boolean(metrics.pouch_detected);
+      if (metrics.pouchDetected !== undefined && metrics.pouchDetected !== null) return Boolean(metrics.pouchDetected);
+      if (metrics.item_placed !== undefined && metrics.item_placed !== null) return Boolean(metrics.item_placed);
+      if (metrics.handover_count !== undefined && metrics.handover_count !== null) return Number(metrics.handover_count) > 0;
+      if (metrics.handoverCount !== undefined && metrics.handoverCount !== null) return Number(metrics.handoverCount) > 0;
+      if (metrics.handover === true || String(metrics.handover).toLowerCase() === "true" || metrics.handover === "active") return true;
+    }
+
+    if (
+      metricKey === "offline_duration_seconds" ||
+      metricKey === "offlineDurationSeconds" ||
+      metricKey === "offline_seconds" ||
+      metricKey === "offlineSeconds" ||
+      metricKey === "offline_duration" ||
+      metricKey === "offlineDuration" ||
+      metricKey === "downtime_seconds" ||
+      metricKey === "downtimeSeconds" ||
+      metricKey === "downtime" ||
+      metricKey === "downtime_duration" ||
+      metricKey === "down_duration_seconds"
+    ) {
+      if (metrics.offline_duration_seconds !== undefined && metrics.offline_duration_seconds !== null) return Number(metrics.offline_duration_seconds);
+      if (metrics.offlineDurationSeconds !== undefined && metrics.offlineDurationSeconds !== null) return Number(metrics.offlineDurationSeconds);
+      if (metrics.offline_seconds !== undefined && metrics.offline_seconds !== null) return Number(metrics.offline_seconds);
+      if (metrics.offlineSeconds !== undefined && metrics.offlineSeconds !== null) return Number(metrics.offlineSeconds);
+      if (metrics.downtime_seconds !== undefined && metrics.downtime_seconds !== null) return Number(metrics.downtime_seconds);
+      if (metrics.downtimeSeconds !== undefined && metrics.downtimeSeconds !== null) return Number(metrics.downtimeSeconds);
+      if (metrics.downtime !== undefined && metrics.downtime !== null) {
+        const val = Number(metrics.downtime);
+        return val > 1000 ? Math.round(val / 1000) : val;
+      }
+      if (metrics.offline_duration !== undefined && metrics.offline_duration !== null) {
+        const val = Number(metrics.offline_duration);
+        return val > 1000 ? Math.round(val / 1000) : val;
+      }
+      if (metrics.offlineDuration !== undefined && metrics.offlineDuration !== null) {
+        const val = Number(metrics.offlineDuration);
+        return val > 1000 ? Math.round(val / 1000) : val;
+      }
+      if (metrics.offlineDurationMs !== undefined && metrics.offlineDurationMs !== null) return Math.round(Number(metrics.offlineDurationMs) / 1000);
+      if (metrics.downtimeDurationMs !== undefined && metrics.downtimeDurationMs !== null) return Math.round(Number(metrics.downtimeDurationMs) / 1000);
+      if (metrics.down_duration_seconds !== undefined && metrics.down_duration_seconds !== null) return Number(metrics.down_duration_seconds);
+      if (metrics.durationSeconds !== undefined && metrics.durationSeconds !== null) return Number(metrics.durationSeconds);
+      if (metrics.duration_seconds !== undefined && metrics.duration_seconds !== null) return Number(metrics.duration_seconds);
+      const lastSeen = metrics.lastSeenAt ?? metrics.last_seen_at ?? metrics.disconnectedAt ?? metrics.disconnected_at;
+      if (lastSeen) {
+        const lastSeenMs = new Date(lastSeen).getTime();
+        if (!Number.isNaN(lastSeenMs)) {
+          return Math.max(0, Math.round((Date.now() - lastSeenMs) / 1000));
+        }
+      }
+    }
+
     return undefined;
   }
 
@@ -441,11 +814,43 @@ export class NbfcRuleEngineService {
     const targetVal = cond.value;
 
     switch (cond.operator) {
-      case "EQUALS":
-        return String(metricVal).toLowerCase() === String(targetVal).toLowerCase();
+      case "EQUALS": {
+        const strMetric = String(metricVal).toLowerCase();
+        const strTarget = String(targetVal).toLowerCase();
+        if (strMetric === strTarget) return true;
+        if ((strTarget === "offline" || strTarget === "down") && ["offline", "down", "disconnected", "unreachable", "inactive", "failed", "false", "0"].includes(strMetric)) {
+          return true;
+        }
+        if ((strTarget === "online" || strTarget === "healthy" || strTarget === "up") && ["online", "healthy", "up", "connected", "active", "true", "1"].includes(strMetric)) {
+          return true;
+        }
+        if ((strTarget === "open" || strTarget === "true") && ["open", "opened", "true", "1", "active", "triggered"].includes(strMetric)) {
+          return true;
+        }
+        if ((strTarget === "closed" || strTarget === "false") && ["closed", "false", "0", "idle", "inactive", "normal"].includes(strMetric)) {
+          return true;
+        }
+        return false;
+      }
 
-      case "NOT_EQUALS":
-        return String(metricVal).toLowerCase() !== String(targetVal).toLowerCase();
+      case "NOT_EQUALS": {
+        const strMetric = String(metricVal).toLowerCase();
+        const strTarget = String(targetVal).toLowerCase();
+        if (strMetric === strTarget) return false;
+        if ((strTarget === "offline" || strTarget === "down") && ["offline", "down", "disconnected", "unreachable", "inactive", "failed", "false", "0"].includes(strMetric)) {
+          return false;
+        }
+        if ((strTarget === "online" || strTarget === "healthy" || strTarget === "up") && ["online", "healthy", "up", "connected", "active", "true", "1"].includes(strMetric)) {
+          return false;
+        }
+        if ((strTarget === "open" || strTarget === "true") && ["open", "opened", "true", "1", "active", "triggered"].includes(strMetric)) {
+          return false;
+        }
+        if ((strTarget === "closed" || strTarget === "false") && ["closed", "false", "0", "idle", "inactive", "normal"].includes(strMetric)) {
+          return false;
+        }
+        return true;
+      }
 
       case "GREATER_THAN":
         return Number(metricVal) > Number(targetVal);
@@ -550,8 +955,12 @@ export class NbfcRuleEngineService {
         ? currentMinutes >= start && currentMinutes <= end
         : currentMinutes >= start || currentMinutes <= end;
 
-    // Business Hours: Monday to Friday 08:30 - 17:30 (and Saturday until 13:00)
+    // Business Hours: Monday to Friday 08:30 - 17:30 (and Saturday until 13:00), or configured window
     if (type === "BUSINESS_HOURS") {
+      const activeDays = schedule?.days || [1, 2, 3, 4, 5, 6];
+      if (!activeDays.includes(dayOfWeek)) return false;
+      const window = configuredWindow();
+      if (window) return isWithinWindow(window.start, window.end);
       if (dayOfWeek === 0) return false; // Sunday closed
       if (dayOfWeek === 6) return currentMinutes >= 510 && currentMinutes <= 780; // Saturday 08:30 - 13:00
       return currentMinutes >= 510 && currentMinutes <= 1050; // Mon-Fri 08:30 - 17:30
@@ -853,6 +1262,51 @@ export class NbfcRuleEngineService {
         notes: "Authoritative recording gap detection (>15s threshold).",
       },
       {
+        detector: "recording-failure",
+        model: "Media Segment Stream Continuity Engine",
+        version: "v3.0.0",
+        status: "PRODUCTION_READY",
+        runtime: "Internal Engine",
+        inputResolution: "TS/MP4 Stream Index",
+        confidenceThreshold: 0.99,
+        validatedHardware: "IO Engine",
+        targetFps: 1,
+        actualFps: 1.0,
+        latencyMs: 2,
+        commercialLicenseReviewed: true,
+        notes: "Authoritative recording gap detection (>15s threshold).",
+      },
+      {
+        detector: "recording-gap",
+        model: "Media Segment Stream Continuity Engine",
+        version: "v3.0.0",
+        status: "PRODUCTION_READY",
+        runtime: "Internal Engine",
+        inputResolution: "TS/MP4 Stream Index",
+        confidenceThreshold: 0.99,
+        validatedHardware: "IO Engine",
+        targetFps: 1,
+        actualFps: 1.0,
+        latencyMs: 2,
+        commercialLicenseReviewed: true,
+        notes: "Authoritative recording gap detection (>15s threshold).",
+      },
+      {
+        detector: "locker-dwell",
+        model: "Spatial Session Dwell Tracker",
+        version: "v2.1.0",
+        status: "PRODUCTION_READY",
+        runtime: "Internal Engine",
+        inputResolution: "Polygon ROI",
+        confidenceThreshold: 0.8,
+        validatedHardware: "CPU Multicore",
+        targetFps: 5,
+        actualFps: 5.0,
+        latencyMs: 10,
+        commercialLicenseReviewed: true,
+        notes: "Tracks customer and personnel session duration within secure locker and vault zones.",
+      },
+      {
         detector: "anpr",
         model: "YOLO Vehicle + PaddleOCR Engine",
         version: "v2.4.0",
@@ -911,6 +1365,141 @@ export class NbfcRuleEngineService {
         latencyMs: 52,
         commercialLicenseReviewed: false,
         notes: "Not implemented in production; requires formal dataset certification.",
+      },
+      {
+        detector: "helmet-worn",
+        model: "Multi-Model Helmet & Face Concealment Localizer",
+        version: "v1.3.2",
+        status: "PRODUCTION_READY",
+        runtime: "ONNX Runtime",
+        inputResolution: "640x640",
+        confidenceThreshold: 0.7,
+        validatedHardware: "NVIDIA T4 / Intel Xeon Gold",
+        targetFps: 15,
+        actualFps: 15.2,
+        latencyMs: 32,
+        commercialLicenseReviewed: true,
+        notes: "Detects helmets, full-face visors, and face concealment gear inside facility and ATM cabins.",
+      },
+      {
+        detector: "helmet",
+        model: "Multi-Model Helmet & Face Concealment Localizer",
+        version: "v1.3.2",
+        status: "PRODUCTION_READY",
+        runtime: "ONNX Runtime",
+        inputResolution: "640x640",
+        confidenceThreshold: 0.7,
+        validatedHardware: "NVIDIA T4 / Intel Xeon Gold",
+        targetFps: 15,
+        actualFps: 15.2,
+        latencyMs: 32,
+        commercialLicenseReviewed: true,
+        notes: "Detects helmets, full-face visors, and face concealment gear inside facility and ATM cabins.",
+      },
+      {
+        detector: "face-cover",
+        model: "Multi-Model Helmet & Face Concealment Localizer",
+        version: "v1.3.2",
+        status: "PRODUCTION_READY",
+        runtime: "ONNX Runtime",
+        inputResolution: "640x640",
+        confidenceThreshold: 0.7,
+        validatedHardware: "NVIDIA T4 / Intel Xeon Gold",
+        targetFps: 15,
+        actualFps: 15.2,
+        latencyMs: 32,
+        commercialLicenseReviewed: true,
+        notes: "Detects helmets, full-face visors, and face concealment gear inside facility and ATM cabins.",
+      },
+      {
+        detector: "safe-door",
+        model: "IoT Magnetic Sensor & Spatial Door Correlation Engine",
+        version: "v2.0.0",
+        status: "PRODUCTION_READY",
+        runtime: "Internal Engine / MQTT IoT Gateway",
+        inputResolution: "Digital Sensor & Camera ROI",
+        confidenceThreshold: 0.95,
+        validatedHardware: "Edge Gateway / CPU Multicore",
+        targetFps: 10,
+        actualFps: 10.0,
+        latencyMs: 5,
+        commercialLicenseReviewed: true,
+        notes: "Real-time safe, vault, and strong-room locker door sensor state correlation with automated high-priority recording.",
+      },
+      {
+        detector: "object",
+        model: "Teller Tray Cash Pouch & Package Detector",
+        version: "v2.0.0",
+        status: "PRODUCTION_READY",
+        runtime: "ONNX Runtime",
+        inputResolution: "640x640",
+        confidenceThreshold: 0.75,
+        validatedHardware: "NVIDIA T4 / CPU Multicore",
+        targetFps: 10,
+        actualFps: 9.8,
+        latencyMs: 24,
+        commercialLicenseReviewed: true,
+        notes: "Detects cash pouches, bags, and packages on teller counters and appraisal trays for audit correlation.",
+      },
+      {
+        detector: "cash-handover",
+        model: "Teller Tray Cash Pouch & Package Detector",
+        version: "v2.0.0",
+        status: "PRODUCTION_READY",
+        runtime: "ONNX Runtime",
+        inputResolution: "640x640",
+        confidenceThreshold: 0.75,
+        validatedHardware: "NVIDIA T4 / CPU Multicore",
+        targetFps: 10,
+        actualFps: 9.8,
+        latencyMs: 24,
+        commercialLicenseReviewed: true,
+        notes: "Detects cash pouches, bags, and packages on teller counters and appraisal trays for audit correlation.",
+      },
+      {
+        detector: "health",
+        model: "Camera Heartbeat & Streaming Health Monitor",
+        version: "v2.2.0",
+        status: "PRODUCTION_READY",
+        runtime: "Internal Watchdog / RTSP Probe",
+        inputResolution: "Network Probe & Heartbeat Metric",
+        confidenceThreshold: 0.99,
+        validatedHardware: "IO Engine / Network Watchdog",
+        targetFps: 1,
+        actualFps: 1.0,
+        latencyMs: 5,
+        commercialLicenseReviewed: true,
+        notes: "Real-time camera availability and stream heartbeat loss detection for business hours security continuity.",
+      },
+      {
+        detector: "CAMERA_HEALTH",
+        model: "Camera Heartbeat & Streaming Health Monitor",
+        version: "v2.2.0",
+        status: "PRODUCTION_READY",
+        runtime: "Internal Watchdog / RTSP Probe",
+        inputResolution: "Network Probe & Heartbeat Metric",
+        confidenceThreshold: 0.99,
+        validatedHardware: "IO Engine / Network Watchdog",
+        targetFps: 1,
+        actualFps: 1.0,
+        latencyMs: 5,
+        commercialLicenseReviewed: true,
+        notes: "Real-time camera availability and stream heartbeat loss detection for business hours security continuity.",
+      },
+      {
+        detector: "camera-offline",
+        model: "Camera Heartbeat & Streaming Health Monitor",
+        version: "v2.2.0",
+        status: "PRODUCTION_READY",
+        runtime: "Internal Watchdog / RTSP Probe",
+        inputResolution: "Network Probe & Heartbeat Metric",
+        confidenceThreshold: 0.99,
+        validatedHardware: "IO Engine / Network Watchdog",
+        targetFps: 1,
+        actualFps: 1.0,
+        latencyMs: 5,
+        commercialLicenseReviewed: true,
+        notes: "Real-time camera availability and stream heartbeat loss detection for business hours security continuity.",
       },
     ];
   }

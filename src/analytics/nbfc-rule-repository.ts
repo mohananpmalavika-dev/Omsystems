@@ -564,7 +564,15 @@ export class NbfcRuleRepository {
     for (const [key, tmpl] of this.inMemoryTemplates.entries()) {
       // Allow normalized target match across all templates
       const normKey = key.toLowerCase().replace(/^(tpl|tmpl)-?(\d+-)?/, "").replace(/[^a-z0-9]/g, "");
-      if (normKey === normalizedTarget || normKey.includes(normalizedTarget) || normalizedTarget.includes(normKey)) {
+      const normName = tmpl.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (
+        normKey === normalizedTarget ||
+        normKey.includes(normalizedTarget) ||
+        normalizedTarget.includes(normKey) ||
+        normName === normalizedTarget ||
+        normName.includes(normalizedTarget) ||
+        normalizedTarget.includes(normName)
+      ) {
         return tmpl;
       }
     }
@@ -1650,8 +1658,15 @@ export class NbfcRuleRepository {
         defaultSeverity: "CRITICAL",
         defaultCooldownMs: 60000,
         defaultActions: ["CREATE_ALERT", "CREATE_INCIDENT", "NOTIFY_SOC", "NOTIFY_BRANCH_MANAGER"],
-        recommendedZoneTypes: ["LOCKER", "CASH_COUNTER", "CUSTOMER_AREA"],
+        recommendedZoneTypes: ["LOCKER", "CASH_COUNTER", "CUSTOMER_AREA", "ALL"],
         suggestedSchedule: "BUSINESS_HOURS",
+        metadata: {
+          maxDowntimeSeconds: 30,
+          targetMetric: "health_status",
+          targetValue: "OFFLINE",
+          complianceTag: "NBFC_BUSINESS_HOURS_CCTV_MANDATE",
+          requiresIncident: true,
+        },
       },
       {
         id: "tmpl-17-recording-failure",
@@ -1666,7 +1681,13 @@ export class NbfcRuleRepository {
         defaultActions: ["CREATE_ALERT", "CREATE_INCIDENT", "NOTIFY_SOC"],
         recommendedZoneTypes: ["LOCKER", "CASH_COUNTER"],
         suggestedSchedule: "24X7",
-        metadata: { maxGapSeconds: 15 },
+        metadata: {
+          maxGapSeconds: 15,
+          targetMetric: "recording_gap_seconds",
+          complianceTag: "NBFC_CONTINUOUS_SURVEILLANCE_SLA",
+          authoritativeMetric: "vms_recording_gap_seconds",
+          requiresIncident: true,
+        },
       },
       {
         id: "tmpl-18-person-fall",
@@ -1740,7 +1761,13 @@ export class NbfcRuleRepository {
         defaultActions: ["AUDIT_EVENT"],
         recommendedZoneTypes: ["CASH_COUNTER"],
         suggestedSchedule: "BUSINESS_HOURS",
-        metadata: { noCurrencyAmountEstimation: true },
+        metadata: {
+          noCurrencyAmountEstimation: true,
+          targetMetric: "handover_event",
+          auditCategory: "TELLER_TRAY_CORRELATION",
+          complianceMandate: "RBI_CASH_COUNTER_AUDIT_TRAIL",
+          supportedObjectClasses: ["package", "bag", "cash_pouch", "pouch", "tray", "cash_tray", "box", "envelope"],
+        },
       },
       {
         id: "tmpl-23-cash-movement-escort",
@@ -1937,6 +1964,7 @@ export class NbfcRuleRepository {
         defaultActions: ["CREATE_ALERT", "START_HIGH_PRIORITY_RECORDING", "CAPTURE_SNAPSHOT", "BOOKMARK_RECORDING", "NOTIFY_SOC"],
         recommendedZoneTypes: ["LOCKER", "STRONG_ROOM"],
         suggestedSchedule: "24X7",
+        metadata: { sensorType: "magnetic_contact", targetState: "OPEN", continuousRecording: true, securityMandate: "RBI_NBFC_STRONG_ROOM_SECURITY" },
       },
       {
         id: "tmpl-35-locker-dwell-time",
@@ -1945,13 +1973,18 @@ export class NbfcRuleRepository {
         description: "Warns when an authorized locker visit exceeds normal operating limits (e.g. > 15 minutes).",
         detectorType: "person",
         defaultCondition: { metric: "locker_session_duration_seconds", operator: "GREATER_THAN", value: 900 },
-        defaultDurationMs: 900000,
+        defaultDurationMs: 0,
         defaultSeverity: "WARNING",
         defaultCooldownMs: 300000,
         defaultActions: ["CREATE_ALERT", "NOTIFY_BRANCH_MANAGER", "NOTIFY_SOC"],
         recommendedZoneTypes: ["LOCKER", "STRONG_ROOM"],
         suggestedSchedule: "BUSINESS_HOURS",
-        metadata: { maxLockerVisitMinutes: 15 },
+        metadata: {
+          maxLockerVisitMinutes: 15,
+          targetMetric: "locker_session_duration_seconds",
+          thresholdSeconds: 900,
+          complianceTag: "NBFC_LOCKER_CUSTODY_POLICY",
+        },
       },
       {
         id: "tmpl-36-server-room-access",

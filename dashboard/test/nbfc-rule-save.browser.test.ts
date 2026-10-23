@@ -28,13 +28,22 @@ const rule = {
   severity: 'HIGH', actions: ['CREATE_ALERT', 'NOTIFY_BRANCH_MANAGER'], version: 1,
 };
 
-async function mount(options: { multipleTargets?: boolean; failOnce?: boolean; deferred?: boolean } = {}) {
+async function mount(options: { multipleTargets?: boolean; failOnce?: boolean; deferred?: boolean; minimumPersonnel?: boolean; flattened?: boolean } = {}) {
   page = await browser.newPage(); page.setDefaultTimeout(5000);
   await page.route('http://rules.test/**', route => route.fulfill({ contentType: 'text/html', body: '<div id="root"></div>' }));
   await page.goto('http://rules.test/analytics/rules');
   await page.evaluate(({ rule, options }) => {
     const w = window as any;
     const current = { ...rule, ...(options.multipleTargets ? { branchIds: ['b1','b2'], cameraIds: ['c1','c2'] } : {}) };
+    if (options.minimumPersonnel) Object.assign(current, {
+      name: 'Minimum Personnel / Dual Control', templateId: 'tmpl-02-minimum-personnel',
+      condition: options.flattened ? { metric: 'vault_operation_active', operator: 'EQUALS', value: 1 } : {
+        logical: 'AND', conditions: [
+          { metric: 'vault_operation_active', operator: 'EQUALS', value: true },
+          { metric: 'person_count', operator: 'LESS_THAN', value: 2 },
+        ],
+      },
+    });
     w.saves = [];
     let failed = false;
     const json = (data: any, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
@@ -63,6 +72,19 @@ const edit = () => page.getByRole('button', { name: 'Edit Closing clearance', ex
 const submit = () => page.getByRole('button', { name: 'Save & Apply Rule', exact: true }).click();
 
 describe('rule builder save and apply', () => {
+  it.each([false, true])('preserves or repairs the dual-control guard when saving the personnel threshold (flattened: %s)', async flattened => {
+    await mount({ minimumPersonnel: true, flattened });
+    await page.getByLabel('Branch', { exact: true }).selectOption('b1');
+    await page.getByRole('button', { name: 'Edit Minimum Personnel / Dual Control', exact: true }).click();
+    expect(await page.getByLabel('Metric', { exact: true }).inputValue()).toBe('person_count');
+    expect(await page.getByLabel('Threshold Value', { exact: true }).inputValue()).toBe('2');
+    await page.getByLabel('Threshold Value', { exact: true }).fill('3');
+    await submit(); await page.getByRole('status').waitFor();
+    expect((await saves())[0].payload.condition).toEqual({ logical: 'AND', conditions: [
+      { metric: 'vault_operation_active', operator: 'EQUALS', value: true },
+      { metric: 'person_count', operator: 'LESS_THAN', value: 3 },
+    ] });
+  });
   it('applies a previously global, disabled rule to the branch selected on the page', async () => {
     await mount();
     await page.getByLabel('Branch', { exact: true }).selectOption('b1');

@@ -55,6 +55,8 @@ import { ScopeMultiSelect } from "@/components/ui/scope-multi-select";
 import { LiveWallWindows } from "@/components/live-wall-windows";
 import { readLiveWallWindowScope } from "@/lib/live-wall-windows";
 import { LIVE_TOUR_INTERVALS } from "@/lib/live-tour-intervals";
+import { useEyeCare } from "@/hooks/use-eye-care";
+import { EyeCareHudButton } from "@/components/eye-care-hud-button";
 export type { HierarchyBranchInfo } from "@/lib/live-wall-hierarchy";
 import {
   endControlRoomActivity,
@@ -327,6 +329,9 @@ function ControlRoomContent() {
     if (voiceStrobeTimer.current) clearTimeout(voiceStrobeTimer.current);
   }, []);
   
+  // Auto Eye-Care Mode for continuous wall monitoring
+  const eyeCare = useEyeCare();
+
   // Hierarchy & Filter States
   const [selectedZone, setSelectedZone] = useState<string[]>(incomingScope.zones);
   const [selectedRegion, setSelectedRegion] = useState<string[]>(incomingScope.regions);
@@ -790,7 +795,21 @@ function ControlRoomContent() {
             <span><strong>{stats.unacknowledgedAlerts}</strong> need attention</span>
           </div>
         </div>
-        <div className="los-page-actions">{isWallWindow && <button type="button" onClick={() => window.close()}><X size={15} />Close window</button>}<span className={"los-data-state " + dataMode}><i />{dataMode === "live" ? "Inventory connected" : dataMode === "partial" ? "Partial service availability" : "Services unavailable"}</span><Link href="/reports/mis?tab=branch-opening">Branch opening report <ArrowUpRight size={15} /></Link><Link href="/operations/alerts">Alert centre <ArrowUpRight size={15} /></Link><button type="button" onClick={() => void loadData()} disabled={refreshing}><RefreshCw size={15} />{refreshing ? "Refreshing…" : "Refresh scope"}</button></div>
+        <div className="los-page-actions">
+          {isWallWindow && <button type="button" onClick={() => window.close()}><X size={15} />Close window</button>}
+          <span className={"los-data-state " + dataMode}><i />{dataMode === "live" ? "Inventory connected" : dataMode === "partial" ? "Partial service availability" : "Services unavailable"}</span>
+          <EyeCareHudButton
+            settings={eyeCare.settings}
+            computed={eyeCare.computed}
+            continuousMinutes={eyeCare.continuousMinutes}
+            secondsUntilNextBreak={eyeCare.secondsUntilNextBreak}
+            onUpdateSettings={eyeCare.updateSettings}
+            onStartMicroBreak={eyeCare.startMicroBreak}
+          />
+          <Link href="/reports/mis?tab=branch-opening">Branch opening report <ArrowUpRight size={15} /></Link>
+          <Link href="/operations/alerts">Alert centre <ArrowUpRight size={15} /></Link>
+          <button type="button" onClick={() => void loadData()} disabled={refreshing}><RefreshCw size={15} />{refreshing ? "Refreshing…" : "Refresh scope"}</button>
+        </div>
       </header>
 
       {/* 2. Interactive Zone / Region / Area / Branch Scope Filter Toolbar */}

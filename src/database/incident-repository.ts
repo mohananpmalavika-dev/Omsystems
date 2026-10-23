@@ -173,7 +173,7 @@ export class IncidentRepository {
     addFilter("inc.assigned_to", filters?.assignedTo);
     if (filters?.branchIds) {
       params.push(filters.branchIds);
-      const branchPredicate = `inc.branch_id::text = ANY($${params.length}::text[])`;
+      const branchPredicate = `inc.branch_id = ANY($${params.length}::uuid[])`;
       clauses.push(filters.includeUnscoped
         ? `(${branchPredicate} OR inc.branch_id IS NULL)`
         : branchPredicate);
@@ -199,7 +199,13 @@ export class IncidentRepository {
        FROM incidents inc
        LEFT JOIN resource_nodes node ON node.id = inc.branch_id
          AND ${activeResourceNode("node")}
-       LEFT JOIN incident_cameras icam ON icam.incident_id = inc.id
+       LEFT JOIN LATERAL (
+         SELECT link.camera_id FROM incident_cameras link
+         JOIN cameras candidate ON candidate.id = link.camera_id AND ${activeCamera("candidate")}
+         WHERE link.incident_id = inc.id
+         ORDER BY COALESCE((to_jsonb(link)->>'is_primary')::boolean, false) DESC, link.added_at, link.id
+         LIMIT 1
+       ) icam ON true
        LEFT JOIN cameras cam ON cam.id = icam.camera_id AND ${activeCamera("cam")}
        LEFT JOIN resource_nodes cam_node ON cam_node.id = cam.resource_node_id
        LEFT JOIN LATERAL (

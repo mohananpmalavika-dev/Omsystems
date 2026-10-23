@@ -97,7 +97,7 @@ export class DailySurveillanceCollectorService {
       if (options.filters?.region) {
         branchNodes = branchNodes.filter(node => hierarchyByBranch.get(node.id)?.region === options.filters?.region);
       }
-      const selectedBranchIds = new Set(branchNodes.map((branch) => branch.id));
+      const selectedBranchIds = new Set<string>();
 
       for (const node of branchNodes) {
         try {
@@ -133,6 +133,7 @@ export class DailySurveillanceCollectorService {
           }
 
           branches.push(bRow);
+          selectedBranchIds.add(node.id);
 
           // 2. Recorders
           if (!options.filters?.deviceType || options.filters.deviceType === "recorder") {
@@ -166,9 +167,9 @@ export class DailySurveillanceCollectorService {
                 networkReachable: cam.onlineStatus === "online",
                 streamReachable: cam.streamAvailable,
                 recordingActive: cam.recordingStatus === "recording",
-                availabilityPercent: cam.healthScore,
-                downtimeMinutes: cam.onlineStatus === "offline" ? 1440 : 0,
-                outageCount: cam.onlineStatus === "offline" ? 1 : 0,
+                availabilityPercent: null,
+                downtimeMinutes: null,
+                outageCount: null,
                 lastSeenAt: cam.lastHeartbeat ? new Date(cam.lastHeartbeat) : undefined,
               });
             }
@@ -286,8 +287,9 @@ export class DailySurveillanceCollectorService {
             internetOutages.push({
               branchId: snapshot.branchId,
               branchName: snapshot.branchName,
-              startedAt: new Date(end.getTime() - 1800_000),
-              durationSeconds: 1800,
+              startedAt: undefined,
+              observedAt: snapshot.network.observedAt ? new Date(snapshot.network.observedAt) : undefined,
+              durationSeconds: undefined,
               path: snapshot.network.state === "FAILOVER" ? "PRIMARY" : "BOTH",
               failoverActivated: snapshot.network.state === "FAILOVER",
               impact: snapshot.network.state === "FAILOVER" ? "NO_IMPACT" : "REMOTE_MONITORING_LOST",
@@ -295,20 +297,8 @@ export class DailySurveillanceCollectorService {
             });
           }
 
-          // 8. Alerts
-          for (const crit of snapshot.alerts.recentCritical || []) {
-            alerts.push({
-              alertId: crit.id,
-              branchId: snapshot.branchId,
-              branchName: snapshot.branchName,
-              cameraId: crit.deviceId,
-              priority: "P1",
-              detectionType: crit.title,
-              createdAt: crit.detectedAt ? new Date(crit.detectedAt) : end,
-              slaBreached: false,
-              state: "OPEN",
-            });
-          }
+          // Alert history is loaded below with the selected period and branch scope.
+
         } catch {
           // Skip unresolvable branch snapshot
         }
@@ -318,17 +308,27 @@ export class DailySurveillanceCollectorService {
       try {
         let alertList: any[] = [];
         if (selectedBranchIds.size > 0 && typeof activeStore.listAnalyticsAlerts === "function") {
-          alertList = await activeStore.listAnalyticsAlerts(options.tenantId, { limit: 1000, branchIds: [...selectedBranchIds] });
-        } else if (Array.isArray((activeStore as any).analyticsAlerts)) {
+          for (let offset = 0; ; offset += 1000) {
+            const page = await activeStore.listAnalyticsAlerts(options.tenantId, {
+              limit: 1000, offset, branchIds: [...selectedBranchIds], from: start.toISOString(), to: end.toISOString(),
+            });
+            alertList.push(...page);
+            if (page.length < 1000) break;
+          }
+        } else if (selectedBranchIds.size > 0 && Array.isArray((activeStore as any).analyticsAlerts)) {
           alertList = (activeStore as any).analyticsAlerts.filter((a: any) => a.tenantId === options.tenantId);
         }
         const alertCameras = await activeStore.listCamerasByIds([...new Set(alertList.map((alert) => alert.cameraId).filter(Boolean))]);
         const branchByCamera = new Map(alertCameras.map((camera) => [camera.id, camera.branchId]));
 
+        const branchNames = new Map(branches.map(branch => [branch.branchId, branch.branchName]));
+        const seenAlerts = new Set<string>();
         for (const a of alertList) {
+          if (new Date(a.lastDetectedAt || a.firstDetectedAt) < start || new Date(a.firstDetectedAt || a.lastDetectedAt) > end) continue;
+          if (a.status === "false_alarm" || a.status === "suppressed") continue;
           const bId = branchByCamera.get(a.cameraId);
           if (!bId || !selectedBranchIds.has(bId)) continue;
-          const bName = (bId && (activeStore as any).nodes?.get?.(bId)?.name) || "Branch";
+          const bName = branchNames.get(bId) || "Branch";
           const alertRow: AlertReportRow = {
             alertId: a.id,
             branchId: bId,
@@ -336,24 +336,33 @@ export class DailySurveillanceCollectorService {
             cameraId: a.cameraId,
             priority: a.severity === "P1" ? "P1" : a.severity === "P2" ? "P2" : a.severity === "P3" ? "P3" : "P4",
             detectionType: a.ruleType || a.title || "Intrusion",
-            createdAt: new Date(a.firstDetectedAt || a.lastDetectedAt || Date.now()),
-            slaBreached: (Date.now() - new Date(a.firstDetectedAt || a.lastDetectedAt || Date.now()).getTime()) > 300_000,
+            createdAt: new Date(a.firstDetectedAt || a.lastDetectedAt),
+            acknowledgedAt: a.acknowledgedAt ? new Date(a.acknowledgedAt) : undefined,
+            resolvedAt: a.resolvedAt ? new Date(a.resolvedAt) : undefined,
+            slaBreached: a.slaDueAt ? Date.parse(a.acknowledgedAt || a.resolvedAt || end.toISOString()) > Date.parse(a.slaDueAt) : false,
             state: a.status === "acknowledged" ? "ACKNOWLEDGED" : a.status === "resolved" ? "RESOLVED" : "OPEN",
           };
-          if (!alerts.some((existing) => existing.alertId === alertRow.alertId)) {
+          if (!seenAlerts.has(alertRow.alertId)) {
+            seenAlerts.add(alertRow.alertId);
             alerts.push(alertRow);
           }
         }
       } catch {
-        // Fallback to snapshot alerts
+        // Missing history must not be replaced with fabricated period alerts.
       }
 
+      const activeByBranch = new Map<string, { p1: number; p2: number }>();
+      for (const alert of alerts) {
+        if (alert.state === 'RESOLVED') continue;
+        const counts = activeByBranch.get(alert.branchId) ?? { p1: 0, p2: 0 };
+        if (alert.priority === 'P1') counts.p1++;
+        if (alert.priority === 'P2') counts.p2++;
+        activeByBranch.set(alert.branchId, counts);
+      }
       for (const bRow of branches) {
-        bRow.activeP1 = alerts.filter((a) => a.branchId === bRow.branchId && a.priority === "P1" && a.state !== "RESOLVED").length;
-        bRow.activeP2 = alerts.filter((a) => a.branchId === bRow.branchId && a.priority === "P2" && a.state !== "RESOLVED").length;
-        if (bRow.activeP1 > 0 && bRow.status !== "OFFLINE") {
-          bRow.status = "CRITICAL";
-        }
+        bRow.activeP1 = activeByBranch.get(bRow.branchId)?.p1 ?? 0;
+        bRow.activeP2 = activeByBranch.get(bRow.branchId)?.p2 ?? 0;
+        if (bRow.activeP1 > 0 && bRow.status !== 'OFFLINE') bRow.status = 'CRITICAL';
       }
     }
 
@@ -409,7 +418,7 @@ export class DailySurveillanceCollectorService {
       unavailableTelemetry: unavailableResources,
       unknownState: unknownResources,
       completenessPercent: totalResources > 0 ? Number((((totalResources - unknownResources) / totalResources) * 100).toFixed(1)) : 100,
-      oldestObservationAt: end,
+      oldestObservationAt: branches.map(branch => branch.lastObservedAt).filter((date): date is Date => !!date && Number.isFinite(date.getTime())).sort((a, b) => a.getTime() - b.getTime())[0],
     };
 
     const executiveSummary: ExecutiveSummary = {

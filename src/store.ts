@@ -3380,8 +3380,14 @@ export class MemoryStore {
     return workOrder;
   }
 
-  async listWorkOrders(tenantId: string, status?: string) {
-    return this.workOrders.filter((order) => order.tenantId === tenantId && (!status || order.status === status));
+  async listWorkOrders(tenantId: string, status?: string, filters?: Parameters<ControlPlaneStore["listWorkOrders"]>[2]) {
+    return this.workOrders.filter((order) => order.tenantId === tenantId && (!status || order.status === status)
+      && (!filters?.from || Date.parse(order.createdAt) >= Date.parse(filters.from))
+      && (!filters?.to || Date.parse(order.createdAt) <= Date.parse(filters.to))
+      && (!filters?.branchNodeId || order.branchNodeId === filters.branchNodeId)
+      && (!filters?.assetId || order.assetId === filters.assetId)
+      && (!filters?.vendorId || order.vendorId === filters.vendorId)
+      && (!filters?.severity || order.severity === filters.severity));
   }
 
   async getWorkOrder(id: string) {

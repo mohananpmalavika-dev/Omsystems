@@ -551,6 +551,9 @@ export function registerNbfcAnalyticsRoutes(
       conditionOverrides: z.record(z.any()).optional(),
     }).parse(request.body || {});
 
+    if (params.id === MINIMUM_PERSONNEL_TEMPLATE_ID && body.conditionOverrides && !validMinimumPersonnelCondition(body.conditionOverrides)) {
+      return reply.code(400).send({ error: "invalid_minimum_personnel_condition", message: "Minimum Personnel requires the active vault operation check and a person/staff count below at least two." });
+    }
     if (!(body.branchIds?.length || body.cameraIds?.length)) {
       return reply.code(400).send({ error: "scoped_activation_required", message: "Template rules must target at least one branch or camera" });
     }

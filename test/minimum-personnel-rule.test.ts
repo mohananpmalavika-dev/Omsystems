@@ -43,6 +43,8 @@ describe('Minimum Personnel / Dual Control condition integrity', () => {
     expect(minimumPersonnelBuilderCondition({ metric: 'person_count', operator: 'LESS_THAN', value: 3 }).conditions?.[1]?.value).toBe(3);
     expect(validMinimumPersonnelCondition({ logical: 'OR', conditions: condition().conditions })).toBe(false);
     expect(validMinimumPersonnelCondition({ metric: 'person_count', operator: 'LESS_THAN', value: 2 })).toBe(false);
+    expect(validMinimumPersonnelCondition({ logical: 'AND', conditions: [null] } as never)).toBe(false);
+    expect(validMinimumPersonnelCondition({ logical: 'AND', conditions: {} } as never)).toBe(false);
   });
 
   it('preserves nested clauses when editing a compound condition', () => {
@@ -55,6 +57,20 @@ describe('Minimum Personnel / Dual Control condition integrity', () => {
 });
 
 describe('Minimum Personnel / Dual Control runtime', () => {
+  it('never uses an unrelated recording gap to skip personnel persistence', async () => {
+    const h = await harness();
+    expect(await h.observe(0, { vault_operation_active: true, person_count: 1, recording_gap_seconds: 120 })).toMatchObject({ triggered: false, durationPersistedMs: 0 });
+  });
+  it('keeps personnel confirmation separate for different zones on the same camera', async () => {
+    const { engine, rule } = await harness();
+    const observe = (seconds: number, zoneId: string) => engine.evaluateRule(rule, {
+      entityKey: 'vault-camera', cameraId: 'vault-camera', zoneId, metrics: { vault_operation_active: true, person_count: 1 },
+      timestamp: new Date(Date.parse('2026-10-23T06:00:00Z') + seconds * 1000),
+    });
+    await observe(0, 'locker'); await observe(5, 'locker');
+    expect(await observe(10, 'strong-room')).toMatchObject({ triggered: false, durationPersistedMs: 0 });
+    expect((await observe(10, 'locker')).triggered).toBe(true);
+  });
   it.each([0,1])('alerts for %i people only after ten seconds of active-operation shortfall', async count => {
     const h = await harness(); const metrics = { vault_operation_active: true, person_count: count };
     expect((await h.observe(0, metrics)).triggered).toBe(false);
@@ -134,6 +150,15 @@ describe('minimum-personnel API validation', () => {
       expect(valid.statusCode).toBe(200); expect(valid.json().condition).toEqual(condition());
       const loaded = await app.inject({ method: 'GET', url: `/api/ai/rules/${rule.id}` });
       expect(loaded.json().rule.condition).toEqual(condition());
+      const invalidCreate = await app.inject({ method: 'POST', url: '/api/ai/rules', payload: {
+        name: 'Bad personnel rule', templateId: MINIMUM_PERSONNEL_TEMPLATE_ID, cameraIds: ['vault-camera'],
+        detectorType: 'person', condition: { metric: 'vault_operation_active', operator: 'EQUALS', value: true },
+      } });
+      expect(invalidCreate.statusCode).toBe(400);
+      const invalidTemplate = await app.inject({ method: 'POST', url: `/api/ai/rule-templates/${MINIMUM_PERSONNEL_TEMPLATE_ID}/instantiate`, payload: {
+        cameraIds: ['vault-camera'], conditionOverrides: { metric: 'person_count', operator: 'LESS_THAN', value: 2 },
+      } });
+      expect(invalidTemplate.statusCode).toBe(400);
     } finally { await app.close(); }
   });
 });

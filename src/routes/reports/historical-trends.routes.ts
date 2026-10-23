@@ -8,6 +8,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Pool } from 'pg';
 import type { ControlPlaneStore } from '../../control-plane-store.js';
+import { activeResourceNode } from '../../database/active-resource.js';
 
 // ============================================================================
 // REQUEST VALIDATION
@@ -38,59 +39,41 @@ async function getExecutiveKPITrends(
 ): Promise<any[]> {
   const query = `
     WITH monthly_data AS (
-      SELECT 
-        DATE_TRUNC('month', detected_at) AS month,
-        COUNT(DISTINCT id) AS total_incidents,
-        COUNT(DISTINCT id) FILTER (WHERE severity IN ('critical', 'high')) AS p1_incidents,
-        COUNT(DISTINCT id) FILTER (WHERE status = 'resolved') AS resolved_incidents,
-        AVG(
-          CASE 
-            WHEN resolved_at IS NOT NULL 
-            THEN EXTRACT(EPOCH FROM (resolved_at - detected_at)) / 60
-            ELSE NULL 
-          END
-        ) AS avg_response_time_min
-      FROM incidents
-      WHERE tenant_id = $1
-        AND branch_id::text = ANY($3::text[])
-        AND detected_at >= NOW() - INTERVAL '1 month' * $2
-        AND deleted_at IS NULL
-      GROUP BY DATE_TRUNC('month', detected_at)
-    ),
-    monthly_cameras AS (
-      SELECT 
-        DATE_TRUNC('month', COALESCE(last_seen_at, created_at)) AS month,
-        COUNT(*) AS total_cameras,
-        COUNT(*) FILTER (WHERE status = 'online') AS online_cameras
-      FROM cameras
-      WHERE tenant_id = $1
-        AND branch_node_id::text = ANY($3::text[])
-      GROUP BY DATE_TRUNC('month', COALESCE(last_seen_at, created_at))
+      SELECT DATE_TRUNC('month', detected_at AT TIME ZONE 'Asia/Kolkata') AS month,
+        COUNT(*) AS total_incidents,
+        COUNT(*) FILTER (WHERE severity = 'P1') AS p1_incidents,
+        COUNT(*) FILTER (WHERE status IN ('resolved', 'closed')) AS resolved_incidents,
+        AVG(EXTRACT(EPOCH FROM (acknowledged_at - detected_at)) / 60)
+          FILTER (WHERE acknowledged_at >= detected_at) AS avg_response_time_min
+      FROM incidents i
+      LEFT JOIN LATERAL (
+        SELECT MIN(history.created_at) AS acknowledged_at FROM incident_status_history history
+        WHERE history.incident_id = i.id AND history.status = 'acknowledged'
+      ) ack ON true
+      WHERE tenant_id = $1 AND branch_id = ANY($3::uuid[])
+        AND detected_at >= NOW() - INTERVAL '1 month' * $2 AND detected_at <= NOW()
+      GROUP BY 1
+    ), monthly_cameras AS (
+      SELECT DATE_TRUNC('month', summary_date)::timestamp AS month,
+        COUNT(DISTINCT camera_id) AS total_cameras,
+        SUM(online_minutes + degraded_minutes)::numeric AS available_minutes,
+        SUM(online_minutes + degraded_minutes + offline_minutes) AS measured_minutes
+      FROM camera_health_daily
+      WHERE tenant_id = $1 AND branch_node_id = ANY($3::uuid[])
+        AND summary_date >= (NOW() - INTERVAL '1 month' * $2)::date AND summary_date <= CURRENT_DATE
+      GROUP BY 1
     )
-    SELECT 
-      TO_CHAR(md.month, 'YYYY-MM') AS month,
+    SELECT TO_CHAR(COALESCE(md.month, mc.month), 'YYYY-MM') AS month,
       COALESCE(md.total_incidents, 0) AS incidents,
       COALESCE(md.p1_incidents, 0) AS p1_threats,
       COALESCE(md.resolved_incidents, 0) AS resolved,
-      ROUND(COALESCE(md.avg_response_time_min, 0), 1) AS avg_response_min,
-      COALESCE(mc.online_cameras, 0) AS online_cameras,
-      COALESCE(mc.total_cameras, 0) AS total_cameras,
-      CASE 
-        WHEN mc.total_cameras > 0 
-        THEN ROUND((mc.online_cameras::numeric / mc.total_cameras) * 100, 1)
-        ELSE 0 
-      END AS uptime_percent,
-      -- Calculate security posture score (0-100)
-      GREATEST(0, LEAST(100, 
-        100 
-        - (COALESCE(md.p1_incidents, 0) * 5)
-        - (COALESCE(md.total_incidents, 0) * 0.5)
-        + (CASE WHEN mc.total_cameras > 0 THEN (mc.online_cameras::numeric / mc.total_cameras) * 20 ELSE 0 END)
-      )) AS security_score
-    FROM monthly_data md
-    FULL OUTER JOIN monthly_cameras mc ON md.month = mc.month
-    ORDER BY month DESC
-    LIMIT $2
+      ROUND(md.avg_response_time_min, 1) AS avg_response_min,
+      NULL::int AS online_cameras,
+      mc.total_cameras,
+      ROUND(mc.available_minutes / NULLIF(mc.measured_minutes, 0) * 100, 1) AS uptime_percent,
+      NULL::numeric AS security_score
+    FROM monthly_data md FULL OUTER JOIN monthly_cameras mc ON md.month = mc.month
+    ORDER BY COALESCE(md.month, mc.month) DESC LIMIT $2
   `;
   
   const result = await pool.query(query, [tenantId, months, branchIds]);
@@ -108,41 +91,25 @@ async function getFinancialTrends(
 ): Promise<any[]> {
   const query = `
     WITH monthly_maintenance AS (
-      SELECT 
-        DATE_TRUNC('month', created_at) AS month,
-        SUM(estimated_cost) AS total_cost,
-        COUNT(*) AS maintenance_count
-      FROM maintenance_records
-      WHERE tenant_id = $1
-        AND branch_id::text = ANY($3::text[])
-        AND created_at >= NOW() - INTERVAL '1 month' * $2
-      GROUP BY DATE_TRUNC('month', created_at)
-    ),
-    monthly_incidents AS (
-      SELECT 
-        DATE_TRUNC('month', detected_at) AS month,
-        COUNT(*) AS incident_count
+      SELECT DATE_TRUNC('month', created_at AT TIME ZONE 'Asia/Kolkata') AS month,
+        SUM(cost) AS total_cost, COUNT(*) AS maintenance_count
+      FROM work_orders
+      WHERE tenant_id = $1 AND branch_node_id = ANY($3::uuid[])
+        AND created_at >= NOW() - INTERVAL '1 month' * $2 AND created_at <= NOW()
+      GROUP BY 1
+    ), monthly_incidents AS (
+      SELECT DATE_TRUNC('month', detected_at AT TIME ZONE 'Asia/Kolkata') AS month, COUNT(*) AS incident_count
       FROM incidents
-      WHERE tenant_id = $1
-        AND branch_id::text = ANY($3::text[])
-        AND detected_at >= NOW() - INTERVAL '1 month' * $2
-        AND deleted_at IS NULL
-      GROUP BY DATE_TRUNC('month', detected_at)
+      WHERE tenant_id = $1 AND branch_id = ANY($3::uuid[])
+        AND detected_at >= NOW() - INTERVAL '1 month' * $2 AND detected_at <= NOW()
+      GROUP BY 1
     )
-    SELECT 
-      TO_CHAR(mm.month, 'YYYY-MM') AS month,
-      COALESCE(mm.total_cost, 0) AS opex,
-      COALESCE(mm.maintenance_count, 0) AS maintenance_count,
+    SELECT TO_CHAR(COALESCE(mm.month, mi.month), 'YYYY-MM') AS month,
+      mm.total_cost AS opex, COALESCE(mm.maintenance_count, 0) AS maintenance_count,
       COALESCE(mi.incident_count, 0) AS incidents,
-      -- Estimated CapEx (cameras + infrastructure, simplified)
-      ROUND(COALESCE(mm.total_cost, 0) * 0.3, 2) AS capex,
-      -- Total cost
-      ROUND(COALESCE(mm.total_cost, 0) * 1.3, 2) AS total_cost
-    FROM monthly_maintenance mm
-    FULL OUTER JOIN monthly_incidents mi ON mm.month = mi.month
-    WHERE mm.month IS NOT NULL OR mi.month IS NOT NULL
-    ORDER BY month DESC
-    LIMIT $2
+      NULL::numeric AS capex, mm.total_cost AS total_cost
+    FROM monthly_maintenance mm FULL OUTER JOIN monthly_incidents mi ON mm.month = mi.month
+    ORDER BY COALESCE(mm.month, mi.month) DESC LIMIT $2
   `;
   
   const result = await pool.query(query, [tenantId, months, branchIds]);
@@ -159,47 +126,35 @@ async function getBenchmarkingTrends(
   branchIds: string[],
 ): Promise<any[]> {
   const query = `
-    WITH monthly_branch_scores AS (
-      SELECT 
-        n.id AS branch_id,
-        n.name AS branch_name,
-        DATE_TRUNC('month', i.detected_at) AS month,
-        COUNT(DISTINCT c.id) AS total_cameras,
-        COUNT(DISTINCT c.id) FILTER (WHERE c.status = 'online') AS online_cameras,
-        COUNT(DISTINCT i.id) AS incidents,
-        COUNT(DISTINCT i.id) FILTER (WHERE i.severity IN ('critical', 'high')) AS p1_incidents
-      FROM nodes n
-      LEFT JOIN cameras c ON c.branch_id = n.id AND c.tenant_id = $1
-      LEFT JOIN incidents i ON i.branch_id = n.id AND i.tenant_id = $1 
-        AND i.detected_at >= NOW() - INTERVAL '1 month' * $2
-        AND i.deleted_at IS NULL
-      WHERE n.tenant_id = $1
-        AND n.type = 'branch'
-        AND n.id::text = ANY($3::text[])
-      GROUP BY n.id, n.name, DATE_TRUNC('month', i.detected_at)
-    ),
-    scored_branches AS (
-      SELECT 
-        branch_id,
-        branch_name,
-        month,
-        -- Overall score calculation
-        GREATEST(0, LEAST(100,
-          70 + 
-          (CASE WHEN total_cameras > 0 THEN (online_cameras::numeric / total_cameras) * 30 ELSE 0 END) -
-          (p1_incidents * 10) -
-          (incidents * 2)
-        )) AS overall_score
-      FROM monthly_branch_scores
+    WITH monthly_incidents AS (
+      SELECT branch_id, DATE_TRUNC('month', detected_at AT TIME ZONE 'Asia/Kolkata') AS month,
+        COUNT(*) AS incidents, COUNT(*) FILTER (WHERE severity = 'P1') AS p1_incidents
+      FROM incidents
+      WHERE tenant_id = $1 AND branch_id = ANY($3::uuid[])
+        AND detected_at >= NOW() - INTERVAL '1 month' * $2 AND detected_at <= NOW()
+      GROUP BY 1, 2
+    ), monthly_cameras AS (
+      SELECT branch_node_id AS branch_id, DATE_TRUNC('month', summary_date)::timestamp AS month,
+        SUM(online_minutes + degraded_minutes)::numeric AS available_minutes,
+        SUM(online_minutes + degraded_minutes + offline_minutes) AS measured_minutes
+      FROM camera_health_daily
+      WHERE tenant_id = $1 AND branch_node_id = ANY($3::uuid[])
+        AND summary_date >= (NOW() - INTERVAL '1 month' * $2)::date AND summary_date <= CURRENT_DATE
+      GROUP BY 1, 2
+    ), scored_branches AS (
+      SELECT COALESCE(i.branch_id, c.branch_id) AS branch_id, COALESCE(i.month, c.month) AS month,
+        CASE WHEN c.measured_minutes > 0 THEN GREATEST(0, LEAST(100,
+          70 + c.available_minutes / c.measured_minutes * 30 - COALESCE(i.p1_incidents, 0) * 10 - COALESCE(i.incidents, 0) * 2
+        )) END AS overall_score
+      FROM monthly_incidents i FULL OUTER JOIN monthly_cameras c ON c.branch_id = i.branch_id AND c.month = i.month
+    ), ranked AS (
+      SELECT *, ROW_NUMBER() OVER (PARTITION BY month ORDER BY overall_score DESC NULLS LAST, branch_id) AS rank
+      FROM scored_branches
     )
-    SELECT 
-      TO_CHAR(month, 'YYYY-MM') AS month,
-      branch_name,
-      ROUND(overall_score, 1) AS score
-    FROM scored_branches
-    WHERE month IS NOT NULL
-    ORDER BY month DESC, overall_score DESC
-    LIMIT $2 * 5 -- Top 5 branches per month
+    SELECT TO_CHAR(r.month, 'YYYY-MM') AS month, n.name AS branch_name, ROUND(r.overall_score, 1) AS score
+    FROM ranked r JOIN resource_nodes n ON n.id = r.branch_id AND n.tenant_id = $1
+    WHERE r.rank <= 5 AND ${activeResourceNode('n')}
+    ORDER BY r.month DESC, r.overall_score DESC NULLS LAST, r.branch_id
   `;
   
   const result = await pool.query(query, [tenantId, months, branchIds]);
@@ -217,41 +172,21 @@ async function getComplianceTrends(
 ): Promise<any[]> {
   const query = `
     WITH monthly_compliance AS (
-      SELECT 
-        DATE_TRUNC('month', created_at) AS month,
-        -- Recording retention compliance
-        AVG(rj.retention_days) AS avg_retention_days,
-        COUNT(DISTINCT rj.camera_id) FILTER (WHERE rj.retention_days >= 90) AS compliant_cameras,
-        COUNT(DISTINCT rj.camera_id) AS total_cameras,
-        -- Audit activity
-        0::int AS audit_events
-      FROM cameras c
-      LEFT JOIN recording_jobs rj ON rj.camera_id = c.id
-      WHERE c.tenant_id = $1
-        AND c.branch_node_id::text = ANY($3::text[])
-        AND c.created_at >= NOW() - INTERVAL '1 month' * $2
-      GROUP BY DATE_TRUNC('month', c.created_at)
+      SELECT DATE_TRUNC('month', summary_date)::timestamp AS month,
+        COUNT(*) FILTER (WHERE retention_compliant IS TRUE) AS compliant_samples,
+        COUNT(*) FILTER (WHERE retention_compliant IS NOT NULL) AS measured_samples,
+        COUNT(DISTINCT camera_id) AS total_cameras
+      FROM recording_status_daily
+      WHERE tenant_id = $1 AND branch_node_id = ANY($3::uuid[])
+        AND summary_date >= (NOW() - INTERVAL '1 month' * $2)::date AND summary_date <= CURRENT_DATE
+      GROUP BY 1
     )
-    SELECT 
-      TO_CHAR(month, 'YYYY-MM') AS month,
-      ROUND(avg_retention_days, 0) AS avg_retention_days,
-      compliant_cameras,
-      total_cameras,
-      CASE 
-        WHEN total_cameras > 0 
-        THEN ROUND((compliant_cameras::numeric / total_cameras) * 100, 1)
-        ELSE 0 
-      END AS compliance_percent,
-      audit_events,
-      -- Overall compliance score
-      GREATEST(0, LEAST(100,
-        (CASE WHEN total_cameras > 0 THEN (compliant_cameras::numeric / total_cameras) * 80 ELSE 0 END) +
-        (CASE WHEN avg_retention_days >= 180 THEN 20 ELSE avg_retention_days / 180 * 20 END)
-      )) AS compliance_score
-    FROM monthly_compliance
-    WHERE month IS NOT NULL
-    ORDER BY month DESC
-    LIMIT $2
+    SELECT TO_CHAR(month, 'YYYY-MM') AS month,
+      NULL::numeric AS avg_retention_days, compliant_samples, measured_samples, total_cameras,
+      ROUND(compliant_samples::numeric / NULLIF(measured_samples, 0) * 100, 1) AS compliance_percent,
+      NULL::int AS audit_events,
+      ROUND(compliant_samples::numeric / NULLIF(measured_samples, 0) * 100, 1) AS compliance_score
+    FROM monthly_compliance ORDER BY month DESC LIMIT $2
   `;
   
   const result = await pool.query(query, [tenantId, months, branchIds]);
@@ -302,6 +237,9 @@ export function createHistoricalTrendsRoutes(instance: FastifyInstance, pool: Po
         reportType: query.reportType,
         months: query.months,
         trends,
+        basis: query.reportType === 'financial' ? 'Recorded work-order costs; capital expenditure is not measured' :
+          query.reportType === 'compliance' ? 'Daily recording retention observations; percentages are weighted by measured camera days' :
+          'Daily camera health observations and period incidents; missing measurements are null',
       });
     } catch (error) {
       request.log.error({ error }, 'Failed to generate historical trends');

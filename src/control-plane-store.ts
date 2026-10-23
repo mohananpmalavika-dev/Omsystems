@@ -444,6 +444,15 @@ export interface WorkOrderInput {
 
 export interface WorkOrderUpdate extends Partial<WorkOrderInput> {}
 
+export interface WorkOrderReportFilters {
+  from?: string;
+  to?: string;
+  branchNodeId?: string;
+  assetId?: string;
+  vendorId?: string;
+  severity?: string;
+}
+
 export interface MaintenanceVendorInput {
   tenantId: string;
   name: string;
@@ -1543,7 +1552,7 @@ export interface ControlPlaneStore {
   getMaintenanceAsset(id: string): Promise<MaintenanceAsset | undefined>;
   updateMaintenanceAsset(id: string, input: MaintenanceAssetUpdate): Promise<MaintenanceAsset | undefined>;
   createWorkOrder(input: WorkOrderInput): Promise<WorkOrder>;
-  listWorkOrders(tenantId: string, status?: WorkOrderStatus): Promise<WorkOrder[]>;
+  listWorkOrders(tenantId: string, status?: WorkOrderStatus, filters?: WorkOrderReportFilters): Promise<WorkOrder[]>;
   getWorkOrder(id: string): Promise<WorkOrder | undefined>;
   updateWorkOrder(id: string, input: WorkOrderUpdate): Promise<WorkOrder | undefined>;
   createMaintenanceVendor(input: MaintenanceVendorInput): Promise<MaintenanceVendor>;

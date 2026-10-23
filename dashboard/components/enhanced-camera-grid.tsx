@@ -47,6 +47,10 @@ import {
   PREDEFINED_OPERATOR_FLAGS,
 } from "@/lib/camera-operator-flags";
 import { CameraPresetManagerModal } from "./camera-preset-manager-modal";
+import { useEyeCare } from "@/hooks/use-eye-care";
+import { EyeCareHudButton } from "./eye-care-hud-button";
+import { EyeCareMicroBreakOverlay } from "./eye-care-micro-break-overlay";
+import { EyeCareReminderToast } from "./eye-care-reminder-toast";
 
 export type GridSize = "1x1" | "2x2" | "3x3" | "4x4" | "5x5" | "6x6" | "7x7" | "8x8" | "9x9" | "10x10" | "11x11" | "12x12" | "1+5" | "1+7" | "2+8";
 
@@ -288,6 +292,9 @@ export function EnhancedCameraGrid({
 
   // 3D Spatial Fusion & E-Map Mini-Radar State
   const [showEMapRadar, setShowEMapRadar] = useState<boolean>(false);
+
+  // Auto Eye-Care Engine & 20-20-20 Continuous Monitoring Protection
+  const eyeCare = useEyeCare();
 
 
   const handleFilterCamerasByMapArea = useCallback(
@@ -1812,6 +1819,14 @@ export function EnhancedCameraGrid({
             <Compass size={15} className={showEMapRadar ? "text-cyan-400 animate-spin" : ""} />
             {showEMapRadar ? "E-Map: Active" : "🗺️ E-Map & Radar"}
           </button>
+          <EyeCareHudButton
+            settings={eyeCare.settings}
+            computed={eyeCare.computed}
+            continuousMinutes={eyeCare.continuousMinutes}
+            secondsUntilNextBreak={eyeCare.secondsUntilNextBreak}
+            onUpdateSettings={eyeCare.updateSettings}
+            onStartMicroBreak={eyeCare.startMicroBreak}
+          />
           <div className="tour-pagination" title="Page navigation (Left/Right Arrow key or buttons)">
             <button
               type="button"
@@ -1976,12 +1991,13 @@ export function EnhancedCameraGrid({
         <div className={`flex-1 w-full min-w-0`}>
           <div 
             ref={containerRef}
-            className={`camera-grid ${gpuAccelClass} ${gridSize === "1+5" ? "layout-hero-1-5" : gridSize === "1+7" ? "layout-hero-1-7" : gridSize === "2+8" ? "layout-hero-2-8" : ""}`}
+            className={`camera-grid ${gpuAccelClass} ${gridSize === "1+5" ? "layout-hero-1-5" : gridSize === "1+7" ? "layout-hero-1-7" : gridSize === "2+8" ? "layout-hero-2-8" : ""} ${eyeCare.settings.enabled && eyeCare.settings.dimInactiveChrome ? "eye-care-subdued" : ""} ${eyeCare.settings.enabled && eyeCare.settings.antiFlickerAlarms ? "eye-care-anti-flicker" : ""}`}
             onMouseEnter={() => setIsGridHovered(true)}
             onMouseLeave={() => setIsGridHovered(false)}
             style={{
               "--camera-grid-columns": renderedColumnCount,
               "--minimum-tile-width": `${minimumTileWidth}px`,
+              ...(eyeCare.settings.enabled && eyeCare.settings.mode !== "off" ? { filter: eyeCare.computed.filter } : {}),
               gridTemplateRows: enableVirtualScrolling && totalPositions > 36 
                 ? `repeat(${Math.ceil(totalPositions / renderedColumnCount)}, minmax(0, 1fr))`
                 : undefined
@@ -2705,6 +2721,20 @@ export function EnhancedCameraGrid({
         onSelectPreset={handleSelectPreset}
         activePresetId={activeViewFilter}
       />
+      {eyeCare.showReminderToast && (
+        <EyeCareReminderToast
+          continuousMinutes={eyeCare.continuousMinutes}
+          onTakeBreak={eyeCare.startMicroBreak}
+          onSnooze={eyeCare.snoozeReminder}
+          onDismiss={eyeCare.dismissReminder}
+        />
+      )}
+      {eyeCare.isMicroBreakActive && (
+        <EyeCareMicroBreakOverlay
+          secondsLeft={eyeCare.microBreakSecondsLeft}
+          onExit={eyeCare.cancelMicroBreak}
+        />
+      )}
     </div>
   );
 }

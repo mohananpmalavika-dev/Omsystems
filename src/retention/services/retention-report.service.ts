@@ -39,11 +39,11 @@ export class RetentionReportService {
       .slice(0, 10);
 
     const predictedViolations7Days = branches
-      .filter((b) => b.daysUntilViolation !== undefined && b.daysUntilViolation <= 7 && b.state !== "CRITICAL" && b.state !== "VIOLATION")
+      .filter((b) => b.worstRetentionDays !== undefined && Number.isFinite(b.worstRetentionDays) && b.daysUntilViolation !== undefined && Number.isFinite(b.daysUntilViolation) && b.daysUntilViolation >= 0 && b.daysUntilViolation <= 7 && b.state !== "CRITICAL" && b.state !== "VIOLATION")
       .map((b) => ({
         branchId: b.branchId,
         branchName: b.branchName,
-        predictedDays: b.worstRetentionDays ? Math.max(0, b.worstRetentionDays - 7) : 85,
+        predictedDays: Math.max(0, b.worstRetentionDays! - 7),
         daysUntilViolation: b.daysUntilViolation!,
       }))
       .sort((a, b) => a.daysUntilViolation - b.daysUntilViolation);

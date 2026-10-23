@@ -187,7 +187,7 @@ async function resolveBranchHierarchy(
       pool,
       `SELECT id::text, parent_id::text, node_type::text, name 
        FROM resource_nodes node
-       WHERE node.tenant_id::text = $1 AND ${activeResourceNode('node')}`,
+       WHERE node.tenant_id = $1::uuid AND ${activeResourceNode('node')}`,
       [tenantId]
     );
     for (const r of rows) {
@@ -313,19 +313,19 @@ async function generateMISReport(
       pool,
       `SELECT 
          c.branch_node_id::text AS branch_id,
-         COUNT(DISTINCT c.id) AS total_cameras,
-         COUNT(DISTINCT c.id) FILTER (WHERE c.status = 'online') AS online_cameras,
+         COUNT(c.id) AS total_cameras,
+         COUNT(c.id) FILTER (WHERE c.status = 'online') AS online_cameras,
          ROUND(
-           COUNT(DISTINCT c.id) FILTER (WHERE c.status = 'online')::numeric / 
-           NULLIF(COUNT(DISTINCT c.id), 0) * 100, 
+           COUNT(c.id) FILTER (WHERE c.status = 'online')::numeric /
+           NULLIF(COUNT(c.id), 0) * 100,
            1
          ) AS uptime_percent
        FROM cameras c
        JOIN resource_nodes rn ON c.branch_node_id = rn.id
-       WHERE rn.tenant_id::text = $1
+       WHERE rn.tenant_id = $1::uuid
          AND ${activeResourceNode('rn')}
          AND ${activeCamera('c')}
-         AND c.branch_node_id::text = ANY($2::text[])
+         AND c.branch_node_id = ANY($2::uuid[])
        GROUP BY c.branch_node_id`,
       [tenantId, branchIds]
     );
@@ -359,31 +359,36 @@ async function generateMISReport(
   // =========================================================================
   // 2. Real Incidents & Threats by Branch
   // =========================================================================
-  const incidentsByBranch = new Map<string, { totalAlerts: number; p1Threats: number; slaPercent: number | null }>();
+  const incidentsByBranch = new Map<string, { totalAlerts: number; p1Threats: number; slaPercent: number | null; slaEvaluated: number }>();
 
   if (pool) {
     const incRows = await safeQuery(
       pool,
       `SELECT 
          i.branch_id::text AS branch_id,
-         COUNT(DISTINCT i.id) AS total_alerts,
-         COUNT(DISTINCT i.id) FILTER (
+         COUNT(i.id) AS total_alerts,
+         COUNT(i.id) FILTER (
            WHERE i.severity = 'P1'
              AND COALESCE(i.status, 'new') NOT IN ('resolved', 'closed', 'false_alarm')
          ) AS p1_threats,
          ROUND(
-           100.0 * COUNT(DISTINCT i.id) FILTER (
+           100.0 * COUNT(i.id) FILTER (
              WHERE i.severity = 'P1'
                AND (
-                 (i.acknowledged_at IS NOT NULL AND i.acknowledged_at <= i.detected_at + interval '5 minutes')
-                 OR i.status IN ('resolved', 'closed')
+                 ack.acknowledged_at IS NOT NULL AND ack.acknowledged_at <= i.detected_at + interval '5 minutes'
                )
-           ) / NULLIF(COUNT(DISTINCT i.id) FILTER (WHERE i.severity = 'P1'), 0),
+           ) / NULLIF(COUNT(i.id) FILTER (WHERE i.severity = 'P1' AND (ack.acknowledged_at IS NOT NULL OR i.detected_at + interval '5 minutes' < now())), 0),
            1
-         ) AS sla_percent
+         ) AS sla_percent,
+         COUNT(*) FILTER (WHERE i.severity = 'P1' AND (ack.acknowledged_at IS NOT NULL OR i.detected_at + interval '5 minutes' < now())) AS sla_evaluated
        FROM incidents i
-       WHERE i.tenant_id::text = $1
-         AND i.branch_id::text = ANY($2::text[])
+       LEFT JOIN LATERAL (
+         SELECT MIN(history.created_at) AS acknowledged_at
+         FROM incident_status_history history
+         WHERE history.incident_id = i.id AND history.status = 'acknowledged'
+       ) ack ON true
+       WHERE i.tenant_id = $1::uuid
+         AND i.branch_id = ANY($2::uuid[])
          AND i.detected_at BETWEEN $3 AND $4
          AND ${shiftCondition(query.shift, 'i.detected_at')}
        GROUP BY i.branch_id`,
@@ -395,6 +400,7 @@ async function generateMISReport(
         totalAlerts: Number(r.total_alerts) || 0,
         p1Threats: Number(r.p1_threats) || 0,
         slaPercent: metricNumber(r.sla_percent),
+        slaEvaluated: Number(r.sla_evaluated) || 0,
       });
     }
   }
@@ -413,8 +419,8 @@ async function generateMISReport(
          fe.branch_id::text AS branch_id,
          SUM(fe.entries) AS footfall
        FROM footfall_events fe
-       WHERE fe.tenant_id::text = $1
-         AND fe.branch_id::text = ANY($2::text[])
+       WHERE fe.tenant_id = $1::uuid
+         AND fe.branch_id = ANY($2::uuid[])
          AND fe.date BETWEEN $3 AND $4
        GROUP BY fe.branch_id`,
       [tenantId, branchIds, reportLocalDate(startDate), reportLocalDate(endDate)]
@@ -434,12 +440,12 @@ async function generateMISReport(
            c.branch_node_id::text AS branch_id,
            COUNT(*) AS footfall
          FROM analytics_events e
-         JOIN cameras c ON c.id::text = e.camera_id::text
+         JOIN cameras c ON c.id = e.camera_id
          JOIN resource_nodes rn ON c.branch_node_id = rn.id
-         WHERE rn.tenant_id::text = $1
+         WHERE rn.tenant_id = $1::uuid
            AND ${activeResourceNode('rn')}
            AND ${activeCamera('c')}
-           AND c.branch_node_id::text = ANY($2::text[])
+           AND c.branch_node_id = ANY($2::uuid[])
            AND e.occurred_at BETWEEN $3 AND $4
            AND e.detection_type IN ('line-crossing', 'footfall', 'customer-counting', 'person-counting')
          GROUP BY c.branch_node_id`,
@@ -460,8 +466,8 @@ async function generateMISReport(
          qm.branch_id::text AS branch_id,
          ROUND(AVG(qm.avg_wait_seconds) / 60.0, 1) AS avg_wait_min
        FROM queue_metrics qm
-       WHERE qm.tenant_id::text = $1
-         AND qm.branch_id::text = ANY($2::text[])
+       WHERE qm.tenant_id = $1::uuid
+         AND qm.branch_id = ANY($2::uuid[])
          AND qm.measured_at BETWEEN $3 AND $4
        GROUP BY qm.branch_id`,
       [tenantId, branchIds, startDate.toISOString(), endDate.toISOString()]
@@ -493,9 +499,9 @@ async function generateMISReport(
            1
          ) AS attendance_percent
        FROM users u
-       WHERE u.tenant_id::text = $1
+       WHERE u.tenant_id = $1::uuid
          AND u.active = true AND u.status = 'active'
-         AND u.branch_id::text = ANY($2::text[])
+         AND u.branch_id = ANY($2::uuid[])
        GROUP BY u.branch_id`,
       [tenantId, branchIds]
     );
@@ -514,10 +520,10 @@ async function generateMISReport(
        FROM camera_specifications cs
        JOIN cameras c ON cs.camera_id = c.id
        JOIN resource_nodes rn ON c.branch_node_id = rn.id
-       WHERE rn.tenant_id::text = $1
+       WHERE rn.tenant_id = $1::uuid
          AND ${activeResourceNode('rn')}
          AND ${activeCamera('c')}
-         AND c.branch_node_id::text = ANY($2::text[])
+         AND c.branch_node_id = ANY($2::uuid[])
        GROUP BY c.branch_node_id`,
       [tenantId, branchIds]
     );
@@ -605,7 +611,7 @@ function aggregateByDimension(
   groupBy: string,
   branches: BranchHierarchy[],
   cameras: Map<string, { total: number; online: number; uptime: number }>,
-  incidents: Map<string, { totalAlerts: number; p1Threats: number; slaPercent: number | null }>,
+  incidents: Map<string, { totalAlerts: number; p1Threats: number; slaPercent: number | null; slaEvaluated: number }>,
   footfall: Map<string, number>,
   waitTime: Map<string, number>,
   attendance: Map<string, number>,
@@ -659,8 +665,8 @@ function aggregateByDimension(
         totalAlerts += inc.totalAlerts;
         p1Threats += inc.p1Threats;
         if (inc.slaPercent !== null) {
-          slaSum += inc.slaPercent;
-          slaCount++;
+          slaSum += inc.slaPercent * inc.slaEvaluated;
+          slaCount += inc.slaEvaluated;
         }
       }
 
@@ -720,6 +726,7 @@ function aggregateByDimension(
       avgWaitMin,
       attendancePercent: avgAttendance,
       slaPercent: avgSla,
+      slaEvaluated: slaCount,
       retentionDays: avgRetentionDays,
       complianceStatus,
       area: groupBy === 'branch' ? groupBranches[0]?.area_name : undefined,
@@ -770,7 +777,10 @@ function calculateSummary(branchMatrix: any[]) {
     totalFootfall,
     avgWaitMin: avgOf('avgWaitMin'),
     avgAttendance: avgOf('attendancePercent'),
-    avgSla: avgOf('slaPercent'),
+    avgSla: (() => {
+      const evaluated = branchMatrix.reduce((sum, row) => sum + row.slaEvaluated, 0);
+      return evaluated > 0 ? Number((branchMatrix.reduce((sum, row) => sum + (row.slaPercent ?? 0) * row.slaEvaluated, 0) / evaluated).toFixed(1)) : null;
+    })(),
     avgRetentionDays: avgOf('retentionDays'),
   };
 }
@@ -812,8 +822,8 @@ async function getDateWiseBreakdown(
        COUNT(*) AS alerts,
        COUNT(*) FILTER (WHERE i.severity = 'P1') AS p1_threats
      FROM incidents i
-     WHERE i.tenant_id::text = $1
-       AND i.branch_id::text = ANY($2::text[])
+     WHERE i.tenant_id = $1::uuid
+       AND i.branch_id = ANY($2::uuid[])
        AND i.detected_at BETWEEN $3 AND $4
        AND ${shiftCondition(shift, 'i.detected_at')}
      GROUP BY DATE(i.detected_at AT TIME ZONE 'Asia/Kolkata')
@@ -846,8 +856,8 @@ async function getTimeWiseBreakdown(
        COUNT(*) AS alerts,
        COUNT(*) FILTER (WHERE i.severity = 'P1') AS p1_threats
      FROM incidents i
-     WHERE i.tenant_id::text = $1
-       AND i.branch_id::text = ANY($2::text[])
+     WHERE i.tenant_id = $1::uuid
+       AND i.branch_id = ANY($2::uuid[])
        AND i.detected_at BETWEEN $3 AND $4
        AND ${shiftCondition(shift, 'i.detected_at')}
      GROUP BY EXTRACT(HOUR FROM i.detected_at AT TIME ZONE 'Asia/Kolkata')

@@ -9,7 +9,8 @@ export interface RuleConditionNode {
 }
 
 function leaves(condition: RuleConditionNode): RuleConditionNode[] {
-  return condition.metric ? [condition] : (condition.conditions ?? []).flatMap(leaves);
+  if (!condition || typeof condition !== 'object' || Array.isArray(condition)) return [];
+  return typeof condition.metric === 'string' ? [condition] : (Array.isArray(condition.conditions) ? condition.conditions : []).flatMap(leaves);
 }
 
 /** Edit the count threshold, while retaining operation gates and other clauses. */
@@ -31,8 +32,9 @@ export function updateRuleCondition(source: RuleConditionNode | undefined, edite
 }
 
 function mandatory(condition: RuleConditionNode, predicate: (node: RuleConditionNode) => boolean): boolean {
+  if (!condition || typeof condition !== 'object' || Array.isArray(condition)) return false;
   if (condition.metric) return predicate(condition);
-  if (!condition.conditions?.length) return false;
+  if (!Array.isArray(condition.conditions) || !condition.conditions.length) return false;
   if (condition.logical === 'OR') return condition.conditions.every(node => mandatory(node, predicate));
   if (condition.logical === 'NOT') return false;
   if (condition.logical && condition.logical !== 'AND') return false;
@@ -67,11 +69,12 @@ export function minimumPersonnelBuilderCondition(condition: RuleConditionNode): 
 }
 
 export function describeRuleCondition(condition: RuleConditionNode): string {
+  if (!condition || typeof condition !== 'object') return 'Invalid condition';
   if (condition.metric) {
     const operators: Record<string, string> = { EQUALS: '=', NOT_EQUALS: '≠', LESS_THAN: '<', LESS_THAN_OR_EQUAL: '≤', GREATER_THAN: '>', GREATER_THAN_OR_EQUAL: '≥' };
     return `${condition.metric.replaceAll('_', ' ')} ${operators[condition.operator ?? ''] ?? condition.operator?.replaceAll('_', ' ') ?? ''} ${String(condition.value ?? '')}`;
   }
-  const clauses = condition.conditions?.map(describeRuleCondition) ?? [];
+  const clauses = Array.isArray(condition.conditions) ? condition.conditions.map(describeRuleCondition) : [];
   if (!clauses.length) return 'No condition configured';
   return condition.logical === 'NOT' ? `NOT (${clauses.join(' OR ')})` : `(${clauses.join(` ${condition.logical ?? 'AND'} `)})`;
 }

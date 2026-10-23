@@ -137,9 +137,9 @@ export interface CameraReportRow {
   streamReachable?: boolean | undefined;
   framesDecodable?: boolean | undefined;
   recordingActive?: boolean | undefined;
-  availabilityPercent: number;
-  downtimeMinutes: number;
-  outageCount: number;
+  availabilityPercent: number | null;
+  downtimeMinutes: number | null;
+  outageCount: number | null;
   lastSeenAt?: Date | undefined;
   reason?: string | undefined;
 }
@@ -193,9 +193,10 @@ export interface RetentionViolationRow {
 export interface InternetOutageRow {
   branchId: string;
   branchName: string;
-  startedAt: Date;
+  startedAt?: Date | undefined;
+  observedAt?: Date | undefined;
   endedAt?: Date | undefined;
-  durationSeconds: number;
+  durationSeconds?: number | undefined;
   path: "PRIMARY" | "BACKUP" | "BOTH" | "UNKNOWN";
   failoverActivated: boolean;
   impact: "NO_IMPACT" | "DEGRADED_MONITORING" | "REMOTE_MONITORING_LOST" | "UNKNOWN";

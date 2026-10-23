@@ -16,7 +16,8 @@
 import type { DailySurveillanceHealthReportData, DailyReportType } from "../domain/daily-surveillance-report.types.js";
 
 function escapeCsv(value: unknown): string {
-  const text = value == null ? "" : String(value);
+  let text = value == null ? "" : String(value);
+  if (typeof value === "string" && /^[\t\r\n ]*[=+\-@]/.test(text)) text = `'${text}`;
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 
@@ -163,7 +164,7 @@ export function renderDailySurveillanceHealthCsv(
       lines.push(
         [
           escapeCsv(net.branchName),
-          escapeCsv(net.startedAt.toISOString()),
+          escapeCsv(net.startedAt?.toISOString()),
           escapeCsv(net.durationSeconds),
           escapeCsv(net.path),
           escapeCsv(net.failoverActivated),

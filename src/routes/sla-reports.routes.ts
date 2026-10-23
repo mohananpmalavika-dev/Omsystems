@@ -13,7 +13,8 @@ const historyQuerySchema = z.object({ days: z.coerce.number().int().min(1).max(3
 const reportQuerySchema = z.object({ reportDate: reportDateSchema.optional(), format: z.enum(["json", "csv"]).default("json") }).strict();
 
 function csvCell(value: string | number | null | undefined) {
-  const text = value == null ? "" : String(value);
+  let text = value == null ? "" : String(value);
+  if (typeof value === "string" && /^[\t\r\n ]*[=+\-@]/.test(text)) text = `'${text}`;
   return `"${text.replaceAll('"', '""')}"`;
 }
 

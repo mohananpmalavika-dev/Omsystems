@@ -20,7 +20,7 @@ const dateRangeSchema = z.object({
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
 }).superRefine((value, context) => {
-  if (value.startDate && value.endDate && value.startDate > value.endDate) {
+  if (value.startDate && value.endDate && Date.parse(value.startDate) > Date.parse(value.endDate)) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["endDate"],
@@ -389,6 +389,7 @@ async function buildAnalyticsReport(
   const startDate = params.startDate ?? new Date(Date.now() - 7 * 86_400_000).toISOString();
   const endDate = params.endDate ?? new Date().toISOString();
   const alertCandidates = await store.listAnalyticsAlerts(user.tenantId, {
+    cameraIds,
     ...(params.branchId ? { branchId: params.branchId } : {}),
     from: startDate,
     to: endDate,

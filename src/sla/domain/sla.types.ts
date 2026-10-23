@@ -39,8 +39,8 @@ export interface CameraHealthDaily {
   unavailableSeconds: number;
   unknownSeconds: number;
 
-  retentionDays: number;
-  retentionCompliant: boolean;
+  retentionDays: number | null;
+  retentionCompliant: boolean | null;
 
   outageCount: number;
   longestOutageSeconds: number;

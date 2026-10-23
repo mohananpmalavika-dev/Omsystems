@@ -143,17 +143,17 @@ export class SurveillanceExceptionBuilder {
 
     // 6. Severe Internet Outages
     for (const outage of data.internetOutages) {
-      if (outage.durationSeconds > 1800 || !outage.failoverActivated) {
+      if ((outage.durationSeconds ?? 0) > 1800 || !outage.failoverActivated) {
         exceptions.push({
-          id: `exc-net-${outage.branchId}-${outage.startedAt.getTime()}`,
+          id: `exc-net-${outage.branchId}-${(outage.startedAt ?? outage.observedAt ?? now).getTime()}`,
           branchId: outage.branchId,
           branchName: outage.branchName,
           type: "INTERNET_OUTAGE",
           severity: "HIGH",
           resourceType: "NETWORK",
-          summary: `Branch internet outage for ${Math.floor(outage.durationSeconds / 60)}m (Failover: ${outage.failoverActivated ? "Active" : "Failed"})`,
-          detectedAt: outage.startedAt,
-          ageSeconds: outage.durationSeconds,
+          summary: `Branch internet outage${outage.durationSeconds == null ? " (duration unknown)" : ` for ${Math.floor(outage.durationSeconds / 60)}m`} (Failover: ${outage.failoverActivated ? "Active" : "Failed"})`,
+          detectedAt: outage.startedAt ?? outage.observedAt ?? now,
+          ageSeconds: outage.durationSeconds ?? 0,
           recommendedAction: "Check ISP primary/secondary link, router interface, and WireGuard VPN tunnel.",
         });
       }

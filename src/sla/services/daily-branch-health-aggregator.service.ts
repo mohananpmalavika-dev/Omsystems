@@ -105,11 +105,16 @@ export class DailyBranchHealthAggregatorService {
     let totalCameraDowntimeSec = 0;
     let totalCameraUnknownSec = 0;
 
-    let totalRecMonitoredSec = 0;
     let totalRecAvailableSec = 0;
+    let totalRecUnknownSec = 0;
     let totalRecDowntimeSec = 0;
 
     const totalCameras = params.cameraIntervals.size;
+
+    // Re-aggregation replaces the camera snapshot for this branch and day.
+    for (const [key, camera] of this.cameraDaily) {
+      if (camera.branchId === branchId && camera.reportDate === reportDate) this.cameraDaily.delete(key);
+    }
 
     for (const [camId, intervals] of params.cameraIntervals.entries()) {
       const camRes = AvailabilityCalculator.calculate(intervals, windowStart, windowEnd);
@@ -120,17 +125,17 @@ export class DailyBranchHealthAggregatorService {
 
       const recIntervals = params.recordingIntervals.get(camId) ?? [];
       const recRes = AvailabilityCalculator.calculate(recIntervals, windowStart, windowEnd);
-      totalRecMonitoredSec += recRes.monitoredSeconds;
       totalRecAvailableSec += recRes.availableSeconds;
+      totalRecUnknownSec += recRes.unknownSeconds;
       totalRecDowntimeSec += recRes.unavailableSeconds;
 
-      const outageCount = intervals.filter((i) => i.state === "FAILED").length;
+      const outages = intervals.filter((i) => i.state === "FAILED")
+        .map((i) => ({ start: Math.max(i.startedAt.getTime(), windowStart.getTime()), end: Math.min(i.endedAt?.getTime() ?? windowEnd.getTime(), windowEnd.getTime()) }))
+        .filter((i) => i.end > i.start);
+      const outageCount = outages.length;
       let longestOutageSeconds = 0;
-      for (const i of intervals) {
-        if (i.state === "FAILED" && i.endedAt) {
-          const dur = Math.floor((i.endedAt.getTime() - i.startedAt.getTime()) / 1000);
-          if (dur > longestOutageSeconds) longestOutageSeconds = dur;
-        }
+      for (const i of outages) {
+        longestOutageSeconds = Math.max(longestOutageSeconds, Math.floor((i.end - i.start) / 1000));
       }
 
       const camDaily: CameraHealthDaily = {
@@ -143,8 +148,8 @@ export class DailyBranchHealthAggregatorService {
         availableSeconds: camRes.availableSeconds,
         unavailableSeconds: camRes.unavailableSeconds,
         unknownSeconds: camRes.unknownSeconds,
-        retentionDays: 92,
-        retentionCompliant: true,
+        retentionDays: null,
+        retentionCompliant: null,
         outageCount,
         longestOutageSeconds,
         monitoringCoveragePct: camRes.monitoringCoveragePct,
@@ -155,18 +160,18 @@ export class DailyBranchHealthAggregatorService {
 
     // Cumulative weighted branch camera availability
     const cameraAvailabilityPct =
-      totalCameraMonitoredSec === 0
+      totalCameraAvailableSec + totalCameraDowntimeSec === 0
         ? null
         : Math.round((totalCameraAvailableSec / (totalCameraAvailableSec + totalCameraDowntimeSec)) * 10000) / 100;
 
     const cameraMonitoringCoveragePct =
       totalCameraMonitoredSec === 0
-        ? 100
+        ? 0
         : Math.round(((totalCameraMonitoredSec - totalCameraUnknownSec) / totalCameraMonitoredSec) * 10000) / 100;
 
     // Cumulative recording availability
     const recordingAvailabilityPct =
-      totalRecMonitoredSec === 0
+      totalRecAvailableSec + totalRecDowntimeSec === 0
         ? null
         : Math.round((totalRecAvailableSec / (totalRecAvailableSec + totalRecDowntimeSec)) * 10000) / 100;
 
@@ -191,7 +196,11 @@ export class DailyBranchHealthAggregatorService {
       cameraAvailabilityPct,
       recordingAvailabilityPct,
       internetRes.availabilityPct,
-      cameraMonitoringCoveragePct,
+      Math.min(cameraMonitoringCoveragePct, recorderRes.monitoringCoveragePct, internetRes.monitoringCoveragePct,
+        (totalRecAvailableSec + totalRecDowntimeSec + totalRecUnknownSec) > 0
+          ? (totalRecAvailableSec + totalRecDowntimeSec) / (totalRecAvailableSec + totalRecDowntimeSec + totalRecUnknownSec) * 100 : 0),
+      recorderRes.availabilityPct,
+      retentionCompliancePct,
     );
 
     const totalAlerts = params.alerts.p1Count + params.alerts.p2Count;
@@ -325,25 +334,19 @@ export class DailyBranchHealthAggregatorService {
     recordingAvailability: number | null,
     internetAvailability: number | null,
     coverage: number,
+    recorderAvailability: number | null,
+    retentionCompliance: number | null,
   ): SlaStatus {
-    if (coverage < 95) return "UNKNOWN";
-    if (cameraAvailability === null || recordingAvailability === null) return "UNKNOWN";
-
-    if (
-      cameraAvailability >= this.targets.cameraAvailabilityTarget &&
-      recordingAvailability >= this.targets.recordingAvailabilityTarget &&
-      (internetAvailability ?? 100) >= this.targets.internetAvailabilityTarget
-    ) {
-      return "COMPLIANT";
-    }
-
-    if (
-      cameraAvailability >= this.targets.cameraAvailabilityTarget - 1.0 &&
-      recordingAvailability >= this.targets.recordingAvailabilityTarget - 1.0
-    ) {
-      return "WARNING";
-    }
-
+    const metrics = [
+      [cameraAvailability, this.targets.cameraAvailabilityTarget],
+      [recordingAvailability, this.targets.recordingAvailabilityTarget],
+      [internetAvailability, this.targets.internetAvailabilityTarget],
+      [recorderAvailability, this.targets.recorderAvailabilityTarget],
+      [retentionCompliance, this.targets.retentionComplianceTarget],
+    ];
+    if (coverage < 95 || metrics.some(([value]) => value == null || !Number.isFinite(value))) return "UNKNOWN";
+    if (metrics.every(([value, target]) => value! >= target!)) return "COMPLIANT";
+    if (metrics.every(([value, target]) => value! >= target! - 1)) return "WARNING";
     return "BREACH";
   }
 

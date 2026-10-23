@@ -9,6 +9,7 @@ import type {
   MaintenanceVendorUpdate,
   WorkOrderInput,
   WorkOrderUpdate,
+  WorkOrderReportFilters,
 } from "../control-plane-store.js";
 import type {
   AmcContract,
@@ -27,7 +28,7 @@ function camelRow<T = JsonRecord>(row: JsonRecord): T {
   return Object.fromEntries(
     Object.entries(row).map(([key, value]) => [
       camelKey(key),
-      value instanceof Date ? value.toISOString() : value,
+      value instanceof Date ? value.toISOString() : key === 'cost' && value != null ? Number(value) : value,
     ]),
   ) as T;
 }
@@ -129,13 +130,26 @@ export class MaintenanceRepository {
     return camelRow<MaintenanceAsset>(result.rows[0]);
   }
 
-  async listWorkOrders(tenantId: string, status?: string) {
+  async listWorkOrders(tenantId: string, status?: string, filters?: WorkOrderReportFilters) {
+    const clauses = ['tenant_id=$1'];
+    const params: unknown[] = [tenantId];
+    const add = (column: string, operator: string, value: string | undefined) => {
+      if (value === undefined) return;
+      params.push(value);
+      clauses.push(`${column} ${operator} $${params.length}`);
+    };
+    add('status', '=', status);
+    add('created_at', '>=', filters?.from);
+    add('created_at', '<=', filters?.to);
+    add('branch_node_id', '=', filters?.branchNodeId);
+    add('asset_id', '=', filters?.assetId);
+    add('vendor_id', '=', filters?.vendorId);
+    add('severity', '=', filters?.severity);
     const result = await this.pool.query(
       `SELECT * FROM work_orders
-       WHERE tenant_id=$1
-         AND ($2::text IS NULL OR status=$2)
+       WHERE ${clauses.join(' AND ')}
        ORDER BY created_at DESC`,
-      [tenantId, status ?? null],
+      params,
     );
     return camelRows<WorkOrder>(result.rows);
   }
@@ -513,7 +527,8 @@ export class MaintenanceRepository {
 
   async listPredictiveAlerts(tenantId: string) {
     const result = await this.pool.query(
-      `SELECT * FROM predictive_alerts WHERE tenant_id=$1 ORDER BY detected_at DESC`,
+      `SELECT *, alert_type AS type, failure_probability::float8 AS score
+       FROM predictive_alerts WHERE tenant_id=$1 ORDER BY detected_at DESC`,
       [tenantId],
     );
     return camelRows<any>(result.rows);

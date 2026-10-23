@@ -519,6 +519,7 @@ export class AnalyticsRepository {
   }
 
   async listAlerts(tenantId: string, filters: AnalyticsAlertFilters): Promise<AnalyticsAlert[]> {
+    if (filters.cameraIds?.length === 0 || filters.branchIds?.length === 0) return [];
     const resolvedTenantId = await this.resolveTenantUuid(tenantId);
     
     // Build branch filter condition
@@ -528,7 +529,6 @@ export class AnalyticsRepository {
       filters.cameraId ?? null, 
       filters.branchId ?? null,
     ];
-    let nextParamIndex = 4;
     
     // If branchIds array is provided, use IN clause instead of single branch equality
     if (filters.branchIds && filters.branchIds.length > 0) {

@@ -696,11 +696,11 @@ export class ActivityTrackingRepository {
     let paramIndex = 3;
     
     if (startDate) {
-      conditions.push(`DATE(login_time) >= $${paramIndex++}::date`);
+      conditions.push(`login_time >= $${paramIndex++}::date`);
       values.push(startDate);
     }
     if (endDate) {
-      conditions.push(`DATE(login_time) <= $${paramIndex++}::date`);
+      conditions.push(`login_time < ($${paramIndex++}::date + INTERVAL '1 day')`);
       values.push(endDate);
     }
     
@@ -748,11 +748,11 @@ export class ActivityTrackingRepository {
       values.push(module);
     }
     if (startDate) {
-      conditions.push(`DATE(pv.visit_start_time) >= $${paramIndex++}::date`);
+      conditions.push(`pv.visit_start_time >= $${paramIndex++}::date`);
       values.push(startDate);
     }
     if (endDate) {
-      conditions.push(`DATE(pv.visit_start_time) <= $${paramIndex++}::date`);
+      conditions.push(`pv.visit_start_time < ($${paramIndex++}::date + INTERVAL '1 day')`);
       values.push(endDate);
     }
     
@@ -787,11 +787,11 @@ export class ActivityTrackingRepository {
       values.push(branchId);
     }
     if (startDate) {
-      conditions.push(`DATE(cr.monitoring_start_time) >= $${paramIndex++}::date`);
+      conditions.push(`cr.monitoring_start_time >= $${paramIndex++}::date`);
       values.push(startDate);
     }
     if (endDate) {
-      conditions.push(`DATE(cr.monitoring_start_time) <= $${paramIndex++}::date`);
+      conditions.push(`cr.monitoring_start_time < ($${paramIndex++}::date + INTERVAL '1 day')`);
       values.push(endDate);
     }
     
@@ -876,12 +876,15 @@ export class ActivityTrackingRepository {
   ): Promise<{ events: any[]; total: number }> {
     const userResult = await this.pool.query(
       `SELECT id, tenant_id FROM users 
-       WHERE id::text = $1 OR username = $1 OR email = $1 OR identity_subject = $1
+       WHERE tenant_id = $2::uuid
+         AND (id::text = $1 OR username = $1 OR email = $1 OR identity_subject = $1)
+       ORDER BY (id::text = $1) DESC, id
        LIMIT 1`,
-      [userId]
+      [userId, tenantId]
     );
-    const targetUserId = userResult.rows[0]?.id || userId;
-    const targetTenantId = userResult.rows[0]?.tenant_id || tenantId;
+    const targetUserId = userResult.rows[0]?.id;
+    if (!targetUserId) return { events: [], total: 0 };
+    const targetTenantId = tenantId;
 
     const result = await this.pool.query(
       `WITH timeline AS (
@@ -900,8 +903,8 @@ export class ActivityTrackingRepository {
           NULL::text AS outcome,
           jsonb_build_object('status', s.session_status, 'device', COALESCE(s.device_info, '{}'::jsonb)) AS metadata
         FROM user_activity_sessions s
-        WHERE (s.tenant_id::text = $1 OR $1 IS NULL) 
-          AND s.user_id::text = $2
+        WHERE s.tenant_id = $1::uuid
+          AND s.user_id = $2::uuid
           AND s.login_time >= $3::date AND s.login_time < ($4::date + INTERVAL '1 day')
 
         UNION ALL
@@ -912,8 +915,8 @@ export class ActivityTrackingRepository {
           s.total_duration_seconds, NULL::uuid, NULL::text, NULL::text,
           jsonb_build_object('status', s.session_status, 'activeSeconds', s.active_duration_seconds, 'idleSeconds', s.idle_duration_seconds)
         FROM user_activity_sessions s
-        WHERE (s.tenant_id::text = $1 OR $1 IS NULL) 
-          AND s.user_id::text = $2 
+        WHERE s.tenant_id = $1::uuid
+          AND s.user_id = $2::uuid
           AND s.logout_time IS NOT NULL
           AND s.logout_time >= $3::date AND s.logout_time < ($4::date + INTERVAL '1 day')
 
@@ -925,8 +928,8 @@ export class ActivityTrackingRepository {
           'Entered ' || pv.page_path, NULL::int, NULL::uuid, NULL::text, NULL::text,
           jsonb_build_object('path', pv.page_path, 'category', pv.page_category)
         FROM user_page_visits pv
-        WHERE (pv.tenant_id::text = $1 OR $1 IS NULL) 
-          AND pv.user_id::text = $2
+        WHERE pv.tenant_id = $1::uuid
+          AND pv.user_id = $2::uuid
           AND pv.visit_start_time >= $3::date AND pv.visit_start_time < ($4::date + INTERVAL '1 day')
 
         UNION ALL
@@ -944,8 +947,8 @@ export class ActivityTrackingRepository {
             'scrollDepth', pv.scroll_depth_percentage
           )
         FROM user_page_visits pv
-        WHERE (pv.tenant_id::text = $1 OR $1 IS NULL) 
-          AND pv.user_id::text = $2 
+        WHERE pv.tenant_id = $1::uuid
+          AND pv.user_id = $2::uuid
           AND pv.visit_end_time IS NOT NULL
           AND pv.visit_end_time >= $3::date AND pv.visit_end_time < ($4::date + INTERVAL '1 day')
 
@@ -959,8 +962,8 @@ export class ActivityTrackingRepository {
           jsonb_build_object('mode', cr.monitoring_mode, 'type', cr.monitoring_type, 'cameraCount', cr.camera_count, 'branchIds', cr.branch_ids)
         FROM control_room_monitoring_activity cr
         LEFT JOIN resource_nodes rn ON rn.id = cr.branch_node_id
-        WHERE (cr.tenant_id::text = $1 OR $1 IS NULL) 
-          AND cr.user_id::text = $2
+        WHERE cr.tenant_id = $1::uuid
+          AND cr.user_id = $2::uuid
           AND cr.monitoring_start_time >= $3::date AND cr.monitoring_start_time < ($4::date + INTERVAL '1 day')
 
         UNION ALL
@@ -977,8 +980,8 @@ export class ActivityTrackingRepository {
           )
         FROM control_room_monitoring_activity cr
         LEFT JOIN resource_nodes rn ON rn.id = cr.branch_node_id
-        WHERE (cr.tenant_id::text = $1 OR $1 IS NULL) 
-          AND cr.user_id::text = $2 
+        WHERE cr.tenant_id = $1::uuid
+          AND cr.user_id = $2::uuid
           AND cr.monitoring_end_time IS NOT NULL
           AND cr.monitoring_end_time >= $3::date AND cr.monitoring_end_time < ($4::date + INTERVAL '1 day')
 
@@ -991,8 +994,8 @@ export class ActivityTrackingRepository {
           NULL::int, NULL::uuid, NULL::text, NULL::text,
           jsonb_build_object('category', a.action_category, 'target', a.action_target, 'feature', a.feature_name, 'context', a.action_metadata)
         FROM user_action_log a
-        WHERE (a.tenant_id::text = $1 OR $1 IS NULL) 
-          AND a.user_id::text = $2
+        WHERE a.tenant_id = $1::uuid
+          AND a.user_id = $2::uuid
           AND a.action_time >= $3::date AND a.action_time < ($4::date + INTERVAL '1 day')
 
         UNION ALL
@@ -1005,8 +1008,8 @@ export class ActivityTrackingRepository {
           jsonb_build_object('correlationId', ae.correlation_id, 'resourceNodeId', ae.resource_node_id)
         FROM audit_events ae
         LEFT JOIN resource_nodes rn ON rn.id = ae.resource_node_id
-        WHERE (ae.tenant_id::text = $1 OR $1 IS NULL) 
-          AND ae.actor_user_id::text = $2
+        WHERE ae.tenant_id = $1::uuid
+          AND ae.actor_user_id = $2::uuid
           AND ae.occurred_at >= $3::date AND ae.occurred_at < ($4::date + INTERVAL '1 day')
       )
       SELECT timeline.*, COUNT(*) OVER()::int AS total_count
@@ -1033,14 +1036,16 @@ export class ActivityTrackingRepository {
     const userResult = await this.pool.query(
       `SELECT id, display_name, COALESCE(username, identity_subject, email) as username, email, tenant_id
        FROM users 
-       WHERE id::text = $1 OR username = $1 OR email = $1 OR identity_subject = $1
+       WHERE tenant_id = $2::uuid
+         AND (id::text = $1 OR username = $1 OR email = $1 OR identity_subject = $1)
+       ORDER BY (id::text = $1) DESC, id
        LIMIT 1`,
-      [userId]
+      [userId, tenantId]
     );
     
     const resolvedUser = userResult.rows[0];
-    const targetUserId = resolvedUser?.id || userId;
-    const targetTenantId = resolvedUser?.tenant_id || tenantId;
+    const targetUserId = resolvedUser?.id ?? null;
+    const targetTenantId = tenantId;
 
     // Get session summary
     const sessionResult = await this.pool.query(
@@ -1053,9 +1058,9 @@ export class ActivityTrackingRepository {
          MIN(login_time) as first_login,
          MAX(logout_time) as last_logout
        FROM user_activity_sessions
-       WHERE (tenant_id::text = $1 OR $1 IS NULL) 
-         AND user_id::text = $2 
-         AND DATE(login_time) >= $3::date AND DATE(login_time) <= $4::date`,
+       WHERE tenant_id = $1::uuid
+         AND user_id = $2::uuid
+         AND login_time >= $3::date AND login_time < ($4::date + INTERVAL '1 day')`,
       [targetTenantId, targetUserId, startDate, endDate]
     );
     
@@ -1067,9 +1072,9 @@ export class ActivityTrackingRepository {
          SUM(COALESCE(duration_seconds, 0)) as total_seconds,
          AVG(COALESCE(duration_seconds, 0))::int as avg_seconds
        FROM user_page_visits
-       WHERE (tenant_id::text = $1 OR $1 IS NULL) 
-         AND user_id::text = $2 
-         AND DATE(visit_start_time) >= $3::date AND DATE(visit_start_time) <= $4::date
+       WHERE tenant_id = $1::uuid
+         AND user_id = $2::uuid
+         AND visit_start_time >= $3::date AND visit_start_time < ($4::date + INTERVAL '1 day')
        GROUP BY page_module
        ORDER BY total_seconds DESC`,
       [targetTenantId, targetUserId, startDate, endDate]
@@ -1089,17 +1094,17 @@ export class ActivityTrackingRepository {
               ELSE ARRAY[]::uuid[]
             END
           ) AS monitored(branch_id)
-          WHERE (scoped.tenant_id::text = $1 OR $1 IS NULL) 
-            AND scoped.user_id::text = $2
-            AND DATE(scoped.monitoring_start_time) >= $3::date
-            AND DATE(scoped.monitoring_start_time) <= $4::date) as unique_branches_monitored,
+          WHERE scoped.tenant_id = $1::uuid
+            AND scoped.user_id = $2::uuid
+            AND scoped.monitoring_start_time >= $3::date
+            AND scoped.monitoring_start_time < ($4::date + INTERVAL '1 day')) as unique_branches_monitored,
          SUM(COALESCE(alert_count, 0)) as total_alerts_handled,
          SUM(COALESCE(incident_count, 0)) as total_incidents_created,
          SUM(COALESCE(camera_switch_count, 0)) as total_camera_switches
        FROM control_room_monitoring_activity
-       WHERE (tenant_id::text = $1 OR $1 IS NULL) 
-         AND user_id::text = $2 
-         AND DATE(monitoring_start_time) >= $3::date AND DATE(monitoring_start_time) <= $4::date`,
+       WHERE tenant_id = $1::uuid
+         AND user_id = $2::uuid
+         AND monitoring_start_time >= $3::date AND monitoring_start_time < ($4::date + INTERVAL '1 day')`,
       [targetTenantId, targetUserId, startDate, endDate]
     );
     
@@ -1119,10 +1124,10 @@ export class ActivityTrackingRepository {
          END
        ) WITH ORDINALITY AS monitored(branch_id, ordinality)
        LEFT JOIN resource_nodes rn ON rn.id = monitored.branch_id
-       WHERE (cr.tenant_id::text = $1 OR $1 IS NULL) 
-         AND cr.user_id::text = $2
-         AND DATE(cr.monitoring_start_time) >= $3::date
-         AND DATE(cr.monitoring_start_time) <= $4::date
+       WHERE cr.tenant_id = $1::uuid
+         AND cr.user_id = $2::uuid
+         AND cr.monitoring_start_time >= $3::date
+         AND cr.monitoring_start_time < ($4::date + INTERVAL '1 day')
        GROUP BY rn.name, cr.branch_names[monitored.ordinality::int], monitored.branch_id
        ORDER BY total_seconds DESC
        LIMIT 20`,
@@ -1133,9 +1138,9 @@ export class ActivityTrackingRepository {
     const actionResult = await this.pool.query(
       `SELECT action_category, COUNT(*) as action_count
        FROM user_action_log
-       WHERE (tenant_id::text = $1 OR $1 IS NULL) 
-         AND user_id::text = $2 
-         AND DATE(action_time) >= $3::date AND DATE(action_time) <= $4::date
+       WHERE tenant_id = $1::uuid
+         AND user_id = $2::uuid
+         AND action_time >= $3::date AND action_time < ($4::date + INTERVAL '1 day')
        GROUP BY action_category
        ORDER BY action_count DESC`,
       [targetTenantId, targetUserId, startDate, endDate]

@@ -960,7 +960,7 @@ export class PostgresStore
   async getMaintenanceAsset(id: string) { return this.maintenance.getAsset(id); }
   async updateMaintenanceAsset(id: string, input: any) { return this.maintenance.updateAsset(id, input); }
   async createWorkOrder(input: any) { return this.maintenance.createWorkOrder(input); }
-  async listWorkOrders(tenantId: string, status?: string) { return this.maintenance.listWorkOrders(tenantId, status); }
+  async listWorkOrders(tenantId: string, status?: string, filters?: Parameters<ControlPlaneStore["listWorkOrders"]>[2]) { return this.maintenance.listWorkOrders(tenantId, status, filters); }
   async getWorkOrder(id: string) { return this.maintenance.getWorkOrder(id); }
   async updateWorkOrder(id: string, input: any) { return this.maintenance.updateWorkOrder(id, input); }
   async createMaintenanceVendor(input: any) { return this.maintenance.createMaintenanceVendor(input); }
