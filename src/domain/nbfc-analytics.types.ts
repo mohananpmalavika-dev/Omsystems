@@ -41,6 +41,11 @@ export type AnalyticsZoneType =
   | "EXIT"
   | "CASH_VAN_AREA"
   | "ATM_AREA"
+  | "VAULT"
+  | "CASH_CABIN"
+  | "ALL"
+  | "LOADING_BAY"
+  | "PARKING"
   | "CUSTOM";
 
 export type DetectorType =
@@ -141,7 +146,8 @@ export type DetectorType =
   | "line_crossing"
   | "tripwire"
   | "TRIPWIRE"
-  | "directional-line-crossing";
+  | "directional-line-crossing"
+  | "safe-door";
 
 export type ScheduleType =
   | "24X7"
@@ -348,7 +354,7 @@ export interface ModelRegistryEntry {
   model: string;
   version: string;
   status: ModelReadinessStatus;
-  runtime: "ONNX Runtime" | "OpenCV / FFmpeg" | "PaddleOCR" | "Internal Engine";
+  runtime: "ONNX Runtime" | "OpenCV / FFmpeg" | "PaddleOCR" | "Internal Engine" | string;
   inputResolution: string;
   confidenceThreshold: number;
   validatedHardware: string;
