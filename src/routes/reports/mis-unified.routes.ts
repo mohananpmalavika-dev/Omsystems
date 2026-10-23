@@ -419,8 +419,8 @@ async function generateMISReport(
          fe.branch_id::text AS branch_id,
          SUM(fe.entries) AS footfall
        FROM footfall_events fe
-       WHERE fe.tenant_id = $1::uuid
-         AND fe.branch_id = ANY($2::uuid[])
+       WHERE fe.tenant_id::text = $1
+         AND fe.branch_id::text = ANY($2::text[])
          AND fe.date BETWEEN $3 AND $4
        GROUP BY fe.branch_id`,
       [tenantId, branchIds, reportLocalDate(startDate), reportLocalDate(endDate)]
@@ -466,8 +466,8 @@ async function generateMISReport(
          qm.branch_id::text AS branch_id,
          ROUND(AVG(qm.avg_wait_seconds) / 60.0, 1) AS avg_wait_min
        FROM queue_metrics qm
-       WHERE qm.tenant_id = $1::uuid
-         AND qm.branch_id = ANY($2::uuid[])
+       WHERE qm.tenant_id::text = $1
+         AND qm.branch_id::text = ANY($2::text[])
          AND qm.measured_at BETWEEN $3 AND $4
        GROUP BY qm.branch_id`,
       [tenantId, branchIds, startDate.toISOString(), endDate.toISOString()]
@@ -499,9 +499,9 @@ async function generateMISReport(
            1
          ) AS attendance_percent
        FROM users u
-       WHERE u.tenant_id = $1::uuid
+       WHERE u.tenant_id::text = $1
          AND u.active = true AND u.status = 'active'
-         AND u.branch_id = ANY($2::uuid[])
+         AND u.branch_id::text = ANY($2::text[])
        GROUP BY u.branch_id`,
       [tenantId, branchIds]
     );

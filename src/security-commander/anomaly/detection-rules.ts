@@ -77,7 +77,36 @@ export const DETECTION_RULES: DetectionRule[] = [
     id: 'person-down',
     name: 'Person Down / Fall',
     description: 'Person fallen or lying down detected',
-    when: event => event.type === 'ai.fall_detected',
+    when: event => {
+      const isFallType =
+        event.type === 'ai.fall_detected' ||
+        event.type === 'ai.fall' ||
+        event.type === 'ai.person_fall' ||
+        event.type === 'ai.man_down' ||
+        event.type === 'medical.emergency' ||
+        event.type === 'safety.fall_detected' ||
+        event.type === 'security.person_down';
+      if (isFallType) return true;
+
+      const metadata = event.metadata as Record<string, unknown> | undefined;
+      if (
+        metadata?.fall_detected === true ||
+        metadata?.fallDetected === true ||
+        metadata?.person_down === true ||
+        metadata?.personDown === true ||
+        metadata?.person_fallen === true ||
+        metadata?.man_down === true ||
+        metadata?.manDown === true ||
+        metadata?.medical_emergency === true
+      ) {
+        return true;
+      }
+
+      if (metadata?.phase === 'POST_FALL_MOTIONLESS' || metadata?.phase === 'IMPACT') return true;
+      if (metadata?.motionless_seconds !== undefined && Number(metadata.motionless_seconds) >= 5) return true;
+
+      return false;
+    },
     score: 0.95,
     reason: 'Person down - potential medical emergency',
   },
@@ -222,14 +251,13 @@ export const DETECTION_RULES: DetectionRule[] = [
     name: 'Camera Offline During Business Hours',
     description: 'Camera went offline during active hours',
     when: (event, context) => {
-      if (event.type !== 'camera.offline') return false;
+      if (event.type !== 'camera.offline' && event.type !== 'security.camera.offline' && event.type !== 'camera_offline') return false;
       
       const hour = event.timestamp.getHours();
       const dayOfWeek = event.timestamp.getDay();
-      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-      const isBusinessHours = hour >= 8 && hour < 18;
-      
-      return !isWeekend && isBusinessHours;
+      if (dayOfWeek === 0) return false; // Sunday closed
+      if (dayOfWeek === 6) return hour >= 8 && hour < 13; // Saturday banking hours: 08:00 - 13:00
+      return hour >= 8 && hour < 18; // Mon-Fri: 08:00 - 18:00
     },
     score: 0.75,
     reason: 'Camera offline during business hours',
@@ -248,14 +276,42 @@ export const DETECTION_RULES: DetectionRule[] = [
     reason: 'PPE violation detected',
   },
 
-  // Unattended Object
+  // Unattended Object / Left Baggage
   {
     id: 'unattended-object',
-    name: 'Unattended Object',
-    description: 'Unattended object/baggage detected',
-    when: event => event.type === 'ai.unattended_object',
-    score: 0.8,
-    reason: 'Unattended object detected',
+    name: 'Unattended Object / Left Baggage',
+    description: 'Unattended object/baggage detected stationary in monitored zone',
+    when: (event, context) => {
+      const isUnattendedEvent =
+        event.type === 'ai.unattended_object' ||
+        event.type === 'ai.abandoned_object' ||
+        event.type === 'ai.left_object' ||
+        event.type === 'security.unattended_object' ||
+        event.type === 'security.abandoned_object' ||
+        event.type === 'unattended_baggage' ||
+        event.type === 'abandoned_object';
+      if (isUnattendedEvent) return true;
+
+      const metadata = event.metadata as Record<string, unknown> | undefined;
+      if (
+        metadata?.unattended_detected === true ||
+        metadata?.left_object_detected === true ||
+        metadata?.abandoned_object === true ||
+        metadata?.unattended_object === true
+      ) {
+        return true;
+      }
+
+      const stationarySec = Number(
+        metadata?.stationary_duration_seconds ??
+        metadata?.stationaryDurationSec ??
+        metadata?.dwellTimeSeconds ??
+        0
+      );
+      return stationarySec >= 300;
+    },
+    score: 0.85,
+    reason: 'Unattended object/baggage detected stationary beyond safety threshold',
   },
 
   // Tailgating
@@ -266,6 +322,288 @@ export const DETECTION_RULES: DetectionRule[] = [
     when: event => event.type === 'ai.tailgating',
     score: 0.8,
     reason: 'Tailgating detected',
+  },
+
+  // Suspicious Repeated Zone Re-entry
+  {
+    id: 'suspicious-repeated-zone-reentry',
+    name: 'Suspicious Repeated Zone Re-entry',
+    description: 'Anonymous subject repeatedly entered secure perimeter/zone within short window',
+    when: (event, context) => {
+      const isReentryEvent =
+        event.type === 'ai.repeated_entry' ||
+        event.type === 'ai.zone_reentry' ||
+        event.type === 'zone.reentry' ||
+        event.type === 'security.zone.reentry';
+      if (isReentryEvent) return true;
+
+      const metadata = event.metadata as Record<string, unknown> | undefined;
+      const count = Number(
+        metadata?.reentry_count_10m ??
+        metadata?.reentryCount10m ??
+        metadata?.reentryCount ??
+        metadata?.reentry_count ??
+        0
+      );
+      return count > 3;
+    },
+    score: 0.85,
+    reason: 'Suspicious repeated zone re-entry in secure perimeter',
+  },
+
+  // Restricted Zone Intrusion
+  {
+    id: 'restricted-zone-intrusion',
+    name: 'Restricted Zone Intrusion',
+    description: 'Unauthorized intrusion or perimeter breach detected in high-security zone',
+    when: (event, context) => {
+      const isIntrusionEvent =
+        event.type === 'ai.intrusion' ||
+        event.type === 'ai.zone_intrusion' ||
+        event.type === 'zone.intrusion' ||
+        event.type === 'security.intrusion' ||
+        event.type === 'perimeter.breach';
+      if (isIntrusionEvent) return true;
+
+      const metadata = event.metadata as Record<string, unknown> | undefined;
+      if (
+        metadata?.intrusion_detected === true ||
+        metadata?.intrusionDetected === true ||
+        metadata?.zone_intrusion === true ||
+        metadata?.zoneIntrusion === true ||
+        metadata?.unauthorized_presence === true ||
+        metadata?.perimeter_breach === true
+      ) {
+        return true;
+      }
+
+      if (metadata?.intruder_count !== undefined && Number(metadata.intruder_count) > 0) return true;
+      if (metadata?.intruderCount !== undefined && Number(metadata.intruderCount) > 0) return true;
+
+      return false;
+    },
+    score: 0.95,
+    reason: 'Restricted zone intrusion detected',
+  },
+
+  // Unregistered Vehicle in Cash Bay
+  {
+    id: 'unregistered-vehicle-cash-bay',
+    name: 'Unregistered Vehicle in Cash Bay',
+    description: 'Unregistered or unauthorized vehicle detected in secure cash transfer bay',
+    when: (event, context) => {
+      const isVehicleBayEvent =
+        event.type === 'ai.unregistered_vehicle' ||
+        event.type === 'ai.unknown_cash_van' ||
+        event.type === 'anpr.unregistered_vehicle' ||
+        event.type === 'vehicle.unauthorized' ||
+        event.type === 'cash_bay.unauthorized_vehicle' ||
+        event.type === 'security.cash_bay.vehicle';
+      if (isVehicleBayEvent) return true;
+
+      const metadata = event.metadata as Record<string, unknown> | undefined;
+      if (
+        metadata?.unregistered_vehicle === true ||
+        metadata?.unknown_vehicle === true ||
+        metadata?.unauthorized_vehicle === true ||
+        metadata?.unknown_cash_van === true
+      ) {
+        return true;
+      }
+
+      if (metadata?.vehicle_in_bay === true && metadata?.plate_authorized === false) {
+        return true;
+      }
+
+      if (metadata?.vehicleInBay === true && metadata?.plateAuthorized === false) {
+        return true;
+      }
+
+      return false;
+    },
+    score: 0.9,
+    reason: 'Unregistered or unauthorized vehicle detected in cash bay',
+  },
+
+  // Cash Counter Overcrowding / Crowd Density
+  {
+    id: 'cash-counter-crowd-density',
+    name: 'Cash Counter Crowd Density Exceeded',
+    description: 'High crowd density or overcrowding detected at cash counter / teller area',
+    when: (event, context) => {
+      const isCrowdEvent =
+        event.type === 'ai.crowd_density' ||
+        event.type === 'ai.crowd_detected' ||
+        event.type === 'crowd.density' ||
+        event.type === 'cash_counter.crowd' ||
+        event.type === 'security.crowd_density';
+      if (isCrowdEvent) return true;
+
+      const metadata = event.metadata as Record<string, unknown> | undefined;
+      if (
+        metadata?.crowd_detected === true ||
+        metadata?.crowdDetected === true ||
+        metadata?.overcrowding === true ||
+        metadata?.overcrowded === true
+      ) {
+        return true;
+      }
+
+      const count = Number(
+        metadata?.person_count ??
+        metadata?.personCount ??
+        metadata?.crowd_count ??
+        metadata?.crowdCount ??
+        metadata?.occupancy ??
+        metadata?.count ??
+        0
+      );
+      if (count > 5) return true;
+
+      const dLevel = String(metadata?.density_level ?? metadata?.densityLevel ?? metadata?.density ?? '').toUpperCase();
+      if (dLevel === 'CROWDED' || dLevel === 'CRITICAL' || dLevel === 'HIGH') return true;
+
+      return false;
+    },
+    score: 0.75,
+    reason: 'High crowd density at cash counter exceeding safety and operational limit',
+  },
+
+  // Cash Van Excessive Bay Dwell Time
+  {
+    id: 'cash-van-excessive-bay-dwell',
+    name: 'Cash Van Excessive Bay Dwell Time',
+    description: 'Armored cash transfer van exceeded maximum loading turnaround dwell time in secure bay',
+    when: (event, context) => {
+      const isVanDwellEvent =
+        event.type === 'ai.cash_van_dwell' ||
+        event.type === 'ai.van_dwell_time' ||
+        event.type === 'cash_van.dwell_exceeded' ||
+        event.type === 'bay.dwell_time' ||
+        event.type === 'logistics.bay_dwell_exceeded';
+      if (isVanDwellEvent) return true;
+
+      const metadata = event.metadata as Record<string, unknown> | undefined;
+      if (
+        metadata?.excessive_bay_dwell === true ||
+        metadata?.excessiveBayDwell === true ||
+        metadata?.van_dwell_exceeded === true ||
+        metadata?.vanDwellExceeded === true
+      ) {
+        return true;
+      }
+
+      const dwellSec = Number(
+        metadata?.dwell_time_seconds ??
+        metadata?.dwellTimeSeconds ??
+        metadata?.bay_dwell_seconds ??
+        metadata?.bayDwellSeconds ??
+        metadata?.van_dwell_seconds ??
+        metadata?.vanDwellSeconds ??
+        metadata?.durationSeconds ??
+        0
+      );
+      if (dwellSec > 1200) return true;
+
+      const dwellMins = Number(
+        metadata?.dwell_minutes ??
+        metadata?.dwellMinutes ??
+        0
+      );
+      if (dwellMins > 20) return true;
+
+      return false;
+    },
+    score: 0.8,
+    reason: 'Armored cash logistics van exceeded maximum 20-minute turnaround bay dwell SLA',
+  },
+
+  // Locker / Vault Maximum Occupancy Exceeded
+  {
+    id: 'locker-vault-max-occupancy',
+    name: 'Locker / Vault Maximum Occupancy Exceeded',
+    description: 'Occupancy inside high-security locker or strong room exceeded authorized dual-custody threshold',
+    when: (event, context) => {
+      const isOccupancyEvent =
+        event.type === 'ai.max_occupancy' ||
+        event.type === 'ai.vault_occupancy' ||
+        event.type === 'ai.locker_occupancy' ||
+        event.type === 'vault.over_occupancy' ||
+        event.type === 'locker.over_occupancy' ||
+        event.type === 'security.vault.occupancy';
+      if (isOccupancyEvent) return true;
+
+      const metadata = event.metadata as Record<string, unknown> | undefined;
+      if (
+        metadata?.max_occupancy_exceeded === true ||
+        metadata?.maxOccupancyExceeded === true ||
+        metadata?.over_occupancy === true ||
+        metadata?.overOccupancy === true
+      ) {
+        return true;
+      }
+
+      const zoneType = String(metadata?.zoneType ?? metadata?.zone_type ?? metadata?.zoneName ?? metadata?.zone ?? '').toUpperCase();
+      const isVaultOrLocker =
+        zoneType.includes('LOCKER') ||
+        zoneType.includes('VAULT') ||
+        zoneType.includes('STRONG_ROOM') ||
+        zoneType.includes('STRONGROOM');
+
+      const count = Number(
+        metadata?.person_count ??
+        metadata?.personCount ??
+        metadata?.occupancy ??
+        metadata?.vault_occupancy ??
+        metadata?.count ??
+        0
+      );
+
+      if (isVaultOrLocker && count > 2) {
+        return true;
+      }
+
+      return false;
+    },
+    score: 0.9,
+    reason: 'Maximum allowable occupancy exceeded inside locker or vault strong room',
+  },
+
+  // Directional Line Crossing / Virtual Tripwire Breach
+  {
+    id: 'directional-line-crossing',
+    name: 'Directional Line Crossing / Tripwire Breach',
+    description: 'Entity crossed virtual perimeter boundary or tripwire in unauthorized direction',
+    when: (event, context) => {
+      const isLineCrossingEvent =
+        event.type === 'ai.line_crossing' ||
+        event.type === 'ai.tripwire' ||
+        event.type === 'tripwire.breach' ||
+        event.type === 'perimeter.line_crossing' ||
+        event.type === 'security.line_crossing';
+      if (isLineCrossingEvent) return true;
+
+      const metadata = event.metadata as Record<string, unknown> | undefined;
+      if (
+        metadata?.line_crossed === true ||
+        metadata?.lineCrossed === true ||
+        metadata?.tripwire_triggered === true ||
+        metadata?.tripwireTriggered === true ||
+        metadata?.line_crossing === true ||
+        metadata?.lineCrossing === true
+      ) {
+        return true;
+      }
+
+      if (typeof metadata?.line_crossing === 'string' && metadata.line_crossing.length > 0) return true;
+      if (typeof metadata?.lineCrossing === 'string' && metadata.lineCrossing.length > 0) return true;
+      if (typeof metadata?.crossing_direction === 'string' && metadata.crossing_direction.length > 0) return true;
+      if (typeof metadata?.tripwire_direction === 'string' && metadata.tripwire_direction.length > 0) return true;
+
+      return false;
+    },
+    score: 0.85,
+    reason: 'Directional line crossing / virtual tripwire boundary breach detected',
   },
 ];
 

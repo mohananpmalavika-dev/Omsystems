@@ -560,7 +560,48 @@ export class NbfcRuleRepository {
     const direct = this.inMemoryTemplates.get(id);
     if (direct) return direct;
 
+    for (const [key, tmpl] of this.inMemoryTemplates.entries()) {
+      if (key === id || key.startsWith(id + "-") || key.startsWith(id.toLowerCase() + "-")) {
+        return tmpl;
+      }
+    }
+
     const normalizedTarget = id.toLowerCase().replace(/^(tpl|tmpl)-?(\d+-)?/, "").replace(/[^a-z0-9]/g, "");
+    if (
+      normalizedTarget === "vaultoccupancy" ||
+      normalizedTarget === "lockeroccupancy" ||
+      normalizedTarget === "vaultmaxoccupancy" ||
+      normalizedTarget === "lockermaxoccupancy" ||
+      normalizedTarget === "maxoccupancy"
+    ) {
+      const tmpl = this.inMemoryTemplates.get("tmpl-01-locker-max-occupancy");
+      if (tmpl) return tmpl;
+    }
+    if (
+      normalizedTarget === "linecrossing" ||
+      normalizedTarget === "directionallinecrossing" ||
+      normalizedTarget === "tripwire" ||
+      normalizedTarget === "virtualboundary" ||
+      normalizedTarget === "boundarycrossing" ||
+      normalizedTarget === "linecrossingalarm"
+    ) {
+      const tmpl = this.inMemoryTemplates.get("tmpl-12-line-crossing");
+      if (tmpl) return tmpl;
+    }
+    if (
+      normalizedTarget === "personfall" ||
+      normalizedTarget === "personfalldetected" ||
+      normalizedTarget === "falldetected" ||
+      normalizedTarget === "falldetection" ||
+      normalizedTarget === "mandown" ||
+      normalizedTarget === "persondown" ||
+      normalizedTarget === "medicalevent" ||
+      normalizedTarget === "medicalemergency" ||
+      normalizedTarget === "personfallmedicalevent"
+    ) {
+      const tmpl = this.inMemoryTemplates.get("tmpl-18-person-fall");
+      if (tmpl) return tmpl;
+    }
     for (const [key, tmpl] of this.inMemoryTemplates.entries()) {
       // Allow normalized target match across all templates
       const normKey = key.toLowerCase().replace(/^(tpl|tmpl)-?(\d+-)?/, "").replace(/[^a-z0-9]/g, "");
@@ -1422,10 +1463,19 @@ export class NbfcRuleRepository {
         defaultDurationMs: 5000,
         defaultSeverity: "CRITICAL",
         defaultCooldownMs: 60000,
-        defaultActions: ["CREATE_ALERT", "CREATE_INCIDENT", "CAPTURE_SNAPSHOT", "CAPTURE_EVIDENCE_CLIP", "NOTIFY_SOC"],
-        recommendedZoneTypes: ["LOCKER", "STRONG_ROOM"],
+        defaultActions: ["CREATE_ALERT", "CREATE_INCIDENT", "CAPTURE_SNAPSHOT", "CAPTURE_EVIDENCE_CLIP", "NOTIFY_SOC", "NOTIFY_BRANCH_MANAGER"],
+        recommendedZoneTypes: ["LOCKER", "STRONG_ROOM", "RESTRICTED_AREA"],
         suggestedSchedule: "BUSINESS_HOURS",
-        metadata: { targetThreshold: 2, unit: "persons" },
+        metadata: {
+          complianceTag: "NBFC_VAULT_OCCUPANCY_POLICY",
+          targetMetrics: ["person_count", "occupancy", "vault_occupancy"],
+          maxAllowedOccupancy: 2,
+          targetThreshold: 2,
+          unit: "persons",
+          requiresIncident: true,
+          serviceArea: "VAULT_LOCKER",
+          securityLevel: "HIGH_SECURITY",
+        },
       },
       {
         id: "tmpl-02-minimum-personnel",
@@ -1473,10 +1523,17 @@ export class NbfcRuleRepository {
         defaultDurationMs: 60000,
         defaultSeverity: "WARNING",
         defaultCooldownMs: 120000,
-        defaultActions: ["CREATE_ALERT", "NOTIFY_BRANCH_MANAGER"],
+        defaultActions: ["CREATE_ALERT", "CAPTURE_SNAPSHOT", "NOTIFY_BRANCH_MANAGER"],
         recommendedZoneTypes: ["QUEUE_AREA", "CASH_COUNTER", "CUSTOMER_AREA"],
         suggestedSchedule: "BUSINESS_HOURS",
-        metadata: { crowdThreshold: 5 },
+        metadata: {
+          complianceTag: "NBFC_CASH_COUNTER_CROWD_SLA",
+          targetMetrics: ["person_count", "crowd_density", "density_level"],
+          maxAllowedCrowd: 5,
+          crowdThreshold: 5,
+          serviceArea: "CASH_COUNTER",
+          securityLevel: "OPERATIONAL_SECURITY",
+        },
       },
       {
         id: "tmpl-05-customer-queue-length",
@@ -1585,23 +1642,46 @@ export class NbfcRuleRepository {
         defaultSeverity: "CRITICAL",
         defaultCooldownMs: 30000,
         defaultActions: ["CREATE_ALERT", "CREATE_INCIDENT", "CAPTURE_SNAPSHOT", "CAPTURE_EVIDENCE_CLIP", "POPUP_LIVE_VIEW", "NOTIFY_SOC"],
-        recommendedZoneTypes: ["RESTRICTED_AREA", "LOCKER", "SERVER_ROOM"],
+        recommendedZoneTypes: ["RESTRICTED_AREA", "LOCKER", "SERVER_ROOM", "STRONG_ROOM", "VAULT", "CASH_CABIN"],
         suggestedSchedule: "24X7",
+        metadata: {
+          targetMetric: "intrusion_detected",
+          targetValue: true,
+          complianceTag: "NBFC_PHYSICAL_SECURITY_RESTRICTED_ZONE_SLA",
+          requiresIncident: true,
+          supportedZones: ["RESTRICTED_AREA", "LOCKER", "SERVER_ROOM", "STRONG_ROOM", "VAULT", "CASH_CABIN"],
+          slaPriority: "P1_URGENT",
+        },
       },
       {
         id: "tmpl-12-line-crossing",
         name: "Directional Line Crossing",
         category: "ACCESS_PERIMETER",
         description: "Triggers when an entity crosses a virtual boundary in a restricted direction (A->B, B->A, Both).",
-        detectorType: "zone",
+        detectorType: "line-crossing",
         defaultCondition: { metric: "line_crossing", operator: "CROSSED_LINE", value: "A_TO_B" },
         defaultDurationMs: 0,
         defaultSeverity: "HIGH",
         defaultCooldownMs: 30000,
-        defaultActions: ["CREATE_ALERT", "CAPTURE_SNAPSHOT", "CAPTURE_EVIDENCE_CLIP"],
-        recommendedZoneTypes: ["ENTRANCE", "LOCKER", "RESTRICTED_AREA"],
+        defaultActions: [
+          "CREATE_ALERT",
+          "CREATE_INCIDENT",
+          "CAPTURE_SNAPSHOT",
+          "CAPTURE_EVIDENCE_CLIP",
+          "NOTIFY_SOC",
+          "NOTIFY_BRANCH_MANAGER",
+        ],
+        recommendedZoneTypes: ["ENTRANCE", "LOCKER", "RESTRICTED_AREA", "SERVER_ROOM", "STRONG_ROOM", "VAULT", "CASH_CABIN", "EXIT"],
         suggestedSchedule: "24X7",
-        metadata: { direction: "A_TO_B" },
+        metadata: {
+          direction: "A_TO_B",
+          complianceTag: "NBFC_PERIMETER_TRIPWIRE_POLICY",
+          targetMetrics: ["line_crossing", "crossing_direction", "direction"],
+          supportedDirections: ["A_TO_B", "B_TO_A", "BOTH"],
+          requiresIncident: true,
+          serviceArea: "PERIMETER_ACCESS",
+          securityLevel: "HIGH_SECURITY",
+        },
       },
       {
         id: "tmpl-13-door-held-open",
@@ -1629,8 +1709,16 @@ export class NbfcRuleRepository {
         defaultSeverity: "HIGH",
         defaultCooldownMs: 60000,
         defaultActions: ["CREATE_ALERT", "CREATE_INCIDENT", "CAPTURE_SNAPSHOT", "NOTIFY_SOC"],
-        recommendedZoneTypes: ["CUSTOM"],
+        recommendedZoneTypes: ["ALL", "CUSTOM", "LOCKER", "CASH_COUNTER", "ENTRANCE"],
         suggestedSchedule: "24X7",
+        metadata: {
+          minTamperDurationMs: 5000,
+          targetMetric: "tamper_detected",
+          targetValue: true,
+          complianceTag: "NBFC_PHYSICAL_TAMPER_PROTECTION",
+          requiresIncident: true,
+          supportedTamperTypes: ["blinding", "covering", "movement", "defocus", "spray", "scene_shift"],
+        },
       },
       {
         id: "tmpl-15-camera-obstruction",
@@ -1697,12 +1785,38 @@ export class NbfcRuleRepository {
         detectorType: "fall",
         defaultCondition: { metric: "fall_detected", operator: "EQUALS", value: true },
         defaultDurationMs: 5000,
-        defaultSeverity: "HIGH",
+        defaultSeverity: "CRITICAL",
         defaultCooldownMs: 60000,
-        defaultActions: ["CREATE_ALERT", "POPUP_LIVE_VIEW", "NOTIFY_BRANCH_MANAGER"],
-        recommendedZoneTypes: ["CUSTOMER_AREA", "STAFF_AREA"],
-        suggestedSchedule: "BUSINESS_HOURS",
-        metadata: { validationStatus: "EXPERIMENTAL" },
+        defaultActions: [
+          "CREATE_ALERT",
+          "CREATE_INCIDENT",
+          "POPUP_LIVE_VIEW",
+          "CAPTURE_SNAPSHOT",
+          "CAPTURE_EVIDENCE_CLIP",
+          "NOTIFY_SOC",
+          "NOTIFY_BRANCH_MANAGER",
+        ],
+        recommendedZoneTypes: [
+          "CUSTOMER_AREA",
+          "STAFF_AREA",
+          "ATM_AREA",
+          "QUEUE_AREA",
+          "CASH_COUNTER",
+          "LOCKER",
+          "ENTRANCE",
+          "RESTRICTED_AREA",
+        ],
+        suggestedSchedule: "24X7",
+        metadata: {
+          validationStatus: "EXPERIMENTAL",
+          complianceTag: "NBFC_HEALTH_SAFETY_MEDICAL_SLA",
+          targetMetrics: ["fall_detected", "person_down", "motionless_seconds"],
+          requiresIncident: true,
+          serviceArea: "BRANCH_WIDE",
+          securityLevel: "HEALTH_SAFETY",
+          motionlessThresholdSeconds: 5,
+          poseConfidenceThreshold: 0.65,
+        },
       },
       {
         id: "tmpl-19-smoke-fire",
@@ -1726,13 +1840,19 @@ export class NbfcRuleRepository {
         description: "Detects static packages, bags, or items left unattended in public or secure corridors.",
         detectorType: "unattended-object",
         defaultCondition: { metric: "stationary_duration_seconds", operator: "GREATER_THAN", value: 300 },
-        defaultDurationMs: 300000,
+        defaultDurationMs: 0,
         defaultSeverity: "MEDIUM",
         defaultCooldownMs: 300000,
-        defaultActions: ["CREATE_ALERT", "CAPTURE_SNAPSHOT", "NOTIFY_BRANCH_MANAGER"],
+        defaultActions: ["CREATE_ALERT", "CAPTURE_SNAPSHOT", "CAPTURE_EVIDENCE_CLIP", "NOTIFY_BRANCH_MANAGER", "NOTIFY_SOC"],
         recommendedZoneTypes: ["CUSTOMER_AREA", "LOCKER", "ATM_AREA", "ENTRANCE"],
         suggestedSchedule: "24X7",
-        metadata: { minDwellSeconds: 300 },
+        metadata: {
+          minDwellSeconds: 300,
+          targetMetric: "stationary_duration_seconds",
+          thresholdSeconds: 300,
+          complianceTag: "NBFC_PHYSICAL_SECURITY_UNATTENDED_OBJECT_SLA",
+          supportedObjectTypes: ["bag", "backpack", "suitcase", "package", "box", "luggage"],
+        },
       },
       {
         id: "tmpl-21-object-removal",
@@ -1820,9 +1940,16 @@ export class NbfcRuleRepository {
         defaultDurationMs: 10000,
         defaultSeverity: "HIGH",
         defaultCooldownMs: 120000,
-        defaultActions: ["CREATE_ALERT", "CAPTURE_SNAPSHOT", "NOTIFY_SOC", "NOTIFY_BRANCH_MANAGER"],
-        recommendedZoneTypes: ["CASH_VAN_AREA"],
+        defaultActions: ["CREATE_ALERT", "CREATE_INCIDENT", "CAPTURE_SNAPSHOT", "CAPTURE_EVIDENCE_CLIP", "NOTIFY_SOC", "NOTIFY_BRANCH_MANAGER"],
+        recommendedZoneTypes: ["CASH_VAN_AREA", "RESTRICTED_AREA", "CUSTOM"],
         suggestedSchedule: "24X7",
+        metadata: {
+          complianceTag: "NBFC_CASH_LOGISTICS_PERIMETER_SLA",
+          targetMetrics: ["vehicle_in_bay", "plate_authorized"],
+          requiresIncident: true,
+          supportedZones: ["CASH_VAN_AREA", "RESTRICTED_AREA", "PARKING", "LOADING_BAY"],
+          securityLevel: "HIGH_PERIMETER",
+        },
       },
       {
         id: "tmpl-26-cash-van-dwell-time",
@@ -1831,13 +1958,21 @@ export class NbfcRuleRepository {
         description: "Monitors armored logistics van dwell time in loading bay to ensure rapid turnaround policy.",
         detectorType: "vehicle",
         defaultCondition: { metric: "dwell_time_seconds", operator: "GREATER_THAN", value: 1200 },
-        defaultDurationMs: 1200000,
+        defaultDurationMs: 0,
         defaultSeverity: "WARNING",
         defaultCooldownMs: 300000,
-        defaultActions: ["CREATE_ALERT", "NOTIFY_BRANCH_MANAGER"],
-        recommendedZoneTypes: ["CASH_VAN_AREA"],
+        defaultActions: ["CREATE_ALERT", "CAPTURE_SNAPSHOT", "CAPTURE_EVIDENCE_CLIP", "NOTIFY_BRANCH_MANAGER", "NOTIFY_SOC"],
+        recommendedZoneTypes: ["CASH_VAN_AREA", "LOADING_BAY", "RESTRICTED_AREA", "PARKING"],
         suggestedSchedule: "BUSINESS_HOURS",
-        metadata: { maxDwellMinutes: 20 },
+        metadata: {
+          complianceTag: "NBFC_CASH_LOGISTICS_DWELL_SLA",
+          targetMetrics: ["dwell_time_seconds", "bay_dwell_seconds", "vehicle_dwell_time"],
+          maxDwellMinutes: 20,
+          maxDwellSeconds: 1200,
+          requiresEvidence: true,
+          serviceArea: "CASH_BAY",
+          securityLevel: "PERIMETER_LOGISTICS",
+        },
       },
       {
         id: "tmpl-27-opening-staff-count",
@@ -1903,13 +2038,18 @@ export class NbfcRuleRepository {
         description: "Flags anonymous tracked subject repeatedly entering and exiting high-security corridor within short window.",
         detectorType: "zone",
         defaultCondition: { metric: "reentry_count_10m", operator: "GREATER_THAN", value: 3 },
-        defaultDurationMs: 600000,
+        defaultDurationMs: 0,
         defaultSeverity: "MEDIUM",
         defaultCooldownMs: 300000,
         defaultActions: ["CREATE_ALERT", "CAPTURE_SNAPSHOT", "NOTIFY_SOC"],
         recommendedZoneTypes: ["LOCKER", "RESTRICTED_AREA", "ATM_AREA"],
         suggestedSchedule: "24X7",
-        metadata: { anonymousTrackingOnly: true },
+        metadata: {
+          anonymousTrackingOnly: true,
+          timeWindowMinutes: 10,
+          maxAllowedReentries: 3,
+          complianceTag: "NBFC_PERIMETER_SURVEILLANCE_SLA",
+        },
       },
       {
         id: "tmpl-32-staff-only-zone",
