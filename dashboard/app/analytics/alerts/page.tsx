@@ -1,6 +1,7 @@
 "use client";
 import { ReportPagination } from "@/components/reports/report-pagination";
 import { downloadReportCsv } from "@/lib/report-export";
+import { downloadAlertPhotoReport } from "@/lib/alert-photo-export";
 import { reportDayBounds, reportLocalDate } from "../../../../packages/contracts/src/report-hierarchy";
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
@@ -36,6 +37,8 @@ import {
   Calendar,
   CalendarDays,
   X,
+  FileSpreadsheet,
+  FileDown,
 } from "lucide-react";
 import type { AnalyticsAlert, AnalyticsAlertsAggregateSummary } from "@/lib/types";
 import {
@@ -61,6 +64,10 @@ export default function AiAlertsIncidentHubPage() {
   const [summary, setSummary] = useState<AnalyticsAlertsAggregateSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState<'xlsx'|'pdf'|null>(null);
+  const [exportMessage, setExportMessage] = useState<{kind:'success'|'error';text:string}|null>(null);
+  const exportController=useRef<AbortController|null>(null);
+  useEffect(()=>()=>exportController.current?.abort(),[]);
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<"split" | "charts" | "table">("split");
   const [branchFilter, setBranchFilter] = useState("all");
@@ -271,6 +278,25 @@ export default function AiAlertsIncidentHubPage() {
 
   useEffect(() => setPage(1), [branchFilter, zoneFilter, regionFilter, areaFilter, alertTypeFilter, dateFilter, severityFilter, statusFilter, conversionFilter, quickFilter, searchQuery, period]);
   // Summary counts - uses accurate PostgreSQL aggregate counts when unfiltered, and filtered slice when filters are applied
+  const handlePhotoExport = async (format:'xlsx'|'pdf') => {
+    if(exporting || loading || !filteredAlerts.length)return;
+    if(filteredAlerts.length>500){setExportMessage({kind:'error',text:'Photo reports support up to 500 alerts per download. Narrow the date range or filters and try again.'});return;}
+    const controller=new AbortController();exportController.current=controller;
+    setExporting(format);setExportMessage(null);
+    const scope=[
+      period.from ? `Period ${reportLocalDate(period.from)} to ${reportLocalDate(period.to!)} IST` : 'All recorded dates (IST)',
+      ...Object.entries({Branch:branchFilter,Zone:zoneFilter,Region:regionFilter,Area:areaFilter,Type:alertTypeFilter,Date:dateFilter,Severity:severityFilter,Status:statusFilter,Conversion:conversionFilter,Priority:quickFilter})
+        .filter(([,value])=>value!=='all').map(([key,value])=>`${key}: ${value}`),
+      searchQuery.trim() && `Search: ${searchQuery.trim()}`,
+    ].filter(Boolean).join(' | ');
+    try {
+      const result=await downloadAlertPhotoReport({format,alertIds:filteredAlerts.map(alert=>alert.id),filters:scope.slice(0,2000),headers:getAlertsAuthHeaders(),signal:controller.signal});
+      setExportMessage({kind:'success',text:`Downloaded ${result.rows} alerts with ${result.photos} photo${result.photos===1?'':'s'}.${result.rows>result.photos ? ` ${result.rows-result.photos} unavailable photos are marked in the report.` : ''}`});
+    } catch(cause) {
+      setExportMessage({kind:'error',text:controller.signal.aborted ? 'Export cancelled.' : cause instanceof Error ? cause.message : 'Unable to download the photo report.'});
+    } finally {setExporting(null);exportController.current=null;}
+  };
+
   const stats = useMemo(() => {
 
     const target = filteredAlerts;
@@ -468,6 +494,13 @@ export default function AiAlertsIncidentHubPage() {
   return (
     <div className="content p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
         <section className="card flex flex-wrap items-end gap-3" aria-label="Report date range">
+          <div className="w-full flex flex-wrap items-center gap-2 border-b border-slate-500/20 pb-3 mb-1">
+            <button className="btn-primary" disabled={loading || !filteredAlerts.length || !!exporting} onClick={()=>void handlePhotoExport('xlsx')}><FileSpreadsheet size={16}/>Excel with photos</button>
+            <button className="btn-secondary" disabled={loading || !filteredAlerts.length || !!exporting} onClick={()=>void handlePhotoExport('pdf')}><FileDown size={16}/>PDF with photos</button>
+            <span className="text-xs text-slate-500">All {filteredAlerts.length} filtered alerts · captured photos embedded where available</span>
+            {exporting && <><span className="inline-flex items-center gap-2 text-xs" role="status"><Loader2 size={15} className="animate-spin"/>Preparing {exporting==='xlsx'?'Excel':'PDF'} and evidence photos…</span><button className="btn-secondary" onClick={()=>exportController.current?.abort()}>Cancel export</button></>}
+            {exportMessage && <p className={`w-full text-sm ${exportMessage.kind==='error'?'text-rose-500':'text-emerald-600'}`} role={exportMessage.kind==='error'?'alert':'status'}>{exportMessage.text}</p>}
+          </div>
           <label className="text-xs">From date (IST)<input aria-label="Report start date" type="date" className="input block mt-1" value={startDay} onChange={event => setStartDay(event.target.value)}/></label>
           <label className="text-xs">To date (IST)<input aria-label="Report end date" type="date" className="input block mt-1" value={endDay} min={startDay} onChange={event => setEndDay(event.target.value)}/></label>
           <button className="btn-primary" onClick={() => { try { setPeriod(reportDayBounds(startDay,endDay)); setDateFilter('all'); setPage(1); } catch(cause) { setError(cause instanceof Error ? cause.message : 'Select valid dates'); } }}>Generate report</button>

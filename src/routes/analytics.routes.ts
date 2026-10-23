@@ -43,6 +43,7 @@ import {
 import type { NbfcRuleRepository } from "../analytics/nbfc-rule-repository.js";
 import type { NbfcRuleEngineService } from "../analytics/nbfc-rule-engine.service.js";
 import { evaluateBranchOpeningDualControl } from "../analytics/branch-opening-dual-control.service.js";
+import { loadAlertReportPhoto, renderAlertReportPdf, renderAlertReportXlsx, type AlertReportRow } from "../reporting/alert-evidence-report.js";
 
 interface AnalyticsRouteOptions {
   analyticsEngineSharedKey?: string;
@@ -577,6 +578,36 @@ export async function registerAnalyticsRoutes(
       { cameraIds, branchId: query.branchId, cameraId: query.cameraId },
     );
     return { data: candidates, summary, total: summary.total, hasMore: candidates.length === query.limit };
+  });
+
+  app.post("/v1/analytics/alerts/export", async (request, reply) => {
+    const parsed = z.object({
+      format:z.enum(['xlsx','pdf']),
+      alertIds:z.array(z.string().uuid()).min(1).max(500),
+      filters:z.string().trim().max(2000).default('All alerts'),
+    }).safeParse(request.body);
+    if(!parsed.success) return reply.code(400).send({error:'invalid_alert_export',message:'Choose 1 to 500 filtered alerts and a valid Excel or PDF format. Narrow your filters for larger reports.'});
+    const input=parsed.data;
+    const selected:AnalyticsAlert[]=[];
+    // Resolve every ID on the server and authorize the whole set before reading photos.
+    // Client-supplied labels never replace the authoritative alert data.
+    for(const id of new Set(input.alertIds)) {
+      const alert=await authorizedAlert(request,reply,store,id,'analytics:export');
+      if(!alert)return;
+      selected.push(alert);
+    }
+    const rows:AlertReportRow[]=new Array(selected.length);
+    let next=0;
+    await Promise.all(Array.from({length:Math.min(6,selected.length)},async()=>{
+      while(next<selected.length){const index=next++;rows[index]=await loadAlertReportPhoto(selected[index]!,store,options);}
+    }));
+    const context={generatedAt:new Date().toISOString(),filters:input.filters};
+    const bytes=input.format==='xlsx' ? await renderAlertReportXlsx(rows,context) : await renderAlertReportPdf(rows,context);
+    await audit(request,store,'analytics.alert_evidence_exported',null,{format:input.format,rowCount:rows.length,photoCount:rows.filter(row=>row.photo).length});
+    return reply.header('content-type',input.format==='xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/pdf')
+      .header('content-disposition',`attachment; filename="alerts-with-photos-${context.generatedAt.slice(0,10)}.${input.format}"`)
+      .header('cache-control','private, no-store').header('x-report-rows',String(rows.length))
+      .header('x-report-photos',String(rows.filter(row=>row.photo).length)).send(bytes);
   });
 
   app.get("/v1/analytics/alerts/summary", async (request, reply) => {
