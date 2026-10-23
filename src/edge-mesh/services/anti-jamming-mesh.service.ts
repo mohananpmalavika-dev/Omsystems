@@ -103,6 +103,7 @@ export class AntiJammingMeshService {
         tenantId: node.tenant_id,
         actorUserId: 'edge-agent-daemon',
         action: 'edge_mesh.wan_isolated',
+        resourceNodeId: branchId,
         outcome: 'success',
         details: { branchId, reason, status: node.status },
       });
@@ -167,6 +168,7 @@ export class AntiJammingMeshService {
         tenantId: 'default-tenant',
         actorUserId: 'edge-agent-daemon',
         action: 'edge_mesh.store_and_forward_synced',
+        resourceNodeId: branchId,
         outcome: 'success',
         details: { branchId, syncedCount: pendingItems.length, bytesSynced, syncDurationMs },
       });

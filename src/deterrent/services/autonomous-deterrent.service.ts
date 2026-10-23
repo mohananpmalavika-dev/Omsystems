@@ -264,6 +264,7 @@ export class AutonomousDeterrentService {
         tenantId,
         actorUserId: 'system-autonomous-deterrent',
         action: 'voice_talkdown.executed',
+        resourceNodeId: branchId || cameraId || null,
         outcome: 'success',
         details: {
           logId: log.id,
@@ -325,6 +326,7 @@ export class AutonomousDeterrentService {
       escalation_level: input.escalated ? 2 : 1,
       latency_ms: latencyMs,
       details: { isOperatorTest: true },
+      created_at: new Date(),
     });
 
     return {
@@ -401,7 +403,7 @@ export class AutonomousDeterrentService {
       const branchRule = rules.find((r) => r.branch_id === branchId);
       if (branchRule) return branchRule;
     }
-    return rules[0];
+    return rules[0]!;
   }
 
   public getRepository(): DeterrentRepository {

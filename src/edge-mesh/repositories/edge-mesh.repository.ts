@@ -307,7 +307,27 @@ export class EdgeMeshRepository {
       const branchPolicy = policies.find((p) => p.branch_id === branchId);
       if (branchPolicy) return branchPolicy;
     }
-    return policies[0] ?? Array.from(this.memoryPolicies.values())[0];
+    const fallback = policies[0] ?? Array.from(this.memoryPolicies.values())[0];
+    if (fallback) return fallback;
+
+    return {
+      id: 'policy-default-fallback',
+      tenant_id: tenantId,
+      name: 'Default Zero-Bandwidth Policy',
+      enabled: true,
+      quiescent_fps: 1.0,
+      quiescent_resolution: '240p',
+      quiescent_bitrate_kbps: 40,
+      burst_fps: 30,
+      burst_resolution: '4K',
+      burst_bitrate_kbps: 4500,
+      burst_duration_seconds: 30,
+      pre_buffer_seconds: 10,
+      trigger_alert_types: ['person_detected', 'motion_detected'],
+      monthly_data_quota_mb: 50000,
+      created_at: new Date(),
+      updated_at: new Date(),
+    };
   }
 
   // 2. Mesh Node Operations

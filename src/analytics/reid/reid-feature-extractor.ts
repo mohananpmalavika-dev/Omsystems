@@ -420,8 +420,9 @@ export class ReidFeatureExtractor {
     let dominantHueBin = 0;
     let maxHueVal = -1;
     for (let i = 0; i < 16; i++) {
-      if (hueBins[i] > maxHueVal) {
-        maxHueVal = hueBins[i];
+      const v = hueBins[i] ?? 0;
+      if (v > maxHueVal) {
+        maxHueVal = v;
         dominantHueBin = i;
       }
     }
@@ -429,8 +430,9 @@ export class ReidFeatureExtractor {
     let dominantSatBin = 0;
     let maxSatVal = -1;
     for (let i = 0; i < 8; i++) {
-      if (satBins[i] > maxSatVal) {
-        maxSatVal = satBins[i];
+      const v = satBins[i] ?? 0;
+      if (v > maxSatVal) {
+        maxSatVal = v;
         dominantSatBin = i;
       }
     }
@@ -438,8 +440,9 @@ export class ReidFeatureExtractor {
     let dominantValBin = 0;
     let maxValVal = -1;
     for (let i = 0; i < 8; i++) {
-      if (valBins[i] > maxValVal) {
-        maxValVal = valBins[i];
+      const v = valBins[i] ?? 0;
+      if (v > maxValVal) {
+        maxValVal = v;
         dominantValBin = i;
       }
     }

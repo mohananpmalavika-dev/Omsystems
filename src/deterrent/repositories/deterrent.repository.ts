@@ -313,7 +313,7 @@ export class DeterrentRepository {
     });
   }
 
-  async createLog(input: Omit<DeterrentLog, 'id'> & { created_at?: Date }): Promise<DeterrentLog> {
+  async createLog(input: Omit<DeterrentLog, 'id' | 'created_at'> & { created_at?: Date }): Promise<DeterrentLog> {
     const id = crypto.randomUUID();
     const now = input.created_at ?? new Date();
 
