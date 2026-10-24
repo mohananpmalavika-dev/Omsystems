@@ -124,6 +124,15 @@ export class NbfcRuleEngineService {
       await resetMinimumConfirmation();
       return suppressed("Minimum Personnel requires an active-operation signal and a valid personnel count. Check the rule configuration and telemetry.");
     }
+    if (minimumPersonnel) {
+      const isVaultTarget = /vault|strong[\s_]*room|locker|safe[\s_]*(?:deposit|room|door|locker)|currency[\s_]*chest|\bsafe\b/i.test(
+        `${input.cameraId || ""} ${input.zoneId || ""} ${rule.name || ""} ${rule.description || ""} ${input.metrics?.zone || ""} ${input.metrics?.cameraName || ""}`
+      );
+      if (!isVaultTarget) {
+        await resetMinimumConfirmation();
+        return suppressed("Dual control / minimum personnel policy applies only to vault cameras and zones.");
+      }
+    }
 
     // 2. Schedule evaluation
     const effectiveSchedule = rule.schedule || ((rule as any).scheduleType ? { type: (rule as any).scheduleType } : { type: "24X7" });

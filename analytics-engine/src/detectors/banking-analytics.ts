@@ -641,6 +641,7 @@ export class BankingAnalyticsDetector extends BaseDetector {
     const results: DetectionResult[] = [];
 
     for (const [zoneId, zone] of this.dualControlZones.entries()) {
+      if (!/vault|strong\s*room|strongroom|locker|safe/i.test(`${zone.name} ${zoneId}`)) continue;
       const personsInZone = persons.filter(p =>
         this.isPointInPolygon(this.getPersonCenter(p), zone.polygon)
       );

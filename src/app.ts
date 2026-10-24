@@ -1470,7 +1470,7 @@ export async function buildApp(options?: {
           imageBase64: input.imageBase64,
           imageEncoding: input.imageEncoding,
           rules,
-          metadata: { ...input.metadata, edgeAgentId: id, branchId: branch.id },
+          metadata: { ...input.metadata, edgeAgentId: id, branchId: branch.id, cameraName: camera.name, channel: camera.channel },
         }),
       });
       const result = await upstream.json().catch(() => ({}));

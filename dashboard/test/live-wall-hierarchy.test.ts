@@ -43,4 +43,25 @@ describe("configured live wall hierarchy", () => {
   it("terminates safely on a malformed parent cycle", () => {
     expect(buildLiveWallBranches([], [{ id: "b", type: "branch", name: "B", parentId: "z" }, { id: "z", type: "zone", name: "Z", parentId: "b" }])[0].zone).toBe("z");
   });
+  it("filters branches and cameras strictly to the active organization tree", () => {
+    const orgNodes: LiveWallHierarchyNode[] = [
+      { id: "org-wizz", name: "Wizzmoni", type: "company", parentId: null },
+      { id: "org-other", name: "Other Org", type: "company", parentId: null },
+      { id: "zone-w", name: "Wizz Zone", type: "zone", parentId: "org-wizz" },
+      { id: "zone-o", name: "Other Zone", type: "zone", parentId: "org-other" },
+      { id: "branch-w", name: "Wizz Branch", type: "branch", parentId: "zone-w" },
+      { id: "branch-o", name: "Other Branch", type: "branch", parentId: "zone-o" },
+    ];
+    const multiOrgCameras = [
+      { id: "cam-w1", name: "Wizz Cam", branchId: "branch-w", status: "online" },
+      { id: "cam-o1", name: "Other Cam", branchId: "branch-o", status: "online" },
+    ] as Camera[];
+
+    const wizzBranches = buildLiveWallBranches(multiOrgCameras, orgNodes, "org-wizz");
+    expect(wizzBranches.map(b => b.branchId)).toEqual(["branch-w"]);
+    expect(wizzBranches[0].cameraCount).toBe(1);
+
+    const wizzZones = liveWallHierarchyOptions(orgNodes, "zone", [], [], "org-wizz");
+    expect(wizzZones.map(z => z.value)).toEqual(["zone-w"]);
+  });
 });

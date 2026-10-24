@@ -36,8 +36,29 @@ function ancestors(node: LiveWallHierarchyNode, byId: Map<string, LiveWallHierar
   return path;
 }
 
-export function buildLiveWallBranches(cameras: Camera[], nodes: LiveWallHierarchyNode[]): HierarchyBranchInfo[] {
+export function filterHierarchyByOrganization(
+  nodes: LiveWallHierarchyNode[],
+  organizationId?: string | null,
+): LiveWallHierarchyNode[] {
+  if (!organizationId) return nodes;
   const byId = new Map(nodes.map(node => [node.id, node]));
+  if (!byId.has(organizationId)) return nodes;
+
+  return nodes.filter(node => {
+    if (node.id === organizationId) return true;
+    const path = ancestors(node, byId);
+    return path.some(ancestor => ancestor.id === organizationId);
+  });
+}
+
+export function buildLiveWallBranches(
+  cameras: Camera[],
+  nodes: LiveWallHierarchyNode[],
+  organizationId?: string | null,
+): HierarchyBranchInfo[] {
+  const scopedNodes = filterHierarchyByOrganization(nodes, organizationId);
+  const byId = new Map(scopedNodes.map(node => [node.id, node]));
+  const scopedBranchIds = new Set(scopedNodes.filter(node => node.type === "branch").map(node => node.id));
   const branches = new Map<string, HierarchyBranchInfo>();
   const addBranch = (id: string, name: string) => {
     const node = byId.get(id);
@@ -45,25 +66,47 @@ export function buildLiveWallBranches(cameras: Camera[], nodes: LiveWallHierarch
     const zone = path.find(parent => parent.type === "zone");
     const region = path.find(parent => parent.type === "region");
     const area = path.find(parent => parent.type === "area");
-    const branch = { branchId: id, branchName: node?.name ?? name, zone: zone?.id ?? "", region: region?.id ?? "", area: area?.id ?? "",
-      zoneName: zone?.name ?? "Unassigned zone", regionName: region?.name ?? "Unassigned region", areaName: area?.name ?? "Unassigned area", cameraCount: 0, onlineCount: 0 };
+    const branch = {
+      branchId: id,
+      branchName: node?.name ?? name,
+      zone: zone?.id ?? "",
+      region: region?.id ?? "",
+      area: area?.id ?? "",
+      zoneName: zone?.name ?? "Unassigned zone",
+      regionName: region?.name ?? "Unassigned region",
+      areaName: area?.name ?? "Unassigned area",
+      cameraCount: 0,
+      onlineCount: 0,
+    };
     branches.set(id, branch);
     return branch;
   };
   // Configured branches and zones remain selectable even before cameras are added.
-  nodes.filter(node => node.type === "branch").forEach(node => addBranch(node.id, node.name));
+  scopedNodes.filter(node => node.type === "branch").forEach(node => addBranch(node.id, node.name));
   for (const camera of cameras) {
     const id = camera.branchId || "default-branch";
-    const branch = branches.get(id) ?? addBranch(id, camera.branchName || `Branch ${id}`);
-    branch.cameraCount++;
-    if (isLiveWallCameraOnline(camera)) branch.onlineCount++;
+    if (organizationId && scopedBranchIds.size > 0 && !scopedBranchIds.has(id)) {
+      continue;
+    }
+    const branch = branches.get(id) ?? (organizationId && scopedBranchIds.size > 0 ? undefined : addBranch(id, camera.branchName || `Branch ${id}`));
+    if (branch) {
+      branch.cameraCount++;
+      if (isLiveWallCameraOnline(camera)) branch.onlineCount++;
+    }
   }
   return [...branches.values()].sort((a, b) => a.branchName.localeCompare(b.branchName));
 }
 
-export function liveWallHierarchyOptions(nodes: LiveWallHierarchyNode[], type: "zone" | "region" | "area", zones: string[] = [], regions: string[] = []) {
-  const byId = new Map(nodes.map(node => [node.id, node]));
-  return nodes.filter(node => {
+export function liveWallHierarchyOptions(
+  nodes: LiveWallHierarchyNode[],
+  type: "zone" | "region" | "area",
+  zones: string[] = [],
+  regions: string[] = [],
+  organizationId?: string | null,
+) {
+  const scopedNodes = filterHierarchyByOrganization(nodes, organizationId);
+  const byId = new Map(scopedNodes.map(node => [node.id, node]));
+  return scopedNodes.filter(node => {
     if (node.type !== type) return false;
     const path = ancestors(node, byId);
     return (type === "zone" || matchesLiveWallSelection(zones, path.find(parent => parent.type === "zone")?.id)) &&

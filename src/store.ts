@@ -51,6 +51,7 @@ import {
   isTerminalAlertStatus,
   sortedMatchingRules,
   isConfirmedShutterTransition,
+  isVaultCameraTarget,
 } from "./analytics/rule-engine.js";
 import { moreSevere, resolveAlertSeverity } from "./analytics/severity-policy.js";
 import { buildFalseAlarmSignature, matchesFalseAlarm, type FalseAlarmSignature } from "./analytics/false-alarm-feedback.js";
@@ -3733,6 +3734,47 @@ export class MemoryStore {
     const camera = this.cameras.get(input.cameraId);
     const node = camera ? this.nodes.get(camera.nodeId) : undefined;
     if (!camera || node?.tenantId !== input.tenantId) throw new Error("camera_not_found");
+
+    const enrichedInput = {
+      ...input,
+      metadata: {
+        ...input.metadata,
+        cameraName: input.metadata?.cameraName || camera.name,
+        channel: input.metadata?.channel ?? camera.channel,
+      },
+    };
+
+    if (
+      (input.detectionType === "dual-control-verification" || input.detectionType === "dual-control-violation") &&
+      input.metadata?.violation !== "BRANCH_OPENING_MINIMUM_STAFF"
+    ) {
+      if (!isVaultCameraTarget(enrichedInput)) {
+        const now = new Date().toISOString();
+        const eventId = randomUUID();
+        const suppressedEvent = {
+          id: eventId,
+          tenantId: input.tenantId,
+          cameraId: input.cameraId,
+          sourceEventId: input.sourceEventId,
+          detectionType: input.detectionType,
+          occurredAt: input.occurredAt,
+          confidence: input.confidence,
+          durationSeconds: input.durationSeconds,
+          modelVersion: input.modelVersion,
+          objects: input.objects,
+          metadata: enrichedInput.metadata,
+          status: "suppressed" as const,
+          createdAt: now,
+        };
+        this.analyticsEvents.push(suppressedEvent);
+        return {
+          event: suppressedEvent,
+          alerts: [],
+          rules: [],
+        };
+      }
+    }
+
     const duplicate = this.analyticsEvents.find((event) =>
       event.tenantId === input.tenantId && event.sourceEventId === input.sourceEventId
     );
@@ -3749,7 +3791,7 @@ export class MemoryStore {
 
     const matchingRules = sortedMatchingRules(
       this.analyticsRules.filter((rule) => rule.cameraId === input.cameraId),
-      input,
+      enrichedInput,
     );
     const signature = matchingRules.length ? await buildFalseAlarmSignature(input) : null;
     const now = new Date().toISOString();

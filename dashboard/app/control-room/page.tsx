@@ -51,6 +51,7 @@ import type { Camera as CameraType } from "@/lib/types";
 import { normalizeCameraStreamProfiles } from "@/lib/camera-stream-profiles";
 import { isLiveWallCameraOnline, matchesLiveWallSelection, selectLiveWallCameras } from "@/lib/live-wall-filters";
 import { buildLiveWallBranches, liveWallHierarchyOptions, parseLiveWallHierarchy, type LiveWallHierarchyNode } from "@/lib/live-wall-hierarchy";
+import { useOrgBranding } from "@/components/ui/org-branding-provider";
 import { ScopeMultiSelect } from "@/components/ui/scope-multi-select";
 import { LiveWallWindows } from "@/components/live-wall-windows";
 import { readLiveWallWindowScope } from "@/lib/live-wall-windows";
@@ -263,6 +264,7 @@ function ControlRoomContent() {
   const urlBranchId = !isWallWindow && incomingScope.branches.length === 1 ? incomingScope.branches[0] : null;
   const isDetached = searchParams?.get("detached") === "true";
   const detachedCameraId = searchParams?.get("cameraId");
+  const { branding } = useOrgBranding();
 
   const [cameras, setCameras] = useState<CameraType[]>([]);
   const [hierarchyNodes, setHierarchyNodes] = useState<LiveWallHierarchyNode[]>([]);
@@ -462,7 +464,10 @@ function ControlRoomContent() {
     return result;
   }, [cameras, liveAi.alertsByCamera, liveAi.rulesByCamera]);
 
-  const branchesList = useMemo(() => buildLiveWallBranches(cameras, hierarchyNodes), [cameras, hierarchyNodes]);
+  const branchesList = useMemo(
+    () => buildLiveWallBranches(cameras, hierarchyNodes, branding.organizationId),
+    [cameras, hierarchyNodes, branding.organizationId],
+  );
 
   // Resolve incoming branch links once; refreshing inventory must not reset a user's selection.
   useEffect(() => {
@@ -479,9 +484,18 @@ function ControlRoomContent() {
     }
   }, [urlBranchId, branchesList, cameraDataState, loading]);
 
-  const availableZones = useMemo(() => liveWallHierarchyOptions(hierarchyNodes, "zone"), [hierarchyNodes]);
-  const availableRegions = useMemo(() => liveWallHierarchyOptions(hierarchyNodes, "region", selectedZone), [hierarchyNodes, selectedZone]);
-  const availableAreas = useMemo(() => liveWallHierarchyOptions(hierarchyNodes, "area", selectedZone, selectedRegion), [hierarchyNodes, selectedZone, selectedRegion]);
+  const availableZones = useMemo(
+    () => liveWallHierarchyOptions(hierarchyNodes, "zone", [], [], branding.organizationId),
+    [hierarchyNodes, branding.organizationId],
+  );
+  const availableRegions = useMemo(
+    () => liveWallHierarchyOptions(hierarchyNodes, "region", selectedZone, [], branding.organizationId),
+    [hierarchyNodes, selectedZone, branding.organizationId],
+  );
+  const availableAreas = useMemo(
+    () => liveWallHierarchyOptions(hierarchyNodes, "area", selectedZone, selectedRegion, branding.organizationId),
+    [hierarchyNodes, selectedZone, selectedRegion, branding.organizationId],
+  );
   const availableBranches = useMemo(() => branchesList.filter(branch =>
     matchesLiveWallSelection(selectedZone, branch.zone) && matchesLiveWallSelection(selectedRegion, branch.region) && matchesLiveWallSelection(selectedArea, branch.area)
   ), [branchesList, selectedZone, selectedRegion, selectedArea]);

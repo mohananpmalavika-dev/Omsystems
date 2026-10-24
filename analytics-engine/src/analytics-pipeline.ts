@@ -558,7 +558,7 @@ export class AnalyticsPipeline {
       //   persistence (10s) before raising a violation.
       if (this.needsDetection(rules, ['dual-control-verification', 'dual-control', 'vault-violation'])) {
         const dualControlRules = rules.filter(r => r.enabled && ['dual-control-verification', 'dual-control', 'vault-violation'].map(normalizeDetectionType).includes(normalizeDetectionType(r.detectionType)));
-        if (dualControlRules.length > 0) {
+        if (dualControlRules.length > 0 && this.isVaultCamera(frame, dualControlRules)) {
           const cameraId = frame.cameraId;
           let vaultState = this.vaultDualControlStates.get(cameraId);
           if (!vaultState) {
@@ -652,6 +652,25 @@ export class AnalyticsPipeline {
     }
 
     return events;
+  }
+
+  private isVaultCamera(frame: DetectionFrame, rules: AnalyticsRule[]): boolean {
+    const vaultRegex = /vault|strong[\s_]*room|locker|safe[\s_]*(?:deposit|room|door|locker)|currency[\s_]*chest|\bsafe\b/i;
+    const meta = frame.metadata || {};
+    const metaStr = `${meta.cameraName || ""} ${meta.name || ""} ${meta.zone || ""} ${meta.zoneName || ""} ${meta.zoneType || ""} ${meta.channelName || ""} ${meta.channel || ""} ${meta.location || ""} ${frame.cameraId || ""}`;
+    if (vaultRegex.test(metaStr)) {
+      return true;
+    }
+    if (meta.channel === 8 || meta.channel === "8" || /channel\s*8/i.test(metaStr)) {
+      return true;
+    }
+    for (const rule of rules) {
+      const ruleStr = `${rule.name || ""} ${rule.zone?.name || ""}`;
+      if (vaultRegex.test(ruleStr)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

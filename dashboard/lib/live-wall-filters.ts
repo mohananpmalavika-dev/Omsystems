@@ -42,6 +42,7 @@ export function selectLiveWallCameras(
   const scoped = cameras.filter((camera) => {
     const branchId = camera.branchId || "default-branch";
     const branch = branchMap.get(branchId);
+    if (branches.length > 0 && !branch) return false;
     if (Array.isArray(scope.branchId)) {
       if (scope.branchId.length && !scope.branchId.includes(branchId)) return false;
     } else if (scope.branchId !== "ALL") {

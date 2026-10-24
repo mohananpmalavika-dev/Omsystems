@@ -1,4 +1,5 @@
 import type { AnalyticsRuleInput, ControlPlaneStore } from "../control-plane-store.js";
+import { isVaultCameraTarget } from "./rule-engine.js";
 
 export type CameraAiRuleDefinition = Pick<
   AnalyticsRuleInput,
@@ -63,12 +64,12 @@ export const CAMERA_AI_SETUP_REQUIRED: readonly string[] = ["shutter-state"];
 
 export function cameraAiRuleInput(
   definition: CameraAiRuleDefinition,
-  options: { protectEvidence?: boolean } = {},
+  options: { protectEvidence?: boolean; enabled?: boolean } = {},
 ): AnalyticsRuleInput {
   return {
     name: definition.name,
     detectionType: definition.detectionType,
-    enabled: true,
+    enabled: options.enabled ?? true,
     objectClasses: [...definition.objectClasses],
     minConfidence: definition.minConfidence ?? 0.65,
     minDurationSeconds: definition.minDurationSeconds,
@@ -85,7 +86,9 @@ export function cameraAiRuleInput(
 export type CameraAiBundleStore = Pick<
   ControlPlaneStore,
   "listAnalyticsRules" | "createAnalyticsRule" | "updateAnalyticsRule"
->;
+> & {
+  getCamera?: (id: string) => Promise<any> | any;
+};
 
 export async function ensureCameraAiBundle(
   store: CameraAiBundleStore,
@@ -94,23 +97,32 @@ export async function ensureCameraAiBundle(
   createdBy?: string,
 ) {
   const existing = await store.listAnalyticsRules(cameraId);
+  const camera = await store.getCamera?.(cameraId).catch(() => undefined);
+  const isVault = camera ? isVaultCameraTarget({ metadata: { cameraName: camera.name, channel: camera.channel } }) : true;
   const byType = new Map(existing.map((rule) => [rule.detectionType, rule]));
   let created = 0;
   let enabled = 0;
 
   for (const definition of CAMERA_AI_RULE_BUNDLE) {
+    const isDualControl = definition.detectionType === "dual-control-verification" || definition.detectionType === "dual-control-violation";
+    const ruleShouldBeEnabled = isDualControl ? isVault : true;
     const rule = byType.get(definition.detectionType);
     if (!rule) {
       await store.createAnalyticsRule(
         tenantId,
         cameraId,
         createdBy,
-        cameraAiRuleInput(definition, { protectEvidence: Boolean(createdBy) }),
+        cameraAiRuleInput(definition, {
+          protectEvidence: Boolean(createdBy),
+          enabled: ruleShouldBeEnabled,
+        }),
       );
       created++;
       continue;
     }
-    if (!rule.enabled) {
+    if (isDualControl && !isVault && rule.enabled) {
+      await store.updateAnalyticsRule(rule.id, tenantId, cameraId, { enabled: false });
+    } else if (ruleShouldBeEnabled && !rule.enabled) {
       await store.updateAnalyticsRule(rule.id, tenantId, cameraId, { enabled: true });
       enabled++;
     }

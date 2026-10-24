@@ -1,11 +1,6 @@
-import { execSync } from 'child_process';
+import pg from 'pg';
+const { Client } = pg;
 
-const sql = `
-SELECT reference, edge_agent_id, updated_at FROM central_stream_secrets LIMIT 10;
-SELECT id, name, status, branch_node_id, last_seen_at FROM edge_agents WHERE status = 'online';
-`;
-
-const b64 = Buffer.from(sql).toString('base64');
-const cmd = `gcloud compute ssh kryptovision-server --zone=asia-south1-b --project=project-7866fc3f-5dd5-4495-804 --quiet --command="echo ${b64} | base64 -d | sudo docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid"`;
-
-console.log(execSync(cmd, { encoding: 'utf8' }));
+async function checkSecrets() {
+  // We can query via gcloud command sending a script or run inside container
+}

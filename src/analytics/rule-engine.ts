@@ -15,6 +15,15 @@ export function sortedMatchingRules(
     .filter((rule) => rule.enabled && !["no-helmet", "person-counting", "occupancy-counting"].includes(rule.detectionType) && detectionTypes.has(rule.detectionType))
     .filter(rule=>!["shutter-opened","shutter-closed"].includes(event.detectionType) ||
       isConfirmedShutterTransition(event) && event.metadata?.shutterRuleId===rule.id)
+    .filter((rule) => {
+      if (rule.detectionType === "dual-control-verification" || rule.detectionType === "dual-control-violation") {
+        if (event.metadata?.violation === "BRANCH_OPENING_MINIMUM_STAFF") {
+          return true;
+        }
+        return isVaultCameraTarget(event, rule);
+      }
+      return true;
+    })
     .filter((rule) => event.confidence >= rule.minConfidence)
     .filter((rule) => event.durationSeconds >= rule.minDurationSeconds)
     .filter((rule) => objectClassesMatch(rule, event))
@@ -28,6 +37,26 @@ export function sortedMatchingRules(
   return matches
     .filter((rule) => !hasHelmetWornRule || rule.detectionType !== "helmet")
     .sort((left, right) => severityOrder[left.severity] - severityOrder[right.severity]);
+}
+
+export function isVaultCameraTarget(
+  target?: { metadata?: Record<string, unknown>; cameraId?: string } | string | null,
+  rule?: AnalyticsRule,
+): boolean {
+  if (!target) return false;
+  const vaultRegex = /vault|strong[\s_]*room|locker|safe[\s_]*(?:deposit|room|door|locker)|currency[\s_]*chest|\bsafe\b/i;
+  if (typeof target === "string") {
+    return vaultRegex.test(target) || /channel\s*8/i.test(target);
+  }
+  const meta = target.metadata || {};
+  const targetStr = `${meta.cameraName || ""} ${meta.name || ""} ${meta.zone || ""} ${meta.zoneName || ""} ${meta.zoneType || ""} ${meta.channelName || ""} ${meta.channel || ""} ${meta.location || ""} ${target.cameraId || ""} ${rule?.name || ""} ${rule?.zone?.name || ""}`;
+  if (vaultRegex.test(targetStr)) {
+    return true;
+  }
+  if (meta.channel === 8 || meta.channel === "8" || /channel\s*8/i.test(targetStr)) {
+    return true;
+  }
+  return false;
 }
 
 export function eventDetectionTypes(event: AnalyticsEventInput): string[] {
