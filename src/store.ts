@@ -2690,7 +2690,7 @@ export class MemoryStore {
     const session = {
       id: randomUUID(), cameraId, userId,
       token: randomBytes(32).toString("base64url"),
-      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
       purpose,
       profile,
       ...(mediaGatewayUrl ? { mediaGatewayUrl } : {}),

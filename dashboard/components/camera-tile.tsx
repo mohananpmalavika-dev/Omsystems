@@ -513,7 +513,7 @@ function CameraTileComponent({
   }, [onPlaybackStateChange]);
   useEffect(() => {
     setHasLiveFrame(false);
-  }, [session?.sessionId, session?.hls?.url]);
+  }, [session?.hls?.url]);
   const deferredDescription = degradationReason
     ? degradationReason.replaceAll("_", " ").toLowerCase()
     : desiredPlaybackMode === "SNAPSHOT"

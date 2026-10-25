@@ -17,25 +17,55 @@ interface DirectSessionAttempt {
 const LIVE_START_TIMEOUT_MS = 30_000;
 const DIRECT_GATEWAY_ATTEMPT_TIMEOUT_MS = 2_500;
 
+export function normalizeSessionOrigin(session: LiveSessionResponse): LiveSessionResponse {
+  if (typeof window === "undefined" || !window.location?.origin) return session;
+  const currentHost = window.location.hostname.toLowerCase();
+  const currentOrigin = window.location.origin;
+
+  const rewriteUrl = (rawUrl?: string) => {
+    if (!rawUrl) return rawUrl;
+    try {
+      const parsed = new URL(rawUrl);
+      const sourceHost = parsed.hostname.toLowerCase();
+      if (
+        sourceHost !== currentHost &&
+        ((currentHost.endsWith("kryptonlogic.com") || currentHost.endsWith("sslip.io") || currentHost === "localhost") &&
+         (sourceHost.endsWith("kryptonlogic.com") || sourceHost.endsWith("sslip.io") || sourceHost === "localhost"))
+      ) {
+        return new URL(`${parsed.pathname}${parsed.search}`, currentOrigin).toString();
+      }
+      return rawUrl;
+    } catch {
+      return rawUrl;
+    }
+  };
+
+  return {
+    ...session,
+    ...(session.hls ? { hls: { ...session.hls, url: rewriteUrl(session.hls.url)! } } : {}),
+    ...(session.webRtc ? { webRtc: { ...session.webRtc, whepUrl: rewriteUrl(session.webRtc.whepUrl)! } } : {}),
+  };
+}
+
 export async function startLiveFromBrowser(
   cameraId: string,
   profile: "main" | "sub" = "sub",
   signal: AbortSignal = AbortSignal.timeout(LIVE_START_TIMEOUT_MS),
 ): Promise<LiveSessionResponse> {
   const authorization = await requestLiveAuthorization(cameraId, profile, "auto", signal);
-  if (!isBrowserDirectLiveStart(authorization)) return authorization;
+  if (!isBrowserDirectLiveStart(authorization)) return normalizeSessionOrigin(authorization);
 
   const direct = await startDirectSession(authorization, signal);
-  if (direct.session) return direct.session;
+  if (direct.session) return normalizeSessionOrigin(direct.session);
 
   // A private branch address is reachable only from an operator on that
   // branch LAN/VPN. Ask for a new, single-use session before trying the
   // branch's public/named-tunnel route from outside that private network.
   try {
     const publicRoute = await requestLiveAuthorization(cameraId, profile, "public", signal);
-    if (!isBrowserDirectLiveStart(publicRoute)) return publicRoute;
+    if (!isBrowserDirectLiveStart(publicRoute)) return normalizeSessionOrigin(publicRoute);
     const publicDirect = await startDirectSession(publicRoute, signal, LIVE_START_TIMEOUT_MS);
-    if (publicDirect.session) return publicDirect.session;
+    if (publicDirect.session) return normalizeSessionOrigin(publicDirect.session);
     if (publicDirect.error) throw new Error(publicDirect.error);
   } catch (error) {
     if (signal.aborted) throw timeoutError(signal.reason ?? error);

@@ -785,7 +785,7 @@ export class CameraRepository {
     const id = randomUUID();
     const token = randomBytes(32).toString("base64url");
     const tokenHash = createHash("sha256").update(token).digest();
-    const expiresAt = new Date(Date.now() + 60_000);
+    const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000);
     await this.pool.query(
       `INSERT INTO live_sessions
          (id, camera_id, user_id, token_hash, expires_at, purpose, profile)

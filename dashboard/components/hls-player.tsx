@@ -9,8 +9,8 @@ const MAX_RECOVERY_ATTEMPTS = 25;
 const STALL_TIMEOUT_MS = 8_000;
 const RECOVERY_DELAY_MS = 1_200;
 const STARTUP_TIMEOUT_MS = 45_000;
-const WEBRTC_STARTUP_TIMEOUT_MS = 25_000;
-const ICE_GATHER_TIMEOUT_MS = 5_000;
+const WEBRTC_STARTUP_TIMEOUT_MS = 3_500;
+const ICE_GATHER_TIMEOUT_MS = 1_500;
 
 type PlayerStatus = "idle" | "loading" | "live" | "reconnecting" | "error";
 
@@ -46,6 +46,10 @@ export function HlsPlayer({
   const playbackErrorRef = useRef(onPlaybackError);
   const playbackStateChangeRef = useRef(onPlaybackStateChange);
   const bitrateChangeRef = useRef(onBitrateChange);
+  const bearerTokenRef = useRef(bearerToken);
+  useEffect(() => {
+    bearerTokenRef.current = bearerToken;
+  }, [bearerToken]);
   const [status, setStatus] = useState<PlayerStatus>(url || whepUrl ? "loading" : "idle");
   const [error, setError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
@@ -54,7 +58,11 @@ export function HlsPlayer({
   const frameCameraRef = useRef(cameraId ?? cameraName);
 
   // Stream transport and display settings.
-  const [streamProtocol, setStreamProtocol] = useState<"webrtc" | "ll-hls">(whepUrl ? "webrtc" : "ll-hls");
+  // For edge-relayed cameras (/edge-media/), HLS is the proven, high-performance transport.
+  // Prefer ll-hls by default whenever url is provided to avoid WebRTC ICE stalling.
+  const isEdgeRelay = Boolean((url && url.includes("/edge-media/")) || (whepUrl && whepUrl.includes("/edge-media/")));
+  const defaultProtocol: "webrtc" | "ll-hls" = (!isEdgeRelay && whepUrl) ? "webrtc" : (url ? "ll-hls" : "webrtc");
+  const [streamProtocol, setStreamProtocol] = useState<"webrtc" | "ll-hls">(defaultProtocol);
   const [resolution, setResolution] = useState<"1080p" | "720p" | "480p" | "240p">("1080p");
   const [showSettings, setShowSettings] = useState(false);
 
@@ -320,8 +328,9 @@ export function HlsPlayer({
               if (isSameOrigin) {
                 xhr.withCredentials = true;
               }
-              if (bearerToken) {
-                xhr.setRequestHeader("Authorization", `Bearer ${bearerToken}`);
+              const activeToken = bearerTokenRef.current || bearerToken;
+              if (activeToken) {
+                xhr.setRequestHeader("Authorization", `Bearer ${activeToken}`);
               }
             },
           });
@@ -494,8 +503,9 @@ export function HlsPlayer({
         const headers: Record<string, string> = {
           "Content-Type": "application/sdp",
         };
-        if (bearerToken) {
-          headers["Authorization"] = `Bearer ${bearerToken}`;
+        const activeToken = bearerTokenRef.current || bearerToken;
+        if (activeToken) {
+          headers["Authorization"] = `Bearer ${activeToken}`;
         }
 
         const res = await fetch(targetWhepUrl, {
@@ -566,7 +576,7 @@ export function HlsPlayer({
               return;
             }
           }
-          if (currentProtocol === "webrtc" && whepUrl) {
+          if (currentProtocol === "webrtc" && whepUrl && (!isEdgeRelay || !url)) {
             void startWebRtc(whepUrl);
           } else if (url) {
             startHls(url);
@@ -604,7 +614,7 @@ export function HlsPlayer({
     setError(null);
 
     // Prefer WebRTC where available; fall back to HLS.
-    if (whepUrl && (currentProtocol === "webrtc" || !url)) {
+    if (whepUrl && streamProtocol === "webrtc" && (!isEdgeRelay || !url)) {
       void startWebRtc(whepUrl);
     } else if (url) {
       startHls(url);
@@ -710,7 +720,7 @@ export function HlsPlayer({
       video.removeAttribute("src");
       video.load();
     };
-  }, [bearerToken, retryNonce, url, whepUrl, cameraId]);
+  }, [retryNonce, url, whepUrl, cameraId]);
 
   const retry = () => {
     setError(null);

@@ -1128,7 +1128,9 @@ export function EnhancedCameraGrid({
       // Replacing a refreshed session without closing the old one exhausts
       // MediaMTX viewer slots over time. The current video remains visible
       // until React swaps to the freshly authorized source.
-      if (previousSession?.sessionId && previousSession.sessionId !== session.sessionId) void releaseLiveSession(previousSession);
+      if (previousSession?.sessionId && previousSession.sessionId !== session.sessionId) {
+        window.setTimeout(() => void releaseLiveSession(previousSession), 15_000);
+      }
     } catch (error) {
       // Leaving a page cancels its requests; it must not change the next view.
       if (controller.signal.aborted && controller.signal.reason?.name !== "TimeoutError") return;
