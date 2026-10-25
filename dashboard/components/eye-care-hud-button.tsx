@@ -147,7 +147,7 @@ export function EyeCareHudButton({
       {/* Flyout Control Drawer */}
       {isOpen && (
         <div
-          className="absolute right-0 mt-2 z-50 w-80 sm:w-96 rounded-2xl bg-slate-900/98 border border-slate-700/80 shadow-2xl backdrop-blur-2xl p-4 text-slate-200 animate-in fade-in zoom-in-95 duration-200 text-xs"
+          className="absolute right-0 mt-2 z-[90] w-80 sm:w-96 max-h-[85vh] overflow-y-auto rounded-2xl bg-slate-900/98 border border-slate-700/80 shadow-2xl backdrop-blur-2xl p-4 text-slate-200 animate-in fade-in zoom-in-95 duration-200 text-xs"
           role="dialog"
           aria-label="Auto Eye-Care Settings"
         >

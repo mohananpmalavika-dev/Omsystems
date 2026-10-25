@@ -103,7 +103,8 @@ html[data-theme] .app-shell .experience-surface .operations-stage-room {
   min-height: 118px;
   margin: 0 0 2px;
   padding: 20px 23px !important;
-  overflow: hidden;
+  overflow: visible !important;
+  z-index: 40;
   border: 1px solid rgba(111, 157, 201, .2);
   border-radius: 16px;
   background: linear-gradient(112deg, rgba(17, 34, 55, .96), rgba(13, 29, 45, .88) 58%, rgba(12, 48, 55, .74));
@@ -113,7 +114,8 @@ html[data-theme] .app-shell .experience-surface .operations-stage-room {
   content: "LIVE  /  01";
   position: absolute;
   right: 24px;
-  bottom: -18px;
+  bottom: 0px;
+  clip-path: inset(0 0 0 0 round 16px);
   color: rgba(184, 222, 237, .045);
   font: 800 clamp(54px, 8vw, 105px)/1 ui-monospace, monospace;
   letter-spacing: -.1em;
@@ -122,7 +124,7 @@ html[data-theme] .app-shell .experience-surface .operations-stage-room {
 .operations-stage-room .los-eyebrow { color: #62d8cb; letter-spacing: .19em; }
 .operations-stage-room .los-page-heading h1 { color: var(--wall-ink) !important; font-size: clamp(27px, 3vw, 37px); letter-spacing: -.055em; }
 .operations-stage-room .los-page-heading p { max-width: 530px; color: #9bacc3; font-size: 11px; }
-.operations-stage-room .los-page-actions { position: relative; z-index: 1; gap: 8px; }
+.operations-stage-room .los-page-actions { position: relative; z-index: 50; gap: 8px; }
 .operations-stage-room .los-page-actions :is(a, button) {
   min-height: 37px;
   color: #bfd1e8;
