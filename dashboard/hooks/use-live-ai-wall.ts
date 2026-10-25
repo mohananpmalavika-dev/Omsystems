@@ -126,7 +126,7 @@ export function useLiveAiWall(cameras: Camera[], enabled = true) {
     if (!enabled || cameraIds.length === 0) return;
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") void refresh();
-    }, 10_000);
+    }, 30_000);
     return () => {
       window.clearInterval(timer);
       requestSequenceRef.current += 1;

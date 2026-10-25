@@ -203,7 +203,10 @@ export function GlobalAlertCenter() {
 
     // Reconcile missed events promptly, including when SSE reconnects.
     events.onopen = () => { void load(); };
-    const timer = window.setInterval(load, 5_000);
+    // Instant alerts are delivered immediately via SSE above; fallback reconciliation throttled to avoid freezing UI
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, 30_000);
     const refreshOnFocus = () => { void load(); };
     window.addEventListener("focus", refreshOnFocus);
     return () => {
