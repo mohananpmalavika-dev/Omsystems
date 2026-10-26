@@ -18,9 +18,15 @@ async function modelPath(env:string,filename:string) {
 async function loadRuntime(){
   try {
     const [detectorPath,recognizerPath]=await Promise.all([modelPath('FACE_DETECTOR_MODEL_PATH','face-detector.onnx'),modelPath('ARCFACE_MODEL_PATH','arcface_r100.onnx')]);
+    const onnxPkg = 'onnxruntime-node';
+    const cvPkg = '../../analytics-engine/src/inference/opencv-specialty-inference.js';
+    const alignPkg = '../../analytics-engine/src/face/face-alignment.service.js';
+    const embedPkg = '../../analytics-engine/src/face/face-embedding.service.js';
     const [{InferenceSession},{YuNetFaceInference},{FaceAlignmentService},{FaceEmbeddingService}]=await Promise.all([
-      import('onnxruntime-node'),import('../../analytics-engine/src/inference/opencv-specialty-inference.js'),
-      import('../../analytics-engine/src/face/face-alignment.service.js'),import('../../analytics-engine/src/face/face-embedding.service.js'),
+      import(onnxPkg) as Promise<any>,
+      import(cvPkg) as Promise<any>,
+      import(alignPkg) as Promise<any>,
+      import(embedPkg) as Promise<any>,
     ]);
     const [detectorBytes,recognizerBytes]=await Promise.all([readFile(detectorPath),readFile(recognizerPath)]);
     const modelId=`arcface-r100:${createHash('sha256').update(recognizerBytes).digest('hex')}:${createHash('sha256').update(detectorBytes).digest('hex')}:align-v2`;
@@ -52,7 +58,7 @@ export async function extractVerifiedFace(imageDataUrl:string):Promise<VerifiedF
   const encoded=await sharp(image.data,{raw:{width:frame.width,height:frame.height,channels:3}}).png().toBuffer();
   const aligned=await ready.alignment.align(encoded,{boundingBox:box,confidence:face.confidence,landmarks:{leftEye:leftEye!,rightEye:rightEye!,nose:nose!,leftMouth:leftMouth!,rightMouth:rightMouth!}},frame.width,frame.height);
   const embedding=await ready.recognizer.extractEmbedding(aligned,face.confidence);
-  const vector=Array.from(embedding.vector);
+  const vector=Array.from(embedding.vector as ArrayLike<number>);
   if(!validFaceVector(vector))throw new Error('The face model returned an invalid embedding.');
   return {vector,modelId:ready.modelId,quality:face.confidence};
 }

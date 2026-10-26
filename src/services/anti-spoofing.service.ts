@@ -155,7 +155,8 @@ export class AntiSpoofingService {
     try {
       let ort: any;
       try {
-        ort = await import("onnxruntime-node");
+        const ortPkg = "onnxruntime-node";
+        ort = await import(ortPkg);
       } catch {
         return null;
       }
