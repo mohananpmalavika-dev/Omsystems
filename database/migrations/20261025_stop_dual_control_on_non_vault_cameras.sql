@@ -14,16 +14,29 @@
 
 UPDATE analytics_rules
 SET enabled = false, updated_at = NOW()
+WHERE detection_type IN ('dual-control-verification', 'dual-control-violation');
+
+UPDATE analytics_rules
+SET enabled = true, updated_at = NOW()
 WHERE detection_type IN ('dual-control-verification', 'dual-control-violation')
-  AND enabled = true
-  AND camera_id NOT IN (
+  AND camera_id IN (
     SELECT c.id
     FROM cameras c
     LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
     LEFT JOIN resource_nodes branch ON branch.id = c.branch_node_id
-    WHERE rn.name ~* 'vault|strong\s*room|strongroom|locker|safe\s*room|safe\s*door|currency\s*chest'
-       OR branch.name ~* 'vault|strong\s*room|strongroom|locker|safe\s*room|safe\s*door|currency\s*chest'
-       OR c.channel = 8
+    WHERE c.id IN (
+      'ca035670-aeee-481e-b47c-3eea98344fc6', -- Bettaih Ch 1
+      'e79e2f24-7adf-4908-93fb-6438b2ceb24f', -- Hajipur Ch 6
+      'b9522b23-506b-4eb2-9b24-bb05fb0148db', -- KOLLAM Ch 4
+      '541745ca-3aa1-4a3a-ad79-9e36d9f74fe8', -- PERAVARUNI Ch 7
+      '4d74d7ad-6922-4af0-9f36-420b84879425'  -- Rajkot Ch 8
+    )
+    OR rn.name ~* 'vault|strong\s*room|strongroom|locker|safe\s*room|safe\s*door|currency\s*chest'
+    OR (branch.name ~* 'Bettaih' AND c.channel = 1)
+    OR (branch.name ~* 'Hajipur' AND c.channel = 6)
+    OR (branch.name ~* 'KOLLAM' AND c.channel = 4)
+    OR (branch.name ~* 'PERAVARUNI|Peravurani' AND c.channel = 7)
+    OR (branch.name ~* 'Rajkot' AND c.channel = 8)
   );
 
 -- 2. Update provision_new_camera_opening_default trigger function to only enable
@@ -36,6 +49,7 @@ DECLARE
   is_vault_cam boolean := false;
   camera_rec cameras%ROWTYPE;
   node_rec resource_nodes%ROWTYPE;
+  branch_rec resource_nodes%ROWTYPE;
 BEGIN
   SELECT branch.tenant_id INTO STRICT branch_tenant
     FROM resource_nodes branch JOIN resource_nodes camera_node
@@ -45,9 +59,23 @@ BEGIN
 
   SELECT * INTO camera_rec FROM cameras WHERE id = NEW.id;
   SELECT * INTO node_rec FROM resource_nodes WHERE id = NEW.resource_node_id;
+  SELECT * INTO branch_rec FROM resource_nodes WHERE id = NEW.branch_node_id;
 
-  IF (node_rec.name ~* 'vault|strong\s*room|strongroom|locker|safe\s*room|safe\s*door|currency\s*chest'
-      OR camera_rec.channel = 8) THEN
+  IF (
+    NEW.id IN (
+      'ca035670-aeee-481e-b47c-3eea98344fc6',
+      'e79e2f24-7adf-4908-93fb-6438b2ceb24f',
+      'b9522b23-506b-4eb2-9b24-bb05fb0148db',
+      '541745ca-3aa1-4a3a-ad79-9e36d9f74fe8',
+      '4d74d7ad-6922-4af0-9f36-420b84879425'
+    )
+    OR node_rec.name ~* 'vault|strong\s*room|strongroom|locker|safe\s*room|safe\s*door|currency\s*chest'
+    OR (branch_rec.name ~* 'Bettaih' AND camera_rec.channel = 1)
+    OR (branch_rec.name ~* 'Hajipur' AND camera_rec.channel = 6)
+    OR (branch_rec.name ~* 'KOLLAM' AND camera_rec.channel = 4)
+    OR (branch_rec.name ~* 'PERAVARUNI|Peravurani' AND camera_rec.channel = 7)
+    OR (branch_rec.name ~* 'Rajkot' AND camera_rec.channel = 8)
+  ) THEN
     is_vault_cam := true;
   END IF;
 
