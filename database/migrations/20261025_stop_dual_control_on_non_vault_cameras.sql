@@ -21,8 +21,8 @@ WHERE detection_type IN ('dual-control-verification', 'dual-control-violation')
     FROM cameras c
     LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
     LEFT JOIN resource_nodes branch ON branch.id = c.branch_node_id
-    WHERE c.name ~* 'vault|strong\s*room|strongroom|locker|safe\s*room|safe\s*door|currency\s*chest'
-       OR rn.name ~* 'vault|strong\s*room|strongroom|locker|safe\s*room|safe\s*door|currency\s*chest'
+    WHERE rn.name ~* 'vault|strong\s*room|strongroom|locker|safe\s*room|safe\s*door|currency\s*chest'
+       OR branch.name ~* 'vault|strong\s*room|strongroom|locker|safe\s*room|safe\s*door|currency\s*chest'
        OR c.channel = 8
   );
 
@@ -46,8 +46,7 @@ BEGIN
   SELECT * INTO camera_rec FROM cameras WHERE id = NEW.id;
   SELECT * INTO node_rec FROM resource_nodes WHERE id = NEW.resource_node_id;
 
-  IF (camera_rec.name ~* 'vault|strong\s*room|strongroom|locker|safe\s*room|safe\s*door|currency\s*chest'
-      OR node_rec.name ~* 'vault|strong\s*room|strongroom|locker|safe\s*room|safe\s*door|currency\s*chest'
+  IF (node_rec.name ~* 'vault|strong\s*room|strongroom|locker|safe\s*room|safe\s*door|currency\s*chest'
       OR camera_rec.channel = 8) THEN
     is_vault_cam := true;
   END IF;
