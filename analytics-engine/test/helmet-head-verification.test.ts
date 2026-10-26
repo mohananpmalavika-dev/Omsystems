@@ -512,4 +512,56 @@ describe("independent helmet head verification", () => {
     const verifier = new LocalizedHelmetHeadVerifier(localizer("head", chairHeadrest), classifier, null, poseEstimator);
     expect(await verifier.verify(frame(), person, 0.9167)).toBeNull();
   });
+
+  it("rejects female staff hair bun false alarm when bun width is narrow relative to shoulder breadth", async () => {
+    const classifier = { run: vi.fn(async () => score(0.99)) };
+    // Hair bun / scrunchie / clip is narrow (width: 0.05)
+    const hairBunBox = { x: 0.35, y: 0.18, width: 0.05, height: 0.06 };
+    const keypoints = Array.from({ length: 17 }, () => ({ x: 0, y: 0, confidence: 0 }));
+    keypoints[5] = { x: 0.25, y: 0.35, confidence: 0.9 }; // left_shoulder
+    keypoints[6] = { x: 0.45, y: 0.35, confidence: 0.9 }; // right_shoulder (shoulderWidth = 0.20, bun ratio = 0.05/0.20 = 0.25 < 0.40)
+    const poseEstimator = {
+      run: vi.fn(async () => [{ boundingBox: person, confidence: 0.9, keypoints }])
+    };
+    const verifier = new LocalizedHelmetHeadVerifier(localizer("helmet", hairBunBox), classifier, null, poseEstimator);
+    expect(await verifier.verify(frame(), person, 0.9167)).toBeNull();
+  });
+
+  it("rejects hair bun false alarm when seen from behind with a bare neck gap above shoulders", async () => {
+    const classifier = { run: vi.fn(async () => score(0.99)) };
+    // High-perched hair bun: bottom at y=0.18, shoulders at y=0.36 (gap = 0.18, while bun height = 0.08)
+    const highBunBox = { x: 0.30, y: 0.10, width: 0.09, height: 0.08 };
+    const keypoints = Array.from({ length: 17 }, () => ({ x: 0, y: 0, confidence: 0 }));
+    // Seen from behind: nose occluded
+    keypoints[5] = { x: 0.25, y: 0.36, confidence: 0.9 }; // left_shoulder
+    keypoints[6] = { x: 0.45, y: 0.36, confidence: 0.9 }; // right_shoulder
+    const poseEstimator = {
+      run: vi.fn(async () => [{ boundingBox: person, confidence: 0.9, keypoints }])
+    };
+    const verifier = new LocalizedHelmetHeadVerifier(localizer("head", highBunBox), classifier, null, poseEstimator);
+    expect(await verifier.verify(frame(), person, 0.9167)).toBeNull();
+  });
+
+  it("rejects hair bun candidate under usesHeadEvidence when pose estimation identifies an undersized hair feature", async () => {
+    const evidence = { run: vi.fn(async () => score(0.99)) };
+    const hairBunBox = { x: 0.35, y: 0.18, width: 0.05, height: 0.06 };
+    const keypoints = Array.from({ length: 17 }, () => ({ x: 0, y: 0, confidence: 0 }));
+    keypoints[5] = { x: 0.25, y: 0.35, confidence: 0.9 }; // left_shoulder
+    keypoints[6] = { x: 0.45, y: 0.35, confidence: 0.9 }; // right_shoulder
+    const poseEstimator = {
+      run: vi.fn(async () => [{ boundingBox: person, confidence: 0.9, keypoints }])
+    };
+    const verifier = new LocalizedHelmetHeadVerifier(
+      localizer("head", hairBunBox),
+      { run: vi.fn(async () => score(0.01)) },
+      null,
+      poseEstimator,
+      evidence,
+      new Set(["*"]),
+    );
+    expect(await verifier.verify(frame(), person, 0.8)).toBeNull();
+    // Evidence model should not even be evaluated on the rejected hair bun
+    expect(evidence.run).not.toHaveBeenCalled();
+  });
 });
+

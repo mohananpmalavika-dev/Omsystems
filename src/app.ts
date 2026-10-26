@@ -132,6 +132,7 @@ import { registerDigitalTwinRoutes } from "./routes/digital-twin.routes.js";
 import { registerOperationalReportRoutes } from "./routes/operational-reports.routes.js";
 import { registerDailySurveillanceReportRoutes } from "./routes/daily-surveillance-report.routes.js";
 import { registerEdgeConnectivityReportRoutes } from "./routes/edge-connectivity-report.routes.js";
+import { registerUserLoginReportRoutes } from "./routes/user-login-report.routes.js";
 import { registerFederationRoutes } from "./routes/federation.routes.js";
 import { registerEmployeeActivityTrackingRoutes } from "./routes/employee-activity-tracking.routes.js";
 import { registerProvisioningRoutes } from "./routes/provisioning.routes.js";
@@ -3053,6 +3054,7 @@ export async function buildApp(options?: {
   });
   await registerDailySurveillanceReportRoutes(app, store);
   await registerEdgeConnectivityReportRoutes(app, store);
+  await registerUserLoginReportRoutes(app, store);
   await registerEvidenceRoutes(app, store, exportWorker);
   await registerBiometricPrivacyRoutes(app);
   await registerHsmSigningRoutes(app, store);

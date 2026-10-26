@@ -135,6 +135,73 @@ export async function registerEdgeConnectivityReportRoutes(
         LIMIT 50;
       `);
 
+      // 4. Edge Agent Online / Offline transitions & history from telemetry
+      const agentTransitionsResult = await pool.query(`
+        WITH status_groups AS (
+          SELECT 
+            edge_agent_id,
+            observed_at,
+            metrics->>'status' as status,
+            LAG(metrics->>'status') OVER (PARTITION BY edge_agent_id ORDER BY observed_at ASC) as prev_status
+          FROM operational_health_telemetry
+          WHERE device_type = 'edge-agent'
+            AND observed_at >= NOW() - INTERVAL '30 days'
+        )
+        SELECT 
+          sg.edge_agent_id,
+          e.name as agent_name,
+          rn.name as branch_name,
+          sg.observed_at as transition_time,
+          sg.prev_status,
+          sg.status as new_status
+        FROM status_groups sg
+        JOIN edge_agents e ON e.id = sg.edge_agent_id
+        LEFT JOIN resource_nodes rn ON rn.id = e.branch_node_id
+        WHERE sg.prev_status IS DISTINCT FROM sg.status
+        ORDER BY sg.observed_at DESC
+        LIMIT 100;
+      `).catch(() => ({ rows: [] }));
+
+      // 5. Camera Connect / Disconnect transitions & history from telemetry
+      const cameraTransitionsResult = await pool.query(`
+        WITH cam_status_groups AS (
+          SELECT 
+            device_id as camera_id,
+            edge_agent_id,
+            observed_at,
+            metrics->>'status' as status,
+            metrics->>'streamActive' as stream_active,
+            LAG(metrics->>'status') OVER (PARTITION BY device_id ORDER BY observed_at ASC) as prev_status
+          FROM operational_health_telemetry
+          WHERE device_type = 'camera'
+            AND observed_at >= NOW() - INTERVAL '30 days'
+        )
+        SELECT 
+          csg.camera_id,
+          COALESCE(rn_cam.name, c.name, 'Channel ' || c.channel) as camera_name,
+          c.channel,
+          c.ip_address::text as camera_ip,
+          e.name as agent_name,
+          rn_branch.name as branch_name,
+          csg.observed_at as event_time,
+          csg.prev_status,
+          csg.status as new_status,
+          CASE 
+            WHEN csg.status = 'online' AND (csg.prev_status != 'online' OR csg.prev_status IS NULL) THEN 'CONNECTED'
+            WHEN csg.status = 'offline' AND csg.prev_status != 'offline' THEN 'DISCONNECTED'
+            WHEN csg.status = 'degraded' THEN 'DEGRADED'
+            ELSE UPPER(COALESCE(csg.status, 'UNKNOWN'))
+          END as event_type
+        FROM cam_status_groups csg
+        LEFT JOIN cameras c ON c.id::text = csg.camera_id
+        LEFT JOIN resource_nodes rn_cam ON rn_cam.id = c.resource_node_id
+        LEFT JOIN edge_agents e ON e.id = csg.edge_agent_id
+        LEFT JOIN resource_nodes rn_branch ON rn_branch.id = c.branch_node_id
+        WHERE csg.prev_status IS DISTINCT FROM csg.status
+        ORDER BY csg.observed_at DESC
+        LIMIT 100;
+      `).catch(() => ({ rows: [] }));
+
       const agents = agentsResult.rows.map((row: any) => ({
         id: row.id,
         agentName: row.agent_name || "Edge Gateway",
@@ -193,6 +260,28 @@ export async function registerEdgeConnectivityReportRoutes(
         reasonCodes: Array.isArray(row.reason_codes) ? row.reason_codes : [row.reason_codes].filter(Boolean),
       }));
 
+      const agentTransitions = (agentTransitionsResult.rows || []).map((row: any) => ({
+        edgeAgentId: row.edge_agent_id,
+        agentName: row.agent_name,
+        branchName: row.branch_name || "Unassigned",
+        transitionTime: row.transition_time,
+        prevStatus: row.prev_status,
+        newStatus: row.new_status,
+      }));
+
+      const cameraTransitions = (cameraTransitionsResult.rows || []).map((row: any) => ({
+        cameraId: row.camera_id,
+        cameraName: row.camera_name,
+        channel: row.channel,
+        cameraIp: row.camera_ip,
+        agentName: row.agent_name || "Direct",
+        branchName: row.branch_name || "Unassigned",
+        eventTime: row.event_time,
+        prevStatus: row.prev_status,
+        newStatus: row.new_status,
+        eventType: row.event_type,
+      }));
+
       const onlineCount = agents.filter((a) => a.calculatedStatus === "ONLINE").length;
       const offlineCount = agents.length - onlineCount;
       const connectedCams = cameras.filter((c) => c.status === "online" || c.liveStatus === "online").length;
@@ -208,11 +297,15 @@ export async function registerEdgeConnectivityReportRoutes(
             connectedCameras: connectedCams,
             disconnectedCameras: cameras.length - connectedCams,
             incidentCount: incidents.length,
+            agentTransitionsCount: agentTransitions.length,
+            cameraTransitionsCount: cameraTransitions.length,
             generatedAt: new Date().toISOString(),
           },
           agents,
           cameras,
           incidents,
+          agentTransitions,
+          cameraTransitions,
         },
       });
     } catch (error: any) {
@@ -283,6 +376,57 @@ export async function registerEdgeConnectivityReportRoutes(
       csv += "Camera Name,Channel,Branch,Edge Agent,Camera IP,Connected Time (Since),Last Seen / Disconnect Time,Status\r\n";
       for (const row of camerasQuery.rows) {
         csv += `"${row.camera_name}","${row.channel}","${row.branch_name || ''}","${row.agent_name || 'Direct'}","${row.camera_ip || ''}","${row.connected_since ? new Date(row.connected_since).toISOString() : ''}","${row.camera_last_seen ? new Date(row.camera_last_seen).toISOString() : ''}","${row.status}"\r\n`;
+      }
+
+      // 3. Edge Agent Transitions History
+      const agentTransQuery = await pool.query(`
+        WITH status_groups AS (
+          SELECT edge_agent_id, observed_at, metrics->>'status' as status,
+                 LAG(metrics->>'status') OVER (PARTITION BY edge_agent_id ORDER BY observed_at ASC) as prev_status
+          FROM operational_health_telemetry WHERE device_type = 'edge-agent'
+        )
+        SELECT e.name as agent_name, rn.name as branch_name, sg.observed_at, sg.prev_status, sg.status
+        FROM status_groups sg
+        JOIN edge_agents e ON e.id = sg.edge_agent_id
+        LEFT JOIN resource_nodes rn ON rn.id = e.branch_node_id
+        WHERE sg.prev_status IS DISTINCT FROM sg.status
+        ORDER BY sg.observed_at DESC LIMIT 500;
+      `).catch(() => ({ rows: [] }));
+
+      if (agentTransQuery.rows.length > 0) {
+        csv += "\r\n=== EDGE AGENT ACTIVE / INACTIVE HISTORY TIMELINE ===\r\n";
+        csv += "Agent Name,Branch,Timestamp (IST),Previous State,New State\r\n";
+        for (const row of agentTransQuery.rows) {
+          const tStr = row.observed_at ? new Date(row.observed_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : "";
+          csv += `"${row.agent_name}","${row.branch_name || ''}","${tStr}","${row.prev_status || 'UNKNOWN'}","${row.status || 'UNKNOWN'}"\r\n`;
+        }
+      }
+
+      // 4. Camera Transitions History
+      const camTransQuery = await pool.query(`
+        WITH cam_status_groups AS (
+          SELECT device_id as camera_id, edge_agent_id, observed_at, metrics->>'status' as status,
+                 LAG(metrics->>'status') OVER (PARTITION BY device_id ORDER BY observed_at ASC) as prev_status
+          FROM operational_health_telemetry WHERE device_type = 'camera'
+        )
+        SELECT COALESCE(rn_cam.name, c.name, 'CH ' || c.channel) as camera_name, c.channel,
+               e.name as agent_name, rn_b.name as branch_name, csg.observed_at, csg.prev_status, csg.status
+        FROM cam_status_groups csg
+        LEFT JOIN cameras c ON c.id::text = csg.camera_id
+        LEFT JOIN resource_nodes rn_cam ON rn_cam.id = c.resource_node_id
+        LEFT JOIN edge_agents e ON e.id = csg.edge_agent_id
+        LEFT JOIN resource_nodes rn_b ON rn_b.id = c.branch_node_id
+        WHERE csg.prev_status IS DISTINCT FROM csg.status
+        ORDER BY csg.observed_at DESC LIMIT 500;
+      `).catch(() => ({ rows: [] }));
+
+      if (camTransQuery.rows.length > 0) {
+        csv += "\r\n=== CAMERA CONNECTION / DISCONNECTION TIMELINE ===\r\n";
+        csv += "Camera Name,Channel,Connected Agent,Branch,Timestamp (IST),Previous State,New State\r\n";
+        for (const row of camTransQuery.rows) {
+          const tStr = row.observed_at ? new Date(row.observed_at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : "";
+          csv += `"${row.camera_name}","${row.channel}","${row.agent_name || 'Direct'}","${row.branch_name || ''}","${tStr}","${row.prev_status || 'UNKNOWN'}","${row.status || 'UNKNOWN'}"\r\n`;
+        }
       }
 
       return reply

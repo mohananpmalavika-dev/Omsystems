@@ -53,10 +53,10 @@ export class HelmetDetector extends BaseDetector {
   // this additional path needs three consecutive positive timestamps.
   private readonly FULL_PERSON_CONFIDENCE = 0.85;
   private readonly HEAD_REGION_OVERLAP_THRESHOLD = 0.6;
-  // Configurable alert confidence floor (defaults to 0.70 for fast detection)
-  private readonly HELMET_WORN_ALERT_CONFIDENCE = Number(process.env.HELMET_CONFIDENCE_THRESHOLD) || 0.70;
+  // Configurable alert confidence floor (defaults to 0.9167 for high-precision detection)
+  private readonly HELMET_WORN_ALERT_CONFIDENCE = Number(process.env.HELMET_CONFIDENCE_THRESHOLD) || 0.9167;
   // A person crop is only an approximate helmet location.
-  private readonly CLASSIFIED_HEAD_CONFIDENCE = Number(process.env.HELMET_CONFIDENCE_THRESHOLD) || 0.70;
+  private readonly CLASSIFIED_HEAD_CONFIDENCE = Number(process.env.HELMET_CONFIDENCE_THRESHOLD) || 0.9167;
   // Upscaling a thin, distant hair/forehead strip to 224px produced the
   // Hajipur bare-head alarms. Compact fallback needs usable source pixels
   // and agreement from a crop including the area above the person's box.
@@ -70,7 +70,7 @@ export class HelmetDetector extends BaseDetector {
 
   constructor(
     inference: ObjectFrameInference | null = null,
-    confidenceThreshold = Number(process.env.HELMET_CONFIDENCE_THRESHOLD) || 0.70,
+    confidenceThreshold = Number(process.env.HELMET_CONFIDENCE_THRESHOLD) || 0.88,
     classifier: HelmetClassificationFrameInference | null = null,
     fastAlert = process.env.HELMET_FAST_ALERT === "true",
     private headVerifier: HelmetHeadVerifier | null = null,
@@ -340,9 +340,9 @@ export class HelmetDetector extends BaseDetector {
             personConfidence: person.confidence ?? 0,
             riskLevel: "violation",
           };
-          // When fastAlert is active, alert on the 1st confirmed detection immediately
+          // Fast mode requires 2 distinct confirmed frames; slower mode requires 3 frames for lower-confidence people
           const confirmations = this.fastAlert
-            ? 1
+            ? 2
             : ((person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ? 2 : 3);
           if (this.confirmClassifiedHead(frame.cameraId, person.boundingBox, frame.timestamp.getTime(), confirmations)) {
             indoorHelmetDetections.push(candidate);
@@ -452,7 +452,7 @@ export class HelmetDetector extends BaseDetector {
           });
           if (!candidate) continue;
           const confirmations = this.fastAlert
-            ? 1
+            ? 2
             : ((person.confidence ?? 0) >= this.CLASSIFIED_PERSON_CONFIDENCE ? 2 : 3);
           if (!this.confirmClassifiedHead(frame.cameraId, person.boundingBox, frame.timestamp.getTime(), confirmations)) continue;
           presence = candidate;

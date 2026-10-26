@@ -144,6 +144,31 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
             return null;
           }
         }
+
+        // Hair bun / ponytail / undersized hair feature check:
+        // A genuine motorcycle helmet encloses the entire skull (width >= 40% of shoulder breadth).
+        // In contrast, isolated hair buns, scrunchies, claw clips, and ponytails are narrow (< 40% of shoulder breadth)
+        // and perched high on the skull, leaving a distinct bare neck gap above the shoulder line.
+        let isUndersizedHairFeature: ((candidateBox: Box) => boolean) | null = null;
+        if (leftShoulder && rightShoulder) {
+          const shoulderWidth = Math.abs(rightShoulder.x - leftShoulder.x);
+          const shoulderY = Math.min(leftShoulder.y, rightShoulder.y);
+          if (shoulderWidth >= 0.05) {
+            isUndersizedHairFeature = (candidateBox: Box) => {
+              const widthRatio = candidateBox.width / shoulderWidth;
+              if (widthRatio < 0.40) return true;
+              if (!nose && (candidateBox.y + candidateBox.height < shoulderY - candidateBox.height * 0.70)) {
+                return true;
+              }
+              return false;
+            };
+            const validCandidates = objects.filter(o => !isUndersizedHairFeature!(o.boundingBox));
+            if (validCandidates.length === 0 && objects.length > 0) {
+              return null;
+            }
+            objects = validCandidates;
+          }
+        }
       }
     }
 
@@ -184,17 +209,48 @@ export class LocalizedHelmetHeadVerifier implements HelmetHeadVerifier {
           person.height * frame.height >= 72) {
         objects = [...objects, ...await this.localizePersonHead(frame, person)];
       }
-      const candidates = objects.filter(item => (item.label === "head" || item.label === "helmet") &&
+      let candidates = objects.filter(item => (item.label === "head" || item.label === "helmet") &&
         (item.confidence ?? 0) >= 0.35 && validHead(frame, person, item.boundingBox) &&
         item.boundingBox.x > 0.005 && item.boundingBox.y > 0.005 &&
         item.boundingBox.x + item.boundingBox.width < 0.995 &&
         item.boundingBox.y + item.boundingBox.height < 0.995);
+
+      // Re-filter candidates from localizePersonHead against hair bun / pose constraints if pose estimator is available
+      if (this.poseEstimator) {
+        let posePending = this.poseFrames.get(frame);
+        if (!posePending) {
+          posePending = this.poseEstimator.run(frame);
+          this.poseFrames.set(frame, posePending);
+        }
+        const poses = await posePending;
+        const matchedPose = findMatchingPose(poses, person);
+        if (matchedPose) {
+          const kp = matchedPose.keypoints;
+          const leftShoulder = (kp[5] && kp[5].confidence >= 0.4) ? kp[5] : undefined;
+          const rightShoulder = (kp[6] && kp[6].confidence >= 0.4) ? kp[6] : undefined;
+          const nose = (kp[0] && kp[0].confidence >= 0.4) ? kp[0] : undefined;
+          if (leftShoulder && rightShoulder) {
+            const shoulderWidth = Math.abs(rightShoulder.x - leftShoulder.x);
+            const shoulderY = Math.min(leftShoulder.y, rightShoulder.y);
+            if (shoulderWidth >= 0.05) {
+              candidates = candidates.filter(c => {
+                const b = c.boundingBox;
+                if (b.width / shoulderWidth < 0.40) return false;
+                if (!nose && (b.y + b.height < shoulderY - b.height * 0.70)) return false;
+                return true;
+              });
+            }
+          }
+        }
+      }
+
       const effectiveThreshold = Math.max(threshold, 0.85);
       for (const candidate of candidates.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))) {
         const head = await this.headClassifier!.run(frame, expand(candidate.boundingBox, 0.15));
         if (!head.wearingHelmet || head.wearingHelmetConfidence < effectiveThreshold) continue;
         const context = await this.headClassifier!.run(frame, expand(candidate.boundingBox, 0.25));
         if (!context.wearingHelmet || context.wearingHelmetConfidence < effectiveThreshold) continue;
+
         return { boundingBox: candidate.boundingBox, localizationConfidence: candidate.confidence!,
           classificationConfidence: Math.min(head.wearingHelmetConfidence, context.wearingHelmetConfidence), headEvidence: true };
       }

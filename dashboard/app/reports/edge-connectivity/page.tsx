@@ -22,8 +22,31 @@ import {
   Activity,
   AlertCircle,
   FileSpreadsheet,
+  Users,
 } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
+
+type AgentTransitionItem = {
+  edgeAgentId: string;
+  agentName: string;
+  branchName: string;
+  transitionTime: string;
+  prevStatus: string;
+  newStatus: string;
+};
+
+type CameraTransitionItem = {
+  cameraId: string;
+  cameraName: string;
+  channel?: number;
+  cameraIp?: string;
+  agentName: string;
+  branchName: string;
+  eventTime: string;
+  prevStatus: string;
+  newStatus: string;
+  eventType: string;
+};
 
 type EdgeAgentItem = {
   id: string;
@@ -101,18 +124,22 @@ type ReportData = {
     connectedCameras: number;
     disconnectedCameras: number;
     incidentCount: number;
+    agentTransitionsCount?: number;
+    cameraTransitionsCount?: number;
     generatedAt: string;
   };
   agents: EdgeAgentItem[];
   cameras: ConnectedCameraItem[];
   incidents: OutageIncidentItem[];
+  agentTransitions?: AgentTransitionItem[];
+  cameraTransitions?: CameraTransitionItem[];
 };
 
 export default function EdgeConnectivityReportPage() {
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"agents" | "cameras" | "incidents">("agents");
+  const [activeTab, setActiveTab] = useState<"agents" | "cameras" | "timeline" | "incidents">("agents");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "online" | "offline">("all");
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -302,6 +329,14 @@ export default function EdgeConnectivityReportPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/reports/user-logins"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-900 border border-slate-700 hover:border-slate-600 text-slate-200 transition-colors shadow-sm"
+            >
+              <Users className="h-3.5 w-3.5 text-cyan-400" />
+              User Login Audit Report
+            </Link>
+
             <button
               type="button"
               onClick={() => setAutoRefresh(!autoRefresh)}
@@ -479,6 +514,21 @@ export default function EdgeConnectivityReportPage() {
             >
               <AlertCircle className="h-3.5 w-3.5" />
               <span>Disconnect Log ({filteredIncidents.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("timeline")}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                activeTab === "timeline"
+                  ? "bg-cyan-600 text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              <span>
+                Timeline History ({(data?.agentTransitions?.length || 0) + (data?.cameraTransitions?.length || 0)})
+              </span>
             </button>
           </div>
 
@@ -848,6 +898,151 @@ export default function EdgeConnectivityReportPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 4: Status Transitions Timeline History */}
+        {activeTab === "timeline" && (
+          <div className="space-y-6">
+            {/* Section A: Edge Agent Active/Inactive Transitions */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden shadow-xl">
+              <div className="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+                  <Server className="h-4 w-4 text-cyan-400" />
+                  <span>Edge Agent Active / Inactive Transition History (Time to Time with Date)</span>
+                </div>
+                <span className="text-xs text-slate-400">
+                  {data?.agentTransitions?.length || 0} state transitions recorded
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-950/70 border-b border-slate-800 text-slate-400 uppercase text-[10px] font-semibold tracking-wider">
+                    <tr>
+                      <th className="py-3 px-4">Date & Time (IST)</th>
+                      <th className="py-3 px-4">Edge Agent</th>
+                      <th className="py-3 px-4">Branch</th>
+                      <th className="py-3 px-4">Previous State</th>
+                      <th className="py-3 px-4">Transitioned State</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/80">
+                    {!data?.agentTransitions?.length ? (
+                      <tr>
+                        <td colSpan={5} className="text-center py-8 text-slate-500">
+                          No edge agent state transitions observed in the recent telemetry window.
+                        </td>
+                      </tr>
+                    ) : (
+                      data.agentTransitions.map((t, idx) => (
+                        <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
+                          <td className="py-3 px-4 font-mono text-slate-300">
+                            {formatTime(t.transitionTime)}
+                          </td>
+                          <td className="py-3 px-4 font-semibold text-slate-100">
+                            {t.agentName}
+                          </td>
+                          <td className="py-3 px-4 text-slate-400">
+                            {t.branchName}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-slate-400">
+                            {t.prevStatus || "UNKNOWN"}
+                          </td>
+                          <td className="py-3 px-4">
+                            {t.newStatus === "online" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                ● ACTIVE / ONLINE
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                                ○ INACTIVE / OFFLINE
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Section B: Camera Connection & Agent Association Transitions */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden shadow-xl">
+              <div className="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+                  <Camera className="h-4 w-4 text-emerald-400" />
+                  <span>Camera Connect / Disconnect Timeline & Agent Association (Time to Time with Date)</span>
+                </div>
+                <span className="text-xs text-slate-400">
+                  {data?.cameraTransitions?.length || 0} camera events recorded
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-950/70 border-b border-slate-800 text-slate-400 uppercase text-[10px] font-semibold tracking-wider">
+                    <tr>
+                      <th className="py-3 px-4">Date & Time (IST)</th>
+                      <th className="py-3 px-4">Camera</th>
+                      <th className="py-3 px-4">Channel / IP</th>
+                      <th className="py-3 px-4">Connected Edge Agent</th>
+                      <th className="py-3 px-4">Branch</th>
+                      <th className="py-3 px-4">Previous State</th>
+                      <th className="py-3 px-4">Event & New State</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/80">
+                    {!data?.cameraTransitions?.length ? (
+                      <tr>
+                        <td colSpan={7} className="text-center py-8 text-slate-500">
+                          No camera connection/disconnection transitions observed in the recent telemetry window.
+                        </td>
+                      </tr>
+                    ) : (
+                      data.cameraTransitions.map((ct, idx) => (
+                        <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
+                          <td className="py-3 px-4 font-mono text-slate-300">
+                            {formatTime(ct.eventTime)}
+                          </td>
+                          <td className="py-3 px-4 font-semibold text-slate-100">
+                            {ct.cameraName}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-slate-400 text-[11px]">
+                            {ct.cameraIp ? `${ct.cameraIp} (CH ${ct.channel ?? '?'})` : `CH ${ct.channel ?? '?'}`}
+                          </td>
+                          <td className="py-3 px-4 text-cyan-300 font-medium">
+                            {ct.agentName}
+                          </td>
+                          <td className="py-3 px-4 text-slate-400">
+                            {ct.branchName}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-slate-400">
+                            {ct.prevStatus || "UNKNOWN"}
+                          </td>
+                          <td className="py-3 px-4">
+                            {ct.eventType === "CONNECTED" || ct.newStatus === "online" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                                🟢 CONNECTED
+                              </span>
+                            ) : ct.eventType === "DEGRADED" || ct.newStatus === "degraded" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                                🟠 STREAM LOSS / DEGRADED
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+                                🔴 DISCONNECTED
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
