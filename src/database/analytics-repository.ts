@@ -24,6 +24,7 @@ import {
   isTerminalAlertStatus,
   sortedMatchingRules,
   isConfirmedShutterTransition,
+  isVaultCameraTarget,
 } from "../analytics/rule-engine.js";
 import { moreSevere, resolveAlertSeverity } from "../analytics/severity-policy.js";
 import { buildFalseAlarmSignature, matchesFalseAlarm, type FalseAlarmSignature } from "../analytics/false-alarm-feedback.js";
@@ -261,14 +262,76 @@ export class AnalyticsRepository {
       await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
         [`analytics-camera:${input.tenantId}:${input.cameraId}`]);
       const camera = await client.query(
-        `SELECT camera.id, COALESCE(camera.branch_node_id::text, node.id::text) AS branch_id
+        `SELECT camera.id, camera.channel, node.name AS camera_name, COALESCE(branch.name, '') AS branch_name, COALESCE(camera.branch_node_id::text, node.id::text) AS branch_id
          FROM cameras camera
          JOIN resource_nodes node ON node.id=camera.resource_node_id
+         LEFT JOIN resource_nodes branch ON branch.id=camera.branch_node_id
          WHERE camera.id=$1 AND node.tenant_id=$2`,
         [input.cameraId, input.tenantId],
       );
       if (!camera.rows[0]) throw new Error("camera_not_found");
       const cameraBranchId: string = camera.rows[0].branch_id ?? "";
+
+      const enrichedInput: AnalyticsEventInput = {
+        ...input,
+        metadata: {
+          ...input.metadata,
+          cameraName: input.metadata?.cameraName || camera.rows[0].camera_name,
+          branchName: input.metadata?.branchName || camera.rows[0].branch_name,
+          channel: input.metadata?.channel ?? camera.rows[0].channel,
+        },
+      };
+
+      if (
+        (input.detectionType === "dual-control-verification" || input.detectionType === "dual-control-violation") &&
+        input.metadata?.violation !== "BRANCH_OPENING_MINIMUM_STAFF"
+      ) {
+        if (!isVaultCameraTarget(enrichedInput)) {
+          const eventId = randomUUID();
+          await client.query(
+            `INSERT INTO analytics_events (
+               id, tenant_id, camera_id, source_event_id, primary_rule_id,
+               detection_type, occurred_at, ended_at, confidence, duration_seconds,
+               model_version, snapshot_reference, clip_reference, metadata, status,
+               rejection_reason
+             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+            [
+              eventId, input.tenantId, input.cameraId, input.sourceEventId,
+              null, input.detectionType, input.occurredAt,
+              input.endedAt ?? null, input.confidence, input.durationSeconds,
+              input.modelVersion, input.snapshotReference ?? null,
+              input.clipReference ?? null, JSON.stringify(enrichedInput.metadata ?? {}),
+              "suppressed",
+              "non_vault_dual_control_suppressed",
+            ],
+          );
+          await client.query("COMMIT");
+          return {
+            event: {
+              id: eventId,
+              tenantId: input.tenantId,
+              cameraId: input.cameraId,
+              sourceEventId: input.sourceEventId,
+              detectionType: input.detectionType,
+              occurredAt: input.occurredAt,
+              endedAt: input.endedAt,
+              confidence: input.confidence,
+              durationSeconds: input.durationSeconds,
+              modelVersion: input.modelVersion,
+              snapshotReference: input.snapshotReference,
+              clipReference: input.clipReference,
+              metadata: enrichedInput.metadata ?? {},
+              status: "suppressed",
+              rejectionReason: "non_vault_dual_control_suppressed",
+              objects: [],
+              createdAt: new Date().toISOString(),
+            },
+            alerts: [],
+            rules: [],
+          };
+        }
+      }
+
       const duplicate = await client.query(
         "SELECT * FROM analytics_events WHERE tenant_id=$1 AND source_event_id=$2",
         [input.tenantId, input.sourceEventId],
@@ -290,10 +353,10 @@ export class AnalyticsRepository {
          WHERE rule.camera_id=$1 AND rule.tenant_id=$2
            AND rule.enabled AND rule.archived_at IS NULL
            AND rule.detection_type = ANY($3::text[])`,
-        [input.cameraId, input.tenantId, eventDetectionTypes(input)],
+        [input.cameraId, input.tenantId, eventDetectionTypes(enrichedInput)],
       );
-      const rules = sortedMatchingRules(candidates.rows.map(mapRule), input);
-      const signature = rules.length ? await buildFalseAlarmSignature(input) : null;
+      const rules = sortedMatchingRules(candidates.rows.map(mapRule), enrichedInput);
+      const signature = rules.length ? await buildFalseAlarmSignature(enrichedInput) : null;
       const eventId = randomUUID();
       await client.query(
         `INSERT INTO analytics_events (
@@ -307,7 +370,7 @@ export class AnalyticsRepository {
           rules[0]?.id ?? null, input.detectionType, input.occurredAt,
           input.endedAt ?? null, input.confidence, input.durationSeconds,
           input.modelVersion, input.snapshotReference ?? null,
-          input.clipReference ?? null, JSON.stringify(input.metadata ?? {}),
+          input.clipReference ?? null, JSON.stringify(enrichedInput.metadata ?? {}),
           rules.length ? "accepted" : "unmatched",
           rules.length ? null : "no_matching_rule",
         ],

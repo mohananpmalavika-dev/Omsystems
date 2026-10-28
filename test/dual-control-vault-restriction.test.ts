@@ -66,6 +66,20 @@ describe("Dual Control Vault Camera Restriction", () => {
       expect(isVaultCameraTarget({ cameraId: "cam-9", metadata: { zone: "VAULT" } })).toBe(true);
       expect(isVaultCameraTarget({ cameraId: "cam-10", metadata: { zoneType: "LOCKER" } })).toBe(true);
       expect(isVaultCameraTarget({ cameraId: "cam-11", metadata: { zoneName: "Strong_Room_Zone" } })).toBe(true);
+
+      // Designated vault camera IDs
+      expect(isVaultCameraTarget({ cameraId: "ca035670-aeee-481e-b47c-3eea98344fc6" })).toBe(true); // Bettaih Ch 1
+      expect(isVaultCameraTarget({ cameraId: "e79e2f24-7adf-4908-93fb-6438b2ceb24f" })).toBe(true); // Hajipur Ch 6
+      expect(isVaultCameraTarget({ cameraId: "b9522b23-506b-4eb2-9b24-bb05fb0148db" })).toBe(true); // KOLLAM Ch 4
+      expect(isVaultCameraTarget({ cameraId: "541745ca-3aa1-4a3a-ad79-9e36d9f74fe8" })).toBe(true); // PERAVARUNI Ch 7
+      expect(isVaultCameraTarget({ cameraId: "4d74d7ad-6922-4af0-9f36-420b84879425" })).toBe(true); // Rajkot Ch 8
+
+      // Branch-specific channel mapping
+      expect(isVaultCameraTarget({ metadata: { branchName: "Bettaih", channel: 1 } })).toBe(true);
+      expect(isVaultCameraTarget({ metadata: { branchName: "Hajipur", channel: 6 } })).toBe(true);
+      expect(isVaultCameraTarget({ metadata: { branchName: "KOLLAM", channel: 4 } })).toBe(true);
+      expect(isVaultCameraTarget({ metadata: { branchName: "PERAVARUNI", channel: 7 } })).toBe(true);
+      expect(isVaultCameraTarget({ metadata: { branchName: "Rajkot", channel: 8 } })).toBe(true);
     });
 
     it("rejects non-vault cameras", () => {
@@ -76,6 +90,18 @@ describe("Dual Control Vault Camera Restriction", () => {
       expect(isVaultCameraTarget({ cameraId: "cam-5", metadata: { cameraName: "Parking Lot Camera" } })).toBe(false);
       expect(isVaultCameraTarget({ cameraId: "cam-6", metadata: { cameraName: "Rajkot - Channel 1" } })).toBe(false);
       expect(isVaultCameraTarget({ cameraId: "cam-7", metadata: { channel: 2 } })).toBe(false);
+
+      // Non-vault channels on specific branches must be rejected (not confused with Rajkot Ch 8)
+      expect(isVaultCameraTarget({ metadata: { branchName: "Bettaih", channel: 8 } })).toBe(false);
+      expect(isVaultCameraTarget({ metadata: { branchName: "Bettaih", channel: 5 } })).toBe(false);
+      expect(isVaultCameraTarget({ metadata: { branchName: "Bettaih", channel: 2 } })).toBe(false);
+      expect(isVaultCameraTarget({ metadata: { branchName: "KOLLAM", channel: 5 } })).toBe(false);
+      expect(isVaultCameraTarget({ metadata: { branchName: "KOLLAM", channel: 8 } })).toBe(false);
+      expect(isVaultCameraTarget({ metadata: { branchName: "KOLLAM", channel: 1 } })).toBe(false);
+      expect(isVaultCameraTarget({ metadata: { branchName: "PERAVARUNI", channel: 1 } })).toBe(false);
+      expect(isVaultCameraTarget({ metadata: { branchName: "PERAVARUNI", channel: 3 } })).toBe(false);
+      expect(isVaultCameraTarget({ metadata: { branchName: "PERAVARUNI", channel: 5 } })).toBe(false);
+      expect(isVaultCameraTarget({ metadata: { branchName: "Hajipur", channel: 1 } })).toBe(false);
     });
   });
 

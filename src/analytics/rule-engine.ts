@@ -39,21 +39,56 @@ export function sortedMatchingRules(
     .sort((left, right) => severityOrder[left.severity] - severityOrder[right.severity]);
 }
 
+export const DESIGNATED_VAULT_CAMERA_IDS = new Set([
+  "ca035670-aeee-481e-b47c-3eea98344fc6", // Bettaih Channel 1
+  "e79e2f24-7adf-4908-93fb-6438b2ceb24f", // Hajipur Channel 6
+  "b9522b23-506b-4eb2-9b24-bb05fb0148db", // KOLLAM Channel 4
+  "541745ca-3aa1-4a3a-ad79-9e36d9f74fe8", // PERAVARUNI Channel 7
+  "4d74d7ad-6922-4af0-9f36-420b84879425", // Rajkot Channel 8
+]);
+
 export function isVaultCameraTarget(
-  target?: { metadata?: Record<string, unknown>; cameraId?: string } | string | null,
+  target?: { metadata?: Record<string, unknown>; cameraId?: string; channel?: number; name?: string } | string | null,
   rule?: AnalyticsRule,
 ): boolean {
   if (!target) return false;
-  const vaultRegex = /vault|strong[\s_]*room|locker|safe[\s_]*(?:deposit|room|door|locker)|currency[\s_]*chest|\bsafe\b/i;
   if (typeof target === "string") {
+    if (DESIGNATED_VAULT_CAMERA_IDS.has(target)) return true;
+    const vaultRegex = /vault|strong[\s_]*room|locker|safe[\s_]*(?:deposit|room|door|locker)|currency[\s_]*chest|\bsafe\b/i;
     return vaultRegex.test(target) || /channel\s*8/i.test(target);
   }
+  if (target.cameraId && DESIGNATED_VAULT_CAMERA_IDS.has(target.cameraId)) {
+    return true;
+  }
   const meta = target.metadata || {};
-  const targetStr = `${meta.cameraName || ""} ${meta.name || ""} ${meta.zone || ""} ${meta.zoneName || ""} ${meta.zoneType || ""} ${meta.channelName || ""} ${meta.channel || ""} ${meta.location || ""} ${target.cameraId || ""} ${rule?.name || ""} ${rule?.zone?.name || ""}`;
+  const branchName = String(meta.branchName || meta.branch || "").toLowerCase();
+  const cameraName = String(meta.cameraName || meta.name || target.name || "").toLowerCase();
+  const channel = meta.channel ?? target.channel;
+
+  // Branch-specific channel mapping for banking deployments
+  const combinedContext = `${branchName} ${cameraName}`;
+  if (combinedContext.includes("bettaih")) {
+    return channel === 1 || channel === "1" || /channel\s*1\b/i.test(cameraName);
+  }
+  if (combinedContext.includes("hajipur")) {
+    return channel === 6 || channel === "6" || /channel\s*6\b/i.test(cameraName);
+  }
+  if (combinedContext.includes("kollam")) {
+    return channel === 4 || channel === "4" || /channel\s*4\b/i.test(cameraName);
+  }
+  if (combinedContext.includes("peravaruni") || combinedContext.includes("peravurani")) {
+    return channel === 7 || channel === "7" || /channel\s*7\b/i.test(cameraName);
+  }
+  if (combinedContext.includes("rajkot")) {
+    return channel === 8 || channel === "8" || /channel\s*8\b/i.test(cameraName);
+  }
+
+  const vaultRegex = /vault|strong[\s_]*room|locker|safe[\s_]*(?:deposit|room|door|locker)|currency[\s_]*chest|\bsafe\b/i;
+  const targetStr = `${cameraName} ${meta.zone || ""} ${meta.zoneName || ""} ${meta.zoneType || ""} ${meta.channelName || ""} ${channel || ""} ${meta.location || ""} ${target.cameraId || ""} ${rule?.name || ""} ${rule?.zone?.name || ""}`;
   if (vaultRegex.test(targetStr)) {
     return true;
   }
-  if (meta.channel === 8 || meta.channel === "8" || /channel\s*8/i.test(targetStr)) {
+  if (channel === 8 || channel === "8" || /channel\s*8\b/i.test(targetStr)) {
     return true;
   }
   return false;

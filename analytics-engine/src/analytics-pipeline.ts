@@ -655,13 +655,31 @@ export class AnalyticsPipeline {
   }
 
   private isVaultCamera(frame: DetectionFrame, rules: AnalyticsRule[]): boolean {
-    const vaultRegex = /vault|strong[\s_]*room|locker|safe[\s_]*(?:deposit|room|door|locker)|currency[\s_]*chest|\bsafe\b/i;
-    const meta = frame.metadata || {};
-    const metaStr = `${meta.cameraName || ""} ${meta.name || ""} ${meta.zone || ""} ${meta.zoneName || ""} ${meta.zoneType || ""} ${meta.channelName || ""} ${meta.channel || ""} ${meta.location || ""} ${frame.cameraId || ""}`;
-    if (vaultRegex.test(metaStr)) {
+    const designatedVaultCameraIds = new Set([
+      "ca035670-aeee-481e-b47c-3eea98344fc6", // Bettaih Channel 1
+      "e79e2f24-7adf-4908-93fb-6438b2ceb24f", // Hajipur Channel 6
+      "b9522b23-506b-4eb2-9b24-bb05fb0148db", // KOLLAM Channel 4
+      "541745ca-3aa1-4a3a-ad79-9e36d9f74fe8", // PERAVARUNI Channel 7
+      "4d74d7ad-6922-4af0-9f36-420b84879425", // Rajkot Channel 8
+    ]);
+    if (frame.cameraId && designatedVaultCameraIds.has(frame.cameraId)) {
       return true;
     }
-    if (meta.channel === 8 || meta.channel === "8" || /channel\s*8/i.test(metaStr)) {
+    const meta = frame.metadata || {};
+    const branchName = String(meta.branchName || meta.branch || "").toLowerCase();
+    const cameraName = String(meta.cameraName || meta.name || "").toLowerCase();
+    const channel = meta.channel;
+    const combined = `${branchName} ${cameraName}`;
+
+    if (combined.includes("bettaih")) return channel === 1 || channel === "1" || /channel\s*1\b/i.test(cameraName);
+    if (combined.includes("hajipur")) return channel === 6 || channel === "6" || /channel\s*6\b/i.test(cameraName);
+    if (combined.includes("kollam")) return channel === 4 || channel === "4" || /channel\s*4\b/i.test(cameraName);
+    if (combined.includes("peravaruni") || combined.includes("peravurani")) return channel === 7 || channel === "7" || /channel\s*7\b/i.test(cameraName);
+    if (combined.includes("rajkot")) return channel === 8 || channel === "8" || /channel\s*8\b/i.test(cameraName);
+
+    const vaultRegex = /vault|strong[\s_]*room|locker|safe[\s_]*(?:deposit|room|door|locker)|currency[\s_]*chest|\bsafe\b/i;
+    const metaStr = `${cameraName} ${meta.zone || ""} ${meta.zoneName || ""} ${meta.zoneType || ""} ${meta.channelName || ""} ${channel || ""} ${meta.location || ""} ${frame.cameraId || ""}`;
+    if (vaultRegex.test(metaStr)) {
       return true;
     }
     for (const rule of rules) {
@@ -669,6 +687,9 @@ export class AnalyticsPipeline {
       if (vaultRegex.test(ruleStr)) {
         return true;
       }
+    }
+    if (channel === 8 || channel === "8" || /channel\s*8\b/i.test(metaStr)) {
+      return true;
     }
     return false;
   }
