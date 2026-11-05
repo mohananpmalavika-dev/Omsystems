@@ -119,6 +119,11 @@ export class AnalyticsPipeline {
     rulesCache = new Map();
     rulesCacheExpiry = new Map();
     CACHE_TTL_MS = 30_000; // 30 seconds
+    // Vault dual-control state tracking per camera
+    vaultDualControlStates = new Map();
+    VAULT_SINGLE_PERSON_CONFIRM_MS = 10_000;
+    VAULT_DUAL_CUSTODY_MEMORY_MS = 45_000;
+    VAULT_ALERT_COOLDOWN_MS = 60_000;
     constructor() {
         // Initialize core detectors
         this.motionDetector = new MotionDetector();
@@ -238,6 +243,7 @@ export class AnalyticsPipeline {
             throw new Error(`Required analytics models are not ready: ${provisioning.missingRequired.join(", ")}`);
         }
         // Initialize detectors
+        this.vaultDualControlStates.clear();
         for (const detector of this.detectors) {
             const name = detector.detectionType;
             try {
@@ -432,25 +438,85 @@ export class AnalyticsPipeline {
             }
             // Dual-control verification (Single person in vault exception)
             // When dual-control-verification rule is enabled on a vault area camera:
-            // Minimum 2 persons required. If exactly 1 person is present (persons.length === 1),
-            // raise a dual-control exception. If 0 persons (idle) or >= 2 persons (dual custody satisfied), no exception.
+            // Minimum 2 persons required.
+            // - 0 persons: Vault idle / unoccupied (no alert)
+            // - >= 2 persons: Dual custody satisfied (no alert, updates lastMultiPersonTimestamp)
+            // - 1 person: Mitigates camera occlusion when 2 officers stand together in front of the safe/lockers.
+            //   Checks face detection count, recent dual custody memory (last 45s), and minimum continuous dwell
+            //   persistence (10s) before raising a violation.
             if (this.needsDetection(rules, ['dual-control-verification', 'dual-control', 'vault-violation'])) {
                 const dualControlRules = rules.filter(r => r.enabled && ['dual-control-verification', 'dual-control', 'vault-violation'].map(normalizeDetectionType).includes(normalizeDetectionType(r.detectionType)));
-                for (const rule of dualControlRules) {
-                    if (persons.length === 1) {
-                        events.push(await this.createEvent(frame, {
-                            detectionType: "dual-control-verification",
-                            confidence: Math.max(0.92, persons[0]?.confidence ?? 0.92),
-                            objects: persons,
-                            requiresAlert: true,
-                            metadata: {
-                                ruleName: rule.name,
-                                actualPersons: 1,
-                                requiredPersons: 2,
-                                violation: "SINGLE_PERSON_IN_VAULT",
-                                description: "Single person detected in vault area (dual control requires minimum 2 persons)",
-                            },
-                        }));
+                if (dualControlRules.length > 0 && this.isVaultCamera(frame, dualControlRules)) {
+                    const cameraId = frame.cameraId;
+                    let vaultState = this.vaultDualControlStates.get(cameraId);
+                    if (!vaultState) {
+                        vaultState = {
+                            lastMultiPersonTimestamp: 0,
+                            singlePersonStartTimestamp: 0,
+                            consecutiveSingleFrames: 0,
+                            lastAlertTimestamp: 0,
+                        };
+                        this.vaultDualControlStates.set(cameraId, vaultState);
+                    }
+                    // Count faces detected in frame (e.g. YuNet face detector)
+                    const faceResult = specializedResults.flat().find(r => r?.detectionType === 'face');
+                    const faceCount = (faceResult?.objects?.length ?? faceResult?.metadata?.faceCount) || 0;
+                    // Effective count of individuals observed in the vault area
+                    const effectivePersons = Math.max(persons.length, faceCount);
+                    const currentTimestamp = frame.timestamp?.getTime?.() || Date.now();
+                    if (effectivePersons >= 2) {
+                        // Dual custody satisfied: update timestamp so brief occlusions don't falsely alert
+                        vaultState.lastMultiPersonTimestamp = currentTimestamp;
+                        vaultState.singlePersonStartTimestamp = 0;
+                        vaultState.consecutiveSingleFrames = 0;
+                    }
+                    else if (effectivePersons === 0) {
+                        // Vault empty / idle: reset single person tracking
+                        vaultState.singlePersonStartTimestamp = 0;
+                        vaultState.consecutiveSingleFrames = 0;
+                    }
+                    else if (effectivePersons === 1) {
+                        // Exactly 1 person detected in this frame.
+                        // Check if dual custody was active recently (within memory window, e.g. 45s).
+                        // When two officers work in a vault together, one frequently leans over the locks or stands behind the other,
+                        // causing momentary occlusion or bounding box overlap. If 2 persons were confirmed in the vault recently,
+                        // this is recognized as active dual custody operation, NOT a single-person violation.
+                        const timeSinceDualCustody = currentTimestamp - vaultState.lastMultiPersonTimestamp;
+                        const isWithinCustodyMemory = vaultState.lastMultiPersonTimestamp > 0 && timeSinceDualCustody < this.VAULT_DUAL_CUSTODY_MEMORY_MS;
+                        if (!isWithinCustodyMemory) {
+                            // Not in active dual custody memory: track single-person dwell persistence
+                            if (!vaultState.singlePersonStartTimestamp) {
+                                vaultState.singlePersonStartTimestamp = currentTimestamp;
+                            }
+                            vaultState.consecutiveSingleFrames++;
+                            const singlePersonDuration = currentTimestamp - vaultState.singlePersonStartTimestamp;
+                            const hasElapsedConfirmation = singlePersonDuration >= this.VAULT_SINGLE_PERSON_CONFIRM_MS && vaultState.consecutiveSingleFrames >= 3;
+                            const hasElapsedCooldown = (currentTimestamp - vaultState.lastAlertTimestamp) >= this.VAULT_ALERT_COOLDOWN_MS;
+                            if (hasElapsedConfirmation && hasElapsedCooldown) {
+                                vaultState.lastAlertTimestamp = currentTimestamp;
+                                for (const rule of dualControlRules) {
+                                    events.push(await this.createEvent(frame, {
+                                        detectionType: "dual-control-verification",
+                                        confidence: Math.max(0.92, persons[0]?.confidence ?? 0.92),
+                                        objects: persons,
+                                        requiresAlert: true,
+                                        metadata: {
+                                            ruleName: rule.name,
+                                            actualPersons: 1,
+                                            requiredPersons: 2,
+                                            durationSeconds: Math.round(singlePersonDuration / 1000),
+                                            violation: "SINGLE_PERSON_IN_VAULT",
+                                            description: `Single person detected in vault area for ${Math.round(singlePersonDuration / 1000)}s (dual control requires minimum 2 persons)`,
+                                        },
+                                    }));
+                                }
+                            }
+                        }
+                        else {
+                            // Within dual custody memory window: maintain dual custody, reset single person persistence
+                            vaultState.singlePersonStartTimestamp = 0;
+                            vaultState.consecutiveSingleFrames = 0;
+                        }
                     }
                 }
             }
@@ -470,6 +536,48 @@ export class AnalyticsPipeline {
             this.scheduler.updateGpuLoad(schedule.modelsToRun, false);
         }
         return events;
+    }
+    isVaultCamera(frame, rules) {
+        const designatedVaultCameraIds = new Set([
+            "ca035670-aeee-481e-b47c-3eea98344fc6", // Bettaih Channel 1
+            "e79e2f24-7adf-4908-93fb-6438b2ceb24f", // Hajipur Channel 6
+            "b9522b23-506b-4eb2-9b24-bb05fb0148db", // KOLLAM Channel 4
+            "541745ca-3aa1-4a3a-ad79-9e36d9f74fe8", // PERAVARUNI Channel 7
+            "4d74d7ad-6922-4af0-9f36-420b84879425", // Rajkot Channel 8
+        ]);
+        if (frame.cameraId && designatedVaultCameraIds.has(frame.cameraId)) {
+            return true;
+        }
+        const meta = frame.metadata || {};
+        const branchName = String(meta.branchName || meta.branch || "").toLowerCase();
+        const cameraName = String(meta.cameraName || meta.name || "").toLowerCase();
+        const channel = meta.channel;
+        const combined = `${branchName} ${cameraName}`;
+        if (combined.includes("bettaih"))
+            return channel === 1 || channel === "1" || /channel\s*1\b/i.test(cameraName);
+        if (combined.includes("hajipur"))
+            return channel === 6 || channel === "6" || /channel\s*6\b/i.test(cameraName);
+        if (combined.includes("kollam"))
+            return channel === 4 || channel === "4" || /channel\s*4\b/i.test(cameraName);
+        if (combined.includes("peravaruni") || combined.includes("peravurani"))
+            return channel === 7 || channel === "7" || /channel\s*7\b/i.test(cameraName);
+        if (combined.includes("rajkot"))
+            return channel === 8 || channel === "8" || /channel\s*8\b/i.test(cameraName);
+        const vaultRegex = /vault|strong[\s_]*room|locker|safe[\s_]*(?:deposit|room|door|locker)|currency[\s_]*chest|\bsafe\b/i;
+        const metaStr = `${cameraName} ${meta.zone || ""} ${meta.zoneName || ""} ${meta.zoneType || ""} ${meta.channelName || ""} ${channel || ""} ${meta.location || ""} ${frame.cameraId || ""}`;
+        if (vaultRegex.test(metaStr)) {
+            return true;
+        }
+        for (const rule of rules) {
+            const ruleStr = `${rule.name || ""} ${rule.zone?.name || ""}`;
+            if (vaultRegex.test(ruleStr)) {
+                return true;
+            }
+        }
+        if (channel === 8 || channel === "8" || /channel\s*8\b/i.test(metaStr)) {
+            return true;
+        }
+        return false;
     }
     /**
      * Process zone-specific rules

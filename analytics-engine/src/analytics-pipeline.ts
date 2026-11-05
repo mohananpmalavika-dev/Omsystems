@@ -8,7 +8,7 @@ import sharp from "sharp";
 import type { z } from "zod";
 import type { detectionSchema } from "./app.js";
 import { PERSON_COUNT_CONFIDENCE, type PersonCountObservation } from "../../packages/contracts/src/live-person-count.js";
-import { BaseDetector, hasInferenceObjects, type DetectionFrame, type DetectedObject, type InferenceObject } from "./detectors/base-detector.js";
+import { BaseDetector, calculateIoU, hasInferenceObjects, type DetectionFrame, type DetectedObject, type InferenceObject } from "./detectors/base-detector.js";
 
 export interface SnapshotRecord {
   buffer: Buffer;
@@ -160,10 +160,15 @@ export class AnalyticsPipeline {
     singlePersonStartTimestamp: number;
     consecutiveSingleFrames: number;
     lastAlertTimestamp: number;
+    dualCustodyActive: boolean;
+    emptySinceTimestamp: number;
   }>();
-  private readonly VAULT_SINGLE_PERSON_CONFIRM_MS = 10_000;
-  private readonly VAULT_DUAL_CUSTODY_MEMORY_MS = 45_000;
-  private readonly VAULT_ALERT_COOLDOWN_MS = 60_000;
+  private readonly VAULT_SINGLE_PERSON_CONFIRM_MS = 15_000;
+  private readonly VAULT_DUAL_CUSTODY_MEMORY_MS = process.env.VAULT_DUAL_CUSTODY_MEMORY_MS
+    ? Number(process.env.VAULT_DUAL_CUSTODY_MEMORY_MS)
+    : 600_000; // 10 minutes memory during active locker operations
+  private readonly VAULT_ALERT_COOLDOWN_MS = 120_000; // 2 minutes cooldown between repeats
+  private readonly VAULT_EMPTY_RESET_MS = 20_000; // 20 seconds continuous empty frames to end dual-custody session
 
 
   constructor() {
@@ -418,7 +423,7 @@ export class AnalyticsPipeline {
 
     // Normalized edge observations have already paid the inference cost and
     // must not be discarded by local GPU sampling or motion-first gating.
-    if (!schedule.shouldProcess && !hasObservedObjects) {
+    if (!schedule.shouldProcess && !hasObservedObjects && !hasInferenceObjects(frame)) {
       // No further processing needed for this frame
       return events;
     }
@@ -550,12 +555,13 @@ export class AnalyticsPipeline {
 
       // Dual-control verification (Single person in vault exception)
       // When dual-control-verification rule is enabled on a vault area camera:
-      // Minimum 2 persons required.
-      // - 0 persons: Vault idle / unoccupied (no alert)
-      // - >= 2 persons: Dual custody satisfied (no alert, updates lastMultiPersonTimestamp)
-      // - 1 person: Mitigates camera occlusion when 2 officers stand together in front of the safe/lockers.
-      //   Checks face detection count, recent dual custody memory (last 45s), and minimum continuous dwell
-      //   persistence (10s) before raising a violation.
+      // Minimum 2 persons required for bank locker / vault operations.
+      // Mitigates false alarms caused by:
+      // 1. One person crouching down or sitting on the floor to access lower locker drawers.
+      // 2. One person bending forward 90 degrees into the safe while the other stands beside them (body merging).
+      // 3. Workers partially occluded behind open safe doors or security grilles.
+      // 4. Faces turned away from the overhead ceiling camera towards locker cabinets.
+      // Uses session-aware dual custody tracking (10 min memory while occupied) and geometric multi-body heuristics.
       if (this.needsDetection(rules, ['dual-control-verification', 'dual-control', 'vault-violation'])) {
         const dualControlRules = rules.filter(r => r.enabled && ['dual-control-verification', 'dual-control', 'vault-violation'].map(normalizeDetectionType).includes(normalizeDetectionType(r.detectionType)));
         if (dualControlRules.length > 0 && this.isVaultCamera(frame, dualControlRules)) {
@@ -567,6 +573,8 @@ export class AnalyticsPipeline {
               singlePersonStartTimestamp: 0,
               consecutiveSingleFrames: 0,
               lastAlertTimestamp: 0,
+              dualCustodyActive: false,
+              emptySinceTimestamp: 0,
             };
             this.vaultDualControlStates.set(cameraId, vaultState);
           }
@@ -575,37 +583,100 @@ export class AnalyticsPipeline {
           const faceResult = specializedResults.flat().find(r => r?.detectionType === 'face');
           const faceCount = (faceResult?.objects?.length ?? faceResult?.metadata?.faceCount) || 0;
 
+          // Multi-person heuristics for crouching, bending, and overlapping bodies in vault overhead cameras
+          const primaryPerson = persons[0];
+          const isMergedWideBox = Boolean(
+            primaryPerson?.boundingBox && (
+              (primaryPerson.boundingBox.width >= 0.21 && primaryPerson.boundingBox.height >= 0.45 && (primaryPerson.boundingBox.width / primaryPerson.boundingBox.height) >= 0.26) ||
+              primaryPerson.boundingBox.width >= 0.27 ||
+              (primaryPerson.boundingBox.width * primaryPerson.boundingBox.height >= 0.18 && primaryPerson.boundingBox.width >= 0.20)
+            )
+          );
+
+          // Check if detectedObjects contains a secondary candidate person with distinct location (low IoU)
+          const hasSecondaryPersonCandidate = detectedObjects.some(obj => {
+            if (obj.label !== 'person' && obj.label !== 'man' && obj.label !== 'woman') return false;
+            const b = obj.boundingBox;
+            if (!b) return false;
+            if (persons.length === 0) return true;
+            return persons.every(p => {
+              if (!p.boundingBox) return true;
+              return calculateIoU(b, p.boundingBox) < 0.25;
+            });
+          });
+
+          // Check for detached face (e.g. crouching person face outside upper torso of standing person)
+          let detachedFaceCount = 0;
+          if (faceResult?.objects && Array.isArray(faceResult.objects)) {
+            for (const face of faceResult.objects) {
+              const fb = face.boundingBox;
+              if (!fb) continue;
+              const faceCenterX = fb.x + fb.width / 2;
+              const faceCenterY = fb.y + fb.height / 2;
+              const matchesStandingPersonHead = persons.some(p => {
+                const pb = p.boundingBox;
+                if (!pb) return false;
+                const insideX = faceCenterX >= pb.x - 0.05 && faceCenterX <= pb.x + pb.width + 0.05;
+                const inUpperThird = faceCenterY >= pb.y - 0.05 && faceCenterY <= pb.y + pb.height * 0.45;
+                return insideX && inUpperThird;
+              });
+              if (!matchesStandingPersonHead) {
+                detachedFaceCount++;
+              }
+            }
+          }
+
+          let heuristicPersons = Math.max(persons.length, faceCount);
+          if (persons.length === 1) {
+            if (isMergedWideBox || hasSecondaryPersonCandidate || detachedFaceCount > 0) {
+              heuristicPersons = Math.max(heuristicPersons, 2);
+            }
+          }
+
           // Effective count of individuals observed in the vault area
-          const effectivePersons = Math.max(persons.length, faceCount);
+          const effectivePersons = heuristicPersons;
           const currentTimestamp = frame.timestamp?.getTime?.() || Date.now();
 
           if (effectivePersons >= 2) {
-            // Dual custody satisfied: update timestamp so brief occlusions don't falsely alert
+            // Dual custody satisfied: mark session active and update timestamp
+            vaultState.dualCustodyActive = true;
             vaultState.lastMultiPersonTimestamp = currentTimestamp;
+            vaultState.emptySinceTimestamp = 0;
             vaultState.singlePersonStartTimestamp = 0;
             vaultState.consecutiveSingleFrames = 0;
           } else if (effectivePersons === 0) {
-            // Vault empty / idle: reset single person tracking
+            // Vault unoccupied in this frame
+            if (!vaultState.emptySinceTimestamp) {
+              vaultState.emptySinceTimestamp = currentTimestamp;
+            } else if (currentTimestamp - vaultState.emptySinceTimestamp >= this.VAULT_EMPTY_RESET_MS) {
+              // Sustained empty vault confirmed (room vacated): reset dual-custody session
+              vaultState.dualCustodyActive = false;
+              vaultState.lastMultiPersonTimestamp = 0;
+            }
             vaultState.singlePersonStartTimestamp = 0;
             vaultState.consecutiveSingleFrames = 0;
           } else if (effectivePersons === 1) {
-            // Exactly 1 person detected in this frame.
-            // Check if dual custody was active recently (within memory window, e.g. 45s).
-            // When two officers work in a vault together, one frequently leans over the locks or stands behind the other,
-            // causing momentary occlusion or bounding box overlap. If 2 persons were confirmed in the vault recently,
-            // this is recognized as active dual custody operation, NOT a single-person violation.
+            // Exactly 1 person detected in this frame
+            vaultState.emptySinceTimestamp = 0; // Room is occupied
+
+            // Check if dual custody was active recently (within memory window, e.g. 10 minutes)
+            // When two officers work in a vault together, one frequently sits on the floor, squats to bottom lockers,
+            // or bends into the safe, causing temporary occlusion. As long as 2 persons initiated dual custody
+            // and the room has remained occupied, this is recognized as active dual custody operation.
             const timeSinceDualCustody = currentTimestamp - vaultState.lastMultiPersonTimestamp;
-            const isWithinCustodyMemory = vaultState.lastMultiPersonTimestamp > 0 && timeSinceDualCustody < this.VAULT_DUAL_CUSTODY_MEMORY_MS;
+            const isWithinCustodyMemory = vaultState.dualCustodyActive &&
+              vaultState.lastMultiPersonTimestamp > 0 &&
+              timeSinceDualCustody < this.VAULT_DUAL_CUSTODY_MEMORY_MS;
 
             if (!isWithinCustodyMemory) {
-              // Not in active dual custody memory: track single-person dwell persistence
+              // Not in active dual custody: track lone individual dwell persistence
               if (!vaultState.singlePersonStartTimestamp) {
                 vaultState.singlePersonStartTimestamp = currentTimestamp;
               }
               vaultState.consecutiveSingleFrames++;
 
               const singlePersonDuration = currentTimestamp - vaultState.singlePersonStartTimestamp;
-              const hasElapsedConfirmation = singlePersonDuration >= this.VAULT_SINGLE_PERSON_CONFIRM_MS && vaultState.consecutiveSingleFrames >= 3;
+              const hasElapsedConfirmation = singlePersonDuration >= this.VAULT_SINGLE_PERSON_CONFIRM_MS && vaultState.consecutiveSingleFrames >= 4;
               const hasElapsedCooldown = (currentTimestamp - vaultState.lastAlertTimestamp) >= this.VAULT_ALERT_COOLDOWN_MS;
 
               if (hasElapsedConfirmation && hasElapsedCooldown) {
