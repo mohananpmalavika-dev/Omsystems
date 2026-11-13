@@ -1,0 +1,250 @@
+# =================================================================
+# Sentinel Grid / KryptonVision - Oracle Cloud (OCI) Production Compose
+# Compatible with OCI Ampere A1 (ARM64) and AMD/Intel (x86_64) Shapes
+# =================================================================
+
+services:
+  # -------------------------------------------------------------
+  # 0. Caddy Automatic SSL Reverse Proxy
+  # -------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: sentinel-oci-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3 (QUIC)
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME:-localhost}
+      - OCI_PUBLIC_IP_DOMAIN=${OCI_PUBLIC_IP_DOMAIN:-localhost}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-service@omsystemandservice.in}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - dashboard
+      - control-plane
+      - media-gateway
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # -------------------------------------------------------------
+  # 1. PostgreSQL 16 + pgvector
+  # -------------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: sentinel-oci-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: sentinel_grid
+      POSTGRES_USER: sentinel_admin
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-SentinelOciDbMaster2026}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    mem_limit: 2048m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinel_admin -d sentinel_grid"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # -------------------------------------------------------------
+  # 2. Redis Cache & Event Bus
+  # -------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: sentinel-oci-redis
+    restart: always
+    command: redis-server --appendonly no --save "" --requirepass ${REDIS_PASSWORD:-SentinelOciRedisMaster2026} --maxmemory 1024mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    mem_limit: 1024m
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-SentinelOciRedisMaster2026}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # -------------------------------------------------------------
+  # 3. Fastify Control Plane API
+  # -------------------------------------------------------------
+  control-plane:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: sentinel-oci-control-plane
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+      HOST: 0.0.0.0
+      AUTH_MODE: session
+      BOOTSTRAP_SUPERADMIN_PASSWORD: ${BOOTSTRAP_SUPERADMIN_PASSWORD:-SentinelMasterAdmin2026!}
+      DATABASE_URL: postgresql://sentinel_admin:${DB_PASSWORD:-SentinelOciDbMaster2026}@postgres:5432/sentinel_grid
+      REDIS_URL: redis://:${REDIS_PASSWORD:-SentinelOciRedisMaster2026}@redis:6379
+      JWT_SECRET: ${JWT_SECRET:-oci-jwt-secret-kryptonlogic-omsystem-2026-prod}
+      SESSION_SECRET: ${SESSION_SECRET:-oci-session-secret-kryptonlogic-omsystem-2026-prod}
+      MEDIA_GATEWAY_INTERNAL_URL: http://media-gateway:8090
+      MEDIA_GATEWAY_SHARED_KEY: ${MEDIA_GATEWAY_SHARED_KEY:-oci-media-gw-shared-key-2026}
+      EDGE_BRIDGE_SHARED_KEY: ${EDGE_BRIDGE_SHARED_KEY:-oci-edge-bridge-shared-key-2026}
+      RECORDING_ENGINE_URL: http://recording-engine:8091
+      RECORDING_ENGINE_SHARED_KEY: ${RECORDING_ENGINE_SHARED_KEY:-oci-recording-shared-key-2026}
+      ANALYTICS_ENGINE_URL: http://analytics-engine:8092
+      ANALYTICS_ENGINE_SHARED_KEY: ${ANALYTICS_ENGINE_SHARED_KEY:-oci-analytics-shared-key-2026}
+      ANALYTICS_SOURCE_SHARED_KEY: ${ANALYTICS_SOURCE_SHARED_KEY:-oci-analytics-source-key-2026}
+      REPORT_DOWNLOAD_SECRET: ${REPORT_DOWNLOAD_SECRET:-oci-report-secret-2026}
+      CONTROL_PLANE_PUBLIC_URL: ${PUBLIC_BASE_URL:-http://localhost}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # -------------------------------------------------------------
+  # 4. Next.js Dashboard UI (Port 10000)
+  # -------------------------------------------------------------
+  dashboard:
+    build:
+      context: ../..
+      dockerfile: dashboard/Dockerfile
+    container_name: sentinel-oci-dashboard
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 10000
+      CONTROL_PLANE_URL: http://control-plane:8080
+      CONTROL_PLANE_INTERNAL_URL: http://control-plane:8080
+      DATABASE_URL: postgresql://sentinel_admin:${DB_PASSWORD:-SentinelOciDbMaster2026}@postgres:5432/sentinel_grid
+      PUBLIC_DASHBOARD_URL: ${PUBLIC_BASE_URL:-http://localhost}
+      MEDIA_GATEWAY_INTERNAL_URL: http://media-gateway:8090
+      MEDIA_GATEWAY_PUBLIC_URL: ${PUBLIC_BASE_URL:-http://localhost}
+      RECORDING_ENGINE_INTERNAL_URL: http://recording-engine:8091
+      RECORDING_ENGINE_SHARED_KEY: ${RECORDING_ENGINE_SHARED_KEY:-oci-recording-shared-key-2026}
+      EDGE_BRIDGE_SHARED_KEY: ${EDGE_BRIDGE_SHARED_KEY:-oci-edge-bridge-shared-key-2026}
+      NEXT_PUBLIC_APP_NAME: "KryptonLogic Enterprise VMS"
+    ports:
+      - "10000:10000"
+    depends_on:
+      - control-plane
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # -------------------------------------------------------------
+  # 5. Media Gateway (RTSP / WebRTC / HLS Streaming)
+  # -------------------------------------------------------------
+  media-gateway:
+    build:
+      context: ../..
+      dockerfile: media-gateway/Dockerfile
+    container_name: sentinel-oci-media-gateway
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 8090
+      CONTROL_PLANE_URL: http://control-plane:8080
+      MEDIA_GATEWAY_SHARED_KEY: ${MEDIA_GATEWAY_SHARED_KEY:-oci-media-gw-shared-key-2026}
+      EDGE_BRIDGE_SHARED_KEY: ${EDGE_BRIDGE_SHARED_KEY:-oci-edge-bridge-shared-key-2026}
+      MEDIAMTX_API_URL: http://127.0.0.1:9997
+      MEDIAMTX_HLS_URL: http://127.0.0.1:8888
+      MEDIAMTX_WEBRTC_URL: http://127.0.0.1:8889
+      PUBLIC_HLS_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}/hls
+      PUBLIC_WEBRTC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}/webrtc
+    ports:
+      - "8090:8090"
+      - "8554:8554"
+      - "8888:8888"
+      - "8189:8189/udp" # WebRTC UDP
+    depends_on:
+      - control-plane
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # -------------------------------------------------------------
+  # 6. Recording Engine
+  # -------------------------------------------------------------
+  recording-engine:
+    build:
+      context: ../..
+      dockerfile: recording-engine/Dockerfile
+    container_name: sentinel-oci-recording-engine
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 8091
+      CONTROL_PLANE_URL: http://control-plane:8080
+      RECORDING_ENGINE_SHARED_KEY: ${RECORDING_ENGINE_SHARED_KEY:-oci-recording-shared-key-2026}
+      STORAGE_PATH: /recordings
+    volumes:
+      - recordings_data:/recordings
+    ports:
+      - "8091:8091"
+    depends_on:
+      - control-plane
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # -------------------------------------------------------------
+  # 7. Analytics Engine (AI Computer Vision)
+  # -------------------------------------------------------------
+  analytics-engine:
+    build:
+      context: ../..
+      dockerfile: analytics-engine/Dockerfile
+    container_name: sentinel-oci-analytics-engine
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 8092
+      ANALYTICS_ENGINE_SHARED_KEY: ${ANALYTICS_ENGINE_SHARED_KEY:-oci-analytics-shared-key-2026}
+      CONTROL_PLANE_URL: http://control-plane:8080
+    ports:
+      - "8092:8092"
+    depends_on:
+      - control-plane
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+  recordings_data:
