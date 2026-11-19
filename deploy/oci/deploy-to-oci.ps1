@@ -1,4 +1,4 @@
-﻿# ==============================================================================
+# ==============================================================================
 # Sentinel Grid / KryptonVision - 1-Click OCI Remote Deployment (PowerShell)
 # ==============================================================================
 param (
@@ -50,11 +50,9 @@ Write-Host "`nConnecting to Oracle Cloud VM at $User@$PublicIp..." -ForegroundCo
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $localSetupScript = Join-Path $scriptDir "setup-oci-vm.sh"
-$localCompose = Join-Path $scriptDir "docker-compose.oci.yml"
-$localCaddy = Join-Path $scriptDir "Caddyfile"
 
-Write-Host "Uploading deployment manifests and setup script..." -ForegroundColor Cyan
-& scp -i "$KeyPath" -o StrictHostKeyChecking=no "$localSetupScript" "$localCompose" "$localCaddy" "${User}@${PublicIp}:/tmp/"
+Write-Host "Uploading setup-oci-vm.sh..." -ForegroundColor Cyan
+& scp -i "$KeyPath" -o StrictHostKeyChecking=no "$localSetupScript" "${User}@${PublicIp}:/tmp/setup-oci-vm.sh"
 
 Write-Host "Executing setup on OCI instance (this will take ~3-5 minutes)..." -ForegroundColor Cyan
 & ssh -i "$KeyPath" -o StrictHostKeyChecking=no "${User}@${PublicIp}" "chmod +x /tmp/setup-oci-vm.sh && sudo /tmp/setup-oci-vm.sh '$Domain'"
@@ -67,3 +65,4 @@ if (-not [string]::IsNullOrWhiteSpace($Domain)) {
     Write-Host "🌐 Live HTTPS URL: https://$cleanIp.sslip.io" -ForegroundColor Green
 }
 Write-Host "🔑 Default Login: krypton / 4344@RAM" -ForegroundColor Yellow
+

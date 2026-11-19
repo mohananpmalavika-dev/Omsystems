@@ -37,8 +37,8 @@ read -rp "Enter Custom Domain (e.g. cctv.omsystemandservice.in, or press Enter f
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo -e "\n${YELLOW}Uploading setup manifests to $SSH_USER@$PUBLIC_IP...${NC}"
-scp -i "$KEY_PATH" -o StrictHostKeyChecking=no "$SCRIPT_DIR/setup-oci-vm.sh" "$SCRIPT_DIR/docker-compose.oci.yml" "$SCRIPT_DIR/Caddyfile" "$SSH_USER@$PUBLIC_IP:/tmp/"
+echo -e "\n${YELLOW}Uploading setup-oci-vm.sh to $SSH_USER@$PUBLIC_IP...${NC}"
+scp -i "$KEY_PATH" -o StrictHostKeyChecking=no "$SCRIPT_DIR/setup-oci-vm.sh" "$SSH_USER@$PUBLIC_IP:/tmp/setup-oci-vm.sh"
 
 echo -e "\n${CYAN}Running setup on Oracle Cloud instance (this takes ~3-5 minutes)...${NC}"
 ssh -i "$KEY_PATH" -o StrictHostKeyChecking=no "$SSH_USER@$PUBLIC_IP" "chmod +x /tmp/setup-oci-vm.sh && sudo /tmp/setup-oci-vm.sh '$DOMAIN_NAME'"
@@ -54,3 +54,4 @@ else
 fi
 echo -e "🔑 Login:    krypton / 4344@RAM"
 echo -e "${GREEN}=================================================================${NC}"
+

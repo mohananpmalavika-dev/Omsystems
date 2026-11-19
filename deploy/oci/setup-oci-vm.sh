@@ -86,14 +86,6 @@ else
     cd /opt/sentinel-grid
 fi
 
-sudo mkdir -p /opt/sentinel-grid/deploy/oci
-if [ -f "/tmp/Caddyfile" ]; then
-    sudo cp /tmp/Caddyfile /opt/sentinel-grid/deploy/oci/
-fi
-if [ -f "/tmp/docker-compose.oci.yml" ]; then
-    sudo cp /tmp/docker-compose.oci.yml /opt/sentinel-grid/deploy/oci/
-fi
-
 # 5. Prepare Production Environment Variables (.env)
 echo -e "\n[5/6] Generating OCI production .env configuration..."
 cd /opt/sentinel-grid/deploy/oci
@@ -170,3 +162,4 @@ echo "Login URL:      $PUBLIC_URL/login"
 echo "Default User:   krypton"
 echo "Default Pass:   4344@RAM"
 echo "================================================================="
+

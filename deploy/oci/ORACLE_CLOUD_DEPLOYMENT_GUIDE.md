@@ -108,3 +108,4 @@ curl -fsSL https://raw.githubusercontent.com/mohananpmalavika-dev/Omsystems/main
 - **URL:** `https://<YOUR-IP>.sslip.io` അല്ലെങ്കിൽ നിങ്ങളുടെ ഡൊമെയ്ൻ
 - **Username:** `krypton`
 - **Password:** `4344@RAM`
+
