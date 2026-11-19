@@ -108,7 +108,7 @@ ADMIN_EMAIL=service@omsystemandservice.in
 
 DB_PASSWORD=OciSentinelMaster2026!
 REDIS_PASSWORD=OciSentinelRedis2026!
-BOOTSTRAP_SUPERADMIN_PASSWORD=SentinelMasterAdmin2026!
+BOOTSTRAP_SUPERADMIN_PASSWORD=4344@RAM
 
 JWT_SECRET=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32 || echo "oci-jwt-secret-kryptonlogic-2026")
 SESSION_SECRET=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32 || echo "oci-session-secret-kryptonlogic-2026")
