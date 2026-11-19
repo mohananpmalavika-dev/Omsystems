@@ -1,18 +1,16 @@
 # =================================================================
 # Sentinel Grid / KryptonVision - Oracle Cloud (OCI) Caddyfile
-# Automatic HTTPS Reverse Proxy & WebRTC Stream Router
+# Automatic Reverse Proxy & WebRTC Stream Router on Port 8080
 # =================================================================
 
 {
     admin off
-    email ${ADMIN_EMAIL:-service@omsystemandservice.in}
 }
 
-# In OCI, this site block handles both custom domain and sslip.io fallback
-{$DOMAIN_NAME:localhost}, {$OCI_PUBLIC_IP_DOMAIN:localhost} {
+:8080 {
     header {
         -X-Frame-Options
-        Content-Security-Policy "frame-ancestors 'self' https://* http://localhost:* https://*.omsystemandservice.in https://*.kryptonlogic.com;"
+        Content-Security-Policy "frame-ancestors 'self' https://* http://*;"
         Permissions-Policy "camera=*, microphone=*, display-capture=*, geolocation=*"
     }
 
@@ -67,7 +65,7 @@
         reverse_proxy control-plane:8080 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-Proto https
+            header_up X-Forwarded-Proto http
             flush_interval -1
         }
     }
@@ -84,7 +82,7 @@
         reverse_proxy control-plane:8080 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-Proto https
+            header_up X-Forwarded-Proto http
             flush_interval -1
         }
     }
@@ -93,32 +91,44 @@
         reverse_proxy control-plane:8080 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-Proto https
+            header_up X-Forwarded-Proto http
             flush_interval -1
         }
     }
 
-    # WebSockets
-    @ws {
-        path /ws /ws/* /socket.io /socket.io/*
-    }
-    handle @ws {
+    handle /api/* {
         reverse_proxy control-plane:8080 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-Proto https
+            header_up X-Forwarded-Proto http
             flush_interval -1
         }
     }
 
-    # Next.js Dashboard Frontend
+    handle /ws {
+        reverse_proxy control-plane:8080 {
+            header_up Upgrade {>Upgrade}
+            header_up Connection {>Connection}
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    handle /socket.io/* {
+        reverse_proxy control-plane:8080 {
+            header_up Upgrade {>Upgrade}
+            header_up Connection {>Connection}
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    # Fallback to Dashboard
     handle {
         reverse_proxy dashboard:10000 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-Proto https
-            flush_interval -1
+            header_up X-Forwarded-Proto http
         }
     }
 }
-

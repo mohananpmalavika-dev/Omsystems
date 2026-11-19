@@ -28,9 +28,9 @@ fi
 # IMPORTANT: OCI instances have strict host-level iptables rules blocking non-SSH ports
 echo -e "\n[2/6] Configuring OCI Host Firewall..."
 if command -v iptables &> /dev/null; then
-    echo "Opening TCP ports: 80, 443, 8080, 8090, 8554, 8888, 10000 and UDP 8189..."
+    echo "Opening TCP ports: 80, 443, 8080, 8090, 8554, 8888, 10000 and UDP 8189, 8190..."
     sudo iptables -I INPUT 1 -p tcp -m multiport --dports 80,443,8080,8090,8554,8888,10000 -j ACCEPT 2>/dev/null || true
-    sudo iptables -I INPUT 1 -p udp --dport 8189 -j ACCEPT 2>/dev/null || true
+    sudo iptables -I INPUT 1 -p udp -m multiport --dports 8189,8190 -j ACCEPT 2>/dev/null || true
 
     # Save iptables rules across reboots
     if command -v netfilter-persistent &> /dev/null; then
@@ -93,10 +93,10 @@ cd /opt/sentinel-grid/deploy/oci
 CUSTOM_DOMAIN="${1:-}"
 if [ -n "$CUSTOM_DOMAIN" ]; then
     PRIMARY_DOMAIN="$CUSTOM_DOMAIN"
-    PUBLIC_URL="https://$CUSTOM_DOMAIN"
+    PUBLIC_URL="http://$CUSTOM_DOMAIN:8080"
 else
     PRIMARY_DOMAIN="$SSLIP_DOMAIN"
-    PUBLIC_URL="https://$SSLIP_DOMAIN"
+    PUBLIC_URL="http://$PUBLIC_IP:8080"
 fi
 
 cat << EOF > .env

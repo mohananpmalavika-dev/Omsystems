@@ -12,9 +12,7 @@ services:
     container_name: sentinel-oci-caddy
     restart: always
     ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp" # HTTP/3 (QUIC)
+      - "8080:8080"
     environment:
       - DOMAIN_NAME=${DOMAIN_NAME:-localhost}
       - OCI_PUBLIC_IP_DOMAIN=${OCI_PUBLIC_IP_DOMAIN:-localhost}
@@ -47,7 +45,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5433:5432"
     mem_limit: 2048m
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sentinel_admin -d sentinel_grid"]
@@ -71,7 +69,7 @@ services:
     volumes:
       - redis_data:/data
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:6380:6379"
     mem_limit: 1024m
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-SentinelOciRedisMaster2026}", "ping"]
@@ -112,9 +110,7 @@ services:
       ANALYTICS_ENGINE_SHARED_KEY: ${ANALYTICS_ENGINE_SHARED_KEY:-oci-analytics-shared-key-2026}
       ANALYTICS_SOURCE_SHARED_KEY: ${ANALYTICS_SOURCE_SHARED_KEY:-oci-analytics-source-key-2026}
       REPORT_DOWNLOAD_SECRET: ${REPORT_DOWNLOAD_SECRET:-oci-report-secret-2026}
-      CONTROL_PLANE_PUBLIC_URL: ${PUBLIC_BASE_URL:-http://localhost}
-    ports:
-      - "8080:8080"
+      CONTROL_PLANE_PUBLIC_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}
     depends_on:
       postgres:
         condition: service_healthy
@@ -176,13 +172,13 @@ services:
       MEDIAMTX_API_URL: http://127.0.0.1:9997
       MEDIAMTX_HLS_URL: http://127.0.0.1:8888
       MEDIAMTX_WEBRTC_URL: http://127.0.0.1:8889
-      PUBLIC_HLS_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}/hls
-      PUBLIC_WEBRTC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost}/webrtc
+      PUBLIC_HLS_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}/hls
+      PUBLIC_WEBRTC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8080}/webrtc
     ports:
       - "8090:8090"
       - "8554:8554"
       - "8888:8888"
-      - "8189:8189/udp" # WebRTC UDP
+      - "8190:8189/udp" # WebRTC UDP (8190 on host to co-exist with other services)
     depends_on:
       - control-plane
     logging:
