@@ -91,16 +91,30 @@ services:
       dockerfile: Dockerfile
     container_name: sentinel-oci-control-plane
     restart: always
+    volumes:
+      - ../../edge-agent/release:/app/edge-agent/release
+      - ../../edge-agent/installer:/app/edge-agent/installer
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     environment:
       NODE_ENV: production
       PORT: 8080
       HOST: 0.0.0.0
       AUTH_MODE: session
+      SKIP_MIGRATION_CHECKSUM_VALIDATION: "true"
+      DB_SSL: "false"
+      DATABASE_TLS_MODE: "DISABLED"
+      ALLOW_INTERNAL_CONTAINER_DB: "true"
       BOOTSTRAP_SUPERADMIN_PASSWORD: ${BOOTSTRAP_SUPERADMIN_PASSWORD:-SentinelMasterAdmin2026!}
       DATABASE_URL: postgresql://sentinel_admin:${DB_PASSWORD:-SentinelOciDbMaster2026}@postgres:5432/sentinel_grid
       REDIS_URL: redis://:${REDIS_PASSWORD:-SentinelOciRedisMaster2026}@redis:6379
       JWT_SECRET: ${JWT_SECRET:-oci-jwt-secret-kryptonlogic-omsystem-2026-prod}
       SESSION_SECRET: ${SESSION_SECRET:-oci-session-secret-kryptonlogic-omsystem-2026-prod}
+      STREAM_VAULT_KEY: ${STREAM_VAULT_KEY:-}
       MEDIA_GATEWAY_INTERNAL_URL: http://media-gateway:8090
       MEDIA_GATEWAY_SHARED_KEY: ${MEDIA_GATEWAY_SHARED_KEY:-oci-media-gw-shared-key-2026}
       EDGE_BRIDGE_SHARED_KEY: ${EDGE_BRIDGE_SHARED_KEY:-oci-edge-bridge-shared-key-2026}
@@ -227,6 +241,7 @@ services:
       NODE_ENV: production
       PORT: 8092
       ANALYTICS_ENGINE_SHARED_KEY: ${ANALYTICS_ENGINE_SHARED_KEY:-oci-analytics-shared-key-2026}
+      ANALYTICS_SOURCE_SHARED_KEY: ${ANALYTICS_SOURCE_SHARED_KEY:-oci-analytics-source-key-2026}
       CONTROL_PLANE_URL: http://control-plane:8080
     ports:
       - "8092:8092"
