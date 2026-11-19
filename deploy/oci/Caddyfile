@@ -96,15 +96,6 @@
         }
     }
 
-    handle /api/* {
-        reverse_proxy control-plane:8080 {
-            header_up Host {host}
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-Proto http
-            flush_interval -1
-        }
-    }
-
     handle /ws {
         reverse_proxy control-plane:8080 {
             header_up Upgrade {>Upgrade}
